@@ -1,0 +1,38 @@
+{
+  "name": "@fastly/compute-js-static-publish",
+  "type": "module",
+  "version": "1.0.0",
+  "description": "Static Publisher for Compute@Edge JavaScript",
+  "main": "./build/index.js",
+  "scripts": {
+    "prepack": "npm run build",
+    "build": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "bin": {
+    "compute-js-static-publish": "./build/index.js",
+    "compute-js-build-static-loader": "./build/build-static.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fastly/compute-js-static-publish.git"
+  },
+  "keywords": [
+    "compute-js",
+    "javascript",
+    "static",
+    "serve"
+  ],
+  "author": "Katsuyuki Omuro <komuro@fastly.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/fastly/compute-js-static-publish/issues"
+  },
+  "homepage": "https://github.com/fastly/compute-js-static-publish#readme",
+  "dependencies": {
+    "typescript": "^4.7.4"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0"
+  }
+}
