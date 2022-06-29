@@ -154,7 +154,7 @@ const fastlyTomlContent = `\
 # This file describes a Fastly Compute@Edge package. To learn more visit:
 # https://developer.fastly.com/reference/fastly-toml/
 
-authors = []
+authors = [ "${author}" ]
 description = "${description}"
 language = "javascript"
 manifest_version = 2
