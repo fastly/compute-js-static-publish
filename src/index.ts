@@ -1,13 +1,9 @@
 #!/usr/bin/env node
 
 // This program creates a Compute@Edge JavaScript application
-// as a subfolder of a create-react-app project in a folder named
-// compute-js.  This project can be served using fastly compute serve
+// in a subfolder named compute-js.
+// This project can be served using fastly compute serve
 // or deployed to a Compute@Edge service using fastly compute publish.
-
-// For now, we expect this program to have been run inside a
-// directory created with create-react-app
-// TODO: Can run anywhere and specify a static folder.
 
 import * as path from "path";
 import * as fs from "fs";
@@ -19,18 +15,23 @@ const optionDefinitions: OptionDefinition[] = [
   { name: 'output', alias: 'o', type: String, defaultValue: './compute-js', },
   { name: 'public-path', type: String, },
   { name: 'static-path', type: String, },
-  { name: 'spa', type: Boolean, defaultValue: false, }
-]
+  { name: 'spa', type: Boolean, defaultValue: false, },
+  { name: 'name', type: String, },
+  { name: 'author', type: String, },
+  { name: 'description', type: String, },
+];
 
 const commandLineValues = commandLineArgs(optionDefinitions);
 
 console.log("Fastly Compute@Edge JavaScript Static Publisher");
 
+let assumeCreateReactApp = false;
 if (commandLineValues['public-path'] === undefined &&
   commandLineValues['static-path'] === undefined
 ) {
   console.log("--public-path and --static-path not provided, assuming create-react-app.");
   console.log("Using --public-path=./build and --static-path=./build/static");
+  assumeCreateReactApp = true;
   commandLineValues['public-path'] = './build';
   commandLineValues['static-path'] = './build/static';
 }
@@ -56,33 +57,45 @@ if(exists) {
   process.exit(1);
 }
 
-let packageJsonText;
-try {
-  packageJsonText = fs.readFileSync("./package.json", "utf-8");
-} catch {
-  console.error("❌ Can't read package.json");
-  console.error("Run this from a create-react-app project directory.");
-  process.exit(1);
-}
-
 let packageJson;
 try {
+  const packageJsonText = fs.readFileSync("./package.json", "utf-8");
   packageJson = JSON.parse(packageJsonText);
 } catch {
-  console.error("❌ Can't parse package.json");
-  console.error("Run this from a create-react-app project directory.");
-  process.exit(1);
+  if(assumeCreateReactApp) {
+    console.error("❌ Can't read/parse package.json");
+    console.error("Run this from a create-react-app project directory.");
+    process.exit(1);
+  }
+  console.log("Can't read/parse package.json in current directory, making no assumptions!");
+  packageJson = null;
 }
 
-if(packageJson.dependencies?.['react-scripts'] == null) {
-  console.error("❌ Can't find react-scripts in dependencies");
-  console.error("Run this from a create-react-app project directory.");
-  process.exit(1);
+let defaultAuthor = 'you@example.com';
+let defaultName = 'compute-js-static-site';
+let defaultDescription = 'Compute@Edge static site';
+if(assumeCreateReactApp) {
+  if(packageJson?.dependencies?.['react-scripts'] == null) {
+    console.error("❌ Can't find react-scripts in dependencies");
+    console.error("Run this from a create-react-app project directory.");
+    process.exit(1);
+  }
+  defaultName = 'my-create-react-app';
+  defaultDescription = 'Compute@Edge static site from create-react-app';
 }
 
-const author = packageJson.author ?? 'you@example.com';
-const name = packageJson.name ?? 'my-app';
-const description = packageJson.description ?? 'create-react-app';
+const author = commandLineValues['author'] ?? packageJson?.author ?? defaultAuthor;
+const name = commandLineValues['name'] ?? packageJson?.name ?? defaultName;
+const description = commandLineValues['description'] ?? packageJson?.description ?? defaultDescription;
+
+console.log('');
+console.log('Public Path :', BUILD_DIR);
+console.log('Static Path :', BUILD_STATIC_DIR ?? '(None)');
+console.log('SPA         :', IS_SPA ? 'Yes' : 'No');
+console.log('name        :', name);
+console.log('author      :', author);
+console.log('description :', description);
+console.log('');
 
 console.log("Initializing Compute@Edge Application in " + computeJsDir + "...");
 fs.mkdirSync(computeJsDir);
@@ -120,6 +133,7 @@ const packageJsonContent = `\
         "node": "^16"
     },
     "license": "MIT",
+    "private": true,
     "main": "src/index.js",
     "scripts": {
         "build": "js-compute-runtime --skip-pkg bin/index.js bin/main.wasm",
