@@ -13,20 +13,46 @@ import * as path from "path";
 import * as fs from "fs";
 import * as url from 'url';
 
-const COMPUTE_JS_DIR = './compute-js';
-const computeJsDir = path.resolve(COMPUTE_JS_DIR);
+import commandLineArgs, { OptionDefinition } from "command-line-args";
 
-const BUILD_DIR = './build';
-const buildDir = path.resolve(BUILD_DIR);
+const optionDefinitions: OptionDefinition[] = [
+  { name: 'output', alias: 'o', type: String, defaultValue: './compute-js', },
+  { name: 'public-path', type: String, },
+  { name: 'static-path', type: String, },
+  { name: 'spa', type: Boolean, defaultValue: false, }
+]
 
-const BUILD_STATIC_DIR = './build/static';
-const buildStaticDir = path.resolve(BUILD_STATIC_DIR);
+const commandLineValues = commandLineArgs(optionDefinitions);
 
 console.log("Fastly Compute@Edge JavaScript Static Publisher");
 
+if (commandLineValues['public-path'] === undefined &&
+  commandLineValues['static-path'] === undefined
+) {
+  console.log("--public-path and --static-path not provided, assuming create-react-app.");
+  console.log("Using --public-path=./build and --static-path=./build/static");
+  commandLineValues['public-path'] = './build';
+  commandLineValues['static-path'] = './build/static';
+}
+
+const COMPUTE_JS_DIR = commandLineValues.output as string;
+const computeJsDir = path.resolve(COMPUTE_JS_DIR);
+
+const BUILD_DIR = commandLineValues['public-path'] as string | undefined;
+if(BUILD_DIR == null) {
+  console.error("❌ required parameter --public-path not provided.");
+  process.exit(1);
+}
+const buildDir = path.resolve(BUILD_DIR);
+
+const BUILD_STATIC_DIR = commandLineValues['static-path'] as string | undefined;
+const buildStaticDir = BUILD_STATIC_DIR != null ? path.resolve(BUILD_STATIC_DIR) : null;
+
+const IS_SPA = commandLineValues['spa'] as boolean | undefined;
+
 const exists = fs.existsSync(computeJsDir);
 if(exists) {
-  console.error('❌ compute-js directory already exists!');
+  console.error(`❌ '${COMPUTE_JS_DIR}' directory already exists!`);
   process.exit(1);
 }
 
@@ -80,13 +106,11 @@ const packageJsonContent = `\
     "name": ${JSON.stringify(name)},
     "description": ${JSON.stringify(description)},
     "author": ${JSON.stringify(author)},
-    "dependencies": {
-        "@fastly/js-compute": "^0.2.5"
-    },
     "devDependencies": {
         "@fastly/expressly": "^1.0.0-alpha.7",` +
         //"@fastly/compute-js-static-publish": "1.0.0",
 `
+        "@fastly/js-compute": "^0.2.5",
         "buffer": "^6.0.3",
         "core-js": "^3.19.1",
         "webpack": "^5.64.0",
@@ -129,15 +153,14 @@ fs.writeFileSync(fastlyTomlPath, fastlyTomlContent, "utf-8");
 
 // static-publish.json
 const buildDirRel = path.relative(computeJsDir, buildDir);
-const buildStaticDirRel = path.relative(computeJsDir, buildStaticDir);
-const isSpa = true;
+const buildStaticDirRel = buildStaticDir != null ? path.relative(computeJsDir, buildStaticDir) : null;
 
 // language=JSON
 const staticPublishJsonContent = `\
 {
   "buildDir": ${JSON.stringify(buildDirRel)},
   "staticDir": ${JSON.stringify(buildStaticDirRel)},
-  "spa": ${JSON.stringify(isSpa)}
+  "spa": ${JSON.stringify(IS_SPA)}
 }
 `;
 
@@ -158,3 +181,17 @@ const indexJsPath = path.resolve(computeJsDir, './src/index.js');
 fs.copyFileSync(indexJsSrcPath, indexJsPath);
 
 console.log("🚀 Compute@Edge application created!");
+
+console.log('');
+console.log('To run your Compute@Edge application locally:');
+console.log('');
+console.log('  cd ' + COMPUTE_JS_DIR);
+console.log('  npm install');
+console.log('  fastly compute serve');
+console.log('');
+console.log('To build and deploy to your Compute@Edge service:');
+console.log('');
+console.log('  cd ' + COMPUTE_JS_DIR);
+console.log('  npm install');
+console.log('  fastly compute publish');
+console.log('');
