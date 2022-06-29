@@ -95,7 +95,8 @@ const fileEntries = [...results.entries()];
 let fileContents = '';
 
 for (const [index, file] of fileEntries) {
-  fileContents += `import file${index} from "${file}";\n`;
+  const relativeFilePath = path.relative('./src', file);
+  fileContents += `import file${index} from "${relativeFilePath}";\n`;
 }
 
 fileContents += `\nexport const assets = {\n`;
