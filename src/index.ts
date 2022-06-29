@@ -22,8 +22,6 @@ const buildDir = path.resolve(BUILD_DIR);
 const BUILD_STATIC_DIR = './build/static';
 const buildStaticDir = path.resolve(BUILD_STATIC_DIR);
 
-const __dirname = url.fileURLToPath(new URL('.', import.meta.url));
-
 console.log("Fastly Compute@Edge JavaScript Static Publisher");
 
 const exists = fs.existsSync(computeJsDir);
@@ -145,6 +143,9 @@ const staticPublishJsonContent = `\
 
 const staticPublishJsonPath = path.resolve(computeJsDir, 'static-publish.json');
 fs.writeFileSync(staticPublishJsonPath, staticPublishJsonContent, "utf-8");
+
+// Copy resource files
+const __dirname = url.fileURLToPath(new URL('.', import.meta.url));
 
 // webpack.config.js
 const webpackConfigJsSrcPath = path.resolve(__dirname, '../resources/webpack.config.js');
