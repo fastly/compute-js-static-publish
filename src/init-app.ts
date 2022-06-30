@@ -5,6 +5,7 @@ import { CommandLineOptions } from "command-line-args";
 // This project can be served using fastly compute serve
 // or deployed to a Compute@Edge service using fastly compute publish.
 
+import * as child_process from "child_process";
 import * as path from "path";
 import * as fs from "fs";
 import * as url from 'url';
@@ -180,17 +181,20 @@ service_id = ""
 
   console.log("🚀 Compute@Edge application created!");
 
+  console.log('Installing dependencies...');
+  console.log(`npm --prefix ${COMPUTE_JS_DIR} install`);
+  child_process.spawnSync('npm', [ '--prefix', COMPUTE_JS_DIR, 'install' ], { stdio: 'inherit' });
+  console.log('');
+
   console.log('');
   console.log('To run your Compute@Edge application locally:');
   console.log('');
   console.log('  cd ' + COMPUTE_JS_DIR);
-  console.log('  npm install');
   console.log('  fastly compute serve');
   console.log('');
   console.log('To build and deploy to your Compute@Edge service:');
   console.log('');
   console.log('  cd ' + COMPUTE_JS_DIR);
-  console.log('  npm install');
   console.log('  fastly compute publish');
   console.log('');
 
