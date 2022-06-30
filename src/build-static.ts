@@ -68,7 +68,7 @@ export function buildStaticLoader() {
     process.exit(1);
   }
 
-  let config;
+  let config: any;
   try {
     config = JSON.parse(configFileText);
   } catch {
@@ -80,7 +80,19 @@ export function buildStaticLoader() {
   const results: string[] = [];
   getFiles(results, config.buildDir);
 
+  const outputDir = path.resolve();
+
   const root = path.resolve(config.buildDir);
+
+  const ignoreDirs = [
+    './node_modules',
+    './.idea',
+  ];
+
+  const ignoreDirsResolved = ignoreDirs.map(
+    dir => path.resolve(config.buildDir, dir)
+  );
+
   const staticRoot = config.staticDir != null ? path.resolve(config.staticDir) : null;
   console.log(`Build directory '${root}'.`);
   if (staticRoot != null) {
@@ -89,25 +101,36 @@ export function buildStaticLoader() {
     console.log(`No static root defined.`);
   }
 
-  const fileEntries = [...results.entries()];
+  const files = results
+    .filter(file => {
+      if(file.startsWith(outputDir)) {
+        return false;
+      }
+      if(ignoreDirsResolved.some(dir => file.startsWith(dir))) {
+        return false;
+      }
+      return true;
+    });
 
   let fileContents = '';
 
-  for (const [index, file] of fileEntries) {
+  for (const [index, file] of files.entries()) {
     const relativeFilePath = path.relative('./src', file);
     fileContents += `import file${index} from "${relativeFilePath}";\n`;
   }
 
   fileContents += `\nexport const assets = {\n`;
 
-  for (const [index, file] of fileEntries) {
+  for (const [index, file] of files.entries()) {
     const contentDef = contentTypes.find(type => type.test.test(file));
     const filePath = JSON.stringify(file.slice(root.length));
     const type = JSON.stringify(contentDef?.type);
     const isStatic = JSON.stringify(staticRoot ? file.startsWith(staticRoot) : false);
 
-    if (contentDef == null) {
-      console.warn('Warning: Unknown file type "' + filePath + '"...');
+    if (contentDef != null) {
+      console.log(filePath + ': ' + type + (isStatic === 'true' ? ' [STATIC]' : ''));
+    } else {
+      console.warn('Warning: Unknown file type ' + filePath + '...');
     }
 
     let content;
@@ -129,6 +152,6 @@ export function buildStaticLoader() {
 
   fs.writeFileSync('./src/statics.js', fileContents);
 
-  console.log("🚀 Wrote static file loader for " + fileEntries.length + " file(s).");
+  console.log("🚀 Wrote static file loader for " + files.length + " file(s).");
 
 }

@@ -10,7 +10,16 @@ try {
   process.exit(1);
 }
 
+const srcDir = path.resolve('./src');
+const srcNodeModulesDir = path.resolve('./node_modules');
 const buildDir = path.resolve(config.buildDir);
+
+if (buildDir.startsWith(path.resolve())) {
+  // If build dir is INSIDE the compute-js app dir, results may be weird
+  console.warn('⚠️ public files directory is inside of the compute-js app directory.');
+  console.warn('This is an unsupported scenario and you may experience trouble.');
+  console.warn('');
+}
 
 module.exports = {
   entry: "./src/index.js",
@@ -31,6 +40,12 @@ module.exports = {
       // Usage: e.g., import notFoundPage from "./page_404.html"
       {
         test: (file) => {
+          if(file.startsWith(srcDir + '/')) {
+            return false;
+          }
+          if(file.startsWith(srcNodeModulesDir + '/')) {
+            return false;
+          }
           if(!file.startsWith(buildDir + '/')) {
             return false;
           }
