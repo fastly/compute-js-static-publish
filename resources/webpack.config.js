@@ -12,11 +12,11 @@ try {
 
 const srcDir = path.resolve('./src');
 const srcNodeModulesDir = path.resolve('./node_modules');
-const buildDir = path.resolve(config.buildDir);
+const publicDir = path.resolve(config.buildDir);
 
-if (buildDir.startsWith(path.resolve())) {
-  // If build dir is INSIDE the compute-js app dir, results may be weird
-  console.warn('⚠️ public files directory is inside of the compute-js app directory.');
+if (publicDir.startsWith(path.resolve())) {
+  // If public dir is INSIDE the compute-js app dir, results may be weird
+  console.warn('⚠️ public files directory is inside of the Compute@Edge app directory.');
   console.warn('This is an unsupported scenario and you may experience trouble.');
   console.warn('');
 }
@@ -46,7 +46,7 @@ module.exports = {
           if(file.startsWith(srcNodeModulesDir + '/')) {
             return false;
           }
-          if(!file.startsWith(buildDir + '/')) {
+          if(!file.startsWith(publicDir + '/')) {
             return false;
           }
           return /\.(txt|htm(l)?|xml|json|map|js|css|svg)/.test(file);
@@ -57,7 +57,13 @@ module.exports = {
       // We base64 encode them here
       {
         test: (file) => {
-          if(!file.startsWith(buildDir + '/')) {
+          if(file.startsWith(srcDir + '/')) {
+            return false;
+          }
+          if(file.startsWith(srcNodeModulesDir + '/')) {
+            return false;
+          }
+          if(!file.startsWith(publicDir + '/')) {
             return false;
           }
           return /\.(bmp|png|gif|jp(e)?g|ico|tif(f)?|aac|mp3|mp4|mpeg|webm|pdf|tar|zip|eot|otf|ttf)/.test(file);

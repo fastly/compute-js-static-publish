@@ -13,27 +13,27 @@ import * as url from 'url';
 export function initApp(commandLineValues: CommandLineOptions) {
 
   let assumeCreateReactApp = false;
-  if (commandLineValues['public-path'] === undefined &&
-    commandLineValues['static-path'] === undefined
+  if (commandLineValues['public-dir'] === undefined &&
+    commandLineValues['static-dir'] === undefined
   ) {
-    console.log("--public-path and --static-path not provided, assuming create-react-app.");
-    console.log("Using --public-path=./build and --static-path=./build/static");
+    console.log("--public-dir and --static-dir not provided, assuming create-react-app.");
+    console.log("Using --public-dir=./build and --static-dir=./build/static");
     assumeCreateReactApp = true;
-    commandLineValues['public-path'] = './build';
-    commandLineValues['static-path'] = './build/static';
+    commandLineValues['public-dir'] = './build';
+    commandLineValues['static-dir'] = './build/static';
   }
 
   const COMPUTE_JS_DIR = commandLineValues.output as string;
   const computeJsDir = path.resolve(COMPUTE_JS_DIR);
 
-  const BUILD_DIR = commandLineValues['public-path'] as string | undefined;
-  if(BUILD_DIR == null) {
-    console.error("❌ required parameter --public-path not provided.");
+  const PUBLIC_DIR = commandLineValues['public-dir'] as string | undefined;
+  if(PUBLIC_DIR == null) {
+    console.error("❌ required parameter --public-dir not provided.");
     process.exit(1);
   }
-  const buildDir = path.resolve(BUILD_DIR);
+  const publicDir = path.resolve(PUBLIC_DIR);
 
-  const BUILD_STATIC_DIR = commandLineValues['static-path'] as string | undefined;
+  const BUILD_STATIC_DIR = commandLineValues['static-dir'] as string | undefined;
   const buildStaticDir = BUILD_STATIC_DIR != null ? path.resolve(BUILD_STATIC_DIR) : null;
 
   const IS_SPA = commandLineValues['spa'] as boolean | undefined;
@@ -81,8 +81,8 @@ export function initApp(commandLineValues: CommandLineOptions) {
   const description = commandLineValues['description'] ?? packageJson?.description ?? defaultDescription;
 
   console.log('');
-  console.log('Public Path :', BUILD_DIR);
-  console.log('Static Path :', BUILD_STATIC_DIR ?? '(None)');
+  console.log('Public Dir  :', PUBLIC_DIR);
+  console.log('Static Dir  :', BUILD_STATIC_DIR ?? '(None)');
   console.log('SPA         :', IS_SPA ? 'Yes' : 'No');
   console.log('name        :', name);
   console.log('author      :', author);
@@ -156,7 +156,7 @@ service_id = ""
   fs.writeFileSync(fastlyTomlPath, fastlyTomlContent, "utf-8");
 
   // static-publish.json
-  const buildDirRel = path.relative(computeJsDir, buildDir);
+  const buildDirRel = path.relative(computeJsDir, publicDir);
   const buildStaticDirRel = buildStaticDir != null ? path.relative(computeJsDir, buildStaticDir) : null;
 
   // language=JSON

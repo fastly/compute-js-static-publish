@@ -1,11 +1,11 @@
 // This program builds static resources out of the files in the
-// static folder to be served. It reads the name of the static
+// public folder to be served. It reads the name of the public
 // folder from the static-publish.json file.
 
 // With create-react-app, this would be the ./build directory.
 
 // This also reexports the "spa" value in the static-publish.json
-// file so that the C@E handler knows to serve up index.html if
+// file so that the C@E handler knows what file to serve up if
 // the resource doesn't map to a file.
 
 import * as fs from "fs";
@@ -84,12 +84,14 @@ export function buildStaticLoader() {
 
   const root = path.resolve(config.buildDir);
 
-  const ignoreDirs = [
+  // Exclude dirs are relative to the build directory
+
+  const excludeDirs = [
     './node_modules',
     './.idea',
   ];
 
-  const ignoreDirsResolved = ignoreDirs.map(
+  const excludeDirsResolved = excludeDirs.map(
     dir => path.resolve(config.buildDir, dir)
   );
 
@@ -106,7 +108,7 @@ export function buildStaticLoader() {
       if(file.startsWith(outputDir)) {
         return false;
       }
-      if(ignoreDirsResolved.some(dir => file.startsWith(dir))) {
+      if(excludeDirsResolved.some(dir => file.startsWith(dir))) {
         return false;
       }
       return true;

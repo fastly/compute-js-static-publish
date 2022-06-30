@@ -8,8 +8,8 @@ import { buildStaticLoader } from "./build-static.js";
 const optionDefinitions: OptionDefinition[] = [
   { name: 'build-static', type: Boolean },
   { name: 'output', alias: 'o', type: String, defaultValue: './compute-js', },
-  { name: 'public-path', type: String, },
-  { name: 'static-path', type: String, },
+  { name: 'public-dir', type: String, },
+  { name: 'static-dir', type: String, },
   { name: 'spa', type: Boolean, defaultValue: false, },
   { name: 'cra-eject', type: Boolean, defaultValue: false },
   { name: 'name', type: String, },
