@@ -11,6 +11,7 @@ const optionDefinitions: OptionDefinition[] = [
   { name: 'public-path', type: String, },
   { name: 'static-path', type: String, },
   { name: 'spa', type: Boolean, defaultValue: false, },
+  { name: 'cra-eject', type: Boolean, defaultValue: false },
   { name: 'name', type: String, },
   { name: 'author', type: String, },
   { name: 'description', type: String, },

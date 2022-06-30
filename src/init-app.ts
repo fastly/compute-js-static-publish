@@ -62,10 +62,15 @@ export function initApp(commandLineValues: CommandLineOptions) {
   let defaultName = 'compute-js-static-site';
   let defaultDescription = 'Compute@Edge static site';
   if(assumeCreateReactApp) {
-    if(packageJson?.dependencies?.['react-scripts'] == null) {
-      console.error("❌ Can't find react-scripts in dependencies");
-      console.error("Run this from a create-react-app project directory.");
-      process.exit(1);
+    if(commandLineValues['cra-eject']) {
+      console.log("--cra-eject specified, skipping check for react-scripts in dependencies.")
+    } else {
+      if(packageJson?.dependencies?.['react-scripts'] == null) {
+        console.error("❌ Can't find react-scripts in dependencies");
+        console.error("Run this from a create-react-app project directory.");
+        console.log("If this is a project created with create-react-app and has since been ejected, specify --cra-eject to skip this check.")
+        process.exit(1);
+      }
     }
     defaultName = 'my-create-react-app';
     defaultDescription = 'Compute@Edge static site from create-react-app';
