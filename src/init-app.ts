@@ -160,13 +160,23 @@ service_id = ""
 
   const staticDirs = [];
   if (buildStaticDir != null) {
-    staticDirs.push(path.relative(publicDir, buildStaticDir));
+    staticDirs.push(buildStaticDir);
   }
 
-  // language=JSON
+  const staticDirsRel = [];
+  for (const staticDir of staticDirs) {
+    const rel = path.relative(publicDir, staticDir);
+    if(rel.startsWith('../')) {
+      // we can't have a path outside the public dir, so we ignore it
+      console.warn(`Specified static dir '${staticDir}' is not inside public directory, ignoring...`);
+      continue;
+    }
+    staticDirsRel.push('./' + rel);
+  }
+
   const staticPublishJson = {
     publicDir: publicDirRel,
-    staticDirs: staticDirs,
+    staticDirs: staticDirsRel,
     spa: IS_SPA,
   };
   const staticPublishJsonContent = JSON.stringify(staticPublishJson, null, 2);
