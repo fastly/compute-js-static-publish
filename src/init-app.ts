@@ -164,13 +164,12 @@ service_id = ""
   }
 
   // language=JSON
-  const staticPublishJsonContent = `\
-{
-  "publicDir": ${JSON.stringify(publicDirRel)},
-  "staticDirs": ${JSON.stringify(staticDirs)},
-  "spa": ${JSON.stringify(IS_SPA)}
-}
-`;
+  const staticPublishJson = {
+    publicDir: publicDirRel,
+    staticDirs: staticDirs,
+    spa: IS_SPA,
+  };
+  const staticPublishJsonContent = JSON.stringify(staticPublishJson, null, 2);
 
   const staticPublishJsonPath = path.resolve(computeJsDir, 'static-publish.json');
   fs.writeFileSync(staticPublishJsonPath, staticPublishJsonContent, "utf-8");
