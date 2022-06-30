@@ -178,10 +178,14 @@ export function buildStaticLoader() {
 
   fileContents += '};\n';
 
-  const isSpa = config.spa ?? false;
-  console.log(`Application ${isSpa ? 'IS' : 'IS NOT'} a SPA.`);
+  const spaFile: string | false = config.spa ?? false;
+  if(spaFile) {
+    console.log(`Application SPA file '${spaFile}'.`);
+  } else {
+    console.log(`Application is not a SPA.`);
+  }
 
-  fileContents += `\nexport const isSpa = ${isSpa};\n`;
+  fileContents += `\nexport const spaFile = ${JSON.stringify(spaFile)};\n`;
 
   fs.writeFileSync('./src/statics.js', fileContents);
 

@@ -10,7 +10,7 @@ const optionDefinitions: OptionDefinition[] = [
   { name: 'output', alias: 'o', type: String, defaultValue: './compute-js', },
   { name: 'public-dir', type: String, },
   { name: 'static-dir', type: String, },
-  { name: 'spa', type: Boolean, defaultValue: false, },
+  { name: 'spa', type: String, },
   { name: 'cra-eject', type: Boolean, defaultValue: false },
   { name: 'name', type: String, },
   { name: 'author', type: String, },

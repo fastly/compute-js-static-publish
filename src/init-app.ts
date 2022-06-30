@@ -36,7 +36,27 @@ export function initApp(commandLineValues: CommandLineOptions) {
   const BUILD_STATIC_DIR = commandLineValues['static-dir'] as string | undefined;
   const buildStaticDir = BUILD_STATIC_DIR != null ? path.resolve(BUILD_STATIC_DIR) : null;
 
-  const IS_SPA = commandLineValues['spa'] as boolean | undefined;
+  const spa = commandLineValues['spa'] as string | null | undefined;
+
+  let spaFilename = spa;
+
+  // Specifically check for null instead of undefined
+  if(spa === null) {
+    spaFilename = path.resolve(publicDir, './index.html');
+    let rel = path.relative(path.resolve(), spaFilename);
+    if(!rel.startsWith('..')) {
+      rel = './' + rel;
+    }
+    console.log('--spa provided with no value, assuming ' + rel);
+  }
+
+  if(spaFilename != null) {
+    spaFilename = path.resolve(spaFilename);
+    if(!spaFilename.startsWith(publicDir)) {
+      console.error(`❌ SPA file '${spaFilename}' not inside public directory!`);
+      process.exit(1);
+    }
+  }
 
   const exists = fs.existsSync(computeJsDir);
   if(exists) {
@@ -80,10 +100,15 @@ export function initApp(commandLineValues: CommandLineOptions) {
   const name = commandLineValues['name'] ?? packageJson?.name ?? defaultName;
   const description = commandLineValues['description'] ?? packageJson?.description ?? defaultDescription;
 
+  let spaRel: string | null = spaFilename != null ? path.relative(path.resolve(), spaFilename) : null;
+  if(spaRel != null && !spaRel.startsWith('..')) {
+    spaRel = './' + spaRel;
+  }
+
   console.log('');
   console.log('Public Dir  :', PUBLIC_DIR);
   console.log('Static Dir  :', BUILD_STATIC_DIR ?? '(None)');
-  console.log('SPA         :', IS_SPA ? 'Yes' : 'No');
+  console.log('SPA         :', spaRel != null ? spaRel : '(None)');
   console.log('name        :', name);
   console.log('author      :', author);
   console.log('description :', description);
@@ -174,12 +199,17 @@ service_id = ""
     staticDirsRel.push('./' + rel);
   }
 
+  let spaFileRel: string | false = false;
+  if(spaFilename != null) {
+    spaFileRel = '/' + path.relative(publicDir, spaFilename);
+  }
+
   const staticPublishJson = {
     publicDir: publicDirRel,
     excludeDirs: [ './node_modules' ],
     includeDirs: [ './.well-known' ],
     staticDirs: staticDirsRel,
-    spa: IS_SPA,
+    spa: spaFileRel,
   };
   const staticPublishJsonContent = JSON.stringify(staticPublishJson, null, 2);
 

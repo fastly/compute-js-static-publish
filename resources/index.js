@@ -1,7 +1,7 @@
 /// <reference types="@fastly/js-compute" />
 
 import { Router } from '@fastly/expressly';
-import { assets, isSpa } from './statics';
+import { assets, spaFile } from './statics';
 
 const router = new Router();
 
@@ -33,11 +33,11 @@ router.get("*", (req, res) => {
 
 // If this is a SPA, then return index.html for HTML requests
 router.get("*", (req, res) => {
-  if(!isSpa || !(req.headers.get('Accept') ?? '').split(',').includes('text/html')) {
+  if(!spaFile || !(req.headers.get('Accept') ?? '').split(',').includes('text/html')) {
     return;
   }
 
-  const staticFile = assets['/index.html'];
+  const staticFile = assets[spaFile];
   res.send(new Response(staticFile.content, {
     status: 200,
     headers: {
