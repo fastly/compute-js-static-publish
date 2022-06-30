@@ -1,5 +1,3 @@
-#!/usr/bin/env node
-
 // This program builds static resources out of the files in the
 // static folder to be served. It reads the name of the static
 // folder from the static-publish.json file.
@@ -57,77 +55,80 @@ function getFiles(results: string[], dir: string) {
   }
 }
 
-console.log("Fastly Compute@Edge JavaScript Static Publisher");
-console.log("Building loader...");
+export function buildStaticLoader() {
 
-let configFileText;
-try {
-  configFileText = fs.readFileSync("./static-publish.json", "utf-8");
-} catch {
-  console.error("❌ Can't read static-publish.json");
-  console.error("Run this from a compute-js-static-publish compute-js directory.");
-  process.exit(1);
-}
+  console.log("Building loader...");
 
-let config;
-try {
-  config = JSON.parse(configFileText);
-} catch {
-  console.error("❌ Can't parse static-publish.json");
-  console.error("Run this from a compute-js-static-publish compute-js directory.");
-  process.exit(1);
-}
-
-const results: string[] = [];
-getFiles(results, config.buildDir);
-
-const root = path.resolve(config.buildDir);
-const staticRoot = config.staticDir != null ? path.resolve(config.staticDir) : null;
-console.log(`Build directory '${root}'.`);
-if (staticRoot != null) {
-  console.log(`Using static root directory '${staticRoot}'.`);
-} else {
-  console.log(`No static root defined.`);
-}
-
-const fileEntries = [...results.entries()];
-
-let fileContents = '';
-
-for (const [index, file] of fileEntries) {
-  const relativeFilePath = path.relative('./src', file);
-  fileContents += `import file${index} from "${relativeFilePath}";\n`;
-}
-
-fileContents += `\nexport const assets = {\n`;
-
-for (const [index, file] of fileEntries) {
-  const contentDef = contentTypes.find(type => type.test.test(file));
-  const filePath = JSON.stringify(file.slice(root.length));
-  const type = JSON.stringify(contentDef?.type);
-  const isStatic = JSON.stringify(staticRoot ? file.startsWith(staticRoot) : false);
-
-  if (contentDef == null) {
-    console.warn('Warning: Unknown file type "' + filePath + '"...');
+  let configFileText;
+  try {
+    configFileText = fs.readFileSync("./static-publish.json", "utf-8");
+  } catch {
+    console.error("❌ Can't read static-publish.json");
+    console.error("Run this from a compute-js-static-publish compute-js directory.");
+    process.exit(1);
   }
 
-  let content;
-  if (contentDef == null || contentDef.binary) {
-    content = 'Buffer.from(file' + index + ', "base64")';
+  let config;
+  try {
+    config = JSON.parse(configFileText);
+  } catch {
+    console.error("❌ Can't parse static-publish.json");
+    console.error("Run this from a compute-js-static-publish compute-js directory.");
+    process.exit(1);
+  }
+
+  const results: string[] = [];
+  getFiles(results, config.buildDir);
+
+  const root = path.resolve(config.buildDir);
+  const staticRoot = config.staticDir != null ? path.resolve(config.staticDir) : null;
+  console.log(`Build directory '${root}'.`);
+  if (staticRoot != null) {
+    console.log(`Using static root directory '${staticRoot}'.`);
   } else {
-    content = 'file' + index;
+    console.log(`No static root defined.`);
   }
 
-  fileContents += `  ${filePath}: { contentType: ${type}, content: ${content}, isStatic: ${isStatic} },\n`;
+  const fileEntries = [...results.entries()];
+
+  let fileContents = '';
+
+  for (const [index, file] of fileEntries) {
+    const relativeFilePath = path.relative('./src', file);
+    fileContents += `import file${index} from "${relativeFilePath}";\n`;
+  }
+
+  fileContents += `\nexport const assets = {\n`;
+
+  for (const [index, file] of fileEntries) {
+    const contentDef = contentTypes.find(type => type.test.test(file));
+    const filePath = JSON.stringify(file.slice(root.length));
+    const type = JSON.stringify(contentDef?.type);
+    const isStatic = JSON.stringify(staticRoot ? file.startsWith(staticRoot) : false);
+
+    if (contentDef == null) {
+      console.warn('Warning: Unknown file type "' + filePath + '"...');
+    }
+
+    let content;
+    if (contentDef == null || contentDef.binary) {
+      content = 'Buffer.from(file' + index + ', "base64")';
+    } else {
+      content = 'file' + index;
+    }
+
+    fileContents += `  ${filePath}: { contentType: ${type}, content: ${content}, isStatic: ${isStatic} },\n`;
+  }
+
+  fileContents += '};\n';
+
+  const isSpa = config.spa ?? false;
+  console.log(`Application ${isSpa ? 'IS' : 'IS NOT'} a SPA.`);
+
+  fileContents += `\nexport const isSpa = ${isSpa};\n`;
+
+  fs.writeFileSync('./src/statics.js', fileContents);
+
+  console.log("🚀 Wrote static file loader for " + fileEntries.length + " file(s).");
+
 }
-
-fileContents += '};\n';
-
-const isSpa = config.spa ?? false;
-console.log(`Application ${isSpa ? 'IS' : 'IS NOT'} a SPA.`);
-
-fileContents += `\nexport const isSpa = ${isSpa};\n`;
-
-fs.writeFileSync('./src/statics.js', fileContents);
-
-console.log("🚀 Wrote static file loader for " + fileEntries.length + " file(s).");
