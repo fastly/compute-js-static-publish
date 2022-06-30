@@ -123,7 +123,7 @@ const packageJsonContent = `\
         "@fastly/expressly": "^1.0.0-alpha.7",` +
         //"@fastly/compute-js-static-publish": "1.0.0",
 `
-        "@fastly/js-compute": "^0.2.5",
+        "@fastly/js-compute": "^0.3.0",
         "buffer": "^6.0.3",
         "core-js": "^3.19.1",
         "webpack": "^5.64.0",
@@ -136,7 +136,7 @@ const packageJsonContent = `\
     "private": true,
     "main": "src/index.js",
     "scripts": {
-        "build": "js-compute-runtime --skip-pkg bin/index.js bin/main.wasm",
+        "build": "js-compute-runtime bin/index.js bin/main.wasm",
         "deploy": "npm run build && fastly compute deploy",
         "prebuild": "npx compute-js-build-static-loader && webpack"
     },
