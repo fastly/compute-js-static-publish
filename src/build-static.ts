@@ -84,17 +84,6 @@ export function buildStaticLoader() {
 
   const publicDirRoot = path.resolve(config.publicDir);
 
-  // Exclude dirs are relative to the build directory
-
-  const excludeDirs = [
-    './node_modules',
-    './.idea',
-  ];
-
-  const excludeDirsResolved = excludeDirs.map(
-    dir => path.resolve(config.publicDir, dir)
-  );
-
   console.log(`Public directory '${publicDirRoot}'.`);
 
   const staticDirs: string[] = config.staticDirs ?? [];
@@ -107,12 +96,32 @@ export function buildStaticLoader() {
     dir => path.resolve(config.publicDir, dir)
   );
 
+  const DEFAULT_EXCLUDE_DIRS = [
+    './node_modules'
+  ];
+
+  const excludeDirs: string[] = config.excludeDirs ?? DEFAULT_EXCLUDE_DIRS;
+  if (excludeDirs.length > 0) {
+    console.log(`Using exclude directories: ${excludeDirs.join(', ')}`);
+  } else {
+    console.log(`No exclude directories defined.`);
+  }
+  const excludeRoots = excludeDirs.map(
+    dir => path.resolve(config.publicDir, dir)
+  );
+
   const files = results
     .filter(file => {
+      // Exclude files that come from C@E app dir
       if(file.startsWith(outputDir)) {
         return false;
       }
-      if(excludeDirsResolved.some(dir => file.startsWith(dir))) {
+      // Exclude files that are in directories that start with "."
+      if(file.indexOf('/.') !== -1) {
+        return false;
+      }
+      // Exclude files that come from "excluded roots" dir
+      if(excludeRoots.some(root => file.startsWith(root))) {
         return false;
       }
       return true;
