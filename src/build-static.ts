@@ -110,11 +110,29 @@ export function buildStaticLoader() {
     dir => path.resolve(config.publicDir, dir)
   );
 
+  const DEFAULT_INCLUDE_DIRS = [
+    './.well-known'
+  ];
+
+  const includeDirs: string[] = config.includeDirs ?? DEFAULT_INCLUDE_DIRS;
+  if (includeDirs.length > 0) {
+    console.log(`Using include directories: ${includeDirs.join(', ')}`);
+  } else {
+    console.log(`No include directories defined.`);
+  }
+  const includeRoots = includeDirs.map(
+    dir => path.resolve(config.publicDir, dir)
+  );
+
   const files = results
     .filter(file => {
       // Exclude files that come from C@E app dir
       if(file.startsWith(outputDir)) {
         return false;
+      }
+      // Include files that come from "included roots" dir
+      if(includeRoots.some(root => file.startsWith(root))) {
+        return true;
       }
       // Exclude files that are in directories that start with "."
       if(file.indexOf('/.') !== -1) {

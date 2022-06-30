@@ -177,6 +177,7 @@ service_id = ""
   const staticPublishJson = {
     publicDir: publicDirRel,
     excludeDirs: [ './node_modules' ],
+    includeDirs: [ './.well-known' ],
     staticDirs: staticDirsRel,
     spa: IS_SPA,
   };
