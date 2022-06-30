@@ -78,11 +78,11 @@ export function buildStaticLoader() {
   }
 
   const results: string[] = [];
-  getFiles(results, config.buildDir);
+  getFiles(results, config.publicDir);
 
   const outputDir = path.resolve();
 
-  const root = path.resolve(config.buildDir);
+  const publicDirRoot = path.resolve(config.publicDir);
 
   // Exclude dirs are relative to the build directory
 
@@ -92,16 +92,20 @@ export function buildStaticLoader() {
   ];
 
   const excludeDirsResolved = excludeDirs.map(
-    dir => path.resolve(config.buildDir, dir)
+    dir => path.resolve(config.publicDir, dir)
   );
 
-  const staticRoot = config.staticDir != null ? path.resolve(config.staticDir) : null;
-  console.log(`Build directory '${root}'.`);
-  if (staticRoot != null) {
-    console.log(`Using static root directory '${staticRoot}'.`);
+  console.log(`Public directory '${publicDirRoot}'.`);
+
+  const staticDirs: string[] = config.staticDirs ?? [];
+  if (staticDirs.length > 0) {
+    console.log(`Using static directories: ${staticDirs.join(', ')}`);
   } else {
-    console.log(`No static root defined.`);
+    console.log(`No static directories defined.`);
   }
+  const staticRoots = staticDirs.map(
+    dir => path.resolve(config.publicDir, dir)
+  );
 
   const files = results
     .filter(file => {
@@ -125,12 +129,12 @@ export function buildStaticLoader() {
 
   for (const [index, file] of files.entries()) {
     const contentDef = contentTypes.find(type => type.test.test(file));
-    const filePath = JSON.stringify(file.slice(root.length));
+    const filePath = JSON.stringify(file.slice(publicDirRoot.length));
     const type = JSON.stringify(contentDef?.type);
-    const isStatic = JSON.stringify(staticRoot ? file.startsWith(staticRoot) : false);
+    const isStatic = staticRoots.some(root => file.startsWith(root));
 
     if (contentDef != null) {
-      console.log(filePath + ': ' + type + (isStatic === 'true' ? ' [STATIC]' : ''));
+      console.log(filePath + ': ' + type + (isStatic ? ' [STATIC]' : ''));
     } else {
       console.warn('Warning: Unknown file type ' + filePath + '...');
     }
@@ -142,7 +146,7 @@ export function buildStaticLoader() {
       content = 'file' + index;
     }
 
-    fileContents += `  ${filePath}: { contentType: ${type}, content: ${content}, isStatic: ${isStatic} },\n`;
+    fileContents += `  ${filePath}: { contentType: ${type}, content: ${content}, isStatic: ${JSON.stringify(isStatic)} },\n`;
   }
 
   fileContents += '};\n';

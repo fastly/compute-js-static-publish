@@ -12,7 +12,7 @@ try {
 
 const srcDir = path.resolve('./src');
 const srcNodeModulesDir = path.resolve('./node_modules');
-const publicDir = path.resolve(config.buildDir);
+const publicDir = path.resolve(config.publicDir);
 
 if (publicDir.startsWith(path.resolve())) {
   // If public dir is INSIDE the compute-js app dir, results may be weird

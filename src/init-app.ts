@@ -156,14 +156,18 @@ service_id = ""
   fs.writeFileSync(fastlyTomlPath, fastlyTomlContent, "utf-8");
 
   // static-publish.json
-  const buildDirRel = path.relative(computeJsDir, publicDir);
-  const buildStaticDirRel = buildStaticDir != null ? path.relative(computeJsDir, buildStaticDir) : null;
+  const publicDirRel = path.relative(computeJsDir, publicDir);
+
+  const staticDirs = [];
+  if (buildStaticDir != null) {
+    staticDirs.push(path.relative(publicDir, buildStaticDir));
+  }
 
   // language=JSON
   const staticPublishJsonContent = `\
 {
-  "buildDir": ${JSON.stringify(buildDirRel)},
-  "staticDir": ${JSON.stringify(buildStaticDirRel)},
+  "publicDir": ${JSON.stringify(publicDirRel)},
+  "staticDirs": ${JSON.stringify(staticDirs)},
   "spa": ${JSON.stringify(IS_SPA)}
 }
 `;
