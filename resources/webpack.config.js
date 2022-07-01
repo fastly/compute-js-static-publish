@@ -10,9 +10,44 @@ try {
   process.exit(1);
 }
 
+let defaultContentTypes;
+try {
+  defaultContentTypes = require("./default-content-types.cjs");
+} catch {
+  console.error('Error loading default-content-types.cjs');
+  process.exit(1);
+}
+
+const contentTypes = defaultContentTypes.mergeContentTypes(config.contentTypes ?? []);
+
 const srcDir = path.resolve('./src');
 const srcNodeModulesDir = path.resolve('./node_modules');
 const publicDir = path.resolve(config.publicDir);
+
+function testStaticFile(file) {
+  if(!file.startsWith(publicDir + '/')) {
+    return null;
+  }
+  if(file.startsWith(srcDir + '/')) {
+    return null;
+  }
+  if(file.startsWith(srcNodeModulesDir + '/')) {
+    return null;
+  }
+  for (const contentType of contentTypes) {
+    let matched = false;
+    if(contentType.test instanceof RegExp) {
+      matched = contentType.test.test(file);
+    } else {
+      // should be a function
+      matched = contentType.test(file);
+    }
+    if(matched) {
+      return { binary: Boolean(contentType.binary) };
+    }
+  }
+  return null;
+}
 
 if (publicDir.startsWith(path.resolve())) {
   // If public dir is INSIDE the compute-js app dir, results may be weird
@@ -40,16 +75,8 @@ module.exports = {
       // Usage: e.g., import notFoundPage from "./page_404.html"
       {
         test: (file) => {
-          if(file.startsWith(srcDir + '/')) {
-            return false;
-          }
-          if(file.startsWith(srcNodeModulesDir + '/')) {
-            return false;
-          }
-          if(!file.startsWith(publicDir + '/')) {
-            return false;
-          }
-          return /\.(txt|htm(l)?|xml|json|map|js|css|svg)/.test(file);
+          const result = testStaticFile(file);
+          return result != null && !result.binary;
         },
         type: "asset/source",
       },
@@ -57,16 +84,8 @@ module.exports = {
       // We base64 encode them here
       {
         test: (file) => {
-          if(file.startsWith(srcDir + '/')) {
-            return false;
-          }
-          if(file.startsWith(srcNodeModulesDir + '/')) {
-            return false;
-          }
-          if(!file.startsWith(publicDir + '/')) {
-            return false;
-          }
-          return /\.(bmp|png|gif|jp(e)?g|ico|tif(f)?|aac|mp3|mp4|mpeg|webm|pdf|tar|zip|eot|otf|ttf)/.test(file);
+          const result = testStaticFile(file);
+          return result != null && result.binary;
         },
         type: "asset/inline",
         generator: {

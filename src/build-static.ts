@@ -10,7 +10,8 @@
 
 import * as fs from "fs";
 import * as path from "path";
-import { CONTENT_TYPES } from "./content-types.js";
+import * as url from "url";
+import { ContentTypeDef } from "./content-types.js";
 
 function getFiles(results: string[], dir: string) {
   const entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -72,6 +73,16 @@ export async function buildStaticLoader() {
     dir => path.resolve(config.publicDir, dir)
   );
 
+  // Load content types
+  const __dirname = url.fileURLToPath(new URL('.', import.meta.url));
+  const defaultContentTypesJsSrcPath = path.resolve(__dirname, '../resources/default-content-types.cjs');
+  const defaultContentTypes = await import(defaultContentTypesJsSrcPath);
+  const finalContentTypes: ContentTypeDef[] = defaultContentTypes.mergeContentTypes(config.contentTypes ?? []);
+
+  // Update the target file too, so webpack can see it.
+  const defaultContentTypesJsPath = path.resolve('./default-content-types.cjs');
+  fs.copyFileSync(defaultContentTypesJsSrcPath, defaultContentTypesJsPath);
+
   const DEFAULT_INCLUDE_DIRS = [
     './.well-known'
   ];
@@ -117,7 +128,7 @@ export async function buildStaticLoader() {
   fileContents += `\nexport const assets = {\n`;
 
   for (const [index, file] of files.entries()) {
-    const contentDef = CONTENT_TYPES.find(type => {
+    const contentDef = finalContentTypes.find(type => {
       if(typeof type.test === 'function') {
         return type.test(file);
       }
