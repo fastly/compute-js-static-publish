@@ -127,6 +127,8 @@ export async function buildStaticLoader() {
     fileContents += `import file${index} from "${relativeFilePath}";\n`;
   }
 
+  const knownAssets: Record<string, {contentType: string, isStatic:boolean}> = {};
+
   fileContents += `\nexport const assets = {\n`;
 
   for (const [index, file] of files.entries()) {
@@ -134,6 +136,7 @@ export async function buildStaticLoader() {
     const filePath = JSON.stringify(file.slice(publicDirRoot.length));
     const type = JSON.stringify(contentDef?.type);
     const isStatic = staticRoots.some(root => file.startsWith(root));
+    knownAssets[filePath] = { contentType: type, isStatic };
 
     if (contentDef != null) {
       console.log(filePath + ': ' + type + (isStatic ? ' [STATIC]' : ''));
@@ -153,9 +156,13 @@ export async function buildStaticLoader() {
 
   fileContents += '};\n';
 
-  const spaFile: string | false = config.spa ?? false;
+  let spaFile: string | false = config.spa ?? false;
   if(spaFile) {
     console.log(`Application SPA file '${spaFile}'.`);
+    if(!knownAssets[spaFile] || knownAssets[spaFile].contentType !== 'text/html') {
+      console.warn(`'${spaFile}' does not exist or is not of type 'text/html'. Ignoring.`);
+      spaFile = false;
+    }
   } else {
     console.log(`Application is not a SPA.`);
   }
