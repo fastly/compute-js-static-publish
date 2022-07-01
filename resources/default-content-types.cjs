@@ -81,6 +81,23 @@ function mergeContentTypes(contentTypes) {
   return finalContentTypes;
 }
 
+function testFileContentType(contentTypes, file) {
+  for (const contentType of contentTypes) {
+    let matched = false;
+    if(contentType.test instanceof RegExp) {
+      matched = contentType.test.test(file);
+    } else {
+      // should be a function
+      matched = contentType.test(file);
+    }
+    if(matched) {
+      return { type: contentType.type, binary: Boolean(contentType.binary) };
+    }
+  }
+  return null;
+}
+
 module.exports = {
   mergeContentTypes,
+  testFileContentType,
 };

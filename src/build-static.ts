@@ -73,10 +73,12 @@ export async function buildStaticLoader() {
     dir => path.resolve(config.publicDir, dir)
   );
 
-  // Load content types
+  // Load defaultContentTypes module
   const __dirname = url.fileURLToPath(new URL('.', import.meta.url));
   const defaultContentTypesJsSrcPath = path.resolve(__dirname, '../resources/default-content-types.cjs');
   const defaultContentTypes = await import(defaultContentTypesJsSrcPath);
+
+  // Load content types
   const finalContentTypes: ContentTypeDef[] = defaultContentTypes.mergeContentTypes(config.contentTypes ?? []);
 
   // Update the target file too, so webpack can see it.
@@ -128,13 +130,7 @@ export async function buildStaticLoader() {
   fileContents += `\nexport const assets = {\n`;
 
   for (const [index, file] of files.entries()) {
-    const contentDef = finalContentTypes.find(type => {
-      if(typeof type.test === 'function') {
-        return type.test(file);
-      }
-      // type is RegExp
-      return type.test.test(file);
-    });
+    const contentDef = defaultContentTypes.testFileContentType(finalContentTypes, file);
     const filePath = JSON.stringify(file.slice(publicDirRoot.length));
     const type = JSON.stringify(contentDef?.type);
     const isStatic = staticRoots.some(root => file.startsWith(root));

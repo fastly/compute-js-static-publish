@@ -24,31 +24,6 @@ const srcDir = path.resolve('./src');
 const srcNodeModulesDir = path.resolve('./node_modules');
 const publicDir = path.resolve(config.publicDir);
 
-function testStaticFile(file) {
-  if(!file.startsWith(publicDir + '/')) {
-    return null;
-  }
-  if(file.startsWith(srcDir + '/')) {
-    return null;
-  }
-  if(file.startsWith(srcNodeModulesDir + '/')) {
-    return null;
-  }
-  for (const contentType of contentTypes) {
-    let matched = false;
-    if(contentType.test instanceof RegExp) {
-      matched = contentType.test.test(file);
-    } else {
-      // should be a function
-      matched = contentType.test(file);
-    }
-    if(matched) {
-      return { binary: Boolean(contentType.binary) };
-    }
-  }
-  return null;
-}
-
 if (publicDir.startsWith(path.resolve())) {
   // If public dir is INSIDE the compute-js app dir, results may be weird
   console.warn('⚠️ public files directory is inside of the Compute@Edge app directory.');
@@ -75,7 +50,16 @@ module.exports = {
       // Usage: e.g., import notFoundPage from "./page_404.html"
       {
         test: (file) => {
-          const result = testStaticFile(file);
+          if(!file.startsWith(publicDir + '/')) {
+            return false;
+          }
+          if(file.startsWith(srcDir + '/')) {
+            return false;
+          }
+          if(file.startsWith(srcNodeModulesDir + '/')) {
+            return false;
+          }
+          const result = defaultContentTypes.testFileContentType(contentTypes, file);
           return result != null && !result.binary;
         },
         type: "asset/source",
@@ -84,7 +68,16 @@ module.exports = {
       // We base64 encode them here
       {
         test: (file) => {
-          const result = testStaticFile(file);
+          if(!file.startsWith(publicDir + '/')) {
+            return false;
+          }
+          if(file.startsWith(srcDir + '/')) {
+            return false;
+          }
+          if(file.startsWith(srcNodeModulesDir + '/')) {
+            return false;
+          }
+          const result = defaultContentTypes.testFileContentType(contentTypes, file);
           return result != null && result.binary;
         },
         type: "asset/inline",
