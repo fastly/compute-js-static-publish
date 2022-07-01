@@ -33,7 +33,13 @@ router.get("*", (req, res) => {
 
 // If this is a SPA, then return index.html for HTML requests
 router.get("*", (req, res) => {
-  if(!spaFile || !(req.headers.get('Accept') ?? '').split(',').includes('text/html')) {
+  if(!spaFile) {
+    return;
+  }
+  const accept = (req.headers.get('Accept') ?? '')
+    .split(',')
+    .map(x => x.split(';')[0]);
+  if(!accept.includes('text/html') && !accept.includes('*/*') && accept.includes('*')) {
     return;
   }
 
