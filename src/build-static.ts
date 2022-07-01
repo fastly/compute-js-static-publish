@@ -1,10 +1,10 @@
 // This program builds static resources out of the files in the
 // public folder to be served. It reads the name of the public
-// folder from the static-publish.json file.
+// folder from the static-publish.rc.js file.
 
 // With create-react-app, this would be the ./build directory.
 
-// This also reexports the "spa" value in the static-publish.json
+// This also reexports the "spa" value in the static-publish.rc.js
 // file so that the C@E handler knows what file to serve up if
 // the resource doesn't map to a file.
 
@@ -24,25 +24,18 @@ function getFiles(results: string[], dir: string) {
   }
 }
 
-export function buildStaticLoader() {
+export async function buildStaticLoader() {
 
   console.log("Building loader...");
 
-  let configFileText;
-  try {
-    configFileText = fs.readFileSync("./static-publish.json", "utf-8");
-  } catch {
-    console.error("❌ Can't read static-publish.json");
-    console.error("Run this from a compute-js-static-publish compute-js directory.");
-    process.exit(1);
-  }
-
   let config: any;
   try {
-    config = JSON.parse(configFileText);
-  } catch {
-    console.error("❌ Can't parse static-publish.json");
+    const staticPublishRcPath = path.resolve('./static-publish.rc.js');
+    config = (await import(staticPublishRcPath)).default;
+  } catch(ex) {
+    console.error("❌ Can't load static-publish.rc.js");
     console.error("Run this from a compute-js-static-publish compute-js directory.");
+    console.error("Error: ", String(ex));
     process.exit(1);
   }
 

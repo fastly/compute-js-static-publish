@@ -180,7 +180,7 @@ service_id = ""
   const fastlyTomlPath = path.resolve(computeJsDir, 'fastly.toml');
   fs.writeFileSync(fastlyTomlPath, fastlyTomlContent, "utf-8");
 
-  // static-publish.json
+  // static-publish.rc.js
   const publicDirRel = path.relative(computeJsDir, publicDir);
 
   const staticDirs = [];
@@ -204,17 +204,17 @@ service_id = ""
     spaFileRel = '/' + path.relative(publicDir, spaFilename);
   }
 
-  const staticPublishJson = {
-    publicDir: publicDirRel,
-    excludeDirs: [ './node_modules' ],
-    includeDirs: [ './.well-known' ],
-    staticDirs: staticDirsRel,
-    spa: spaFileRel,
-  };
-  const staticPublishJsonContent = JSON.stringify(staticPublishJson, null, 2);
+  const staticPublishJsContent = `\
+module.exports = {
+  publicDir: ${JSON.stringify(publicDirRel)},
+  excludeDirs: [ './node_modules' ],
+  includeDirs: [ './.well-known' ],
+  staticDirs: ${JSON.stringify(staticDirsRel)},
+  spa: ${JSON.stringify(spaFileRel)},
+};`;
 
-  const staticPublishJsonPath = path.resolve(computeJsDir, 'static-publish.json');
-  fs.writeFileSync(staticPublishJsonPath, staticPublishJsonContent, "utf-8");
+  const staticPublishJsonPath = path.resolve(computeJsDir, 'static-publish.rc.js');
+  fs.writeFileSync(staticPublishJsonPath, staticPublishJsContent, "utf-8");
 
   // Copy resource files
   const __dirname = url.fileURLToPath(new URL('.', import.meta.url));

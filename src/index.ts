@@ -22,7 +22,7 @@ const commandLineValues = commandLineArgs(optionDefinitions);
 console.log("Fastly Compute@Edge JavaScript Static Publisher");
 
 if (commandLineValues['build-static']) {
-  buildStaticLoader();
+  await buildStaticLoader();
   process.exit();
 }
 

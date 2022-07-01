@@ -4,9 +4,9 @@ const { ProvidePlugin } = webpack;
 
 let config;
 try {
-  config = require("./static-publish.json");
+  config = require("./static-publish.rc.js");
 } catch {
-  console.error('Error loading static-publish.json');
+  console.error('Error loading static-publish.rc.js');
   process.exit(1);
 }
 

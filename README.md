@@ -110,5 +110,5 @@ npx @fastly/compute-js-static-publish --public-dir=./build --static-dir=./build/
 | `description` | `description` from package.json, or`Compute@Edge static site`   | The description of your application. This will be used to fill in the `fastly.toml` and `package.json` files of the generated application.                                                                                                                                                 |
 | `author`      | `author` from package.json, or `you@example.com`                | The author of your application. This will be used to fill in the `fastly.toml` and `package.json` files of the generated application.                                                                                                                                                      |
 
-The paths and spa flag will be written to a `static-publish.json` file, and is referenced by the `compute-js-build-static-loader`
+The various configurations will be written to a `static-publish.rc.js` file, and is referenced by the `compute-js-build-static-loader`
 command that is run on each `build` of the Compute@Edge project (this runs as a part of the `prebuild` script in `package.json`).
