@@ -10,38 +10,7 @@
 
 import * as fs from "fs";
 import * as path from "path";
-
-const contentTypes = [
-  // Text formats
-  { test: /.txt$/, type: 'text/plain', binary: false },
-  { test: /.htm(l)?$/, type: 'text/html', binary: false },
-  { test: /.xml$/, type: 'application/xml', binary: false },
-  { test: /.json$/, type: 'application/json', binary: false },
-  { test: /.map$/, type: 'application/json', binary: false },
-  { test: /.js$/, type: 'application/javascript', binary: false },
-  { test: /.css$/, type: 'text/css', binary: false },
-  { test: /.svg$/, type: 'image/svg+xml', binary: false },
-
-  // Binary formats
-  { test: /.bmp$/, type: 'image/bmp', binary: true },
-  { test: /.png$/, type: 'image/png', binary: true },
-  { test: /.gif$/, type: 'image/gif', binary: true },
-  { test: /.jp(e)?g$/, type: 'image/jpeg', binary: true },
-  { test: /.ico$/, type: 'image/vnd.microsoft.icon', binary: true },
-  { test: /.tif(f)?$/, type: 'image/png', binary: true },
-  { test: /.aac$/, type: 'audio/aac', binary: true },
-  { test: /.mp3$/, type: 'audio/mpeg', binary: true },
-  { test: /.avi$/, type: 'video/x-msvideo', binary: true },
-  { test: /.mp4$/, type: 'video/mp4', binary: true },
-  { test: /.mpeg$/, type: 'video/mpeg', binary: true },
-  { test: /.webm$/, type: 'video/webm', binary: true },
-  { test: /.pdf$/, type: 'application/pdf', binary: true },
-  { test: /.tar$/, type: 'application/x-tar', binary: true },
-  { test: /.zip$/, type: 'application/zip', binary: true },
-  { test: /.eot$/, type: 'application/vnd.ms-fontobject', binary: true },
-  { test: /.otf$/, type: 'font/otf', binary: true },
-  { test: /.ttf$/, type: 'font/ttf', binary: true },
-];
+import { CONTENT_TYPES } from "./content-types.js";
 
 function getFiles(results: string[], dir: string) {
   const entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -155,7 +124,13 @@ export function buildStaticLoader() {
   fileContents += `\nexport const assets = {\n`;
 
   for (const [index, file] of files.entries()) {
-    const contentDef = contentTypes.find(type => type.test.test(file));
+    const contentDef = CONTENT_TYPES.find(type => {
+      if(typeof type.test === 'function') {
+        return type.test(file);
+      }
+      // type is RegExp
+      return type.test.test(file);
+    });
     const filePath = JSON.stringify(file.slice(publicDirRoot.length));
     const type = JSON.stringify(contentDef?.type);
     const isStatic = staticRoots.some(root => file.startsWith(root));
