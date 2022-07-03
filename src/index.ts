@@ -6,6 +6,7 @@ import { initApp } from "./init-app.js";
 import { buildStaticLoader } from "./build-static.js";
 
 const optionDefinitions: OptionDefinition[] = [
+  { name: 'preset', type: String, }, // (optional) Should be one of: cra (create-react-app), svelte
   { name: 'build-static', type: Boolean },
   { name: 'output', alias: 'o', type: String, defaultValue: './compute-js', },
   { name: 'public-dir', type: String, },

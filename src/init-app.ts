@@ -10,33 +10,138 @@ import * as path from "path";
 import * as fs from "fs";
 import * as url from 'url';
 
+type AppOptions = {
+  'public-dir': string | undefined,
+  'static-dir': string | undefined,
+  spa: string | null | undefined,
+  name: string,
+  author: string,
+  description: string,
+};
+
+type Preset = {
+  name: string,
+  inherit?: string,
+  check?: PresetCheckFunc | undefined,
+  defaultOptions?: Partial<AppOptions>,
+};
+
+type PresetCheckFunc = (packageJson: any | null, options: AppOptions) => boolean;
+
+const presets: Record<string, Preset | string> = {
+  'cra': {
+    name: 'Create React App',
+    defaultOptions: {
+      'public-dir': './build',
+      'static-dir': './build/static',
+      spa: undefined,
+      name: 'my-create-react-app',
+      description: 'Compute@Edge static site from create-react-app',
+    },
+    check: (packageJson, options) => {
+      if(packageJson == null) {
+        console.error("❌ Can't read/parse package.json");
+        console.error("Run this from a create-react-app project directory.");
+        return false;
+      }
+      if(packageJson?.dependencies?.['react-scripts'] == null) {
+        console.error("❌ Can't find react-scripts in dependencies");
+        console.error("Run this from a create-react-app project directory.");
+        console.log("If this is a project created with create-react-app and has since been ejected, specify preset cra-eject to skip this check.")
+        return false;
+      }
+      return true;
+    },
+  },
+  'cra-eject': {
+    name: 'Create React App (Ejected)',
+    inherit: 'cra',
+    check: undefined,
+  },
+  'create-react-app': 'cra',
+};
+
+const defaultOptions: AppOptions = {
+  'public-dir': undefined,
+  'static-dir': undefined,
+  spa: undefined,
+  author: 'you@example.com',
+  name: 'compute-js-static-site',
+  description: 'Compute@Edge static site',
+};
+
+function pickKeys(keys: string[], object: Record<string, any>): Record<string, any> {
+
+  const result: Record<string, any> = {};
+
+  for (const key of keys) {
+    if(object[key] !== undefined) {
+      result[key] = object[key];
+    }
+  }
+
+  return result;
+
+}
+
 export function initApp(commandLineValues: CommandLineOptions) {
 
-  let assumeCreateReactApp = false;
-  if (commandLineValues['public-dir'] === undefined &&
-    commandLineValues['static-dir'] === undefined
-  ) {
-    console.log("--public-dir and --static-dir not provided, assuming create-react-app.");
-    console.log("Using --public-dir=./build and --static-dir=./build/static");
-    assumeCreateReactApp = true;
-    commandLineValues['public-dir'] = './build';
-    commandLineValues['static-dir'] = './build/static';
+  let options: AppOptions = defaultOptions;
+  let check: PresetCheckFunc | undefined = undefined;
+
+  const presetName = (commandLineValues['preset'] as string | null) ?? 'none';
+  if(presetName !== 'none') {
+    if(presets[presetName] == null) {
+      console.error('Unknown preset name.');
+      console.error("--preset must be one of: none, " + (Object.keys(presets).join(', ')));
+      process.exit(1);
+    }
+
+    let presetDef: string | Preset = presetName;
+    while(typeof presetDef === 'string') {
+      presetDef = presets[presetDef];
+    }
+
+    options = { ...options, ...presetDef.defaultOptions };
+    check = presetDef.check;
+  }
+
+  let packageJson;
+  try {
+    const packageJsonText = fs.readFileSync("./package.json", "utf-8");
+    packageJson = JSON.parse(packageJsonText);
+  } catch {
+    console.log("Can't read/parse package.json in current directory, making no assumptions!");
+    packageJson = null;
+  }
+
+  options = {
+    ...options,
+    ...pickKeys(['author', 'name', 'description'], packageJson ?? {}),
+    ...pickKeys(['public-dir', 'static-dir', 'spa', 'author', 'name', 'description'], commandLineValues)
+  };
+
+  if(check != null) {
+    if(!check(packageJson, options)) {
+      console.log("Failed preset check.");
+      process.exit(1);
+    }
   }
 
   const COMPUTE_JS_DIR = commandLineValues.output as string;
   const computeJsDir = path.resolve(COMPUTE_JS_DIR);
 
-  const PUBLIC_DIR = commandLineValues['public-dir'] as string | undefined;
+  const PUBLIC_DIR = options['public-dir'] as string | undefined;
   if(PUBLIC_DIR == null) {
     console.error("❌ required parameter --public-dir not provided.");
     process.exit(1);
   }
   const publicDir = path.resolve(PUBLIC_DIR);
 
-  const BUILD_STATIC_DIR = commandLineValues['static-dir'] as string | undefined;
+  const BUILD_STATIC_DIR = options['static-dir'] as string | undefined;
   const buildStaticDir = BUILD_STATIC_DIR != null ? path.resolve(BUILD_STATIC_DIR) : null;
 
-  const spa = commandLineValues['spa'] as string | null | undefined;
+  const spa = options['spa'] as string | null | undefined;
 
   let spaFilename = spa;
 
@@ -64,41 +169,9 @@ export function initApp(commandLineValues: CommandLineOptions) {
     process.exit(1);
   }
 
-  let packageJson;
-  try {
-    const packageJsonText = fs.readFileSync("./package.json", "utf-8");
-    packageJson = JSON.parse(packageJsonText);
-  } catch {
-    if(assumeCreateReactApp) {
-      console.error("❌ Can't read/parse package.json");
-      console.error("Run this from a create-react-app project directory.");
-      process.exit(1);
-    }
-    console.log("Can't read/parse package.json in current directory, making no assumptions!");
-    packageJson = null;
-  }
-
-  let defaultAuthor = 'you@example.com';
-  let defaultName = 'compute-js-static-site';
-  let defaultDescription = 'Compute@Edge static site';
-  if(assumeCreateReactApp) {
-    if(commandLineValues['cra-eject']) {
-      console.log("--cra-eject specified, skipping check for react-scripts in dependencies.")
-    } else {
-      if(packageJson?.dependencies?.['react-scripts'] == null) {
-        console.error("❌ Can't find react-scripts in dependencies");
-        console.error("Run this from a create-react-app project directory.");
-        console.log("If this is a project created with create-react-app and has since been ejected, specify --cra-eject to skip this check.")
-        process.exit(1);
-      }
-    }
-    defaultName = 'my-create-react-app';
-    defaultDescription = 'Compute@Edge static site from create-react-app';
-  }
-
-  const author = commandLineValues['author'] ?? packageJson?.author ?? defaultAuthor;
-  const name = commandLineValues['name'] ?? packageJson?.name ?? defaultName;
-  const description = commandLineValues['description'] ?? packageJson?.description ?? defaultDescription;
+  const author = options['author'];
+  const name = options['name'];
+  const description = options['description'];
 
   let spaRel: string | null = spaFilename != null ? path.relative(path.resolve(), spaFilename) : null;
   if(spaRel != null && !spaRel.startsWith('..')) {
