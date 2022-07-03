@@ -59,6 +59,14 @@ const presets: Record<string, Preset | string> = {
     check: undefined,
   },
   'create-react-app': 'cra',
+  'vite': {
+    name: 'Vite',
+    defaultOptions: {
+      'public-dir': './dist',
+      'static-dir': undefined,
+      spa: undefined,
+    },
+  },
 };
 
 const defaultOptions: AppOptions = {
