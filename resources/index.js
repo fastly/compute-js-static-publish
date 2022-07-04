@@ -1,16 +1,42 @@
 /// <reference types="@fastly/js-compute" />
 
 import { Router } from '@fastly/expressly';
-import { assets, spaFile } from './statics';
+import { assets, spaFile, autoIndex } from './statics';
 
 const router = new Router();
 
+function getMatchingRequestPath(path) {
+  // If the path being looked up does not end in a slash, it has to
+  // match exactly one of the assets
+  if(!path.endsWith('/')) {
+
+    if(path in assets) {
+      return path;
+    }
+
+    return null;
+
+  }
+
+  // try auto-index
+  if(autoIndex != null) {
+    for (const indexEntry of autoIndex) {
+      let indexPath = path + indexEntry;
+      if(indexPath in assets) {
+        return indexPath;
+      }
+    }
+  }
+
+  return null;
+}
+
 router.get("*", (req, res) => {
-  const path = req.urlObj.pathname !== '/' ? req.urlObj.pathname : '/index.html';
-  const staticFile = assets[path];
-  if(staticFile == null) {
+  const assetPath = getMatchingRequestPath(req.urlObj.pathname);
+  if(assetPath == null) {
     return;
   }
+  const staticFile = assets[assetPath];
 
   // Aggressive caching for static files, and no caching for everything else.
   // https://create-react-app.dev/docs/production-build/#static-file-caching

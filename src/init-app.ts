@@ -14,6 +14,7 @@ type AppOptions = {
   'public-dir': string | undefined,
   'static-dir': string | undefined,
   spa: string | null | undefined,
+  'auto-index': string[] | null | undefined,
   name: string,
   author: string,
   description: string,
@@ -73,6 +74,7 @@ const defaultOptions: AppOptions = {
   'public-dir': undefined,
   'static-dir': undefined,
   spa: undefined,
+  'auto-index': [ 'index.html', 'index.htm' ],
   author: 'you@example.com',
   name: 'compute-js-static-site',
   description: 'Compute@Edge static site',
@@ -126,8 +128,10 @@ export function initApp(commandLineValues: CommandLineOptions) {
   options = {
     ...options,
     ...pickKeys(['author', 'name', 'description'], packageJson ?? {}),
-    ...pickKeys(['public-dir', 'static-dir', 'spa', 'author', 'name', 'description'], commandLineValues)
+    ...pickKeys(['public-dir', 'static-dir', 'spa', 'auto-index', 'author', 'name', 'description'], commandLineValues)
   };
+
+  console.log('options', options);
 
   if(check != null) {
     if(!check(packageJson, options)) {
@@ -150,6 +154,8 @@ export function initApp(commandLineValues: CommandLineOptions) {
   const buildStaticDir = BUILD_STATIC_DIR != null ? path.resolve(BUILD_STATIC_DIR) : null;
 
   const spa = options['spa'] as string | null | undefined;
+
+  const autoIndex = options['auto-index'] as string[] | null | undefined;
 
   let spaFilename = spa;
 
@@ -190,6 +196,7 @@ export function initApp(commandLineValues: CommandLineOptions) {
   console.log('Public Dir  :', PUBLIC_DIR);
   console.log('Static Dir  :', BUILD_STATIC_DIR ?? '(None)');
   console.log('SPA         :', spaRel != null ? spaRel : '(None)');
+  console.log('Auto-Index  :', autoIndex != null ? autoIndex : '(None)')
   console.log('name        :', name);
   console.log('author      :', author);
   console.log('description :', description);
@@ -292,6 +299,7 @@ module.exports = {
   includeDirs: [ './.well-known' ],
   staticDirs: ${JSON.stringify(staticDirsRel)},
   spa: ${JSON.stringify(spaFileRel)},
+  autoIndex: ${JSON.stringify(autoIndex)},
 };`;
 
   const staticPublishJsonPath = path.resolve(computeJsDir, 'static-publish.rc.js');

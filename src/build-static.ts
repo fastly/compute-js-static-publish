@@ -169,6 +169,9 @@ export async function buildStaticLoader() {
 
   fileContents += `\nexport const spaFile = ${JSON.stringify(spaFile)};\n`;
 
+  let autoIndex: string | false = config.autoIndex ?? null;
+  fileContents += `\nexport const autoIndex = ${JSON.stringify(autoIndex)};\n`;
+
   fs.writeFileSync('./src/statics.js', fileContents);
 
   console.log("🚀 Wrote static file loader for " + files.length + " file(s).");
