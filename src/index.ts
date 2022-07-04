@@ -63,6 +63,9 @@ const optionDefinitions: OptionDefinition[] = [
   { name: 'name', type: String, },
   { name: 'author', type: String, },
   { name: 'description', type: String, },
+
+  // Fastly Service ID to be added to the fastly.toml that is generated.
+  { name: 'service-id', type: String },
 ];
 
 const commandLineValues = commandLineArgs(optionDefinitions);

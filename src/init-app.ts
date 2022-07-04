@@ -20,6 +20,7 @@ type AppOptions = {
   name: string,
   author: string,
   description: string,
+  'service-id': string | undefined,
 };
 
 type Preset = {
@@ -108,6 +109,7 @@ const defaultOptions: AppOptions = {
   author: 'you@example.com',
   name: 'compute-js-static-site',
   description: 'Compute@Edge static site',
+  'service-id': undefined,
 };
 
 function pickKeys(keys: string[], object: Record<string, any>): Record<string, any> {
@@ -158,7 +160,7 @@ export function initApp(commandLineValues: CommandLineOptions) {
   options = {
     ...options,
     ...pickKeys(['author', 'name', 'description'], packageJson ?? {}),
-    ...pickKeys(['public-dir', 'static-dir', 'spa', 'not-found-page', 'auto-index', 'auto-ext', 'author', 'name', 'description'], commandLineValues)
+    ...pickKeys(['public-dir', 'static-dir', 'spa', 'not-found-page', 'auto-index', 'auto-ext', 'author', 'name', 'description', 'service-id'], commandLineValues)
   };
 
   if(typeof options['not-found-page'] === 'function') {
@@ -241,6 +243,7 @@ export function initApp(commandLineValues: CommandLineOptions) {
   const author = options['author'];
   const name = options['name'];
   const description = options['description'];
+  const fastlyServiceId = options['service-id'] as string | undefined;
 
   let spaRel: string | null = spaFilename != null ? path.relative(path.resolve(), spaFilename) : null;
   if(spaRel != null && !spaRel.startsWith('..')) {
@@ -262,6 +265,7 @@ export function initApp(commandLineValues: CommandLineOptions) {
   console.log('name        :', name);
   console.log('author      :', author);
   console.log('description :', description);
+  console.log('Service ID  :', fastlyServiceId);
   console.log('');
 
   console.log("Initializing Compute@Edge Application in " + computeJsDir + "...");
@@ -324,7 +328,7 @@ description = "${description}"
 language = "javascript"
 manifest_version = 2
 name = "${name}"
-service_id = ""
+service_id = "${fastlyServiceId}"
 `;
 
   const fastlyTomlPath = path.resolve(computeJsDir, 'fastly.toml');
