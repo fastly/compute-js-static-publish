@@ -11,6 +11,7 @@ const optionDefinitions: OptionDefinition[] = [
   // - vite
   // - sveltekit
   // - next
+  // - gatsby
   { name: 'preset', type: String, },
 
   { name: 'build-static', type: Boolean },

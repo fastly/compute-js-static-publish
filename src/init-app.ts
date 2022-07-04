@@ -85,6 +85,14 @@ const presets: Record<string, Preset | string> = {
       spa: undefined,
     },
   },
+  'gatsby': {
+    name: 'Gatsby',
+    defaultOptions: {
+      'public-dir': './public',
+      'static-dir': undefined,
+      spa: undefined,
+    },
+  },
 };
 
 const defaultOptions: AppOptions = {
