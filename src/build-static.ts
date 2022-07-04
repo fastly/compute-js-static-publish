@@ -133,13 +133,13 @@ export async function buildStaticLoader() {
 
   for (const [index, file] of files.entries()) {
     const contentDef = defaultContentTypes.testFileContentType(finalContentTypes, file);
-    const filePath = JSON.stringify(file.slice(publicDirRoot.length));
-    const type = JSON.stringify(contentDef?.type);
+    const filePath = file.slice(publicDirRoot.length);
+    const type = contentDef?.type;
     const isStatic = staticRoots.some(root => file.startsWith(root));
     knownAssets[filePath] = { contentType: type, isStatic };
 
     if (contentDef != null) {
-      console.log(filePath + ': ' + type + (isStatic ? ' [STATIC]' : ''));
+      console.log(filePath + ': ' + JSON.stringify(type) + (isStatic ? ' [STATIC]' : ''));
     } else {
       console.warn('Warning: Unknown file type ' + filePath + '...');
     }
@@ -151,7 +151,7 @@ export async function buildStaticLoader() {
       content = 'file' + index;
     }
 
-    fileContents += `  ${filePath}: { contentType: ${type}, content: ${content}, isStatic: ${JSON.stringify(isStatic)} },\n`;
+    fileContents += `  ${JSON.stringify(filePath)}: { contentType: ${JSON.stringify(type)}, content: ${content}, isStatic: ${JSON.stringify(isStatic)} },\n`;
   }
 
   fileContents += '};\n';
