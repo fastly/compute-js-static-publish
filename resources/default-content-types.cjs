@@ -28,6 +28,8 @@ const defaultContentTypes = [
   { test: /.eot$/, type: 'application/vnd.ms-fontobject', binary: true },
   { test: /.otf$/, type: 'font/otf', binary: true },
   { test: /.ttf$/, type: 'font/ttf', binary: true },
+  { test: /.woff$/, type: 'font/woff', binary: true },
+  { test: /.woff2$/, type: 'font/woff2', binary: true },
 ];
 
 function mergeContentTypes(contentTypes) {
