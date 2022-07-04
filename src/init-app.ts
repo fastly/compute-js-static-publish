@@ -69,6 +69,22 @@ const presets: Record<string, Preset | string> = {
       spa: undefined,
     },
   },
+  'sveltekit': {
+    name: 'SvelteKit',
+    defaultOptions: {
+      'public-dir': './dist',
+      'static-dir': undefined,
+      spa: undefined,
+    },
+  },
+  'next': {
+    name: 'Next.js',
+    defaultOptions: {
+      'public-dir': './out',
+      'static-dir': undefined,
+      spa: undefined,
+    },
+  },
 };
 
 const defaultOptions: AppOptions = {
