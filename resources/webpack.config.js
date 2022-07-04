@@ -59,6 +59,7 @@ module.exports = {
           if(file.startsWith(srcNodeModulesDir + '/')) {
             return false;
           }
+          // If content type is known, and it's known not to be binary.
           const result = defaultContentTypes.testFileContentType(contentTypes, file);
           return result != null && !result.binary;
         },
@@ -77,8 +78,9 @@ module.exports = {
           if(file.startsWith(srcNodeModulesDir + '/')) {
             return false;
           }
+          // If content type unknown, or it's known to be binary.
           const result = defaultContentTypes.testFileContentType(contentTypes, file);
-          return result != null && result.binary;
+          return result == null || result.binary;
         },
         type: "asset/inline",
         generator: {
