@@ -14,6 +14,7 @@ type AppOptions = {
   'public-dir': string | undefined,
   'static-dir': string | undefined,
   spa: string | null | undefined,
+  'not-found-page': string | null | ((options: AppOptions) => string | undefined) | undefined,
   'auto-index': string[] | null | undefined,
   'auto-ext': string[] | null | undefined,
   name: string,
@@ -99,6 +100,9 @@ const defaultOptions: AppOptions = {
   'public-dir': undefined,
   'static-dir': undefined,
   spa: undefined,
+  'not-found-page': (options) => {
+    return options['public-dir'] + '/404.html';
+  },
   'auto-index': [ 'index.html', 'index.htm' ],
   'auto-ext': [ '.html', '.htm' ],
   author: 'you@example.com',
@@ -154,10 +158,13 @@ export function initApp(commandLineValues: CommandLineOptions) {
   options = {
     ...options,
     ...pickKeys(['author', 'name', 'description'], packageJson ?? {}),
-    ...pickKeys(['public-dir', 'static-dir', 'spa', 'auto-index', 'auto-ext', 'author', 'name', 'description'], commandLineValues)
+    ...pickKeys(['public-dir', 'static-dir', 'spa', 'not-found-page', 'auto-index', 'auto-ext', 'author', 'name', 'description'], commandLineValues)
   };
 
-  console.log('options', options);
+  if(typeof options['not-found-page'] === 'function') {
+    // Apply function for this one
+    options['not-found-page'] = options['not-found-page'](options);
+  }
 
   if(check != null) {
     if(!check(packageJson, options)) {
@@ -180,6 +187,7 @@ export function initApp(commandLineValues: CommandLineOptions) {
   const buildStaticDir = BUILD_STATIC_DIR != null ? path.resolve(BUILD_STATIC_DIR) : null;
 
   const spa = options['spa'] as string | null | undefined;
+  const notFoundPage = options['not-found-page'] as string | null | undefined;
 
   const autoIndex = options['auto-index'] as string[] | null | undefined;
   const autoExt = options['auto-ext'] as string[] | null | undefined;
@@ -204,6 +212,26 @@ export function initApp(commandLineValues: CommandLineOptions) {
     }
   }
 
+  let notFoundPageFilename = notFoundPage;
+
+  // Specifically check for null instead of undefined
+  if(notFoundPage === null) {
+    notFoundPageFilename = path.resolve(publicDir, './404.html');
+    let rel = path.relative(path.resolve(), notFoundPageFilename);
+    if(!rel.startsWith('..')) {
+      rel = './' + rel;
+    }
+    console.log('--not-found-page provided with no value, assuming ' + rel);
+  }
+
+  if(notFoundPageFilename != null) {
+    notFoundPageFilename = path.resolve(notFoundPageFilename);
+    if(!notFoundPageFilename.startsWith(publicDir)) {
+      console.error(`❌ --not-found-page file '${notFoundPageFilename}' not inside public directory!`);
+      process.exit(1);
+    }
+  }
+
   const exists = fs.existsSync(computeJsDir);
   if(exists) {
     console.error(`❌ '${COMPUTE_JS_DIR}' directory already exists!`);
@@ -219,10 +247,16 @@ export function initApp(commandLineValues: CommandLineOptions) {
     spaRel = './' + spaRel;
   }
 
+  let notFoundRel: string | null = notFoundPageFilename != null ? path.relative(path.resolve(), notFoundPageFilename) : null;
+  if(notFoundRel != null && !notFoundRel.startsWith('..')) {
+    notFoundRel = './' + notFoundRel;
+  }
+
   console.log('');
   console.log('Public Dir  :', PUBLIC_DIR);
   console.log('Static Dir  :', BUILD_STATIC_DIR ?? '(None)');
   console.log('SPA         :', spaRel != null ? spaRel : '(None)');
+  console.log('404 Page    :', notFoundRel != null ? notFoundRel : '(None)');
   console.log('Auto-Index  :', autoIndex != null ? autoIndex : '(None)')
   console.log('Auto-Ext    :', autoExt != null ? autoExt : '(None)')
   console.log('name        :', name);
@@ -320,6 +354,11 @@ service_id = ""
     spaFileRel = '/' + path.relative(publicDir, spaFilename);
   }
 
+  let notFoundFileRel: string | false = false;
+  if(notFoundPageFilename != null) {
+    notFoundFileRel = '/' + path.relative(publicDir, notFoundPageFilename);
+  }
+
   const staticPublishJsContent = `\
 module.exports = {
   publicDir: ${JSON.stringify(publicDirRel)},
@@ -327,6 +366,7 @@ module.exports = {
   includeDirs: [ './.well-known' ],
   staticDirs: ${JSON.stringify(staticDirsRel)},
   spa: ${JSON.stringify(spaFileRel)},
+  notFoundPage: ${JSON.stringify(notFoundFileRel)},
   autoIndex: ${JSON.stringify(autoIndex)},
   autoExt: ${JSON.stringify(autoExt)},
 };`;

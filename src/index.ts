@@ -59,6 +59,7 @@ const optionDefinitions: OptionDefinition[] = [
   },
 
   { name: 'spa', type: String, },
+  { name: 'not-found-page', type: String, },
   { name: 'name', type: String, },
   { name: 'author', type: String, },
   { name: 'description', type: String, },

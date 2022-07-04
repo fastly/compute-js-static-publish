@@ -169,6 +169,19 @@ export async function buildStaticLoader() {
 
   fileContents += `\nexport const spaFile = ${JSON.stringify(spaFile)};\n`;
 
+  let notFoundPageFile: string | false = config.notFoundPage ?? false;
+  if(notFoundPageFile) {
+    console.log(`Application 'not found (404)' file '${notFoundPageFile}'.`);
+    if(!knownAssets[notFoundPageFile] || knownAssets[notFoundPageFile].contentType !== 'text/html') {
+      console.warn(`'${notFoundPageFile}' does not exist or is not of type 'text/html'. Ignoring.`);
+      notFoundPageFile = false;
+    }
+  } else {
+    console.log(`Application specifies no 'not found (404)' page.`);
+  }
+
+  fileContents += `\nexport const notFoundPageFile = ${JSON.stringify(notFoundPageFile)};\n`;
+
   let autoIndex: string | false = config.autoIndex ?? null;
   fileContents += `\nexport const autoIndex = ${JSON.stringify(autoIndex)};\n`;
 

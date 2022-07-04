@@ -1,7 +1,7 @@
 /// <reference types="@fastly/js-compute" />
 
 import { Router } from '@fastly/expressly';
-import { assets, spaFile, autoIndex, autoExt } from './statics';
+import { assets, spaFile, notFoundPageFile, autoIndex, autoExt } from './statics';
 
 const router = new Router();
 
@@ -41,6 +41,16 @@ function getMatchingRequestPath(path) {
   return null;
 }
 
+function requestAcceptsTextHtml(req) {
+  const accept = (req.headers.get('Accept') ?? '')
+    .split(',')
+    .map(x => x.split(';')[0]);
+  if(!accept.includes('text/html') && !accept.includes('*/*') && accept.includes('*')) {
+    return false;
+  }
+  return true;
+}
+
 router.get("*", (req, res) => {
   const assetPath = getMatchingRequestPath(req.urlObj.pathname);
   if(assetPath == null) {
@@ -72,10 +82,7 @@ router.get("*", (req, res) => {
   if(!spaFile) {
     return;
   }
-  const accept = (req.headers.get('Accept') ?? '')
-    .split(',')
-    .map(x => x.split(';')[0]);
-  if(!accept.includes('text/html') && !accept.includes('*/*') && accept.includes('*')) {
+  if(!requestAcceptsTextHtml(req)) {
     return;
   }
 
@@ -90,6 +97,18 @@ router.get("*", (req, res) => {
 });
 
 router.all("*", (req, res) => {
+  if(notFoundPageFile && requestAcceptsTextHtml(req)) {
+    const staticFile = assets[notFoundPageFile];
+    res.send(new Response(staticFile.content, {
+      status: 404,
+      headers: {
+        'Cache-Control': 'no-cache',
+        'Content-Type': 'text/html',
+      }
+    }));
+    return;
+  }
+
   res.send(new Response("404 Not Found", {
     status: 404,
     headers: {
