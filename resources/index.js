@@ -1,7 +1,7 @@
 /// <reference types="@fastly/js-compute" />
 
 import { Router } from '@fastly/expressly';
-import { assets, spaFile, autoIndex } from './statics';
+import { assets, spaFile, autoIndex, autoExt } from './statics';
 
 const router = new Router();
 
@@ -12,6 +12,16 @@ function getMatchingRequestPath(path) {
 
     if(path in assets) {
       return path;
+    }
+
+    // try auto-ext
+    if(autoExt != null) {
+      for (const extEntry of autoExt) {
+        let pathWithExt = path + extEntry;
+        if(pathWithExt in assets) {
+          return pathWithExt;
+        }
+      }
     }
 
     return null;

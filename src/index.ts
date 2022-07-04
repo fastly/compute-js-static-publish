@@ -29,6 +29,28 @@ const optionDefinitions: OptionDefinition[] = [
     },
   },
 
+  // List of extensions to apply to a path name, for example, if
+  // http://example.com/about is requested, we can respond with http://example.com/about.html
+  {
+    name: 'auto-ext',
+    type: (val: string | null) => {
+      if(val == null) {
+        return null;
+      }
+      const values = val
+        .split(',')
+        .map(x => x.trim())
+        .map(x => {
+          while(x.startsWith('.')) {
+            x = x.slice(1);
+          }
+          return '.' + x;
+        })
+        .filter(x => x !== '');
+      return values.length > 0 ? values : null;
+    },
+  },
+
   { name: 'spa', type: String, },
   { name: 'cra-eject', type: Boolean, defaultValue: false },
   { name: 'name', type: String, },
