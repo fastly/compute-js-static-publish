@@ -52,7 +52,6 @@ const optionDefinitions: OptionDefinition[] = [
   },
 
   { name: 'spa', type: String, },
-  { name: 'cra-eject', type: Boolean, defaultValue: false },
   { name: 'name', type: String, },
   { name: 'author', type: String, },
   { name: 'description', type: String, },
