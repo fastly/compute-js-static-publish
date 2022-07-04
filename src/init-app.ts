@@ -95,6 +95,14 @@ const presets: Record<string, Preset | string> = {
       spa: undefined,
     },
   },
+  'docusaurus': {
+    name: 'Docusaurus',
+    defaultOptions: {
+      'public-dir': './build',
+      'static-dir': undefined,
+      spa: undefined,
+    },
+  },
 };
 
 const defaultOptions: AppOptions = {

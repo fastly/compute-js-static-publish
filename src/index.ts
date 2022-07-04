@@ -12,6 +12,7 @@ const optionDefinitions: OptionDefinition[] = [
   // - sveltekit
   // - next
   // - gatsby
+  // - docusaurus
   { name: 'preset', type: String, },
 
   { name: 'build-static', type: Boolean },
