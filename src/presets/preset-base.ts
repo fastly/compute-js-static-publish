@@ -2,7 +2,7 @@ export type AppOptions = {
   'public-dir': string | undefined,
   'static-dir': string | undefined,
   spa: string | null | undefined,
-  'not-found-page': string | null | ((options: AppOptions) => string | undefined) | undefined,
+  'not-found-page': string | null | undefined,
   'auto-index': string[] | null | undefined,
   'auto-ext': string[] | null | undefined,
   name: string,

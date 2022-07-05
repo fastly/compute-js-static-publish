@@ -17,9 +17,7 @@ const defaultOptions: AppOptions = {
   'public-dir': undefined,
   'static-dir': undefined,
   spa: undefined,
-  'not-found-page': (options) => {
-    return options['public-dir'] + '/404.html';
-  },
+  'not-found-page': '[public-dir]/404.html',
   'auto-index': [ 'index.html', 'index.htm' ],
   'auto-ext': [ '.html', '.htm' ],
   author: 'you@example.com',
@@ -40,6 +38,13 @@ function pickKeys(keys: string[], object: Record<string, any>): Record<string, a
 
   return result;
 
+}
+
+function applyPublicDir(optionValue: string | null | undefined, publicDir: string) {
+  if(optionValue == null) {
+    return optionValue;
+  }
+  return optionValue.replace('[public-dir]', publicDir);
 }
 
 export function initApp(commandLineValues: CommandLineOptions) {
@@ -75,11 +80,6 @@ export function initApp(commandLineValues: CommandLineOptions) {
     ...pickKeys(['public-dir', 'static-dir', 'spa', 'not-found-page', 'auto-index', 'auto-ext', 'author', 'name', 'description', 'service-id'], commandLineValues)
   };
 
-  if(typeof options['not-found-page'] === 'function') {
-    // Apply function for this one
-    options['not-found-page'] = options['not-found-page'](options);
-  }
-
   if(preset != null) {
     if(!preset.check(packageJson, options)) {
       console.log("Failed preset check.");
@@ -98,11 +98,11 @@ export function initApp(commandLineValues: CommandLineOptions) {
   }
   const publicDir = path.resolve(PUBLIC_DIR);
 
-  const BUILD_STATIC_DIR = options['static-dir'];
+  const BUILD_STATIC_DIR = applyPublicDir(options['static-dir'], PUBLIC_DIR);
   const buildStaticDir = BUILD_STATIC_DIR != null ? path.resolve(BUILD_STATIC_DIR) : null;
 
-  const spa = options['spa'];
-  const notFoundPage = options['not-found-page'];
+  const spa = applyPublicDir(options['spa'], PUBLIC_DIR);
+  const notFoundPage = applyPublicDir(options['not-found-page'], PUBLIC_DIR);
 
   const autoIndex = options['auto-index'];
   const autoExt = options['auto-ext'];
