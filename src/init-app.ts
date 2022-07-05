@@ -10,100 +10,8 @@ import * as path from "path";
 import * as fs from "fs";
 import * as url from 'url';
 
-type AppOptions = {
-  'public-dir': string | undefined,
-  'static-dir': string | undefined,
-  spa: string | null | undefined,
-  'not-found-page': string | null | ((options: AppOptions) => string | undefined) | undefined,
-  'auto-index': string[] | null | undefined,
-  'auto-ext': string[] | null | undefined,
-  name: string,
-  author: string,
-  description: string,
-  'service-id': string | undefined,
-};
-
-type Preset = {
-  name: string,
-  inherit?: string,
-  check?: PresetCheckFunc | undefined,
-  defaultOptions?: Partial<AppOptions>,
-};
-
-type PresetCheckFunc = (packageJson: any | null, options: AppOptions) => boolean;
-
-const presets: Record<string, Preset | string> = {
-  'cra': {
-    name: 'Create React App',
-    defaultOptions: {
-      'public-dir': './build',
-      'static-dir': './build/static',
-      spa: undefined,
-      name: 'my-create-react-app',
-      description: 'Compute@Edge static site from create-react-app',
-    },
-    check: (packageJson, options) => {
-      if(packageJson == null) {
-        console.error("❌ Can't read/parse package.json");
-        console.error("Run this from a create-react-app project directory.");
-        return false;
-      }
-      if(packageJson?.dependencies?.['react-scripts'] == null) {
-        console.error("❌ Can't find react-scripts in dependencies");
-        console.error("Run this from a create-react-app project directory.");
-        console.log("If this is a project created with create-react-app and has since been ejected, specify preset cra-eject to skip this check.")
-        return false;
-      }
-      return true;
-    },
-  },
-  'cra-eject': {
-    name: 'Create React App (Ejected)',
-    inherit: 'cra',
-    check: undefined,
-  },
-  'create-react-app': 'cra',
-  'vite': {
-    name: 'Vite',
-    defaultOptions: {
-      'public-dir': './dist',
-      'static-dir': undefined,
-      spa: undefined,
-    },
-  },
-  'sveltekit': {
-    name: 'SvelteKit',
-    defaultOptions: {
-      'public-dir': './dist',
-      'static-dir': undefined,
-      spa: undefined,
-    },
-  },
-  'next': {
-    name: 'Next.js',
-    defaultOptions: {
-      'public-dir': './out',
-      'static-dir': undefined,
-      spa: undefined,
-    },
-  },
-  'gatsby': {
-    name: 'Gatsby',
-    defaultOptions: {
-      'public-dir': './public',
-      'static-dir': undefined,
-      spa: undefined,
-    },
-  },
-  'docusaurus': {
-    name: 'Docusaurus',
-    defaultOptions: {
-      'public-dir': './build',
-      'static-dir': undefined,
-      spa: undefined,
-    },
-  },
-};
+import { AppOptions, IPresetBase } from './presets/preset-base.js';
+import { presets } from './presets/index.js';
 
 const defaultOptions: AppOptions = {
   'public-dir': undefined,
@@ -137,23 +45,18 @@ function pickKeys(keys: string[], object: Record<string, any>): Record<string, a
 export function initApp(commandLineValues: CommandLineOptions) {
 
   let options: AppOptions = defaultOptions;
-  let check: PresetCheckFunc | undefined = undefined;
+  let preset: IPresetBase | null = null;
 
   const presetName = (commandLineValues['preset'] as string | null) ?? 'none';
   if(presetName !== 'none') {
-    if(presets[presetName] == null) {
+    const presetClass = presets[presetName];
+    if(presetClass == null) {
       console.error('Unknown preset name.');
       console.error("--preset must be one of: none, " + (Object.keys(presets).join(', ')));
       process.exit(1);
+      return;
     }
-
-    let presetDef: string | Preset = presetName;
-    while(typeof presetDef === 'string') {
-      presetDef = presets[presetDef];
-    }
-
-    options = { ...options, ...presetDef.defaultOptions };
-    check = presetDef.check;
+    preset = new presetClass();
   }
 
   let packageJson;
@@ -167,6 +70,7 @@ export function initApp(commandLineValues: CommandLineOptions) {
 
   options = {
     ...options,
+    ...(preset != null ? preset.defaultOptions : {}),
     ...pickKeys(['author', 'name', 'description'], packageJson ?? {}),
     ...pickKeys(['public-dir', 'static-dir', 'spa', 'not-found-page', 'auto-index', 'auto-ext', 'author', 'name', 'description', 'service-id'], commandLineValues)
   };
@@ -176,10 +80,11 @@ export function initApp(commandLineValues: CommandLineOptions) {
     options['not-found-page'] = options['not-found-page'](options);
   }
 
-  if(check != null) {
-    if(!check(packageJson, options)) {
+  if(preset != null) {
+    if(!preset.check(packageJson, options)) {
       console.log("Failed preset check.");
       process.exit(1);
+      return;
     }
   }
 
