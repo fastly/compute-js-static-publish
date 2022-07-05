@@ -88,3 +88,18 @@ each argument are as follows, but you may still override these defaults individu
 | `next`                         | `./out`      | (None)           | For apps written using [Next.js](https://nextjs.org), using `npm run export`.                                                                                                       |
 | `gatsby`                       | `./public`   | (None)           | For apps written using [Gatsby](https://www.gatsbyjs.com).                                                                                                                          |
 | `docusaurus`                   | `./build`    | (None)           | For apps written using [Docusaurus](https://docusaurus.io)                                                                                                                          |
+
+## Issues
+
+If you encounter any non-security-related bug or unexpected behavior, please [file an issue][bug]
+using the bug report template.
+
+[bug]: https://github.com/fastly/compute-js-static-publish/issues/new?labels=bug
+
+### Security issues
+
+Please see our [SECURITY.md](./SECURITY.md) for guidance on reporting security-related issues.
+
+## License
+
+[MIT](./LICENSE).
