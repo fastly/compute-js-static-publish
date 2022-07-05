@@ -95,6 +95,7 @@ export function initApp(commandLineValues: CommandLineOptions) {
   if(PUBLIC_DIR == null) {
     console.error("❌ required parameter --public-dir not provided.");
     process.exit(1);
+    return;
   }
   const publicDir = path.resolve(PUBLIC_DIR);
 
@@ -124,6 +125,7 @@ export function initApp(commandLineValues: CommandLineOptions) {
     if(!spaFilename.startsWith(publicDir)) {
       console.error(`❌ SPA file '${spaFilename}' not inside public directory!`);
       process.exit(1);
+      return;
     }
   }
 
@@ -144,6 +146,7 @@ export function initApp(commandLineValues: CommandLineOptions) {
     if(!notFoundPageFilename.startsWith(publicDir)) {
       console.error(`❌ --not-found-page file '${notFoundPageFilename}' not inside public directory!`);
       process.exit(1);
+      return;
     }
   }
 
@@ -151,6 +154,7 @@ export function initApp(commandLineValues: CommandLineOptions) {
   if(exists) {
     console.error(`❌ '${COMPUTE_JS_DIR}' directory already exists!`);
     process.exit(1);
+    return;
   }
 
   const author = options['author'];
