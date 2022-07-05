@@ -6,6 +6,8 @@ export class DocusaurusPreset implements IPresetBase {
     'public-dir': './build',
     'static-dir': undefined,
     spa: undefined,
+    name: 'my-docusaurus-app',
+    description: 'Compute@Edge static site from docusaurus',
   };
   check() {
     return true;

@@ -6,6 +6,8 @@ export class GatsbyPreset implements IPresetBase {
     'public-dir': './public',
     'static-dir': undefined,
     spa: undefined,
+    name: 'my-gatsby-app',
+    description: 'Compute@Edge static site from Gatsby',
   };
   check() {
     return true;

@@ -6,6 +6,8 @@ export class NextJsPreset implements IPresetBase {
     'public-dir': './out',
     'static-dir': undefined,
     spa: undefined,
+    name: 'my-next-app',
+    description: 'Compute@Edge static site from Next.js',
   };
   check() {
     return true;

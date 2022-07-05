@@ -6,6 +6,8 @@ export class SvelteKitPreset implements IPresetBase {
     'public-dir': './dist',
     'static-dir': undefined,
     spa: undefined,
+    name: 'my-sveltekit-app',
+    description: 'Compute@Edge static site from SvelteKit',
   };
   check() {
     return true;
