@@ -4,8 +4,6 @@ export class GatsbyPreset implements IPresetBase {
   name = 'Gatsby';
   defaultOptions = {
     'public-dir': './public',
-    'static-dir': undefined,
-    spa: undefined,
     name: 'my-gatsby-app',
     description: 'Compute@Edge static site from Gatsby',
   };

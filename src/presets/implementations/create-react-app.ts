@@ -5,7 +5,6 @@ export class CreateReactAppPreset implements IPresetBase {
   defaultOptions = {
     'public-dir': './build',
     'static-dir': './build/static',
-    spa: undefined,
     name: 'my-create-react-app',
     description: 'Compute@Edge static site from create-react-app',
   };
