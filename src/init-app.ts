@@ -91,21 +91,21 @@ export function initApp(commandLineValues: CommandLineOptions) {
   const COMPUTE_JS_DIR = commandLineValues.output as string;
   const computeJsDir = path.resolve(COMPUTE_JS_DIR);
 
-  const PUBLIC_DIR = options['public-dir'] as string | undefined;
+  const PUBLIC_DIR = options['public-dir'];
   if(PUBLIC_DIR == null) {
     console.error("❌ required parameter --public-dir not provided.");
     process.exit(1);
   }
   const publicDir = path.resolve(PUBLIC_DIR);
 
-  const BUILD_STATIC_DIR = options['static-dir'] as string | undefined;
+  const BUILD_STATIC_DIR = options['static-dir'];
   const buildStaticDir = BUILD_STATIC_DIR != null ? path.resolve(BUILD_STATIC_DIR) : null;
 
-  const spa = options['spa'] as string | null | undefined;
-  const notFoundPage = options['not-found-page'] as string | null | undefined;
+  const spa = options['spa'];
+  const notFoundPage = options['not-found-page'];
 
-  const autoIndex = options['auto-index'] as string[] | null | undefined;
-  const autoExt = options['auto-ext'] as string[] | null | undefined;
+  const autoIndex = options['auto-index'];
+  const autoExt = options['auto-ext'];
 
   let spaFilename = spa;
 
@@ -156,7 +156,7 @@ export function initApp(commandLineValues: CommandLineOptions) {
   const author = options['author'];
   const name = options['name'];
   const description = options['description'];
-  const fastlyServiceId = options['service-id'] as string | undefined;
+  const fastlyServiceId = options['service-id'];
 
   let spaRel: string | null = spaFilename != null ? path.relative(path.resolve(), spaFilename) : null;
   if(spaRel != null && !spaRel.startsWith('..')) {
