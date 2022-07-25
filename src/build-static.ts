@@ -124,7 +124,14 @@ export async function buildStaticLoader() {
 
   for (const [index, file] of files.entries()) {
     const relativeFilePath = path.relative('./src', file);
-    fileContents += `import file${index} from "${relativeFilePath}";\n`;
+    const contentDef = defaultContentTypes.testFileContentType(finalContentTypes, file);
+    let query;
+    if (contentDef == null || contentDef.binary) {
+      query = '?staticBinary';
+    } else {
+      query = '?staticText';
+    }
+    fileContents += `import file${index} from "${relativeFilePath}${query}";\n`;
   }
 
   const knownAssets: Record<string, {contentType: string, isStatic:boolean}> = {};
