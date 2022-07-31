@@ -148,7 +148,7 @@ export async function buildStaticLoader() {
     let loadModule = false;
     if (moduleTest != null && moduleTest(filePath)) {
       loadModule = true;
-      fileContents += `import fileModule${index} from "${relativeFilePath}";\n`;
+      fileContents += `import * as fileModule${index} from "${relativeFilePath}";\n`;
     }
     knownAssets[filePath] = { contentType: type, isStatic, loadModule, };
   }
