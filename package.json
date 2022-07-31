@@ -1,7 +1,7 @@
 {
   "name": "@fastly/compute-js-static-publish",
   "type": "module",
-  "version": "2.0.0-alpha.0",
+  "version": "2.0.0-alpha.1",
   "description": "Static Publisher for Compute@Edge JavaScript",
   "main": "./build/index.js",
   "scripts": {
