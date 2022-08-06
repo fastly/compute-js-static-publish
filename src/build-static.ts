@@ -129,7 +129,7 @@ export async function buildStaticLoader() {
 
   const knownAssets: Record<string, {contentType: string, isStatic: boolean, loadModule: boolean}> = {};
 
-  let fileContents = '';
+  let fileContents = 'import { Buffer } from "buffer";\n';
 
   for (const [index, file] of files.entries()) {
     const relativeFilePath = path.relative('./src', file);
