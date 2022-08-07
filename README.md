@@ -85,11 +85,14 @@ These arguments are used to populate the `fastly.toml` and `package.json` files 
 | `cra-eject`                   | `./build`      | `./build/static` | For apps written using Create React App, but which have since been ejected via `npm run eject`. Does not check for `react-scripts`. |
 | `vite`                        | `./dist`       | (None)           | For apps written using [Vite](https://vitejs.dev).                                                                                  |
 | `sveltekit`                   | `./dist`       | (None)           | For apps written using [SvelteKit](https://kit.svelte.dev).                                                                         |
-| `next`                        | `./out`        | (None)           | For apps written using [Next.js](https://nextjs.org), using `npm run export`.                                                       |
+| `next`                        | `./out`        | (None)           | For apps written using [Next.js](https://nextjs.org), using `npm run export`. *1                                                    |
 | `gatsby`                      | `./public`     | (None)           | For apps written using [Gatsby](https://www.gatsbyjs.com).                                                                          |
 | `docusaurus`                  | `./build`      | (None)           | For apps written using [Docusaurus](https://docusaurus.io)                                                                          |
 
 You may still override any of these options individually.
+
+*1 - For Next.js, consider using `@fastly/next-compute-js`, a Node.js server implementation that allows you to run
+   your Next.js application on Compute@Edge.
 
 ## Issues
 
