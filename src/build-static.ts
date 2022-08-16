@@ -99,6 +99,8 @@ export async function buildStaticLoader() {
     dir => path.resolve(config.publicDir, dir)
   );
 
+  const excludeTest: ((path: string) => boolean) | undefined = config.excludeTest;
+
   const files = results
     .filter(file => {
       // Exclude files that come from C@E app dir
@@ -118,25 +120,45 @@ export async function buildStaticLoader() {
         return false;
       }
       return true;
+    })
+    .filter(file => {
+      return excludeTest == null || !excludeTest(file);
     });
 
-  let fileContents = '';
+  const moduleTest: ((path: string) => boolean) | undefined = config.moduleTest;
+
+  const knownAssets: Record<string, {contentType: string, isStatic: boolean, loadModule: boolean}> = {};
+
+  let fileContents = 'import { Buffer } from "buffer";\n';
 
   for (const [index, file] of files.entries()) {
     const relativeFilePath = path.relative('./src', file);
-    fileContents += `import file${index} from "${relativeFilePath}";\n`;
-  }
+    const contentDef = defaultContentTypes.testFileContentType(finalContentTypes, file);
+    const filePath = file.slice(publicDirRoot.length);
+    const type = contentDef?.type;
+    const isStatic = staticRoots.some(root => file.startsWith(root));
 
-  const knownAssets: Record<string, {contentType: string, isStatic:boolean}> = {};
+    let query;
+    if (contentDef == null || contentDef.binary) {
+      query = '?staticBinary';
+    } else {
+      query = '?staticText';
+    }
+    fileContents += `import file${index} from "${relativeFilePath}${query}";\n`;
+    let loadModule = false;
+    if (moduleTest != null && moduleTest(filePath)) {
+      loadModule = true;
+      fileContents += `import * as fileModule${index} from "${relativeFilePath}";\n`;
+    }
+    knownAssets[filePath] = { contentType: type, isStatic, loadModule, };
+  }
 
   fileContents += `\nexport const assets = {\n`;
 
   for (const [index, file] of files.entries()) {
     const contentDef = defaultContentTypes.testFileContentType(finalContentTypes, file);
     const filePath = file.slice(publicDirRoot.length);
-    const type = contentDef?.type;
-    const isStatic = staticRoots.some(root => file.startsWith(root));
-    knownAssets[filePath] = { contentType: type, isStatic };
+    const { contentType: type, isStatic, loadModule } = knownAssets[filePath];
 
     if (contentDef != null) {
       console.log(filePath + ': ' + JSON.stringify(type) + (isStatic ? ' [STATIC]' : ''));
@@ -151,7 +173,14 @@ export async function buildStaticLoader() {
       content = 'file' + index;
     }
 
-    fileContents += `  ${JSON.stringify(filePath)}: { contentType: ${JSON.stringify(type)}, content: ${content}, isStatic: ${JSON.stringify(isStatic)} },\n`;
+    let module;
+    if (loadModule) {
+      module = 'fileModule' + index;
+    } else {
+      module = 'null';
+    }
+
+    fileContents += `  ${JSON.stringify(filePath)}: { contentType: ${JSON.stringify(type)}, content: ${content}, module: ${module}, isStatic: ${JSON.stringify(isStatic)} },\n`;
   }
 
   fileContents += '};\n';

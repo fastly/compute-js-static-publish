@@ -1,7 +1,7 @@
 {
   "name": "@fastly/compute-js-static-publish",
   "type": "module",
-  "version": "1.0.0",
+  "version": "2.0.0-alpha.2",
   "description": "Static Publisher for Compute@Edge JavaScript",
   "main": "./build/index.js",
   "scripts": {
@@ -30,12 +30,12 @@
   },
   "homepage": "https://github.com/fastly/compute-js-static-publish#readme",
   "dependencies": {
-    "command-line-args": "^5.2.1",
-    "typescript": "^4.7.4"
+    "command-line-args": "^5.2.1"
   },
   "devDependencies": {
     "@types/command-line-args": "^5.2.0",
-    "@types/node": "^18.0.0"
+    "@types/node": "^18.0.0",
+    "typescript": "^4.7.4"
   },
   "engines": {
     "node": ">=14.8"

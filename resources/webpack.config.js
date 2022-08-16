@@ -2,35 +2,6 @@ const path = require("path");
 const webpack = require("webpack");
 const { ProvidePlugin } = webpack;
 
-let config;
-try {
-  config = require("./static-publish.rc.js");
-} catch {
-  console.error('Error loading static-publish.rc.js');
-  process.exit(1);
-}
-
-let defaultContentTypes;
-try {
-  defaultContentTypes = require("./default-content-types.cjs");
-} catch {
-  console.error('Error loading default-content-types.cjs');
-  process.exit(1);
-}
-
-const contentTypes = defaultContentTypes.mergeContentTypes(config.contentTypes ?? []);
-
-const srcDir = path.resolve('./src');
-const srcNodeModulesDir = path.resolve('./node_modules');
-const publicDir = path.resolve(config.publicDir);
-
-if (publicDir.startsWith(path.resolve())) {
-  // If public dir is INSIDE the compute-js app dir, results may be weird
-  console.warn('⚠️ public files directory is inside of the Compute@Edge app directory.');
-  console.warn('This is an unsupported scenario and you may experience trouble.');
-  console.warn('');
-}
-
 module.exports = {
   entry: "./src/index.js",
   optimization: {
@@ -49,39 +20,18 @@ module.exports = {
       // asset/source exports the source code of the asset.
       // Usage: e.g., import notFoundPage from "./page_404.html"
       {
-        test: (file) => {
-          if(!file.startsWith(publicDir + '/')) {
-            return false;
-          }
-          if(file.startsWith(srcDir + '/')) {
-            return false;
-          }
-          if(file.startsWith(srcNodeModulesDir + '/')) {
-            return false;
-          }
-          // If content type is known, and it's known not to be binary.
-          const result = defaultContentTypes.testFileContentType(contentTypes, file);
-          return result != null && !result.binary;
-        },
+        test: /\.(txt|html)/,
         type: "asset/source",
       },
-      // asset/inline exports the raw bytes of the asset.
-      // We base64 encode them here
       {
-        test: (file) => {
-          if(!file.startsWith(publicDir + '/')) {
-            return false;
-          }
-          if(file.startsWith(srcDir + '/')) {
-            return false;
-          }
-          if(file.startsWith(srcNodeModulesDir + '/')) {
-            return false;
-          }
-          // If content type unknown, or it's known to be binary.
-          const result = defaultContentTypes.testFileContentType(contentTypes, file);
-          return result == null || result.binary;
-        },
+        // asset/source exports the source code of the asset.
+        resourceQuery: /staticText/,
+        type: "asset/source",
+      },
+      {
+        // asset/inline exports the raw bytes of the asset.
+        // We base64 encode them here
+        resourceQuery: /staticBinary/,
         type: "asset/inline",
         generator: {
           /**
