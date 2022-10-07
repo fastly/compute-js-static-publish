@@ -94,6 +94,19 @@ You may still override any of these options individually.
 *1 - For Next.js, consider using `@fastly/next-compute-js`, a Node.js server implementation that allows you to run
    your Next.js application on Compute@Edge.
 
+## Troubleshooting
+
+If you're using Fastly CLI 4.0.0 or newer, and your project was scaffolded using a version
+of this tool older than 2.1.0, then you'll need to add the following to the
+`fastly.toml` file that is in your `compute-js` directory.
+
+```toml
+[scripts]
+  build = "npx @fastly/compute-js-static-publish --build-static && $(npm bin)/webpack && $(npm bin)/js-compute-runtime ./bin/index.js ./bin/main.wasm"
+```
+
+If Fastly CLI has already added `build = "$(npm bin)/webpack && $(npm bin)/js-compute-runtime ./bin/index.js ./bin/main.wasm"`, then replace it with the above.
+
 ## Issues
 
 If you encounter any non-security-related bug or unexpected behavior, please [file an issue][bug].
