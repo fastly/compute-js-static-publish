@@ -222,9 +222,7 @@ export function initApp(commandLineValues: CommandLineOptions) {
     "private": true,
     "main": "src/index.js",
     "scripts": {
-        "build": "js-compute-runtime bin/index.js bin/main.wasm",
-        "deploy": "npm run build && fastly compute deploy",
-        "prebuild": "npx @fastly/compute-js-static-publish --build-static && webpack"
+        "deploy": "fastly compute deploy"
     },
     "version": "0.2.1"
 }
@@ -246,6 +244,9 @@ language = "javascript"
 manifest_version = 2
 name = "${name}"
 service_id = "${fastlyServiceId}"
+
+[scripts]
+  build = "npx @fastly/compute-js-static-publish --build-static && $(npm bin)/webpack && $(npm bin)/js-compute-runtime ./bin/index.js ./bin/main.wasm"
 `;
 
   const fastlyTomlPath = path.resolve(computeJsDir, 'fastly.toml');
