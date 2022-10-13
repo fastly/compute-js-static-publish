@@ -37,7 +37,8 @@ export async function buildStaticLoader() {
     console.error("❌ Can't load static-publish.rc.js");
     console.error("Run this from a compute-js-static-publish compute-js directory.");
     console.error("Error: ", String(ex));
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   const results: string[] = [];

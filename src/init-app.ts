@@ -58,7 +58,7 @@ export function initApp(commandLineValues: CommandLineOptions) {
     if(presetClass == null) {
       console.error('Unknown preset name.');
       console.error("--preset must be one of: none, " + (Object.keys(presets).join(', ')));
-      process.exit(1);
+      process.exitCode = 1;
       return;
     }
     preset = new presetClass();
@@ -83,7 +83,7 @@ export function initApp(commandLineValues: CommandLineOptions) {
   if(preset != null) {
     if(!preset.check(packageJson, options)) {
       console.log("Failed preset check.");
-      process.exit(1);
+      process.exitCode = 1;
       return;
     }
   }
@@ -94,7 +94,7 @@ export function initApp(commandLineValues: CommandLineOptions) {
   const PUBLIC_DIR = options['public-dir'];
   if(PUBLIC_DIR == null) {
     console.error("❌ required parameter --public-dir not provided.");
-    process.exit(1);
+    process.exitCode = 1;
     return;
   }
   const publicDir = path.resolve(PUBLIC_DIR);
@@ -124,7 +124,7 @@ export function initApp(commandLineValues: CommandLineOptions) {
     spaFilename = path.resolve(spaFilename);
     if(!spaFilename.startsWith(publicDir)) {
       console.error(`❌ SPA file '${spaFilename}' not inside public directory!`);
-      process.exit(1);
+      process.exitCode = 1;
       return;
     }
   }
@@ -145,7 +145,7 @@ export function initApp(commandLineValues: CommandLineOptions) {
     notFoundPageFilename = path.resolve(notFoundPageFilename);
     if(!notFoundPageFilename.startsWith(publicDir)) {
       console.error(`❌ --not-found-page file '${notFoundPageFilename}' not inside public directory!`);
-      process.exit(1);
+      process.exitCode = 1;
       return;
     }
   }
@@ -153,7 +153,7 @@ export function initApp(commandLineValues: CommandLineOptions) {
   const exists = fs.existsSync(computeJsDir);
   if(exists) {
     console.error(`❌ '${COMPUTE_JS_DIR}' directory already exists!`);
-    process.exit(1);
+    process.exitCode = 1;
     return;
   }
 

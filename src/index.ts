@@ -73,9 +73,16 @@ const commandLineValues = commandLineArgs(optionDefinitions);
 
 console.log("Fastly Compute@Edge JavaScript Static Publisher");
 
-if (commandLineValues['build-static']) {
-  await buildStaticLoader();
-  process.exit();
+let mode: 'init-app' | 'build-static' = 'init-app';
+if(commandLineValues['build-static']) {
+  mode = 'build-static';
 }
 
-initApp(commandLineValues);
+switch(mode) {
+case 'build-static':
+  await buildStaticLoader();
+  break;
+case 'init-app':
+  initApp(commandLineValues);
+  break;
+}
