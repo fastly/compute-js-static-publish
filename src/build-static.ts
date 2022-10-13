@@ -12,6 +12,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as url from "url";
 import { ContentTypeDef } from "./content-types.js";
+import commandLineArgs from "command-line-args";
 
 function getFiles(results: string[], dir: string) {
   const entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -25,9 +26,12 @@ function getFiles(results: string[], dir: string) {
   }
 }
 
-export async function buildStaticLoader() {
+export async function buildStaticLoader(commandLineValues: commandLineArgs.CommandLineOptions) {
 
-  console.log("Building loader...");
+  const { 'suppress-framework-warnings': suppressFrameworkWarnings } = commandLineValues;
+  const displayFrameworkWarnings = !suppressFrameworkWarnings;
+
+  console.log("🚀 Building loader...");
 
   let config: any;
   try {
@@ -48,13 +52,15 @@ export async function buildStaticLoader() {
 
   const publicDirRoot = path.resolve(config.publicDir);
 
-  console.log(`Public directory '${publicDirRoot}'.`);
+  console.log(`✅ Public directory '${publicDirRoot}'.`);
 
   const staticDirs: string[] = config.staticDirs ?? [];
   if (staticDirs.length > 0) {
-    console.log(`Using static directories: ${staticDirs.join(', ')}`);
+    console.log(`✅ Using static directories: ${staticDirs.join(', ')}`);
   } else {
-    console.log(`No static directories defined.`);
+    if (displayFrameworkWarnings) {
+      console.log(`✅ No static directories defined.`);
+    }
   }
   const staticRoots = staticDirs.map(
     dir => path.resolve(config.publicDir, dir)
@@ -66,9 +72,11 @@ export async function buildStaticLoader() {
 
   const excludeDirs: string[] = config.excludeDirs ?? DEFAULT_EXCLUDE_DIRS;
   if (excludeDirs.length > 0) {
-    console.log(`Using exclude directories: ${excludeDirs.join(', ')}`);
+    console.log(`✅ Using exclude directories: ${excludeDirs.join(', ')}`);
   } else {
-    console.log(`No exclude directories defined.`);
+    if (displayFrameworkWarnings) {
+      console.log(`✅ No exclude directories defined.`);
+    }
   }
   const excludeRoots = excludeDirs.map(
     dir => path.resolve(config.publicDir, dir)
@@ -92,9 +100,11 @@ export async function buildStaticLoader() {
 
   const includeDirs: string[] = config.includeDirs ?? DEFAULT_INCLUDE_DIRS;
   if (includeDirs.length > 0) {
-    console.log(`Using include directories: ${includeDirs.join(', ')}`);
+    console.log(`✅ Using include directories: ${includeDirs.join(', ')}`);
   } else {
-    console.log(`No include directories defined.`);
+    if (displayFrameworkWarnings) {
+      console.log(`✅ No include directories defined.`);
+    }
   }
   const includeRoots = includeDirs.map(
     dir => path.resolve(config.publicDir, dir)
@@ -162,9 +172,11 @@ export async function buildStaticLoader() {
     const { contentType: type, isStatic, loadModule } = knownAssets[filePath];
 
     if (contentDef != null) {
-      console.log(filePath + ': ' + JSON.stringify(type) + (isStatic ? ' [STATIC]' : ''));
+      console.log('✅ ' + filePath + ': ' + JSON.stringify(type) + (isStatic ? ' [STATIC]' : ''));
     } else {
-      console.log('⚠️ Notice: Unknown file type ' + filePath + '. Treating as binary file.');
+      if (displayFrameworkWarnings) {
+        console.log('⚠️ Notice: Unknown file type ' + filePath + '. Treating as binary file.');
+      }
     }
 
     let content;
@@ -188,26 +200,34 @@ export async function buildStaticLoader() {
 
   let spaFile: string | false = config.spa ?? false;
   if(spaFile) {
-    console.log(`Application SPA file '${spaFile}'.`);
+    console.log(`✅ Application SPA file '${spaFile}'.`);
     if(!knownAssets[spaFile] || knownAssets[spaFile].contentType !== 'text/html') {
-      console.log(`⚠️ Notice: '${spaFile}' does not exist or is not of type 'text/html'. Ignoring.`);
+      if (displayFrameworkWarnings) {
+        console.log(`⚠️ Notice: '${spaFile}' does not exist or is not of type 'text/html'. Ignoring.`);
+      }
       spaFile = false;
     }
   } else {
-    console.log(`Application is not a SPA.`);
+    if (displayFrameworkWarnings) {
+      console.log(`✅ Application is not a SPA.`);
+    }
   }
 
   fileContents += `\nexport const spaFile = ${JSON.stringify(spaFile)};\n`;
 
   let notFoundPageFile: string | false = config.notFoundPage ?? false;
   if(notFoundPageFile) {
-    console.log(`Application 'not found (404)' file '${notFoundPageFile}'.`);
+    console.log(`✅ Application 'not found (404)' file '${notFoundPageFile}'.`);
     if(!knownAssets[notFoundPageFile] || knownAssets[notFoundPageFile].contentType !== 'text/html') {
-      console.log(`⚠️ Notice: '${notFoundPageFile}' does not exist or is not of type 'text/html'. Ignoring.`);
+      if (displayFrameworkWarnings) {
+        console.log(`⚠️ Notice: '${notFoundPageFile}' does not exist or is not of type 'text/html'. Ignoring.`);
+      }
       notFoundPageFile = false;
     }
   } else {
-    console.log(`Application specifies no 'not found (404)' page.`);
+    if (displayFrameworkWarnings) {
+      console.log(`✅ Application specifies no 'not found (404)' page.`);
+    }
   }
 
   fileContents += `\nexport const notFoundPageFile = ${JSON.stringify(notFoundPageFile)};\n`;
@@ -220,6 +240,6 @@ export async function buildStaticLoader() {
 
   fs.writeFileSync('./src/statics.js', fileContents);
 
-  console.log("🚀 Wrote static file loader for " + files.length + " file(s).");
+  console.log("✅ Wrote static file loader for " + files.length + " file(s).");
 
 }

@@ -16,6 +16,7 @@ const optionDefinitions: OptionDefinition[] = [
   { name: 'preset', type: String, },
 
   { name: 'build-static', type: Boolean },
+  { name: 'suppress-framework-warnings', type: Boolean },
   { name: 'output', alias: 'o', type: String, defaultValue: './compute-js', },
   { name: 'public-dir', type: String, },
   { name: 'static-dir', type: String, },
@@ -80,7 +81,7 @@ if(commandLineValues['build-static']) {
 
 switch(mode) {
 case 'build-static':
-  await buildStaticLoader();
+  await buildStaticLoader(commandLineValues);
   break;
 case 'init-app':
   initApp(commandLineValues);
