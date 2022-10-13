@@ -164,7 +164,7 @@ export async function buildStaticLoader() {
     if (contentDef != null) {
       console.log(filePath + ': ' + JSON.stringify(type) + (isStatic ? ' [STATIC]' : ''));
     } else {
-      console.warn('Warning: Unknown file type ' + filePath + '...');
+      console.log('⚠️ Notice: Unknown file type ' + filePath + '. Treating as binary file.');
     }
 
     let content;
@@ -190,7 +190,7 @@ export async function buildStaticLoader() {
   if(spaFile) {
     console.log(`Application SPA file '${spaFile}'.`);
     if(!knownAssets[spaFile] || knownAssets[spaFile].contentType !== 'text/html') {
-      console.warn(`'${spaFile}' does not exist or is not of type 'text/html'. Ignoring.`);
+      console.log(`⚠️ Notice: '${spaFile}' does not exist or is not of type 'text/html'. Ignoring.`);
       spaFile = false;
     }
   } else {
@@ -203,7 +203,7 @@ export async function buildStaticLoader() {
   if(notFoundPageFile) {
     console.log(`Application 'not found (404)' file '${notFoundPageFile}'.`);
     if(!knownAssets[notFoundPageFile] || knownAssets[notFoundPageFile].contentType !== 'text/html') {
-      console.warn(`'${notFoundPageFile}' does not exist or is not of type 'text/html'. Ignoring.`);
+      console.log(`⚠️ Notice: '${notFoundPageFile}' does not exist or is not of type 'text/html'. Ignoring.`);
       notFoundPageFile = false;
     }
   } else {
