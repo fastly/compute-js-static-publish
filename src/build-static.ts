@@ -52,14 +52,14 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
 
   const publicDirRoot = path.resolve(config.publicDir);
 
-  console.log(`✅ Public directory '${publicDirRoot}'.`);
+  console.log(`✔️ Public directory '${publicDirRoot}'.`);
 
   const staticDirs: string[] = config.staticDirs ?? [];
   if (staticDirs.length > 0) {
-    console.log(`✅ Using static directories: ${staticDirs.join(', ')}`);
+    console.log(`✔️ Using static directories: ${staticDirs.join(', ')}`);
   } else {
     if (displayFrameworkWarnings) {
-      console.log(`✅ No static directories defined.`);
+      console.log(`✔️ No static directories defined.`);
     }
   }
   const staticRoots = staticDirs.map(
@@ -72,10 +72,10 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
 
   const excludeDirs: string[] = config.excludeDirs ?? DEFAULT_EXCLUDE_DIRS;
   if (excludeDirs.length > 0) {
-    console.log(`✅ Using exclude directories: ${excludeDirs.join(', ')}`);
+    console.log(`✔️ Using exclude directories: ${excludeDirs.join(', ')}`);
   } else {
     if (displayFrameworkWarnings) {
-      console.log(`✅ No exclude directories defined.`);
+      console.log(`✔️ No exclude directories defined.`);
     }
   }
   const excludeRoots = excludeDirs.map(
@@ -100,10 +100,10 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
 
   const includeDirs: string[] = config.includeDirs ?? DEFAULT_INCLUDE_DIRS;
   if (includeDirs.length > 0) {
-    console.log(`✅ Using include directories: ${includeDirs.join(', ')}`);
+    console.log(`✔️ Using include directories: ${includeDirs.join(', ')}`);
   } else {
     if (displayFrameworkWarnings) {
-      console.log(`✅ No include directories defined.`);
+      console.log(`✔️ No include directories defined.`);
     }
   }
   const includeRoots = includeDirs.map(
@@ -172,7 +172,7 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
     const { contentType: type, isStatic, loadModule } = knownAssets[filePath];
 
     if (contentDef != null) {
-      console.log('✅ ' + filePath + ': ' + JSON.stringify(type) + (isStatic ? ' [STATIC]' : ''));
+      console.log('✔️ ' + filePath + ': ' + JSON.stringify(type) + (isStatic ? ' [STATIC]' : ''));
     } else {
       if (displayFrameworkWarnings) {
         console.log('⚠️ Notice: Unknown file type ' + filePath + '. Treating as binary file.');
@@ -200,7 +200,7 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
 
   let spaFile: string | false = config.spa ?? false;
   if(spaFile) {
-    console.log(`✅ Application SPA file '${spaFile}'.`);
+    console.log(`✔️ Application SPA file '${spaFile}'.`);
     if(!knownAssets[spaFile] || knownAssets[spaFile].contentType !== 'text/html') {
       if (displayFrameworkWarnings) {
         console.log(`⚠️ Notice: '${spaFile}' does not exist or is not of type 'text/html'. Ignoring.`);
@@ -209,7 +209,7 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
     }
   } else {
     if (displayFrameworkWarnings) {
-      console.log(`✅ Application is not a SPA.`);
+      console.log(`✔️ Application is not a SPA.`);
     }
   }
 
@@ -217,7 +217,7 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
 
   let notFoundPageFile: string | false = config.notFoundPage ?? false;
   if(notFoundPageFile) {
-    console.log(`✅ Application 'not found (404)' file '${notFoundPageFile}'.`);
+    console.log(`✔️ Application 'not found (404)' file '${notFoundPageFile}'.`);
     if(!knownAssets[notFoundPageFile] || knownAssets[notFoundPageFile].contentType !== 'text/html') {
       if (displayFrameworkWarnings) {
         console.log(`⚠️ Notice: '${notFoundPageFile}' does not exist or is not of type 'text/html'. Ignoring.`);
@@ -226,7 +226,7 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
     }
   } else {
     if (displayFrameworkWarnings) {
-      console.log(`✅ Application specifies no 'not found (404)' page.`);
+      console.log(`✔️ Application specifies no 'not found (404)' page.`);
     }
   }
 
@@ -240,6 +240,6 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
 
   fs.writeFileSync('./src/statics.js', fileContents);
 
-  console.log("✅ Wrote static file loader for " + files.length + " file(s).");
+  console.log("✅  Wrote static file loader for " + files.length + " file(s).");
 
 }

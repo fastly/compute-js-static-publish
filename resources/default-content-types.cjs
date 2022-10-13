@@ -47,17 +47,17 @@ function mergeContentTypes(contentTypes) {
         typeof contentType.test !== 'function' &&
         !(contentType.test instanceof RegExp)
       ) {
-        console.warn(`Ignoring contentTypes[${index}]: 'test' must be a function or regular expression.`);
+        console.log(`⚠️ Ignoring contentTypes[${index}]: 'test' must be a function or regular expression.`);
         invalid = true;
       }
 
       if(typeof contentType.type !== 'string' || contentType.type.indexOf('/') === -1) {
-        console.warn(`Ignoring contentTypes[${index}]: 'type' must be a string representing a MIME type.`);
+        console.log(`⚠️ Ignoring contentTypes[${index}]: 'type' must be a string representing a MIME type.`);
         invalid = true;
       }
 
       if('binary' in contentType && typeof contentType.binary !== 'boolean') {
-        console.warn(`Ignoring contentTypes[${index}]: optional 'binary' must be a boolean value.`);
+        console.log(`⚠️ Ignoring contentTypes[${index}]: optional 'binary' must be a boolean value.`);
         invalid = true;
       }
 
@@ -74,7 +74,7 @@ function mergeContentTypes(contentTypes) {
     }
   }
 
-  console.log('Applying ' + finalContentTypes.length + ' custom content type(s).');
+  console.log('✔️ Applying ' + finalContentTypes.length + ' custom content type(s).');
 
   for (const contentType of defaultContentTypes) {
     finalContentTypes.push(contentType);
