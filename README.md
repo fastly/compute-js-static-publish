@@ -91,7 +91,7 @@ These arguments are used to populate the `fastly.toml` and `package.json` files 
 
 You may still override any of these options individually.
 
-*1 - For Next.js, consider using `@fastly/next-compute-js`, a Node.js server implementation that allows you to run
+*1 - For Next.js, consider using `@fastly/next-compute-js`, a Next.js server implementation that allows you to run
    your Next.js application on Compute@Edge.
 
 ## Troubleshooting
