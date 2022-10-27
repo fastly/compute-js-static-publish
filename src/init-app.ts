@@ -175,10 +175,10 @@ export function initApp(commandLineValues: CommandLineOptions) {
   console.log('');
   console.log('Public Dir  :', PUBLIC_DIR);
   console.log('Static Dir  :', BUILD_STATIC_DIR ?? '(None)');
-  console.log('SPA         :', spaRel != null ? spaRel : '(None)');
-  console.log('404 Page    :', notFoundRel != null ? notFoundRel : '(None)');
-  console.log('Auto-Index  :', autoIndex != null ? autoIndex : '(None)')
-  console.log('Auto-Ext    :', autoExt != null ? autoExt : '(None)')
+  console.log('SPA         :', spaRel ?? '(None)');
+  console.log('404 Page    :', notFoundRel ?? '(None)');
+  console.log('Auto-Index  :', autoIndex ?? '(None)')
+  console.log('Auto-Ext    :', autoExt ?? '(None)')
   console.log('name        :', name);
   console.log('author      :', author);
   console.log('description :', description);
