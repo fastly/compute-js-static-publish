@@ -246,7 +246,7 @@ name = "${name}"
 ${fastlyServiceId != null ? `service_id = "${fastlyServiceId}"
 ` : ''}
 [scripts]
-  build = "npx @fastly/compute-js-static-publish --build-static && $(npm bin)/webpack && $(npm bin)/js-compute-runtime ./bin/index.js ./bin/main.wasm"
+  build = "npx @fastly/compute-js-static-publish --build-static && npx webpack && npx js-compute-runtime ./bin/index.js ./bin/main.wasm"
 `;
 
   const fastlyTomlPath = path.resolve(computeJsDir, 'fastly.toml');
