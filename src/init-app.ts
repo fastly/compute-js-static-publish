@@ -182,7 +182,7 @@ export function initApp(commandLineValues: CommandLineOptions) {
   console.log('name        :', name);
   console.log('author      :', author);
   console.log('description :', description);
-  console.log('Service ID  :', fastlyServiceId);
+  console.log('Service ID  :', fastlyServiceId ?? '(None)');
   console.log('');
 
   console.log("Initializing Compute@Edge Application in " + computeJsDir + "...");
@@ -243,8 +243,8 @@ description = "${description}"
 language = "javascript"
 manifest_version = 2
 name = "${name}"
-service_id = "${fastlyServiceId}"
-
+${fastlyServiceId != null ? `service_id = "${fastlyServiceId}"
+` : ''}
 [scripts]
   build = "npx @fastly/compute-js-static-publish --build-static && $(npm bin)/webpack && $(npm bin)/js-compute-runtime ./bin/index.js ./bin/main.wasm"
 `;
