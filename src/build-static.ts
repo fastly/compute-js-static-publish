@@ -90,10 +90,6 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
   // Load content types
   const finalContentTypes: ContentTypeDef[] = defaultContentTypes.mergeContentTypes(config.contentTypes ?? []);
 
-  // Update the target file too, so webpack can see it.
-  const defaultContentTypesJsPath = path.resolve('./default-content-types.cjs');
-  fs.copyFileSync(defaultContentTypesJsSrcPath, defaultContentTypesJsPath);
-
   const DEFAULT_INCLUDE_DIRS = [
     './.well-known'
   ];
