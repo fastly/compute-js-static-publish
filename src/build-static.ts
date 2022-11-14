@@ -11,7 +11,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import * as url from "url";
-import { ContentTypeDef } from "./content-types.js";
+import { ContentTypeDef, DefaultContentTypesModule } from "./content-types.js";
 import commandLineArgs from "command-line-args";
 
 function getFiles(results: string[], dir: string) {
@@ -85,7 +85,7 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
   // Load defaultContentTypes module
   const __dirname = url.fileURLToPath(new URL('.', import.meta.url));
   const defaultContentTypesJsSrcPath = path.resolve(__dirname, '../resources/default-content-types.cjs');
-  const defaultContentTypes = await import(defaultContentTypesJsSrcPath);
+  const defaultContentTypes: DefaultContentTypesModule = await import(defaultContentTypesJsSrcPath);
 
   // Load content types
   const finalContentTypes: ContentTypeDef[] = defaultContentTypes.mergeContentTypes(config.contentTypes ?? []);
