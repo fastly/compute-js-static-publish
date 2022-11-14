@@ -40,5 +40,13 @@
   },
   "engines": {
     "node": ">=14.8"
-  }
+  },
+  "files": [
+    "build",
+    "resources",
+    "LICENSE",
+    "package.json",
+    "README.md",
+    "SECURITY.md"
+  ]
 }
