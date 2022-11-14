@@ -7,11 +7,15 @@ export class StaticAssets {
     this.assetsMap = assetsMap;
   }
 
+  public getAsset(key: string) {
+    return this.assetsMap[key];
+  }
+
   public serveAsset(event: FetchEvent, pathPrefix: string = '') {
     const { request } = event;
     const { pathname } = new URL(request.url);
 
-    const asset = this.assetsMap[`${pathPrefix}${pathname}`];
+    const asset = this.getAsset(`${pathPrefix}${pathname}`);
     if (!asset) {
       return null;
     }
