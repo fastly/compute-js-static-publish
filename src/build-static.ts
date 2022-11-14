@@ -179,7 +179,7 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
     if (contentDef == null || contentDef.binary) {
       content = 'Buffer.from(file' + index + ', "base64")';
     } else {
-      content = 'file' + index;
+      content = 'String(file' + index + ')';
     }
 
     let module;
@@ -233,6 +233,8 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
 
   let autoExt: string | false = config.autoExt ?? null;
   fileContents += `\nexport const autoExt = ${JSON.stringify(autoExt)};\n`;
+
+  fileContents += '\nexport const staticAssets = new StaticAssets(assets);\n';
 
   fs.writeFileSync('./src/statics.js', fileContents);
 
