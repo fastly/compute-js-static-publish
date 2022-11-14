@@ -4,6 +4,7 @@
   "version": "2.2.2",
   "description": "Static Publisher for Compute@Edge JavaScript",
   "main": "./build/index.js",
+  "types": "./build/index.d.ts",
   "scripts": {
     "prepack": "npm run build",
     "build": "tsc",
