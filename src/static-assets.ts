@@ -11,15 +11,7 @@ export class StaticAssets {
     return this.assetsMap[key];
   }
 
-  public serveAsset(event: FetchEvent, pathPrefix: string = '') {
-    const { request } = event;
-    const { pathname } = new URL(request.url);
-
-    const asset = this.getAsset(`${pathPrefix}${pathname}`);
-    if (!asset) {
-      return null;
-    }
-
+  public serveAsset(asset: Asset) {
     // Aggressive caching for static files, and no caching for everything else.
     const headers: HeadersInit = {
       'Cache-Control': asset.isStatic ? 'max-age=31536000' : 'no-cache',
@@ -31,5 +23,17 @@ export class StaticAssets {
       status: 200,
       headers,
     });
+  }
+
+  public serveAssetForEvent(event: FetchEvent, pathPrefix: string = '') {
+    const { request } = event;
+    const { pathname } = new URL(request.url);
+
+    const asset = this.getAsset(`${pathPrefix}${pathname}`);
+    if (!asset) {
+      return null;
+    }
+
+    return this.serveAsset(asset);
   }
 }
