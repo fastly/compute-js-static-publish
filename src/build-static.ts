@@ -11,7 +11,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import * as url from "url";
-import { ContentTypeDef, DefaultContentTypesModule } from "./content-types.js";
+import { ContentTypeDef, DefaultContentTypesModule } from "./types.js";
 import commandLineArgs from "command-line-args";
 
 function getFiles(results: string[], dir: string) {
