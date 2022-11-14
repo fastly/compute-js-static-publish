@@ -1,7 +1,7 @@
 /// <reference types="@fastly/js-compute" />
 
 import { Router } from '@fastly/expressly';
-import { assets, spaFile, notFoundPageFile, autoIndex, autoExt } from './statics';
+import { staticAssets, spaFile, notFoundPageFile, autoIndex, autoExt } from './statics';
 
 const router = new Router();
 
@@ -10,7 +10,7 @@ function getMatchingRequestPath(path) {
   // match exactly one of the assets
   if(!path.endsWith('/')) {
 
-    if(path in assets) {
+    if (staticAssets.getAsset(path) != null) {
       return path;
     }
 
@@ -18,7 +18,7 @@ function getMatchingRequestPath(path) {
     if(autoExt != null) {
       for (const extEntry of autoExt) {
         let pathWithExt = path + extEntry;
-        if(pathWithExt in assets) {
+        if (staticAssets.getAsset(pathWithExt) != null) {
           return pathWithExt;
         }
       }
@@ -32,7 +32,7 @@ function getMatchingRequestPath(path) {
   if(autoIndex != null) {
     for (const indexEntry of autoIndex) {
       let indexPath = path + indexEntry;
-      if(indexPath in assets) {
+      if (staticAssets.getAsset(indexPath) != null) {
         return indexPath;
       }
     }
@@ -53,23 +53,13 @@ function requestAcceptsTextHtml(req) {
 
 router.get("*", (req, res) => {
   const assetPath = getMatchingRequestPath(req.urlObj.pathname);
-  if(assetPath == null) {
+  const asset = staticAssets.getAsset(assetPath);
+  if(asset == null) {
     return;
   }
-  const staticFile = assets[assetPath];
 
-  // Aggressive caching for static files, and no caching for everything else.
-  // https://create-react-app.dev/docs/production-build/#static-file-caching
-  const headers = {
-    'Cache-Control': staticFile.isStatic ? 'max-age=31536000' : 'no-cache',
-  };
-  if(staticFile.contentType != null) {
-    headers['Content-Type'] = staticFile.contentType;
-  }
-  res.send(new Response(staticFile.content, {
-    status: 200,
-    headers,
-  }));
+  const response = staticAssets.serveAsset(asset);
+  res.send(response);
 });
 
 // TODO: If you need to handle any API routes, add them here.
@@ -85,28 +75,35 @@ router.get("*", (req, res) => {
   if(!requestAcceptsTextHtml(req)) {
     return;
   }
+  const asset = staticAssets.getAsset(spaFile);
+  if(asset == null) {
+    return;
+  }
 
-  const staticFile = assets[spaFile];
-  res.send(new Response(staticFile.content, {
+  const response = new Response(asset.content, {
     status: 200,
     headers: {
       'Cache-Control': 'no-cache',
       'Content-Type': 'text/html',
     }
-  }));
+  });
+  res.send(response);
 });
 
 router.all("*", (req, res) => {
   if(notFoundPageFile && requestAcceptsTextHtml(req)) {
-    const staticFile = assets[notFoundPageFile];
-    res.send(new Response(staticFile.content, {
-      status: 404,
-      headers: {
-        'Cache-Control': 'no-cache',
-        'Content-Type': 'text/html',
-      }
-    }));
-    return;
+    const asset = staticAssets.getAsset(notFoundPageFile);
+    if(asset != null) {
+      const response = new Response(asset.content, {
+        status: 404,
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Content-Type': 'text/html',
+        }
+      });
+      res.send(response);
+      return;
+    }
   }
 
   res.send(new Response("404 Not Found", {
