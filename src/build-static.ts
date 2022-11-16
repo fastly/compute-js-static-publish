@@ -45,12 +45,11 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
     return;
   }
 
-  const results: string[] = [];
-  getFiles(results, config.publicDir);
-
   const outputDir = path.resolve();
+  const publicDirRoot = path.resolve(config.publicDir ?? './');
 
-  const publicDirRoot = path.resolve(config.publicDir);
+  const results: string[] = [];
+  getFiles(results, publicDirRoot);
 
   console.log(`✔️ Public directory '${publicDirRoot}'.`);
 
@@ -63,7 +62,7 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
     }
   }
   const staticRoots = staticDirs.map(
-    dir => path.resolve(config.publicDir, dir)
+    dir => path.resolve(publicDirRoot, dir)
   );
 
   const DEFAULT_EXCLUDE_DIRS = [
@@ -79,7 +78,7 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
     }
   }
   const excludeRoots = excludeDirs.map(
-    dir => path.resolve(config.publicDir, dir)
+    dir => path.resolve(publicDirRoot, dir)
   );
 
   // Load defaultContentTypes module
@@ -103,7 +102,7 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
     }
   }
   const includeRoots = includeDirs.map(
-    dir => path.resolve(config.publicDir, dir)
+    dir => path.resolve(publicDirRoot, dir)
   );
 
   const excludeTest: ((path: string) => boolean) | undefined = config.excludeTest;
