@@ -110,7 +110,7 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
   const files = results
     .filter(file => {
       // Exclude files that come from C@E app dir
-      if(file.startsWith(outputDir)) {
+      if(outputDir != publicDirRoot && file.startsWith(outputDir)) {
         return false;
       }
       // Include files that come from "included roots" dir
