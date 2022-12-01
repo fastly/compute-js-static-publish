@@ -209,11 +209,12 @@ export function initApp(commandLineValues: CommandLineOptions) {
     "author": ${JSON.stringify(author)},
     "devDependencies": {
         "@fastly/expressly": "^1.0.0-alpha.7",
-        "@fastly/js-compute": "^0.5.3",
         "buffer": "^6.0.3",
-        "core-js": "^3.19.1",
         "webpack": "^5.64.0",
         "webpack-cli": "^4.9.1"
+    },
+    "dependencies": {
+        "@fastly/js-compute": "^0.5.12"
     },
     "engines": {
         "node": ">=16.0.0"
