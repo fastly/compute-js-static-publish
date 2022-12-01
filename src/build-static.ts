@@ -135,7 +135,7 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
 
   const knownAssets: Record<string, {contentType: string, isStatic: boolean, loadModule: boolean}> = {};
 
-  let fileContents = 'import { Buffer } from "buffer";\n';
+  let fileContents = '';
 
   for (const [index, file] of files.entries()) {
     const relativeFilePath = path.relative('./src', file);
@@ -161,6 +161,19 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
 
   fileContents += 'import { StaticAssets } from "@fastly/compute-js-static-publish";\n';
 
+  fileContents += `
+function fromBase64(data) {
+  const raw = atob(data);
+  const rawLength = raw.length;
+  const array = new ArrayBuffer(rawLength);
+  const view = new Uint8Array(array);
+  for (let i = 0; i < rawLength; i++) {
+    view[i] = raw.charCodeAt(i);
+  }
+  return array;
+}
+  `;
+
   fileContents += `\nexport const assets = {\n`;
 
   for (const [index, file] of files.entries()) {
@@ -178,7 +191,7 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
 
     let content;
     if (contentDef == null || contentDef.binary) {
-      content = 'Buffer.from(file' + index + ', "base64")';
+      content = 'fromBase64(file' + index + ')';
     } else {
       content = 'String(file' + index + ')';
     }

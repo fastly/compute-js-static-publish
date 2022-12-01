@@ -49,13 +49,5 @@ module.exports = {
     // Polyfills go here.
     // Used for, e.g., any cross-platform WHATWG,
     // or core nodejs modules needed for your application.
-    new ProvidePlugin({
-      Buffer: [ "buffer", "Buffer" ],
-    }),
   ],
-  resolve: {
-    fallback: {
-      "buffer": require.resolve("buffer/"),
-    },
-  },
 };
