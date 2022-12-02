@@ -18,7 +18,7 @@ export type DefaultContentTypesModule = {
 
 export type Asset = {
   contentType: string,
-  content: Buffer | string,
+  content: ArrayBuffer | string,
   module: unknown | null,
   isStatic: boolean,
 };
