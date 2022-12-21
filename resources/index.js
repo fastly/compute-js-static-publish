@@ -6,15 +6,15 @@ import { staticAssets, spaFile, notFoundPageFile, autoIndex, autoExt } from './s
 const router = new Router();
 
 function getMatchingRequestPath(path) {
-  // If the path being looked up does not end in a slash, it has to
-  // match exactly one of the assets
-  if(!path.endsWith('/')) {
 
+  if(!path.endsWith('/')) {
+    // A path that does not end in a slash can match an asset directly
     if (staticAssets.getAsset(path) != null) {
       return path;
     }
 
-    // try auto-ext
+    // ... or, we can try auto-ext:
+    // looks for an asset that has the specified suffix (usually extension, such as .html)
     if(autoExt != null) {
       for (const extEntry of autoExt) {
         let pathWithExt = path + extEntry;
@@ -23,15 +23,20 @@ function getMatchingRequestPath(path) {
         }
       }
     }
-
-    return null;
-
   }
 
-  // try auto-index
+  // try auto-index:
+  // treats the path as a directory, and looks for an asset with the specified
+  // suffix (usually an index file, such as index.html)
+  let dir = path;
+  // remove all slashes from end, and add one trailing slash
+  while(dir.endsWith('/')) {
+    dir = dir.slice(0, -1);
+  }
+  dir = dir + '/';
   if(autoIndex != null) {
     for (const indexEntry of autoIndex) {
-      let indexPath = path + indexEntry;
+      let indexPath = dir + indexEntry;
       if (staticAssets.getAsset(indexPath) != null) {
         return indexPath;
       }
