@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+### Changed
+
+- Updated to @fastly/js-compute@1.0.1
+- Updated generated app to @fastly/js-compute@1.0.1
+- Updated generated app to @fastly/express@1.0.0-beta.2
+
 ### Fixed
 
 - Enable minimize in `webpack.config.js`
