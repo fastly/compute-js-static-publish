@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+### Fixed
+
+- Updated generated app to @fastly/compute-js-static-publish@3.0.1
+
 ## [3.0.0] - 2022-12-23
 
 ### Changed
