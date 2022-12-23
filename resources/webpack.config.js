@@ -1,11 +1,9 @@
 const path = require("path");
-const webpack = require("webpack");
-const { ProvidePlugin } = webpack;
 
 module.exports = {
   entry: "./src/index.js",
   optimization: {
-    minimize: false
+    minimize: true
   },
   target: "webworker",
   output: {
