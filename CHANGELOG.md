@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated to @fastly/js-compute@1.0.1
 - Updated generated app to @fastly/js-compute@1.0.1
 - Updated generated app to @fastly/express@1.0.0-beta.2
+- Improve mechanism of serving static files by copying them into the static content dir and using `includeBytes()`, rather than using asset modules
 
 ### Fixed
 

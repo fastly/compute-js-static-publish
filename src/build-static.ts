@@ -135,51 +135,40 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
 
   const knownAssets: Record<string, {contentType: string, isStatic: boolean, loadModule: boolean}> = {};
 
+  // Create "static content" dir that will be used to hold a copy of static files
+  // NOTE: this is needed because includeBytes doesn't seem to be able to traverse
+  // up to parent dir of Compute project.
+  const staticContentDir = './src/static-content';
+  fs.rmSync(staticContentDir, { recursive: true, force: true });
+  fs.mkdirSync(staticContentDir, { recursive: true });
+
   let fileContents = '';
 
-  for (const [index, file] of files.entries()) {
-    const relativeFilePath = path.relative('./src', file);
-    const contentDef = defaultContentTypes.testFileContentType(finalContentTypes, file);
-    const filePath = file.slice(publicDirRoot.length);
-    const type = contentDef?.type;
-    const isStatic = staticRoots.some(root => file.startsWith(root));
-
-    let query;
-    if (contentDef == null || contentDef.binary) {
-      query = '?staticBinary';
-    } else {
-      query = '?staticText';
-    }
-    fileContents += `import file${index} from "${relativeFilePath}${query}";\n`;
-    let loadModule = false;
-    if (moduleTest != null && moduleTest(filePath)) {
-      loadModule = true;
-      fileContents += `import * as fileModule${index} from "${relativeFilePath}";\n`;
-    }
-    knownAssets[filePath] = { contentType: type, isStatic, loadModule, };
-  }
-
   fileContents += 'import { StaticAssets } from "@fastly/compute-js-static-publish";\n';
+  fileContents += 'import { includeBytes } from "fastly:experimental";\n';
 
-  fileContents += `
-function fromBase64(data) {
-  const raw = atob(data);
-  const rawLength = raw.length;
-  const array = new ArrayBuffer(rawLength);
-  const view = new Uint8Array(array);
-  for (let i = 0; i < rawLength; i++) {
-    view[i] = raw.charCodeAt(i);
+  // If any files need to be loaded as modules, import them now.
+  const loadAsModule: boolean[] = [];
+  if (moduleTest != null) {
+    for (const [index, file] of files.entries()) {
+      const relativeFilePath = path.relative('./src', file);
+      const filePath = file.slice(publicDirRoot.length);
+      if (moduleTest(filePath)) {
+        loadAsModule[index] = true;
+        fileContents += `import * as fileModule${index} from "${relativeFilePath}";\n`;
+      }
+    }
   }
-  return array;
-}
-  `;
+
+  fileContents += 'const textDecoder = new TextDecoder();\n';
 
   fileContents += `\nexport const assets = {\n`;
 
   for (const [index, file] of files.entries()) {
     const contentDef = defaultContentTypes.testFileContentType(finalContentTypes, file);
     const filePath = file.slice(publicDirRoot.length);
-    const { contentType: type, isStatic, loadModule } = knownAssets[filePath];
+    const type = contentDef?.type;
+    const isStatic = staticRoots.some(root => file.startsWith(root));
 
     if (contentDef != null) {
       console.log('✔️ ' + filePath + ': ' + JSON.stringify(type) + (isStatic ? ' [STATIC]' : ''));
@@ -189,15 +178,28 @@ function fromBase64(data) {
       }
     }
 
-    let content;
+    // Serve static files by copying them into the static content dir and using includeBytes()
+    let staticFileExt, staticFileTypeDesc, isBinary;
     if (contentDef == null || contentDef.binary) {
-      content = 'fromBase64(file' + index + ')';
+      staticFileExt = '.bin';
+      staticFileTypeDesc = 'binary';
+      isBinary = true;
     } else {
-      content = 'String(file' + index + ')';
+      staticFileExt = '.txt';
+      staticFileTypeDesc = 'text';
+      isBinary = false;
+    }
+    const staticFilePath = `${staticContentDir}/file${index}${staticFileExt}`;
+    fs.cpSync(file, staticFilePath);
+    console.log(`✔️ Copied static ${staticFileTypeDesc} file "${file}" to "${staticFilePath}".`)
+
+    let content = `includeBytes("${staticFilePath}")`;
+    if (!isBinary) {
+      content = `textDecoder.decode(${content})`;
     }
 
     let module;
-    if (loadModule) {
+    if (loadAsModule[index]) {
       module = 'fileModule' + index;
     } else {
       module = 'null';

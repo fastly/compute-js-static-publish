@@ -195,6 +195,7 @@ export function initApp(commandLineValues: CommandLineOptions) {
 /bin
 /pkg
 /src/statics.js
+/src/static-content
 `;
   const gitIgnorePath = path.resolve(computeJsDir, '.gitignore');
   fs.writeFileSync(gitIgnorePath, gitIgnoreContent, "utf-8");
