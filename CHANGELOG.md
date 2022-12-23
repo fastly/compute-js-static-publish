@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+## [2.4.2] - 2022-12-21
+
+### Changed
+
+- auto-index now also applies to request paths that do not have a trailing slash 
+
 ## [2.4.1] - 2022-12-02
 
 ### Fixed
