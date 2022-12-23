@@ -2,6 +2,11 @@
 
 Using a static site generator to build your website? Do you simply need to serve some static files? With `compute-js-static-publish`, now you can deploy and serve everything from Fastly's blazing-fast [Compute@Edge](https://developer.fastly.com/learning/compute/).
 
+## Breaking Changes
+
+v3.0 makes some updates that require changes to some files. If you've been using your `compute-js-static-publisher` application without modification, you may simply re-scaffold your application.
+Otherwise, you can make some updates to your files. See [MIGRATING](#migrating) below for details.
+
 ## How it works
 
 You have some HTML files, along with some accompanying CSS, JavaScript, image, and font files in a directory. Perhaps you've used a framework or static site generator to build these files.
@@ -93,6 +98,63 @@ You may still override any of these options individually.
 
 *1 - For Next.js, consider using `@fastly/next-compute-js`, a Next.js server implementation that allows you to run
    your Next.js application on Compute@Edge.
+
+## Migrating
+
+If you've updated your project to 3.0.0 or newer of `@fastly/compute-js-static-publish`, and it was scaffolded a version of this tool older than 3.0.0, you'll need to either re-scaffold your project, or make some changes to your application.
+
+If you wish to modify your application, make the following changes:
+
+* `webpack.config.js`
+
+  * Add a new `externals` array to the bottom if it doesn't exist already, and add the following entry:
+
+    ```javascript
+    module.exports = {
+      /* ... other config ... */
+      externals: [
+        ({request,}, callback) => {
+           if (/^fastly:.*$/.test(request)) {
+               return callback(null, 'commonjs ' + request);
+           }
+           callback();
+        }
+      ],
+    }
+    ```
+
+  * Remove the following code from the `module.rules` array.
+
+    ```javascript
+      {
+        // asset/source exports the source code of the asset.
+        resourceQuery: /staticText/,
+        type: "asset/source",
+      },
+      {
+        // asset/inline exports the raw bytes of the asset.
+        // We base64 encode them here
+        resourceQuery: /staticBinary/,
+        type: "asset/inline",
+        generator: {
+          /**
+           * @param {Buffer} content
+           * @returns {string}
+           */
+          dataUrl: content => {
+            return content.toString('base64');
+          },
+        }
+      },
+    ```
+
+* `.gitignore`
+
+  * Add the following entry:
+  
+    ```gitignore
+    /src/static-content
+    ```
 
 ## Troubleshooting
 
