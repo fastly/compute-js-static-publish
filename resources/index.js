@@ -15,7 +15,7 @@ function getMatchingRequestPath(path) {
 
     // ... or, we can try auto-ext:
     // looks for an asset that has the specified suffix (usually extension, such as .html)
-    if(autoExt != null) {
+    if(Array.isArray(autoExt)) {
       for (const extEntry of autoExt) {
         let pathWithExt = path + extEntry;
         if (staticAssets.getAsset(pathWithExt) != null) {
@@ -34,7 +34,7 @@ function getMatchingRequestPath(path) {
     dir = dir.slice(0, -1);
   }
   dir = dir + '/';
-  if(autoIndex != null) {
+  if(Array.isArray(autoIndex)) {
     for (const indexEntry of autoIndex) {
       let indexPath = dir + indexEntry;
       if (staticAssets.getAsset(indexPath) != null) {
