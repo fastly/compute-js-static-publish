@@ -244,10 +244,10 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
 
   fileContents += `\nexport const notFoundPageFile = ${JSON.stringify(notFoundPageFile)};\n`;
 
-  let autoIndex: string | false = config.autoIndex ?? null;
+  let autoIndex: string[] | false = config.autoIndex ?? false;
   fileContents += `\nexport const autoIndex = ${JSON.stringify(autoIndex)};\n`;
 
-  let autoExt: string | false = config.autoExt ?? null;
+  let autoExt: string[] | false = config.autoExt ?? false;
   fileContents += `\nexport const autoExt = ${JSON.stringify(autoExt)};\n`;
 
   fileContents += '\nexport const staticAssets = new StaticAssets(assets);\n';
