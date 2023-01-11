@@ -81,8 +81,9 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
     dir => path.resolve(publicDirRoot, dir)
   );
 
-  // Load defaultContentTypes module
   const __dirname = url.fileURLToPath(new URL('.', import.meta.url));
+
+  // Load defaultContentTypes module
   const defaultContentTypesJsSrcPath = path.resolve(__dirname, '../resources/default-content-types.cjs');
   const defaultContentTypes: DefaultContentTypesModule = await import(defaultContentTypesJsSrcPath);
 
@@ -255,5 +256,15 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
   fs.writeFileSync('./src/statics.js', fileContents);
 
   console.log("✅  Wrote static file loader for " + files.length + " file(s).");
+
+  // Copy Types file for static file loader
+  try {
+    const staticsTypeFile = path.resolve(__dirname, '../resources/statics.d.ts');
+    fs.copyFileSync(staticsTypeFile, './src/statics.d.ts');
+
+    console.log("✅  Wrote static file loader types file statics.d.ts.");
+  } catch {
+    console.log("⚠️ Notice: could not wrote static file loader types file statics.d.ts.");
+  }
 
 }

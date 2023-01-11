@@ -195,6 +195,7 @@ export function initApp(commandLineValues: CommandLineOptions) {
 /bin
 /pkg
 /src/statics.js
+/src/statics.d.ts
 /src/static-content
 `;
   const gitIgnorePath = path.resolve(computeJsDir, '.gitignore');
