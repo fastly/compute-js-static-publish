@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+### Added
+
+- Generate statics.d.ts alongside static.js helpful for TypeScript
+- Export Config type to describe shape of static-publish.rc.js
+- Generated static files have descriptive notice
+
 ## [3.0.1] - 2022-12-23
 
 ### Fixed
