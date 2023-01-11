@@ -11,7 +11,11 @@
 import * as fs from "fs";
 import * as path from "path";
 import * as url from "url";
-import { ContentTypeDef, DefaultContentTypesModule } from "./types.js";
+import {
+  Config,
+  ContentTypeDef,
+  DefaultContentTypesModule,
+} from "./types.js";
 import commandLineArgs from "command-line-args";
 
 function getFiles(results: string[], dir: string) {
@@ -33,7 +37,7 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
 
   console.log("🚀 Building loader...");
 
-  let config: any;
+  let config: Config;
   try {
     const staticPublishRcPath = path.resolve('./static-publish.rc.js');
     config = (await import(staticPublishRcPath)).default;
@@ -106,7 +110,7 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
     dir => path.resolve(publicDirRoot, dir)
   );
 
-  const excludeTest: ((path: string) => boolean) | undefined = config.excludeTest;
+  const excludeTest: ((path: string) => boolean) | null = config.excludeTest ?? null;
 
   const files = results
     .filter(file => {
@@ -132,7 +136,7 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
       return excludeTest == null || !excludeTest(file);
     });
 
-  const moduleTest: ((path: string) => boolean) | undefined = config.moduleTest;
+  const moduleTest: ((path: string) => boolean) | null = config.moduleTest ?? null;
 
   const knownAssets: Record<string, {contentType: string, isStatic: boolean, loadModule: boolean}> = {};
 

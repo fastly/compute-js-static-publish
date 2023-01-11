@@ -285,6 +285,7 @@ ${fastlyServiceId != null ? `service_id = "${fastlyServiceId}"
   }
 
   const staticPublishJsContent = `\
+/** @type {import('@fastly/compute-js-static-publish').Config} */
 module.exports = {
   publicDir: ${JSON.stringify(publicDirRel)},
   excludeDirs: [ './node_modules' ],
