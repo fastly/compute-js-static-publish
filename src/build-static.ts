@@ -188,22 +188,20 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
     }
 
     // Serve static files by copying them into the static content dir and using includeBytes()
-    let staticFileExt, staticFileTypeDesc, isBinary;
+    let staticFileExt, staticFileType;
     if (contentDef == null || contentDef.binary) {
       staticFileExt = '.bin';
-      staticFileTypeDesc = 'binary';
-      isBinary = true;
+      staticFileType = 'binary';
     } else {
       staticFileExt = '.txt';
-      staticFileTypeDesc = 'text';
-      isBinary = false;
+      staticFileType = 'string';
     }
     const staticFilePath = `${staticContentDir}/file${index}${staticFileExt}`;
     fs.cpSync(file, staticFilePath);
-    console.log(`✔️ Copied static ${staticFileTypeDesc} file "${file}" to "${staticFilePath}".`)
+    console.log(`✔️ Copied static ${staticFileType} file "${file}" to "${staticFilePath}".`)
 
     let content = `includeBytes("${staticFilePath}")`;
-    if (!isBinary) {
+    if (staticFileType === 'string') {
       content = `textDecoder.decode(${content})`;
     }
 
@@ -214,7 +212,7 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
       module = 'null';
     }
 
-    fileContents += `  ${JSON.stringify(filePath)}: { contentType: ${JSON.stringify(type)}, content: ${content}, module: ${module}, isStatic: ${JSON.stringify(isStatic)} },\n`;
+    fileContents += `  ${JSON.stringify(filePath)}: { type: ${JSON.stringify(staticFileType)}, contentType: ${JSON.stringify(type)}, content: ${content}, module: ${module}, isStatic: ${JSON.stringify(isStatic)} },\n`;
   }
 
   fileContents += '};\n';
