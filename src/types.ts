@@ -16,12 +16,20 @@ export type DefaultContentTypesModule = {
   testFileContentType: (contentTypes: ContentTypeDef[], file: string) => ContentTypeMatch,
 };
 
-export type Asset = {
+export type AssetBase = {
   contentType: string,
-  content: ArrayBuffer | string,
-  module: unknown | null,
+  module: any | null,
   isStatic: boolean,
 };
+export type StringAsset = AssetBase & {
+  type: 'string',
+  content: string,
+};
+export type BinaryAsset = AssetBase & {
+  type: 'binary',
+  content: Uint8Array,
+};
+export type Asset = StringAsset | BinaryAsset;
 
 export type AssetsMap = {
   [filePath: string]: Asset,
