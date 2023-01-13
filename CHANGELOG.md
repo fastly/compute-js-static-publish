@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+### Fixed
+
+- Added `type` field that had been missing from asset entry
+- Content for binary files is now typed as `Uint8Array` rather than `ArrayBuffer`
+
 ## [3.1.0] - 2023-01-11
 
 ### Added
