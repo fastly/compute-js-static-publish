@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+## [3.2.0] - 2023-01-13
+
 ### Fixed
 
 - Added `type` field that had been missing from asset entry
