@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+### Fixed
+
+- SPA and 404 files were being left out
+- Corrected typing of loadModule function
+
 ## [3.3.0] - 2023-02-16
 
 ### Added
