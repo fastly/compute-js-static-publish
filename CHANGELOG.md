@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+### Added
+
+- Make assets map available on the StaticAssets object.
+- In addition to exporting module assets as [static `import` statements](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/import),
+    they can alternatively be exported as [`import()` calls](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/import).
+    At the current time, this feature requires a bundler that supports the `import()` function, such as [Webpack](https://webpack.js.org). 
+
 ## [3.2.1] - 2023-01-30
 
 ### Added
