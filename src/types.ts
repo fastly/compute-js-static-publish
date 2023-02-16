@@ -19,7 +19,7 @@ export type DefaultContentTypesModule = {
 export type AssetBase = {
   contentType: string,
   module: any | null,
-  loadModule: () => Promise<any> | null,
+  loadModule: (() => Promise<any>) | null,
   isStatic: boolean,
 };
 export type StringAsset = AssetBase & {
