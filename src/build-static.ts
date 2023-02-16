@@ -165,8 +165,8 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
 
 `;
 
-  fileContents += 'import { StaticAssets } from "@fastly/compute-js-static-publish";\n';
   fileContents += 'import { includeBytes } from "fastly:experimental";\n';
+  fileContents += 'import { StaticAssets } from "@fastly/compute-js-static-publish";\n';
 
   // If any files need to be loaded as modules, import them now.
   const loadAsModule: ModuleLoadType[] = [];
