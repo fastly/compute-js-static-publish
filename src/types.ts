@@ -19,6 +19,7 @@ export type DefaultContentTypesModule = {
 export type AssetBase = {
   contentType: string,
   module: any | null,
+  loadModule: () => Promise<any> | null,
   isStatic: boolean,
 };
 export type StringAsset = AssetBase & {
@@ -35,13 +36,17 @@ export type AssetsMap = {
   [filePath: string]: Asset,
 };
 
+export type ModuleLoadType = 'static' | 'dynamic';
+export type ModuleTestResult = ModuleLoadType | false;
+export type ModuleTestFunction = ((path: string) => true | ModuleTestResult) | null;
+
 export type Config = {
   publicDir: string,
   excludeDirs?: string[] | null,
   includeDirs?: string[] | null,
   staticDirs?: string [] | null,
   excludeTest?: ((path: string) => boolean) | null,
-  moduleTest?: ((path: string) => boolean) | null,
+  moduleTest?: ModuleTestFunction,
   spa?: string | null,
   autoIndex?: string[] | false | null,
   autoExt?: string[] | false | null,

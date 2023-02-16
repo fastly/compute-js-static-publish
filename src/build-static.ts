@@ -14,7 +14,9 @@ import * as url from "url";
 import {
   Config,
   ContentTypeDef,
-  DefaultContentTypesModule,
+  DefaultContentTypesModule, ModuleLoadType,
+  ModuleTestFunction,
+  ModuleTestResult,
 } from "./types.js";
 import commandLineArgs from "command-line-args";
 
@@ -28,6 +30,16 @@ function getFiles(results: string[], dir: string) {
       results.push(name);
     }
   }
+}
+
+function processModuleTestResult(value: true | ModuleTestResult): ModuleTestResult {
+  if (value === true) {
+    return 'static';
+  }
+  if (value === false) {
+    return false;
+  }
+  return value;
 }
 
 export async function buildStaticLoader(commandLineValues: commandLineArgs.CommandLineOptions) {
@@ -136,7 +148,7 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
       return excludeTest == null || !excludeTest(file);
     });
 
-  const moduleTest: ((path: string) => boolean) | null = config.moduleTest ?? null;
+  const moduleTest: ModuleTestFunction = config.moduleTest ?? null;
 
   const knownAssets: Record<string, {contentType: string, isStatic: boolean, loadModule: boolean}> = {};
 
@@ -157,14 +169,17 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
   fileContents += 'import { includeBytes } from "fastly:experimental";\n';
 
   // If any files need to be loaded as modules, import them now.
-  const loadAsModule: boolean[] = [];
+  const loadAsModule: ModuleLoadType[] = [];
   if (moduleTest != null) {
     for (const [index, file] of files.entries()) {
-      const relativeFilePath = path.relative('./src', file);
       const filePath = file.slice(publicDirRoot.length);
-      if (moduleTest(filePath)) {
-        loadAsModule[index] = true;
-        fileContents += `import * as fileModule${index} from "${relativeFilePath}";\n`;
+      const moduleTestValue = processModuleTestResult( moduleTest(filePath) );
+      if (moduleTestValue) {
+        loadAsModule[index] = moduleTestValue;
+        if(moduleTestValue === 'static') {
+          const relativeFilePath = path.relative('./src', file);
+          fileContents += `import * as fileModule${index} from "${relativeFilePath}";\n`;
+        }
       }
     }
   }
@@ -206,13 +221,20 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
     }
 
     let module;
-    if (loadAsModule[index]) {
+    if (loadAsModule[index] === 'static') {
       module = 'fileModule' + index;
     } else {
       module = 'null';
     }
+    let loadModuleFunction;
+    if (loadAsModule[index] === 'dynamic') {
+      const relativeFilePath = path.relative('./src', file);
+      loadModuleFunction = `() => import("${relativeFilePath}")`;
+    } else {
+      loadModuleFunction = 'null';
+    }
 
-    fileContents += `  ${JSON.stringify(filePath)}: { type: ${JSON.stringify(staticFileType)}, contentType: ${JSON.stringify(type)}, content: ${content}, module: ${module}, isStatic: ${JSON.stringify(isStatic)} },\n`;
+    fileContents += `  ${JSON.stringify(filePath)}: { type: ${JSON.stringify(staticFileType)}, contentType: ${JSON.stringify(type)}, content: ${content}, module: ${module}, loadModule: ${loadModuleFunction}, isStatic: ${JSON.stringify(isStatic)} },\n`;
   }
 
   fileContents += '};\n';
