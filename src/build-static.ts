@@ -150,7 +150,7 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
 
   const moduleTest: ModuleTestFunction = config.moduleTest ?? null;
 
-  const knownAssets: Record<string, {contentType: string, isStatic: boolean, loadModule: boolean}> = {};
+  const knownAssets: Record<string, { contentType: string }> = {};
 
   // Create "static content" dir that will be used to hold a copy of static files
   // NOTE: this is needed because includeBytes doesn't seem to be able to traverse
@@ -193,6 +193,7 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
     const filePath = file.slice(publicDirRoot.length);
     const type = contentDef?.type;
     const isStatic = staticRoots.some(root => file.startsWith(root));
+    knownAssets[filePath] = { contentType: type, };
 
     if (contentDef != null) {
       console.log('✔️ ' + filePath + ': ' + JSON.stringify(type) + (isStatic ? ' [STATIC]' : ''));
