@@ -11,6 +11,10 @@ export class StaticAssets {
     return this.assetsMap[key];
   }
 
+  public get assets(): AssetsMap {
+    return this.assetsMap;
+  }
+
   public serveAsset(asset: Asset) {
     // Aggressive caching for static files, and no caching for everything else.
     const headers: HeadersInit = {
