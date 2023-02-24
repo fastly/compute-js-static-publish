@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+### Fixed
+
+- Update generated package.json and fastly.toml to recommended setup
+- Updated documentation on migration
+
 ## [3.4.0] - 2023-02-16
 
 ### Fixed
