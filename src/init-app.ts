@@ -210,13 +210,13 @@ export function initApp(commandLineValues: CommandLineOptions) {
     "description": ${JSON.stringify(description)},
     "author": ${JSON.stringify(author)},
     "devDependencies": {
-        "@fastly/compute-js-static-publish": "^3.0.1",
+        "@fastly/compute-js-static-publish": "^3.4.0",
         "@fastly/expressly": "^1.0.0-beta.2",
         "webpack": "^5.75.0",
         "webpack-cli": "^5.0.0"
     },
     "dependencies": {
-        "@fastly/js-compute": "^1.0.1"
+        "@fastly/js-compute": "^1.3.4"
     },
     "engines": {
         "node": ">=16.0.0"
@@ -225,7 +225,9 @@ export function initApp(commandLineValues: CommandLineOptions) {
     "private": true,
     "main": "src/index.js",
     "scripts": {
-        "deploy": "fastly compute deploy"
+        "deploy": "fastly compute deploy",
+        "prebuild": "npx @fastly/compute-js-static-publish --build-static && webpack",
+        "build": "js-compute-runtime ./bin/index.js ./bin/main.wasm"
     },
     "version": "0.2.1"
 }
@@ -249,7 +251,7 @@ name = "${name}"
 ${fastlyServiceId != null ? `service_id = "${fastlyServiceId}"
 ` : ''}
 [scripts]
-  build = "npx @fastly/compute-js-static-publish --build-static && npx webpack && npx js-compute-runtime ./bin/index.js ./bin/main.wasm"
+  build = "npm run build"
 `;
 
   const fastlyTomlPath = path.resolve(computeJsDir, 'fastly.toml');
