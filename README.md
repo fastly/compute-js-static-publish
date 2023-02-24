@@ -29,7 +29,7 @@ npm install
 fastly compute serve
 ```
 
-The build process will generate a `/src/statics.js` file (in `./compute-js`) that holds references to your project's public files.
+The build process will generate a `/src/statics.js` and accompanying `/src/statics.d.ts` file (in `./compute-js`) that holds references to your project's public files.
 
 ### 3. When you're ready to go live, [deploy your Compute@Edge service](https://developer.fastly.com/reference/cli/compute/publish/)
 
@@ -101,13 +101,11 @@ You may still override any of these options individually.
 
 ## Migrating
 
-If you've updated your project to 3.0.0 or newer of `@fastly/compute-js-static-publish`, and it was scaffolded a version of this tool older than 3.0.0, you'll need to either re-scaffold your project, or make some changes to your application.
-
-If you wish to modify your application, make the following changes:
+To update `@fastly/compute-js-static-publish` to a new major version, we recommend that you re-scaffold your application. However, we know that's not always possible, so the following is provided to help you overcome any breaking changes.
 
 * `webpack.config.js`
 
-  * Add a new `externals` array to the bottom if it doesn't exist already, and add the following entry:
+  * Starting `v3.0.0`, we depend on `v1.0.0` of the `js-compute` library. You'll need to add a new `externals` array to the bottom if it doesn't exist already, and add the following entry:
 
     ```javascript
     module.exports = {
@@ -123,7 +121,7 @@ If you wish to modify your application, make the following changes:
     }
     ```
 
-  * Remove the following code from the `module.rules` array.
+  * Starting `v3.0.0`, we are able to produce more size-efficient Wasm files by using the [`includeBytes` function](https://js-compute-reference-docs.edgecompute.app/docs/fastly:experimental/includeBytes) to include the contents of static files instead of Webpack static assets. The following code can safely be removed from the `module.rules` array.
 
     ```javascript
       {
@@ -150,24 +148,29 @@ If you wish to modify your application, make the following changes:
 
 * `.gitignore`
 
-  * Add the following entry:
+  * Add any of the following entries that may be missing from your `.gitignore` file:
   
     ```gitignore
+    /src/statics.js
+    /src/statics.d.ts
     /src/static-content
     ```
+    
+* Various versions of `@fastly/compute-js-static-publish` have specified different build scripts. At the current time, the following is the recommended setup, regardless of the version of `@fastly/compute-js-static-publish` or Fastly CLI.  
 
-## Troubleshooting
+  * The build script listed in `compute-js/fastly.toml` should look like this:
+    ```toml
+    [scripts]
+    build = "npm run build"
+    ```
 
-If you're using Fastly CLI 4.0.0 or newer, and your project was scaffolded using a version
-of this tool older than 2.1.0, then you'll need to either re-scaffold your project, or add the following to the
-`fastly.toml` file that is in your `compute-js` directory.
-
-```toml
-[scripts]
-  build = "npx @fastly/compute-js-static-publish --build-static && npx webpack && npx js-compute-runtime ./bin/index.js ./bin/main.wasm"
-```
-
-If Fastly CLI has already added `build = "npx webpack && npx js-compute-runtime ./bin/index.js ./bin/main.wasm"`, then replace it with the above.
+  * The `scripts` section of `compute-js/package.json` should contain the following lines:
+    ```json
+    {
+        "prebuild": "npx @fastly/compute-js-static-publish --build-static && webpack",
+        "build": "js-compute-runtime ./bin/index.js ./bin/main.wasm"
+    }
+    ```
 
 ## Issues
 
