@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+## [3.6.0] - 2023-02-28
+
 ### Added
 
 - Made testing against default content types easier
