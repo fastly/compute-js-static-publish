@@ -84,7 +84,7 @@ function mergeContentTypes(contentTypes) {
 }
 
 function testFileContentType(contentTypes, file) {
-  for (const contentType of contentTypes) {
+  for (const contentType of contentTypes ?? defaultContentTypes) {
     let matched = false;
     if(contentType.test instanceof RegExp) {
       matched = contentType.test.test(file);
@@ -100,6 +100,7 @@ function testFileContentType(contentTypes, file) {
 }
 
 module.exports = {
+  defaultContentTypes,
   mergeContentTypes,
   testFileContentType,
 };
