@@ -210,13 +210,12 @@ export function initApp(commandLineValues: CommandLineOptions) {
     "description": ${JSON.stringify(description)},
     "author": ${JSON.stringify(author)},
     "devDependencies": {
-        "@fastly/compute-js-static-publish": "^3.5.0",
-        "@fastly/expressly": "^1.0.0-beta.2",
+        "@fastly/compute-js-static-publish": "^4.0.0-alpha.0",
         "webpack": "^5.75.0",
         "webpack-cli": "^5.0.0"
     },
     "dependencies": {
-        "@fastly/js-compute": "^1.3.4"
+        "@fastly/js-compute": "^1.4.0"
     },
     "engines": {
         "node": ">=16.0.0"

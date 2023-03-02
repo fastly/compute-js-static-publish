@@ -1,15 +1,10 @@
-export type ContentTypeDef = {
-  test: RegExp | ((path: string) => boolean),
-  type: string,
-  binary?: boolean,
-};
+// Content Type test
 
-export type ContentTypeTestResult = {
-  type: string,
-  binary: boolean,
-};
+import {
+  ContentTypeDef,
+  ContentTypeTestResult,
+} from '@fastly/compute-js-static-publish';
 
 declare const defaultContentTypes: ContentTypeDef[];
-
 declare function mergeContentTypes(entries?: ContentTypeDef[]): ContentTypeDef[];
-declare function testFileContentType(entries: ContentTypeDef[] | null | undefined, path: string): ContentTypeTestResult | null;
+declare function testFileContentType(entries: ContentTypeDef[] | null | undefined, assetKey: string): ContentTypeTestResult | null;

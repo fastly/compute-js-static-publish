@@ -1,35 +1,35 @@
 const defaultContentTypes = [
   // Text formats
-  { test: /.txt$/, type: 'text/plain', binary: false },
-  { test: /.htm(l)?$/, type: 'text/html', binary: false },
-  { test: /.xml$/, type: 'application/xml', binary: false },
-  { test: /.json$/, type: 'application/json', binary: false },
-  { test: /.map$/, type: 'application/json', binary: false },
-  { test: /.js$/, type: 'application/javascript', binary: false },
-  { test: /.css$/, type: 'text/css', binary: false },
-  { test: /.svg$/, type: 'image/svg+xml', binary: false },
+  { test: /.txt$/, contentType: 'text/plain', text: true },
+  { test: /.htm(l)?$/, contentType: 'text/html', text: true },
+  { test: /.xml$/, contentType: 'application/xml', text: true },
+  { test: /.json$/, contentType: 'application/json', text: true },
+  { test: /.map$/, contentType: 'application/json', text: true },
+  { test: /.js$/, contentType: 'application/javascript', text: true },
+  { test: /.css$/, contentType: 'text/css', text: true },
+  { test: /.svg$/, contentType: 'image/svg+xml', text: true },
 
   // Binary formats
-  { test: /.bmp$/, type: 'image/bmp', binary: true },
-  { test: /.png$/, type: 'image/png', binary: true },
-  { test: /.gif$/, type: 'image/gif', binary: true },
-  { test: /.jp(e)?g$/, type: 'image/jpeg', binary: true },
-  { test: /.ico$/, type: 'image/vnd.microsoft.icon', binary: true },
-  { test: /.tif(f)?$/, type: 'image/png', binary: true },
-  { test: /.aac$/, type: 'audio/aac', binary: true },
-  { test: /.mp3$/, type: 'audio/mpeg', binary: true },
-  { test: /.avi$/, type: 'video/x-msvideo', binary: true },
-  { test: /.mp4$/, type: 'video/mp4', binary: true },
-  { test: /.mpeg$/, type: 'video/mpeg', binary: true },
-  { test: /.webm$/, type: 'video/webm', binary: true },
-  { test: /.pdf$/, type: 'application/pdf', binary: true },
-  { test: /.tar$/, type: 'application/x-tar', binary: true },
-  { test: /.zip$/, type: 'application/zip', binary: true },
-  { test: /.eot$/, type: 'application/vnd.ms-fontobject', binary: true },
-  { test: /.otf$/, type: 'font/otf', binary: true },
-  { test: /.ttf$/, type: 'font/ttf', binary: true },
-  { test: /.woff$/, type: 'font/woff', binary: true },
-  { test: /.woff2$/, type: 'font/woff2', binary: true },
+  { test: /.bmp$/, contentType: 'image/bmp', text: false },
+  { test: /.png$/, contentType: 'image/png', text: false },
+  { test: /.gif$/, contentType: 'image/gif', text: false },
+  { test: /.jp(e)?g$/, contentType: 'image/jpeg', text: false },
+  { test: /.ico$/, contentType: 'image/vnd.microsoft.icon', text: false },
+  { test: /.tif(f)?$/, contentType: 'image/png', text: false },
+  { test: /.aac$/, contentType: 'audio/aac', text: false },
+  { test: /.mp3$/, contentType: 'audio/mpeg', text: false },
+  { test: /.avi$/, contentType: 'video/x-msvideo', text: false },
+  { test: /.mp4$/, contentType: 'video/mp4', text: false },
+  { test: /.mpeg$/, contentType: 'video/mpeg', text: false },
+  { test: /.webm$/, contentType: 'video/webm', text: false },
+  { test: /.pdf$/, contentType: 'application/pdf', text: false },
+  { test: /.tar$/, contentType: 'application/x-tar', text: false },
+  { test: /.zip$/, contentType: 'application/zip', text: false },
+  { test: /.eot$/, contentType: 'application/vnd.ms-fontobject', text: false },
+  { test: /.otf$/, contentType: 'font/otf', text: false },
+  { test: /.ttf$/, contentType: 'font/ttf', text: false },
+  { test: /.woff$/, contentType: 'font/woff', text: false },
+  { test: /.woff2$/, contentType: 'font/woff2', text: false },
 ];
 
 function mergeContentTypes(contentTypes) {
@@ -51,23 +51,23 @@ function mergeContentTypes(contentTypes) {
         invalid = true;
       }
 
-      if(typeof contentType.type !== 'string' || contentType.type.indexOf('/') === -1) {
+      if(typeof contentType.contentType !== 'string' || contentType.contentType.indexOf('/') === -1) {
         console.log(`⚠️ Ignoring contentTypes[${index}]: 'type' must be a string representing a MIME type.`);
         invalid = true;
       }
 
-      if('binary' in contentType && typeof contentType.binary !== 'boolean') {
-        console.log(`⚠️ Ignoring contentTypes[${index}]: optional 'binary' must be a boolean value.`);
+      if('text' in contentType && typeof contentType.text !== 'boolean') {
+        console.log(`⚠️ Ignoring contentTypes[${index}]: optional 'text' must be a boolean value.`);
         invalid = true;
       }
 
       if(!invalid) {
         const contentTypeDef = {
           test: contentType.test,
-          type: contentType.type,
+          contentType: contentType.contentType,
         };
-        if(contentType.binary != null) {
-          contentTypeDef.binary = contentType.binary;
+        if(contentType.text != null) {
+          contentTypeDef.text = contentType.text;
         }
         finalContentTypes.push(contentTypeDef);
       }
@@ -83,17 +83,17 @@ function mergeContentTypes(contentTypes) {
   return finalContentTypes;
 }
 
-function testFileContentType(contentTypes, file) {
+function testFileContentType(contentTypes, assetKey) {
   for (const contentType of contentTypes ?? defaultContentTypes) {
     let matched = false;
     if(contentType.test instanceof RegExp) {
-      matched = contentType.test.test(file);
+      matched = contentType.test.test(assetKey);
     } else {
       // should be a function
-      matched = contentType.test(file);
+      matched = contentType.test(assetKey);
     }
     if(matched) {
-      return { type: contentType.type, binary: Boolean(contentType.binary) };
+      return { contentType: contentType.contentType, text: Boolean(contentType.text ?? false) };
     }
   }
   return null;
