@@ -45,6 +45,7 @@ import { applyDefaults } from "./util/data.js";
 import { calculateFileHash } from "./util/hash.js";
 import { getFiles } from "./util/files.js";
 import { createStringId } from "./util/id.js";
+import { FastlyApiContext, loadApiKey } from "./util/fastly-api.js";
 
 import type {
   ContentAssetMetadataMap,
@@ -205,8 +206,19 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
   console.log(`✔️ Public directory '${publicDirRoot}'.`);
 
   const objectStoreName = config.objectStore;
+  let fastlyApiContext: FastlyApiContext | null = null;
   if (objectStoreName != null) {
+    // TODO: load api key from command line
+    const apiKeyResult = loadApiKey();
+    if (apiKeyResult == null) {
+      console.error("❌ Fastly API Token not provided.");
+      console.error("Specify one on the command line, or use the FASTLY_API_TOKEN environment variable.");
+      process.exitCode = 1;
+      return;
+    }
+    fastlyApiContext = { apiToken: apiKeyResult.apiToken };
     console.log(`✔️ Using Object Store mode, with object store: ${objectStoreName}`);
+    console.log(`✔️ Fastly API Token: ${fastlyApiContext.apiToken.slice(0, 4)}${'*'.repeat(fastlyApiContext.apiToken.length-4)} from '${apiKeyResult.source}'`);
   } else {
     if (displayFrameworkWarnings) {
       console.log(`✔️ Not using Object Store mode.`);

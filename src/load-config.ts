@@ -258,7 +258,6 @@ const normalizeConfig = buildNormalizeFunctionForObject<StaticPublisherConfigNor
     let normalized;
     if ( (normalized = normalizePublisherServerConfig(server, innerErrors)) ) {
       // ok
-      console.log({normalized});
       server = normalized;
     } else if (server === null) {
       // ok
