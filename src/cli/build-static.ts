@@ -287,6 +287,11 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
       contentAssetInclusionResultValue = {
         includeContent: contentAssetInclusionResultValue,
       };
+    } else if (contentAssetInclusionResultValue === 'inline') {
+      contentAssetInclusionResultValue = {
+        includeContent: true,
+        inline: true,
+      };
     }
     const contentAssetInclusionResult = applyDefaults(contentAssetInclusionResultValue ?? null, {
       includeContent: true,
@@ -298,6 +303,11 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
     if (typeof moduleAssetInclusionResultValue === 'boolean') {
       moduleAssetInclusionResultValue = {
         includeModule: moduleAssetInclusionResultValue,
+      };
+    } else if (moduleAssetInclusionResultValue === 'static-import') {
+      moduleAssetInclusionResultValue = {
+        includeModule: true,
+        useStaticImport: true,
       };
     }
 

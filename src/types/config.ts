@@ -26,7 +26,7 @@ export type ContentAssetInclusionResult = {
 };
 
 // Asset Inclusion test
-export type ContentAssetInclusionTest = (assetKey: string, contentType?: string) => ContentAssetInclusionResult | true | false | null;
+export type ContentAssetInclusionTest = (assetKey: string, contentType?: string) => ContentAssetInclusionResult | true | 'inline' | false | null;
 
 export type ModuleAssetInclusionResult = {
   // Module asset inclusion mode:
@@ -45,7 +45,7 @@ export type ModuleAssetInclusionResult = {
 };
 
 // Asset Inclusion test
-export type ModuleAssetInclusionTest = (assetKey: string, contentType?: string) => ModuleAssetInclusionResult | true | false | null;
+export type ModuleAssetInclusionTest = (assetKey: string, contentType?: string) => ModuleAssetInclusionResult | true | false | 'static-import' | null;
 
 export type StaticPublisherConfig = {
   // Set to a directory that acts as the root of all files that will be included in this publish.
