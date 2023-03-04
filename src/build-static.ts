@@ -46,6 +46,7 @@ import { calculateFileHash } from "./util/hash.js";
 import { getFiles } from "./util/files.js";
 import { createStringId } from "./util/id.js";
 import { FastlyApiContext, loadApiKey } from "./util/fastly-api.js";
+import { objectStoreEntryExists, objectStoreSubmitFile } from "./util/object-store.js";
 
 import type {
   ContentAssetMetadataMap,
@@ -392,8 +393,17 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
       fs.cpSync(file, metadata.staticFilePath);
       console.log(`✔️ Copied ${metadata.text ? 'text' : 'binary'} asset "${file}" to "${metadata.staticFilePath}".`)
     } else {
-      // TODO: Upload to Object Store
-      console.log(`✔️ Submitted ${metadata.text ? 'text' : 'binary'} asset "${file}" to Object Store at key "${metadata.objectStoreKey}".`)
+      // fastlyApiContext and objectStoreName will not be null at this point.
+
+      if (await objectStoreEntryExists(fastlyApiContext!, objectStoreName!, metadata.objectStoreKey)) {
+        // Already exists in Object Store
+        console.log(`✔️ Asset already exists in Object Store with key "${metadata.objectStoreKey}".`)
+      } else {
+        // Upload to Object Store
+        const fileData = fs.readFileSync(file);
+        await objectStoreSubmitFile(fastlyApiContext!, objectStoreName!, metadata.objectStoreKey, fileData);
+        console.log(`✔️ Submitted ${metadata.text ? 'text' : 'binary'} asset "${file}" to Object Store at key "${metadata.objectStoreKey}".`)
+      }
 
       // Update object store description for local dev
       localObjectStoreDesc.push({key: metadata.objectStoreKey, path: path.relative('./', file)});

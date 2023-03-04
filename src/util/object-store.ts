@@ -105,3 +105,28 @@ export async function objectStoreEntryExists(fastlyApiContext: FastlyApiContext,
   return response.status === 200;
 
 }
+
+const encoder = new TextEncoder();
+export async function objectStoreSubmitFile(fastlyApiContext: FastlyApiContext, objectStoreName: string, key: string, data: Uint8Array | string): Promise<void> {
+
+  const objectStoreId = await getObjectStoreIdForName(fastlyApiContext, objectStoreName);
+  if (objectStoreId == null) {
+    throw new Error('Object store not found');
+  }
+
+  const endpoint = `/resources/stores/object/${encodeURIComponent(objectStoreId)}/keys/${encodeURIComponent(key)}`;
+  const body = typeof data === 'string' ? encoder.encode(data) : data;
+
+  const response = await callFastlyApi(fastlyApiContext, endpoint, null, {
+    method: 'PUT',
+    headers: {
+      'content-type': 'application/octet-stream',
+    },
+    body,
+  });
+
+  if (response.status !== 200) {
+    throw new Error(`Submitting item ${key} gave error: ${response.status}`);
+  }
+
+}
