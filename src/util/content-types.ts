@@ -1,4 +1,9 @@
-const defaultContentTypes = [
+import {
+  ContentTypeDef,
+  ContentTypeTestResult,
+} from "../types/content-types.js";
+
+const defaultContentTypes: ContentTypeDef[] = [
   // Text formats
   { test: /.txt$/, contentType: 'text/plain', text: true },
   { test: /.htm(l)?$/, contentType: 'text/html', text: true },
@@ -32,9 +37,13 @@ const defaultContentTypes = [
   { test: /.woff2$/, contentType: 'font/woff2', text: false },
 ];
 
-function mergeContentTypes(contentTypes) {
+export function getDefaultContentTypes() {
+  return defaultContentTypes;
+}
 
-  const finalContentTypes = [];
+export function mergeContentTypes(contentTypes: ContentTypeDef[]) {
+
+  const finalContentTypes: ContentTypeDef[] = [];
 
   if(!Array.isArray(contentTypes)) {
     console.warn('contentTypes not an array, ignoring.');
@@ -62,7 +71,7 @@ function mergeContentTypes(contentTypes) {
       }
 
       if(!invalid) {
-        const contentTypeDef = {
+        const contentTypeDef: ContentTypeDef = {
           test: contentType.test,
           contentType: contentType.contentType,
         };
@@ -76,6 +85,8 @@ function mergeContentTypes(contentTypes) {
 
   console.log('✔️ Applying ' + finalContentTypes.length + ' custom content type(s).');
 
+  // NOTE: these come later because these are tested in order.
+  // In other words, the earlier ones have higher precedence.
   for (const contentType of defaultContentTypes) {
     finalContentTypes.push(contentType);
   }
@@ -83,7 +94,7 @@ function mergeContentTypes(contentTypes) {
   return finalContentTypes;
 }
 
-function testFileContentType(contentTypes, assetKey) {
+export function testFileContentType(contentTypes: ContentTypeDef[] | null | undefined, assetKey: string): ContentTypeTestResult | null {
   for (const contentType of contentTypes ?? defaultContentTypes) {
     let matched = false;
     if(contentType.test instanceof RegExp) {
@@ -98,9 +109,3 @@ function testFileContentType(contentTypes, assetKey) {
   }
   return null;
 }
-
-module.exports = {
-  defaultContentTypes,
-  mergeContentTypes,
-  testFileContentType,
-};

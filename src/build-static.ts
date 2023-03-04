@@ -47,6 +47,7 @@ import { getFiles } from "./util/files.js";
 import { createStringId } from "./util/id.js";
 import { FastlyApiContext, loadApiKey } from "./util/fastly-api.js";
 import { objectStoreEntryExists, objectStoreSubmitFile } from "./util/object-store.js";
+import { mergeContentTypes, testFileContentType } from "./util/content-types.js";
 
 import type {
   ContentAssetMetadataMap,
@@ -61,7 +62,6 @@ import type {
   ModuleAssetInclusionResultNormalized,
   PublisherServerConfigNormalized,
 } from "./types/config-normalized.js";
-type DefaultContentTypesModule = typeof import('../resources/default-content-types.js');
 
 type AssetInfo =
   ContentTypeTestResult &
@@ -254,12 +254,8 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
 
   const __dirname = url.fileURLToPath(new URL('.', import.meta.url));
 
-  // Load defaultContentTypes module
-  const defaultContentTypesJsSrcPath = path.resolve(__dirname, '../resources/default-content-types.cjs');
-  const defaultContentTypesModule: DefaultContentTypesModule = await import(defaultContentTypesJsSrcPath);
-
   // Load content types
-  const finalContentTypes: ContentTypeDef[] = defaultContentTypesModule.mergeContentTypes(config.contentTypes ?? []);
+  const finalContentTypes: ContentTypeDef[] = mergeContentTypes(config.contentTypes);
 
   // getFiles() applies excludeDirs, excludeDotFiles, and includeWellKnown.
   let files = getFiles(publicDirRoot, config);
@@ -274,7 +270,7 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
   const assetInfos: AssetInfo[] = files.map(file => {
     const assetKey = file.slice(publicDirRoot.length);
 
-    let contentTypeTestResult = defaultContentTypesModule.testFileContentType(finalContentTypes, assetKey);
+    let contentTypeTestResult = testFileContentType(finalContentTypes, assetKey);
 
     if (contentTypeTestResult == null) {
       contentTypeTestResult = {
