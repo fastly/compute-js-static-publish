@@ -375,10 +375,16 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
   const localObjectStoreDesc: {key: string, path: string}[] = [];
 
   // Prepare content asset
+  const counts = {
+    inline: 0,
+    objectStore: 0,
+    excluded: 0,
+  }
   for (const assetInfo of assetInfos) {
     const metadata = contentAssetMetadataMap[assetInfo.assetKey];
     if (metadata == null) {
       // Non-content asset
+      counts.excluded++;
       continue;
     }
 
@@ -388,6 +394,7 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
       // Inline using includeBytes()
       fs.cpSync(file, metadata.staticFilePath);
       console.log(`✔️ Copied ${metadata.text ? 'text' : 'binary'} asset "${file}" to "${metadata.staticFilePath}".`)
+      counts.inline++;
     } else {
       // fastlyApiContext and objectStoreName will not be null at this point.
 
@@ -401,6 +408,8 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
         console.log(`✔️ Submitted ${metadata.text ? 'text' : 'binary'} asset "${file}" to Object Store at key "${metadata.objectStoreKey}".`)
       }
 
+      counts.objectStore++;
+
       // Update object store description for local dev
       localObjectStoreDesc.push({key: metadata.objectStoreKey, path: path.relative('./', file)});
     }
@@ -410,8 +419,13 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
     writeObjectStoreEntriesToFastlyToml(objectStoreName, localObjectStoreDesc);
   }
 
-  console.log("✅  Prepared " + files.length + " content asset(s).");
-
+  console.log("✅  Prepared " + (counts.inline + counts.objectStore) + " content asset(s):");
+  if (counts.inline > 0) {
+    console.log("      " + counts.inline + " inline");
+  }
+  if (counts.objectStore > 0) {
+    console.log("      " + counts.objectStore + " object store");
+  }
 
   // Build statics-metadata.js
   let metadataFileContents = `/*
