@@ -245,13 +245,6 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
     console.log(`✔️ (.well-known is exempt from exclusion.)`);
   }
 
-  // NOTE: Static directories are no longer a thing.
-  // NOTE: Exclude roots are no longer a thing.
-  // NOTE: include roots are no longer a thing.
-
-  // Behavior change - these tests are performed against
-  // each "directory name", not the full asset key.
-
   const __dirname = url.fileURLToPath(new URL('.', import.meta.url));
 
   // Load content types
@@ -328,7 +321,6 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
 
   // Create "static content" dir that will be used to hold a copy of static files.
   // NOTE: this is needed because includeBytes doesn't seem to be able to traverse up to parent dir of the Compute project.
-  // These are used even for Object Store mode, so that they can be sourced by Viceroy for local development.
   const staticContentDir = './src/static-content';
   fs.rmSync(staticContentDir, { recursive: true, force: true });
   fs.mkdirSync(staticContentDir, { recursive: true });
@@ -544,7 +536,6 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
       console.log(`✔️ Application is not a SPA.`);
     }
   }
-  // fileContents += `\nexport const spaFile = ${JSON.stringify(spaFile)};\n`;
 
   let notFoundPageFile = server.notFoundPageFile;
   if(notFoundPageFile != null) {
@@ -563,13 +554,8 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
     }
   }
 
-  // fileContents += `\nexport const notFoundPageFile = ${JSON.stringify(notFoundPageFile)};\n`;
-
   let autoIndex: string[] = server.autoIndex;
-  // fileContents += `\nexport const autoIndex = ${JSON.stringify(autoIndex)};\n`;
-
   let autoExt: string[] = server.autoExt;
-  //fileContents += `\nexport const autoExt = ${JSON.stringify(autoExt)};\n`;
 
   const serverConfig: PublisherServerConfigNormalized = {
     publicDirPrefix,
