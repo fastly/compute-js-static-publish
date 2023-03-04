@@ -1,4 +1,4 @@
-import { ContentAssets } from "../assets/content-assets.js";
+import { ContentAssets } from "./assets/content-assets.js";
 
 import type { PublisherServerConfigNormalized } from "../types/config-normalized.js";
 import type { ContentAsset } from "../types/content-assets.js";

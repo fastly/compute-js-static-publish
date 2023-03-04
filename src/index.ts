@@ -3,6 +3,6 @@
 export * from './types/index.js';
 
 export { getObjectStoreKeys } from './util/metadata.js';
-export { ContentAssets } from './assets/content-assets.js';
-export { ModuleAssets } from './assets/module-assets.js';
+export { ContentAssets } from './server/assets/content-assets.js';
+export { ModuleAssets } from './server/assets/module-assets.js';
 export { PublisherServer } from './server/publisher-server.js';

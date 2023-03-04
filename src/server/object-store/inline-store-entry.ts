@@ -1,9 +1,9 @@
-import { StoreEntry } from "./types/compute.js";
+import { StoreEntry } from "../../types/compute.js";
 
 // A class designed to give a Body-style interface to Uint8Array.
 // The intended use case is arrays brought in from includeBytes().
 
-export class IncludeBytesStoreEntry implements StoreEntry {
+export class InlineStoreEntry implements StoreEntry {
   _consumed: boolean;
 
   _body: ReadableStreamForBytes;
@@ -57,7 +57,7 @@ export class IncludeBytesStoreEntry implements StoreEntry {
   static decoder = new TextDecoder();
   async text(): Promise<string> {
     const data = await this.arrayBuffer();
-    return IncludeBytesStoreEntry.decoder.decode(data);
+    return InlineStoreEntry.decoder.decode(data);
   }
 
   async json(): Promise<any> {

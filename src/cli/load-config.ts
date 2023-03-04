@@ -9,11 +9,11 @@ import {
 
 import type {
   ContentTypeDef,
-} from "./types/content-types.js";
+} from "../types/content-types.js";
 import type {
   StaticPublisherConfigNormalized,
   PublisherServerConfigNormalized,
-} from "./types/config-normalized.js";
+} from "../types/config-normalized.js";
 
 const normalizeContentTypeDef = buildNormalizeFunctionForObject<ContentTypeDef>((config, errors) => {
 

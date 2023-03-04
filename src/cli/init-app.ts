@@ -305,12 +305,12 @@ module.exports = {
   const __dirname = url.fileURLToPath(new URL('.', import.meta.url));
 
   // webpack.config.js
-  const webpackConfigJsSrcPath = path.resolve(__dirname, '../resources/webpack.config.js');
+  const webpackConfigJsSrcPath = path.resolve(__dirname, '../../resources/webpack.config.js');
   const webpackConfigJsPath = path.resolve(computeJsDir, 'webpack.config.js');
   fs.copyFileSync(webpackConfigJsSrcPath, webpackConfigJsPath);
 
   // src/index.js
-  const indexJsSrcPath = path.resolve(__dirname, '../resources/index.js');
+  const indexJsSrcPath = path.resolve(__dirname, '../../resources/index.js');
   const indexJsPath = path.resolve(computeJsDir, './src/index.js');
   fs.copyFileSync(indexJsSrcPath, indexJsPath);
 

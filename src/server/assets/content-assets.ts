@@ -2,16 +2,16 @@ import { includeBytes } from "fastly:experimental";
 import { ObjectStore } from "fastly:object-store";
 
 import { AssetManager } from "./asset-manager.js";
-import { IncludeBytesStoreEntry } from "../include-bytes-store-entry.js";
+import { InlineStoreEntry } from "../object-store/inline-store-entry.js";
 
-import type { StoreEntry } from "../types/compute.js";
+import type { StoreEntry } from "../../types/compute.js";
 import type {
   ContentAsset,
   ContentAssetMetadataMap,
   ContentAssetMetadataMapEntry,
   ContentAssetMetadataMapEntryInline,
   ContentAssetMetadataMapEntryObjectStore
-} from "../types/content-assets.js";
+} from "../../types/content-assets.js";
 
 const decoder = new TextDecoder();
 
@@ -32,7 +32,7 @@ export class ContentInlineAsset implements ContentAsset {
   }
 
   getStoreEntry(): Promise<StoreEntry> {
-    return Promise.resolve(new IncludeBytesStoreEntry(this.bytes));
+    return Promise.resolve(new InlineStoreEntry(this.bytes));
   }
 
   getBytes(): Uint8Array {

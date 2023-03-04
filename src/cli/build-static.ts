@@ -47,21 +47,21 @@ import { getFiles } from "./util/files.js";
 import { createStringId } from "./util/id.js";
 import { FastlyApiContext, loadApiKey } from "./util/fastly-api.js";
 import { objectStoreEntryExists, objectStoreSubmitFile } from "./util/object-store.js";
-import { mergeContentTypes, testFileContentType } from "./util/content-types.js";
+import { mergeContentTypes, testFileContentType } from "../util/content-types.js";
 
 import type {
   ContentAssetMetadataMap,
   ContentAssetMetadataMapEntry,
-} from "./types/content-assets.js";
+} from "../types/content-assets.js";
 import type {
   ContentTypeDef,
   ContentTypeTestResult,
-} from "./types/content-types.js";
+} from "../types/content-types.js";
 import type {
   ContentAssetInclusionResultNormalized,
   ModuleAssetInclusionResultNormalized,
   PublisherServerConfigNormalized,
-} from "./types/config-normalized.js";
+} from "../types/config-normalized.js";
 
 type AssetInfo =
   ContentTypeTestResult &
@@ -431,12 +431,12 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
 
   // Copy Types file for static file loader
   try {
-    const typesFile = path.resolve(__dirname, '../resources/statics-metadata.d.ts');
+    const typesFile = path.resolve(__dirname, '../../resources/statics-metadata.d.ts');
     fs.copyFileSync(typesFile, './src/statics-metadata.d.ts');
 
     console.log("✅  Wrote content assets metadata types file statics-metadata.d.ts.");
   } catch {
-    console.log("⚠️ Notice: could not wrote content assets metadata types file statics-metadata.d.ts.");
+    console.log("⚠️ Notice: could not write content assets metadata types file statics-metadata.d.ts.");
   }
 
   // Build statics.js
@@ -574,12 +574,12 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
 
   // Copy Types file for static file loader
   try {
-    const staticsTypeFile = path.resolve(__dirname, '../resources/statics.d.ts');
+    const staticsTypeFile = path.resolve(__dirname, '../../resources/statics.d.ts');
     fs.copyFileSync(staticsTypeFile, './src/statics.d.ts');
 
     console.log("✅  Wrote static file loader types file statics.d.ts.");
   } catch {
-    console.log("⚠️ Notice: could not wrote static file loader types file statics.d.ts.");
+    console.log("⚠️ Notice: could not write static file loader types file statics.d.ts.");
   }
 
 }

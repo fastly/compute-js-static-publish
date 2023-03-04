@@ -1,6 +1,6 @@
 import { AssetManager } from "./asset-manager.js";
 
-import type { ModuleAsset, ModuleAssetMap } from "../types/module-assets.js";
+import type { ModuleAsset, ModuleAssetMap } from "../../types/module-assets.js";
 
 export class ModuleAssetDynamic implements ModuleAsset {
   readonly assetKey: string;
