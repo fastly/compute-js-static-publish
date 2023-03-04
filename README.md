@@ -2,6 +2,10 @@
 
 Using a static site generator to build your website? Do you simply need to serve some static files? With `compute-js-static-publish`, now you can deploy and serve everything from Fastly's blazing-fast [Compute@Edge](https://developer.fastly.com/learning/compute/).
 
+## Prerequisites
+
+Node 18 or newer is required.
+
 ## Breaking Changes
 
 v3.0 makes some updates that require changes to some files. If you've been using your `compute-js-static-publisher` application without modification, you may simply re-scaffold your application.
