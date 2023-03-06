@@ -74,6 +74,9 @@ type AssetInfo =
 
     // Asset key (relative to public dir)
     assetKey: string,
+
+    // Last modified time
+    lastModifiedTime: number,
   };
 
 type ObjectStoreItemDesc = {
@@ -329,9 +332,13 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
       useStaticImport: false,
     });
 
+    const stats = fs.statSync(file);
+    const lastModifiedTime = Math.floor((stats.mtime).getTime() / 1000);
+
     return {
       file,
       assetKey,
+      lastModifiedTime,
       ...contentAssetInclusionResult,
       ...moduleAssetInclusionResult,
       ...contentTypeTestResult,
@@ -360,6 +367,7 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
       assetKey,
       contentType,
       text,
+      lastModifiedTime,
     } = assetInfo;
 
     let metadata: ContentAssetMetadataMapEntry;
@@ -368,6 +376,7 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
       metadata = {
         assetKey,
         contentType,
+        lastModifiedTime,
         text,
         isInline: true,
         staticFilePath: `${staticContentDir}/file${contentItems}.${assetInfo.text ? 'txt' : 'bin'}`,
@@ -381,6 +390,7 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
       metadata = {
         assetKey,
         contentType,
+        lastModifiedTime,
         text,
         isInline: false,
         staticFilePath: `${staticContentDir}/file${contentItems}.${assetInfo.text ? 'txt' : 'bin'}`,

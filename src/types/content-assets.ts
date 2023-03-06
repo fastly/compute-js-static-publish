@@ -7,6 +7,7 @@ export type ContentAssetMetadataMapEntryBase = {
   assetKey: string;
   contentType: string,
   text: boolean,
+  lastModifiedTime: number, // as unix time
   staticFilePath: string,
   staticFilePathsCompressed: StaticPublisherCompressedFilePaths,
 };
