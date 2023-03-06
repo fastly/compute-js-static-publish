@@ -60,7 +60,7 @@ const normalizeContentTypeDefs = buildNormalizeFunctionForArray<ContentTypeDef>(
 
 const normalizePublisherServerConfig = buildNormalizeFunctionForObject<PublisherServerConfigNormalized>((config, errors) => {
 
-  let { publicDirPrefix, staticItems, spaFile, notFoundPageFile, autoExt, autoIndex } = config;
+  let { publicDirPrefix, staticItems, compression, spaFile, notFoundPageFile, autoExt, autoIndex } = config;
 
   if (!isSpecified(config, 'publicDirPrefix')) {
     publicDirPrefix = '';
@@ -98,6 +98,19 @@ const normalizePublisherServerConfig = buildNormalizeFunctionForObject<Publisher
       });
     } else {
       errors.push('staticItems, if specified, must be a string value, an array of string values, false, or null');
+    }
+  }
+
+  if (!isSpecified(config, 'compression')) {
+    compression = [ 'br', 'gzip' ];
+  } else if (compression === null) {
+    compression = []
+  } else {
+    if (!Array.isArray(compression)) {
+      compression = [ compression ];
+    }
+    if (compression.some((x: any) => x !== 'br' && x !== 'gzip')) {
+      errors.push(`compression, if specified, must be null or an array and can only contain 'br' and 'gzip'.`);
     }
   }
 
@@ -160,6 +173,7 @@ const normalizePublisherServerConfig = buildNormalizeFunctionForObject<Publisher
   return {
     publicDirPrefix,
     staticItems,
+    compression,
     spaFile,
     notFoundPageFile,
     autoExt,
@@ -177,6 +191,7 @@ const normalizeConfig = buildNormalizeFunctionForObject<StaticPublisherConfigNor
     excludeDotFiles,
     includeWellKnown,
     contentAssetInclusionTest,
+    contentCompression,
     moduleAssetInclusionTest,
     contentTypes,
     server,
@@ -258,6 +273,19 @@ const normalizeConfig = buildNormalizeFunctionForObject<StaticPublisherConfigNor
     errors.push('contentAssetInclusionTest, if specified, must be null or a function.');
   }
 
+  if (!isSpecified(config, 'contentCompression')) {
+    contentCompression = [ 'br', 'gzip' ];
+  } else if (contentCompression === null) {
+    contentCompression = []
+  } else {
+    if (!Array.isArray(contentCompression)) {
+      contentCompression = [ contentCompression ];
+    }
+    if (contentCompression.some((x: any) => x !== 'br' && x !== 'gzip')) {
+      errors.push(`contentCompression, if specified, must be null or an array and can only contain 'br' and 'gzip'.`);
+    }
+  }
+
   if (!isSpecified(config, 'moduleAssetInclusionTest')) {
     moduleAssetInclusionTest = null;
   } else if (moduleAssetInclusionTest === null || typeof moduleAssetInclusionTest === 'function') {
@@ -309,6 +337,7 @@ const normalizeConfig = buildNormalizeFunctionForObject<StaticPublisherConfigNor
     includeWellKnown,
     excludeDirs,
     contentAssetInclusionTest,
+    contentCompression,
     moduleAssetInclusionTest,
     contentTypes,
     server,

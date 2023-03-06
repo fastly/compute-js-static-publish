@@ -65,6 +65,10 @@ export type StaticPublisherConfig = {
   // A test to run on each asset key to determine whether and how to include the file as a content asset and/or module asset.
   contentAssetInclusionTest?: ContentAssetInclusionTest | null;
 
+  // Pre-generate content in these formats as well and serve them in tandem with the
+  // compression setting in the server settings. Default value is [ 'br' | 'gzip' ].
+  contentCompression?: ('br' | 'gzip')[],
+
   // A test to run on each asset key to determine whether and how to include the file as a content asset and/or module asset.
   moduleAssetInclusionTest?: ModuleAssetInclusionTest | null;
 
@@ -92,6 +96,11 @@ export type PublisherServerConfig = {
   // Items that end with a trailing slash are interpreted as directory names,
   // Items that don't contain asterisks and that do not end in slash are checked for exact match.
   staticItems?: string[] | string | false | null,
+
+  // Compression. If the request contains an Accept-Encoding header, they are checked in the order listed
+  // in the header for the values listed here. The compression algorithm represented by the first match is applied.
+  // Default value is [ 'br', 'gzip' ].
+  compression?: ('br' | 'gzip')[],
 
   // Set to the asset key of a content item to serve this when a GET request comes in for an unknown asset, and
   // the Accept header includes text/html.

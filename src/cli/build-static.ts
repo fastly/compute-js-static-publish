@@ -47,6 +47,8 @@ import { createStringId } from "./util/id.js";
 import { FastlyApiContext, loadApiKey } from "./util/fastly-api.js";
 import { objectStoreEntryExists, objectStoreSubmitFile } from "./util/object-store.js";
 import { mergeContentTypes, testFileContentType } from "../util/content-types.js";
+import { compressionTypes } from "../constants/compression.js";
+import { algs } from "./compression/index.js";
 
 import type {
   ContentAssetMetadataMap,
@@ -73,6 +75,12 @@ type AssetInfo =
     // Asset key (relative to public dir)
     assetKey: string,
   };
+
+type ObjectStoreItemDesc = {
+  objectStoreKey: string,
+  staticFilePath: string,
+  text: boolean,
+};
 
 function generateOrLoadPublishId() {
 
@@ -106,7 +114,21 @@ function generateOrLoadPublishId() {
 
 }
 
-function writeObjectStoreEntriesToFastlyToml(objectStoreName: string, localObjectStoreDesc: {key: string, path: string}[]) {
+async function uploadFilesToObjectStore(fastlyApiContext: FastlyApiContext, objectStoreName: string, objectStoreItems: ObjectStoreItemDesc[]) {
+  for (const { objectStoreKey, staticFilePath, text } of objectStoreItems) {
+    if (await objectStoreEntryExists(fastlyApiContext, objectStoreName, objectStoreKey)) {
+      // Already exists in Object Store
+      console.log(`✔️ Asset already exists in Object Store with key "${objectStoreKey}".`)
+    } else {
+      // Upload to Object Store
+      const fileData = fs.readFileSync(staticFilePath);
+      await objectStoreSubmitFile(fastlyApiContext!, objectStoreName!, objectStoreKey, fileData);
+      console.log(`✔️ Submitted ${text ? 'text' : 'binary'} asset "${staticFilePath}" to Object Store at key "${objectStoreKey}".`)
+    }
+  }
+}
+
+function writeObjectStoreEntriesToFastlyToml(objectStoreName: string, objectStoreItems: ObjectStoreItemDesc[]) {
 
   let fastlyToml = fs.readFileSync('./fastly.toml', 'utf-8');
 
@@ -159,11 +181,11 @@ function writeObjectStoreEntriesToFastlyToml(objectStoreName: string, localObjec
 
   let tablesToml = '';
 
-  for (const {key, path} of localObjectStoreDesc) {
+  for (const {objectStoreKey, staticFilePath} of objectStoreItems) {
     // Probably, JSON.stringify is wrong, but it should do its job
     tablesToml += tableMarker + '\n';
-    tablesToml += 'key = ' + JSON.stringify(key) + '\n';
-    tablesToml += 'path = ' + JSON.stringify(path) + '\n';
+    tablesToml += 'key = ' + JSON.stringify(objectStoreKey) + '\n';
+    tablesToml += 'path = ' + JSON.stringify(path.relative('./', staticFilePath)) + '\n';
     tablesToml += '\n';
   }
 
@@ -349,6 +371,7 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
         text,
         isInline: true,
         staticFilePath: `${staticContentDir}/file${contentItems}.${assetInfo.text ? 'txt' : 'bin'}`,
+        staticFilePathsCompressed: {},
       };
     } else {
       // Use the hash as part of the object store key name.  This avoids having to
@@ -360,7 +383,10 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
         contentType,
         text,
         isInline: false,
+        staticFilePath: `${staticContentDir}/file${contentItems}.${assetInfo.text ? 'txt' : 'bin'}`,
+        staticFilePathsCompressed: {},
         objectStoreKey: `${publishId}:${assetInfo.assetKey}_${hash}`,
+        objectStoreKeysCompressed: {},
       };
     }
 
@@ -369,7 +395,8 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
 
   console.log("🚀 Preparing content assets ...");
 
-  const localObjectStoreDesc: {key: string, path: string}[] = [];
+  // Object store items to upload
+  const objectStoreItems: ObjectStoreItemDesc[] = [];
 
   // Prepare content asset
   const counts = {
@@ -387,33 +414,58 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
 
     const { file } = assetInfo;
 
+    // Copy file to static-content directory
+    fs.cpSync(file, metadata.staticFilePath);
+    console.log(`✔️ Copied ${metadata.text ? 'text' : 'binary'} asset "${file}" to "${metadata.staticFilePath}".`)
+
+    for (const alg of config.contentCompression) {
+      const encodedStaticFilePath = `${metadata.staticFilePath}_${alg}`;
+
+      const compressTo = algs[alg];
+      if (compressTo != null) {
+        if (await compressTo(file, encodedStaticFilePath, metadata.text)) {
+          metadata.staticFilePathsCompressed[alg] = encodedStaticFilePath;
+          console.log(`✔️ Compressed ${metadata.text ? 'text' : 'binary'} asset "${file}" to "${encodedStaticFilePath}" [${alg}].`)
+        }
+      }
+    }
+
     if (metadata.isInline) {
       // Inline using includeBytes()
-      fs.cpSync(file, metadata.staticFilePath);
-      console.log(`✔️ Copied ${metadata.text ? 'text' : 'binary'} asset "${file}" to "${metadata.staticFilePath}".`)
       counts.inline++;
     } else {
       // fastlyApiContext and objectStoreName will not be null at this point.
 
-      if (await objectStoreEntryExists(fastlyApiContext!, objectStoreName!, metadata.objectStoreKey)) {
-        // Already exists in Object Store
-        console.log(`✔️ Asset already exists in Object Store with key "${metadata.objectStoreKey}".`)
-      } else {
-        // Upload to Object Store
-        const fileData = fs.readFileSync(file);
-        await objectStoreSubmitFile(fastlyApiContext!, objectStoreName!, metadata.objectStoreKey, fileData);
-        console.log(`✔️ Submitted ${metadata.text ? 'text' : 'binary'} asset "${file}" to Object Store at key "${metadata.objectStoreKey}".`)
+      objectStoreItems.push({
+        objectStoreKey: metadata.objectStoreKey,
+        staticFilePath: metadata.staticFilePath,
+        text: metadata.text,
+      });
+
+      // For each supported compression type, see if we have a file
+      // and then if we do, we upload it to the object store too.
+      for (const alg of compressionTypes) {
+        const staticFilePath = metadata.staticFilePathsCompressed[alg];
+        if (staticFilePath == null) {
+          continue;
+        }
+        const hash = calculateFileHash(staticFilePath);
+        const objectStoreKey = `${publishId}:${assetInfo.assetKey}_${alg}_${hash}`;
+        objectStoreItems.push({
+          objectStoreKey,
+          staticFilePath,
+          text: metadata.text,
+        });
+        metadata.objectStoreKeysCompressed[alg] = objectStoreKey;
       }
 
       counts.objectStore++;
-
-      // Update object store description for local dev
-      localObjectStoreDesc.push({key: metadata.objectStoreKey, path: path.relative('./', file)});
     }
   }
 
   if (objectStoreName != null) {
-    writeObjectStoreEntriesToFastlyToml(objectStoreName, localObjectStoreDesc);
+    await uploadFilesToObjectStore(fastlyApiContext!, objectStoreName, objectStoreItems);
+    writeObjectStoreEntriesToFastlyToml(objectStoreName, objectStoreItems);
   }
 
   console.log("✅  Prepared " + (counts.inline + counts.objectStore) + " content asset(s):");
@@ -508,6 +560,7 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
   const server = applyDefaults<PublisherServerConfigNormalized>(config.server, {
     publicDirPrefix: '',
     staticItems: [],
+    compression: [ 'br', 'gzip' ],
     spaFile: null,
     notFoundPageFile: null,
     autoExt: [],
@@ -518,6 +571,8 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
   console.log(`✔️ Server public dir prefix '${publicDirPrefix}'.`);
 
   let staticItems = server.staticItems;
+
+  let compression = server.compression;
 
   let spaFile = server.spaFile;
   if(spaFile != null) {
@@ -558,6 +613,7 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
   const serverConfig: PublisherServerConfigNormalized = {
     publicDirPrefix,
     staticItems,
+    compression,
     spaFile,
     notFoundPageFile,
     autoExt,

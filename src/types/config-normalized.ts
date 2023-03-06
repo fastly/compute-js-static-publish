@@ -1,5 +1,6 @@
 import type { ContentAssetInclusionTest, ExcludeDirTest, ModuleAssetInclusionTest } from "./config.js";
 import type { ContentTypeDef } from "./content-types.js";
+import type { ContentCompressionTypes } from "../constants/compression.js";
 
 export type ContentAssetInclusionResultNormalized = {
   includeContent: boolean,
@@ -18,6 +19,7 @@ export type StaticPublisherConfigNormalized = {
   excludeDotFiles: boolean,
   includeWellKnown: boolean,
   contentAssetInclusionTest: ContentAssetInclusionTest | null;
+  contentCompression: ContentCompressionTypes[],
   moduleAssetInclusionTest: ModuleAssetInclusionTest | null;
   contentTypes: ContentTypeDef[],
   server: PublisherServerConfigNormalized | null,
@@ -26,6 +28,7 @@ export type StaticPublisherConfigNormalized = {
 export type PublisherServerConfigNormalized = {
   publicDirPrefix: string,
   staticItems: string[],
+  compression: ContentCompressionTypes[],
   spaFile: string | null,
   notFoundPageFile: string | null,
   autoExt: string[],

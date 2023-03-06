@@ -1,18 +1,23 @@
 import type { StoreEntry } from "../types/compute.js";
+import type { ContentCompressionTypes } from "../constants/compression.js";
+
+export type StaticPublisherCompressedFilePaths = Partial<Record<ContentCompressionTypes, string>>;
 
 export type ContentAssetMetadataMapEntryBase = {
   assetKey: string;
   contentType: string,
   text: boolean,
+  staticFilePath: string,
+  staticFilePathsCompressed: StaticPublisherCompressedFilePaths,
 };
 
 export type ContentAssetMetadataMapEntryInline = ContentAssetMetadataMapEntryBase & {
   isInline: true,
-  staticFilePath: string,
 };
 export type ContentAssetMetadataMapEntryObjectStore = ContentAssetMetadataMapEntryBase & {
-  isInline: false;
-  objectStoreKey: string;
+  isInline: false,
+  objectStoreKey: string,
+  objectStoreKeysCompressed: StaticPublisherCompressedFilePaths,
 };
 export type ContentAssetMetadataMapEntry =
   ContentAssetMetadataMapEntryInline | ContentAssetMetadataMapEntryObjectStore;
