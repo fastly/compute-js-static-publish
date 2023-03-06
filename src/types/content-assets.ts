@@ -1,5 +1,5 @@
-import type { StoreEntry } from "../types/compute.js";
 import type { ContentCompressionTypes } from "../constants/compression.js";
+import type { StoreEntryAndContentType } from "../types/compute.js";
 
 export type StaticPublisherCompressedFilePaths = Partial<Record<ContentCompressionTypes, string>>;
 
@@ -29,7 +29,7 @@ export type ContentAssetMetadataMap = {
 export interface ContentAsset {
   readonly assetKey: string;
   getMetadata(): ContentAssetMetadataMapEntry;
-  getStoreEntry(): Promise<StoreEntry>;
+  getStoreEntryAndContentType(acceptEncodings?: ContentCompressionTypes[]): Promise<StoreEntryAndContentType>;
   getBytes(): Uint8Array;
   getText(): string;
   readonly isInline: boolean;

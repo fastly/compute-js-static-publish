@@ -4,7 +4,6 @@ import { ObjectStore } from "fastly:object-store";
 import { AssetManager } from "./asset-manager.js";
 import { InlineStoreEntry } from "../object-store/inline-store-entry.js";
 
-import type { StoreEntry } from "../../types/compute.js";
 import type {
   ContentAsset,
   ContentAssetMetadataMap,
@@ -12,6 +11,8 @@ import type {
   ContentAssetMetadataMapEntryInline,
   ContentAssetMetadataMapEntryObjectStore
 } from "../../types/content-assets.js";
+import type { StoreEntryAndContentType } from "../../types/compute.js";
+import type { ContentCompressionTypes } from "../../constants/compression.js";
 
 const decoder = new TextDecoder();
 
@@ -21,18 +22,42 @@ export class ContentInlineAsset implements ContentAsset {
   private readonly metadata: ContentAssetMetadataMapEntryInline;
 
   private readonly bytes: Uint8Array;
+  private readonly compressedBytes: Partial<Record<ContentCompressionTypes, Uint8Array>>;
 
-  constructor(metadata: ContentAssetMetadataMapEntryInline, bytes: Uint8Array) {
+  constructor(metadata: ContentAssetMetadataMapEntryInline) {
     this.metadata = metadata;
+
+    const bytes = includeBytes(metadata.staticFilePath);
+    const compressedBytes = Object.entries(metadata.staticFilePathsCompressed)
+      .reduce<Partial<Record<ContentCompressionTypes, Uint8Array>>>((obj, [key, value]) => {
+        obj[key as ContentCompressionTypes] = includeBytes(value);
+        return obj;
+      }, {});
+
     this.bytes = bytes;
+    this.compressedBytes = compressedBytes;
   }
 
   get assetKey() {
     return this.metadata.assetKey;
   }
 
-  getStoreEntry(): Promise<StoreEntry> {
-    return Promise.resolve(new InlineStoreEntry(this.bytes));
+  async getStoreEntryAndContentType(acceptEncodings?: ContentCompressionTypes[]): Promise<StoreEntryAndContentType> {
+    let bytes: Uint8Array | undefined;
+    let contentEncoding: ContentCompressionTypes | null = null;
+    if (acceptEncodings != null) {
+      for(const encoding of acceptEncodings) {
+        bytes = this.compressedBytes[encoding];
+        if (bytes != null) {
+          contentEncoding = encoding;
+          break;
+        }
+      }
+    }
+    bytes ??= this.bytes;
+
+    const storeEntry = new InlineStoreEntry(bytes);
+    return { storeEntry, contentEncoding };
   }
 
   getBytes(): Uint8Array {
@@ -68,13 +93,26 @@ export class ContentObjectStoreAsset implements ContentAsset {
     return this.metadata.assetKey;
   }
 
-  async getStoreEntry(): Promise<StoreEntry> {
+  async getStoreEntryAndContentType(acceptEncodings: ContentCompressionTypes[] = []): Promise<StoreEntryAndContentType> {
+    let objectStoreKey: string | undefined;
+    let contentEncoding: ContentCompressionTypes | null = null;
+    if (acceptEncodings != null) {
+      for(const encoding of acceptEncodings) {
+        objectStoreKey = this.metadata.objectStoreKeysCompressed[encoding];
+        if (objectStoreKey != null) {
+          contentEncoding = encoding;
+          break;
+        }
+      }
+    }
+    objectStoreKey ??= this.metadata.objectStoreKey;
+
     const objectStore = new ObjectStore(this.objectStoreName);
     let retries = 3;
     while (retries > 0) {
-      const entry = await objectStore.get(this.metadata.objectStoreKey);
-      if (entry != null) {
-        return entry;
+      const storeEntry = await objectStore.get(objectStoreKey);
+      if (storeEntry != null) {
+        return { storeEntry, contentEncoding };
       }
 
       // Note the null does NOT mean 404. The fact that we are here means
@@ -116,8 +154,7 @@ export class ContentAssets extends AssetManager<ContentAsset> {
       let asset: ContentAsset;
       if (metadata.isInline) {
 
-        const bytes = includeBytes(metadata.staticFilePath);
-        asset = new ContentInlineAsset(metadata, bytes);
+        asset = new ContentInlineAsset(metadata);
 
       } else {
 

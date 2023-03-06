@@ -1,3 +1,8 @@
+export type StoreEntryAndContentType = {
+  readonly storeEntry: StoreEntry;
+  readonly contentEncoding: string | null;
+}
+
 export interface StoreEntry {
   readonly body: ReadableStream<Uint8Array> | null;
   readonly bodyUsed: boolean;

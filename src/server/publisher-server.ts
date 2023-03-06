@@ -2,6 +2,7 @@ import { ContentAssets } from "./assets/content-assets.js";
 
 import type { PublisherServerConfigNormalized } from "../types/config-normalized.js";
 import type { ContentAsset } from "../types/content-assets.js";
+import type { ContentCompressionTypes } from "../constants/compression.js";
 
 function requestAcceptsTextHtml(req: Request) {
   const accept = (req.headers.get('Accept') ?? '')
@@ -89,6 +90,17 @@ export class PublisherServer {
     return null;
   }
 
+  findAcceptEncodings(request: Request): ContentCompressionTypes[] {
+    if (this.serverConfig.compression.length === 0) {
+      return [];
+    }
+    const found = (request.headers.get('accept-encoding') ?? '')
+      .split(',')
+      .map(x => x.trim())
+      .filter(x => this.serverConfig.compression.includes(x as ContentCompressionTypes));
+    return found as ContentCompressionTypes[];
+  }
+
   testExtendedCache(pathname: string) {
     return this.staticItems
       .some(x => {
@@ -102,7 +114,7 @@ export class PublisherServer {
       });
   }
 
-  async serveAsset(asset: ContentAsset, init?: AssetInit): Promise<Response> {
+  async serveAsset(request: Request, asset: ContentAsset, init?: AssetInit): Promise<Response> {
     const metadata = asset.getMetadata();
     const headers: Record<string, string> = {
       'Content-Type': metadata.contentType,
@@ -121,8 +133,12 @@ export class PublisherServer {
       headers['Cache-Control'] = cacheControlValue;
     }
 
-    const storeEntry = await asset.getStoreEntry();
-    return new Response(storeEntry.body, {
+    const acceptEncodings = this.findAcceptEncodings(request);
+    const storeEntryAndContentType = await asset.getStoreEntryAndContentType(acceptEncodings);
+    if (storeEntryAndContentType.contentEncoding != null) {
+      headers['Content-Encoding'] = storeEntryAndContentType.contentEncoding;
+    }
+    return new Response(storeEntryAndContentType.storeEntry.body, {
       status: init?.status ?? 200,
       headers,
     });
@@ -140,7 +156,7 @@ export class PublisherServer {
 
     const asset = this.getMatchingAsset(pathname);
     if (asset != null) {
-      return this.serveAsset(asset, {
+      return this.serveAsset(request, asset, {
         cache: this.testExtendedCache(pathname) ? 'extended' : null,
       });
     }
@@ -154,7 +170,9 @@ export class PublisherServer {
       if (spaFile != null) {
         const asset = this.contentAssets.getAsset(spaFile);
         if (asset != null) {
-          return this.serveAsset(asset, { cache: 'never' });
+          return this.serveAsset(request, asset, {
+            cache: 'never',
+          });
         }
       }
 
@@ -162,7 +180,10 @@ export class PublisherServer {
       if (notFoundPageFile != null) {
         const asset = this.contentAssets.getAsset(notFoundPageFile);
         if (asset != null) {
-          return this.serveAsset(asset, { status: 404, cache: 'never' });
+          return this.serveAsset(request, asset, {
+            status: 404,
+            cache: 'never',
+          });
         }
       }
     }
