@@ -4,7 +4,6 @@ import type { ContentTypeDef } from "./content-types.js";
 export type ContentAssetInclusionResultNormalized = {
   includeContent: boolean,
   inline: boolean,
-  extendedCache: boolean,
 };
 
 export type ModuleAssetInclusionResultNormalized = {
@@ -26,6 +25,7 @@ export type StaticPublisherConfigNormalized = {
 
 export type PublisherServerConfigNormalized = {
   publicDirPrefix: string,
+  staticItems: string[],
   spaFile: string | null,
   notFoundPageFile: string | null,
   autoExt: string[],

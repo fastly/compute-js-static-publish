@@ -32,10 +32,12 @@
   "homepage": "https://github.com/fastly/compute-js-static-publish#readme",
   "dependencies": {
     "@fastly/js-compute": "^1.4.0",
-    "command-line-args": "^5.2.1"
+    "command-line-args": "^5.2.1",
+    "glob-to-regexp": "^0.4.1"
   },
   "devDependencies": {
     "@types/command-line-args": "^5.2.0",
+    "@types/glob-to-regexp": "^0.4.1",
     "@types/node": "^18.0.0",
     "rimraf": "^4.3.0",
     "typescript": "^4.9.5"

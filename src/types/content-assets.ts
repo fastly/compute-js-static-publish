@@ -4,7 +4,6 @@ export type ContentAssetMetadataMapEntryBase = {
   assetKey: string;
   contentType: string,
   text: boolean,
-  extendedCache: boolean,
 };
 
 export type ContentAssetMetadataMapEntryInline = ContentAssetMetadataMapEntryBase & {

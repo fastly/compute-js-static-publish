@@ -13,16 +13,15 @@ function requestAcceptsTextHtml(req: Request) {
   return true;
 }
 
-async function buildAssetResponse(asset: ContentAsset, status: number, headers: Record<string, string>): Promise<Response> {
-  const storeEntry = await asset.getStoreEntry();
-  return new Response(storeEntry.body, {
-    status,
-    headers,
-  });
-}
+type AssetInit = {
+  status?: number,
+  headers?: Record<string, string>,
+  cache?: 'extended' | 'never' | null,
+};
 
 export class PublisherServer {
   private readonly serverConfig: PublisherServerConfigNormalized;
+  private readonly staticItems: (string|RegExp)[];
   private readonly contentAssets: ContentAssets;
 
   public constructor(
@@ -31,6 +30,20 @@ export class PublisherServer {
   ) {
     this.serverConfig = serverConfig;
     this.contentAssets = contentAssets;
+
+    this.staticItems = serverConfig.staticItems
+      .map((x, i) => {
+        if (x.startsWith('re:')) {
+          const fragments = x.slice(3).match(/\/(.*?)\/([a-z]*)?$/i);
+          if (fragments == null) {
+            console.warn(`Cannot parse staticItems item index ${i}: '${x}', skipping...`);
+            return '';
+          }
+          return new RegExp(fragments[1], fragments[2] || '');
+        }
+        return x;
+      })
+      .filter(x => Boolean(x));
   }
 
   getMatchingAsset(path: string): ContentAsset | null {
@@ -76,41 +89,43 @@ export class PublisherServer {
     return null;
   }
 
-  async getFallbackHtmlResponse(): Promise<Response | null> {
-
-    // These are raw asset paths, not relative to public path
-    const { spaFile, notFoundPageFile } = this.serverConfig;
-
-    if (spaFile != null) {
-      const asset = this.contentAssets.getAsset(spaFile);
-      if (asset != null) {
-        return buildAssetResponse(asset, 200, {
-          'Cache-Control': 'no-cache',
-          'Content-Type': 'text/html',
-        });
-      }
-    }
-
-    if (notFoundPageFile != null) {
-      const asset = this.contentAssets.getAsset(notFoundPageFile);
-      if (asset != null) {
-        return buildAssetResponse(asset, 404, {
-          'Cache-Control': 'no-cache',
-          'Content-Type': 'text/html',
-        });
-      }
-    }
-
-    return null;
+  testExtendedCache(pathname: string) {
+    return this.staticItems
+      .some(x => {
+        if (x instanceof RegExp) {
+          return x.test(pathname);
+        }
+        if (x.endsWith('/')) {
+          return pathname.startsWith(x);
+        }
+        return x === pathname;
+      });
   }
 
-  async serveAsset(asset: ContentAsset): Promise<Response> {
+  async serveAsset(asset: ContentAsset, init?: AssetInit): Promise<Response> {
     const metadata = asset.getMetadata();
-    const headers = {
+    const headers: Record<string, string> = {
       'Content-Type': metadata.contentType,
-      'Cache-Control': metadata.extendedCache ? 'max-age=31536000' : 'no-cache',
     };
-    return buildAssetResponse(asset, 200, headers);
+    Object.assign(headers, init?.headers);
+    if (init?.cache != null) {
+      let cacheControlValue;
+      switch(init.cache) {
+      case 'extended':
+        cacheControlValue = 'max-age=31536000';
+        break;
+      case 'never':
+        cacheControlValue = 'no-store';
+        break;
+      }
+      headers['Cache-Control'] = cacheControlValue;
+    }
+
+    const storeEntry = await asset.getStoreEntry();
+    return new Response(storeEntry.body, {
+      status: init?.status ?? 200,
+      headers,
+    });
   }
 
   async serveRequest(request: Request): Promise<Response | null> {
@@ -125,14 +140,30 @@ export class PublisherServer {
 
     const asset = this.getMatchingAsset(pathname);
     if (asset != null) {
-      return this.serveAsset(asset);
+      return this.serveAsset(asset, {
+        cache: this.testExtendedCache(pathname) ? 'extended' : null,
+      });
     }
 
+    // fallback HTML responses, like SPA and "not found" pages
     if (requestAcceptsTextHtml(request)) {
-      // fallback HTML responses, like SPA and "not found" pages
-      const fallbackResponse = await this.getFallbackHtmlResponse();
-      if (fallbackResponse != null) {
-        return fallbackResponse;
+
+      // These are raw asset paths, not relative to public path
+      const { spaFile } = this.serverConfig;
+
+      if (spaFile != null) {
+        const asset = this.contentAssets.getAsset(spaFile);
+        if (asset != null) {
+          return this.serveAsset(asset, { cache: 'never' });
+        }
+      }
+
+      const { notFoundPageFile } = this.serverConfig;
+      if (notFoundPageFile != null) {
+        const asset = this.contentAssets.getAsset(notFoundPageFile);
+        if (asset != null) {
+          return this.serveAsset(asset, { status: 404, cache: 'never' });
+        }
       }
     }
 

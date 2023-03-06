@@ -1,4 +1,5 @@
 import path from "path";
+import globToRegExp from 'glob-to-regexp';
 
 import {
   buildNormalizeFunctionForArray,
@@ -59,7 +60,7 @@ const normalizeContentTypeDefs = buildNormalizeFunctionForArray<ContentTypeDef>(
 
 const normalizePublisherServerConfig = buildNormalizeFunctionForObject<PublisherServerConfigNormalized>((config, errors) => {
 
-  let { publicDirPrefix, spaFile, notFoundPageFile, autoExt, autoIndex } = config;
+  let { publicDirPrefix, staticItems, spaFile, notFoundPageFile, autoExt, autoIndex } = config;
 
   if (!isSpecified(config, 'publicDirPrefix')) {
     publicDirPrefix = '';
@@ -68,6 +69,35 @@ const normalizePublisherServerConfig = buildNormalizeFunctionForObject<Publisher
       // ok
     } else {
       errors.push('publicDirPrefix, if specified, must be a string value.');
+    }
+  }
+
+  if (!isSpecified(config, 'staticItems')) {
+    staticItems = [];
+  } else {
+    if (staticItems === null || staticItems === false) {
+      staticItems = [];
+    }
+    if (!Array.isArray(staticItems)) {
+      staticItems = [ staticItems ];
+    }
+    if (staticItems.every((x: any) => typeof x === 'string')) {
+      staticItems = (staticItems as string[]).map((x, index) => {
+        if (x.includes('*')) {
+          let re;
+          try {
+            const regexp = globToRegExp(x, {globstar: true});
+            re = 're:' + String(regexp);
+          } catch {
+            errors.push(`staticItems item at index ${index}, '${x}', cannot be parsed as glob pattern.`);
+            re = null;
+          }
+          return re;
+        }
+        return x;
+      });
+    } else {
+      errors.push('staticItems, if specified, must be a string value, an array of string values, false, or null');
     }
   }
 
@@ -129,6 +159,7 @@ const normalizePublisherServerConfig = buildNormalizeFunctionForObject<Publisher
 
   return {
     publicDirPrefix,
+    staticItems,
     spaFile,
     notFoundPageFile,
     autoExt,

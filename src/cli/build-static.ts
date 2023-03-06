@@ -14,7 +14,6 @@
 //     - timestamp (to be implemented soon): last modified time as unix time
 //     - etag (to be implemented soon): string - Etag
 //     - text: boolean - whether this is a text file
-//     - extendedCache: boolean - whether to treat this as a "static file"
 
 // statics.js
 // imports statics-metadata.js and adds utilities to load the files
@@ -289,7 +288,6 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
     const contentAssetInclusionResult = applyDefaults(contentAssetInclusionResultValue ?? null, {
       includeContent: true,
       inline: false,
-      extendedCache: false,
     });
 
     let moduleAssetInclusionResultValue = config.moduleAssetInclusionTest?.(assetKey, contentTypeTestResult.contentType);
@@ -334,13 +332,12 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
       continue;
     }
     contentItems++;
-    console.log(`✔️ [${contentItems}] ${assetInfo.assetKey}: ${JSON.stringify(assetInfo.contentType)}${assetInfo.extendedCache ? ' [Extended cache]' : ''}`);
+    console.log(`✔️ [${contentItems}] ${assetInfo.assetKey}: ${JSON.stringify(assetInfo.contentType)}`);
 
     const {
       assetKey,
       contentType,
       text,
-      extendedCache,
     } = assetInfo;
 
     let metadata: ContentAssetMetadataMapEntry;
@@ -350,7 +347,6 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
         assetKey,
         contentType,
         text,
-        extendedCache,
         isInline: true,
         staticFilePath: `${staticContentDir}/file${contentItems}.${assetInfo.text ? 'txt' : 'bin'}`,
       };
@@ -363,7 +359,6 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
         assetKey,
         contentType,
         text,
-        extendedCache,
         isInline: false,
         objectStoreKey: `${publishId}:${assetInfo.assetKey}_${hash}`,
       };
@@ -512,6 +507,7 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
 
   const server = applyDefaults<PublisherServerConfigNormalized>(config.server, {
     publicDirPrefix: '',
+    staticItems: [],
     spaFile: null,
     notFoundPageFile: null,
     autoExt: [],
@@ -520,6 +516,8 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
 
   let publicDirPrefix = server.publicDirPrefix;
   console.log(`✔️ Server public dir prefix '${publicDirPrefix}'.`);
+
+  let staticItems = server.staticItems;
 
   let spaFile = server.spaFile;
   if(spaFile != null) {
@@ -559,6 +557,7 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
 
   const serverConfig: PublisherServerConfigNormalized = {
     publicDirPrefix,
+    staticItems,
     spaFile,
     notFoundPageFile,
     autoExt,

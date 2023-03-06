@@ -17,12 +17,6 @@ export type ContentAssetInclusionResult = {
   // true  - Use includeBytes() for this asset, even if Object Store is enabled.
   // false - If Object Store is enabled, serve the file from it. Default.
   inline?: boolean,
-
-  // extendedCache:
-  // true  - Flag the asset as being "static", as a hint to the server to serve the
-  //         resource with a Cache-Control header with a very long TTL.
-  // false - Don't flag the asset as static. Default.
-  extendedCache?: boolean,
 };
 
 // Asset Inclusion test
@@ -90,6 +84,14 @@ export type PublisherServerConfig = {
   // Prefix to apply to web requests. Effectively, a directory within rootDir that is used
   // by the web server to determine the asset to respond with. Defaults to the empty string.
   publicDirPrefix?: string,
+
+  // A test to apply to item names to decide whether to serve them as "static" files, in other
+  // words, with a long TTL. These are used for files that are not expected to change.
+  // They can be provided as a string or array of strings.
+  // Items that contain asterisks, are interpreted as glob patterns.
+  // Items that end with a trailing slash are interpreted as directory names,
+  // Items that don't contain asterisks and that do not end in slash are checked for exact match.
+  staticItems?: string[] | string | false | null,
 
   // Set to the asset key of a content item to serve this when a GET request comes in for an unknown asset, and
   // the Accept header includes text/html.
