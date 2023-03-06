@@ -1,5 +1,6 @@
 import { ContentAssets } from "./assets/content-assets.js";
 import { checkIfModifiedSince, getIfModifiedSinceHeader } from "./serve-preconditions/if-modified-since.js";
+import { checkIfNoneMatch, getIfNoneMatchHeader } from "./serve-preconditions/if-none-match.js";
 import { buildHeadersSubset } from "./util/http.js";
 
 import type { PublisherServerConfigNormalized } from "../types/config-normalized.js";
@@ -140,12 +141,28 @@ export class PublisherServer {
     // - if false for GET/HEAD, respond 304 (Not Modified)
     // - if false for other methods, respond 412 (Precondition Failed)
 
+    let skipIfNoneMatch = false;
+    {
+      const headerValue = getIfNoneMatchHeader(request);
+      if (headerValue.length > 0) {
+        const result = checkIfNoneMatch(asset, headerValue);
+        if (result) {
+          skipIfNoneMatch = true;
+        } else {
+          return new Response(null, {
+            status: 304,
+            headers: buildHeadersSubset(responseHeaders, headersToPreserveForUnmodified),
+          });
+        }
+      }
+    }
+
     // 4. When the method is GET or HEAD, If-None-Match is not present, and If-Modified-Since is present, evaluate the
     // If-Modified-Since precondition:
     // - if true, continue to step 5
     // - if false, respond 304 (Not Modified)
 
-    {
+    if (!skipIfNoneMatch) {
       // For us, method is always GET or HEAD here.
       const headerValue = getIfModifiedSinceHeader(request);
       if (headerValue != null) {
@@ -188,6 +205,7 @@ export class PublisherServer {
       headers['Cache-Control'] = cacheControlValue;
     }
 
+    headers['ETag'] = metadata.etag;
     if (metadata.lastModifiedTime !== 0) {
       headers['Last-Modified'] = (new Date( metadata.lastModifiedTime * 1000 )).toUTCString();
     }

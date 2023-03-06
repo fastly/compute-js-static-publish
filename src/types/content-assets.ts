@@ -8,6 +8,7 @@ export type ContentAssetMetadataMapEntryBase = {
   contentType: string,
   text: boolean,
   lastModifiedTime: number, // as unix time
+  etag: string, // same as hash of file
   staticFilePath: string,
   staticFilePathsCompressed: StaticPublisherCompressedFilePaths,
 };

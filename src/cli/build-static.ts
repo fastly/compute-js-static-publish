@@ -77,6 +77,9 @@ type AssetInfo =
 
     // Last modified time
     lastModifiedTime: number,
+
+    // Hash (to be used as etag and as part of file id)
+    hash: string,
   };
 
 type ObjectStoreItemDesc = {
@@ -335,10 +338,13 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
     const stats = fs.statSync(file);
     const lastModifiedTime = Math.floor((stats.mtime).getTime() / 1000);
 
+    const hash = calculateFileHash(file);
+
     return {
       file,
       assetKey,
       lastModifiedTime,
+      hash,
       ...contentAssetInclusionResult,
       ...moduleAssetInclusionResult,
       ...contentTypeTestResult,
@@ -377,6 +383,7 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
         assetKey,
         contentType,
         lastModifiedTime,
+        etag: `"${assetInfo.hash}"`,
         text,
         isInline: true,
         staticFilePath: `${staticContentDir}/file${contentItems}.${assetInfo.text ? 'txt' : 'bin'}`,
@@ -385,17 +392,17 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
     } else {
       // Use the hash as part of the object store key name.  This avoids having to
       // re-upload a file if it already exists.
-      const hash = calculateFileHash(assetInfo.file);
 
       metadata = {
         assetKey,
         contentType,
         lastModifiedTime,
+        etag: `"${assetInfo.hash}"`,
         text,
         isInline: false,
         staticFilePath: `${staticContentDir}/file${contentItems}.${assetInfo.text ? 'txt' : 'bin'}`,
         staticFilePathsCompressed: {},
-        objectStoreKey: `${publishId}:${assetInfo.assetKey}_${hash}`,
+        objectStoreKey: `${publishId}:${assetInfo.assetKey}_${assetInfo.hash}`,
         objectStoreKeysCompressed: {},
       };
     }
