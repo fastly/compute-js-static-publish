@@ -25,7 +25,7 @@ export function loadApiKey(): LoadApiKeyResult | null {
     try {
       apiToken = execSync('fastly profile token', {
         encoding: 'utf-8',
-      }) || null;
+      })?.trim() || null;
     } catch {
       apiToken = null;
     }
