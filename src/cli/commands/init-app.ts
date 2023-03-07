@@ -10,8 +10,8 @@ import * as path from "path";
 import * as fs from "fs";
 import * as url from 'url';
 
-import { AppOptions, IPresetBase } from './presets/preset-base.js';
-import { presets } from './presets/index.js';
+import { AppOptions, IPresetBase } from '../presets/preset-base.js';
+import { presets } from '../presets/index.js';
 
 const defaultOptions: AppOptions = {
   'public-dir': undefined,

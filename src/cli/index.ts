@@ -2,8 +2,8 @@
 
 import commandLineArgs, { OptionDefinition } from "command-line-args";
 
-import { initApp } from "./init-app.js";
-import { buildStaticLoader } from "./build-static.js";
+import { initApp } from "./commands/init-app.js";
+import { buildStaticLoader } from "./commands/build-static.js";
 
 const optionDefinitions: OptionDefinition[] = [
   // (optional) Should be one of:

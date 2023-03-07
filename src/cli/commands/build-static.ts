@@ -39,37 +39,37 @@ import * as path from "path";
 import * as url from "url";
 import commandLineArgs from "command-line-args";
 
-import { loadConfigFile } from "./load-config.js";
-import { applyDefaults } from "./util/data.js";
-import { calculateFileHash } from "./util/hash.js";
-import { getFiles } from "./util/files.js";
-import { createStringId } from "./util/id.js";
-import { FastlyApiContext, loadApiKey } from "./util/fastly-api.js";
-import { objectStoreEntryExists, objectStoreSubmitFile } from "./util/object-store.js";
-import { mergeContentTypes, testFileContentType } from "../util/content-types.js";
-import { algs } from "./compression/index.js";
+import { loadConfigFile } from "../load-config.js";
+import { applyDefaults } from "../util/data.js";
+import { calculateFileHash } from "../util/hash.js";
+import { getFiles } from "../util/files.js";
+import { createStringId } from "../util/id.js";
+import { FastlyApiContext, loadApiKey } from "../util/fastly-api.js";
+import { objectStoreEntryExists, objectStoreSubmitFile } from "../util/object-store.js";
+import { mergeContentTypes, testFileContentType } from "../../util/content-types.js";
+import { algs } from "../compression/index.js";
 
 import type {
   ContentAssetMetadataMap,
   ContentAssetMetadataMapEntry,
-} from "../types/content-assets.js";
+} from "../../types/content-assets.js";
 import type {
   ContentTypeDef,
   ContentTypeTestResult,
-} from "../types/content-types.js";
+} from "../../types/content-types.js";
 import type {
   ContentAssetInclusionResultNormalized,
   ModuleAssetInclusionResultNormalized,
   PublisherServerConfigNormalized,
-} from "../types/config-normalized.js";
+} from "../../types/config-normalized.js";
 import type {
   ContentCompressionTypes,
-} from "../constants/compression.js";
+} from "../../constants/compression.js";
 import type {
   CompressedFileInfos,
   ContentFileInfo,
   ContentFileInfoForObjectStore,
-} from "../types/content-assets.js";
+} from "../../types/content-assets.js";
 
 type AssetInfo =
   ContentTypeTestResult &
@@ -531,7 +531,7 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
 
   // Copy Types file for static file loader
   try {
-    const typesFile = path.resolve(__dirname, '../../resources/statics-metadata.d.ts');
+    const typesFile = path.resolve(__dirname, '../../../resources/statics-metadata.d.ts');
     fs.copyFileSync(typesFile, './src/statics-metadata.d.ts');
 
     console.log("✅  Wrote content assets metadata types file statics-metadata.d.ts.");
@@ -676,7 +676,7 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
 
   // Copy Types file for static file loader
   try {
-    const staticsTypeFile = path.resolve(__dirname, '../../resources/statics.d.ts');
+    const staticsTypeFile = path.resolve(__dirname, '../../../resources/statics.d.ts');
     fs.copyFileSync(staticsTypeFile, './src/statics.d.ts');
 
     console.log("✅  Wrote static file loader types file statics.d.ts.");
