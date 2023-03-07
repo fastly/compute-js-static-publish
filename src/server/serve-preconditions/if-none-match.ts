@@ -11,7 +11,7 @@ export function getIfNoneMatchHeader(request: Request): string[] {
 
 }
 
-export function checkIfNoneMatch(asset: ContentAsset, headerValue: string[]): boolean {
+export function checkIfNoneMatch(etag: string, headerValue: string[]): boolean {
   // 1. If the field value is "*", the condition is false if the origin server has a
   // current representation for the target resource.
   if (headerValue.includes('*')) {
@@ -24,7 +24,7 @@ export function checkIfNoneMatch(asset: ContentAsset, headerValue: string[]): bo
   // if there have been changes to the representation data.
 
   // But in our system we don't use weak tags, so we do a compare
-  if (headerValue.includes(asset.getMetadata().etag)) {
+  if (headerValue.includes(etag)) {
     return false;
   }
 

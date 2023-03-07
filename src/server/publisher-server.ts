@@ -145,7 +145,7 @@ export class PublisherServer {
     {
       const headerValue = getIfNoneMatchHeader(request);
       if (headerValue.length > 0) {
-        const result = checkIfNoneMatch(asset, headerValue);
+        const result = checkIfNoneMatch(responseHeaders['ETag'], headerValue);
         if (result) {
           skipIfNoneMatch = true;
         } else {
@@ -205,7 +205,13 @@ export class PublisherServer {
       headers['Cache-Control'] = cacheControlValue;
     }
 
-    headers['ETag'] = metadata.etag;
+    const acceptEncodings = this.findAcceptEncodings(request);
+    const storeEntryAndContentType = await asset.getStoreEntryInfo(acceptEncodings);
+    if (storeEntryAndContentType.contentEncoding != null) {
+      headers['Content-Encoding'] = storeEntryAndContentType.contentEncoding;
+    }
+
+    headers['ETag'] = `"${storeEntryAndContentType.hash}"`;
     if (metadata.lastModifiedTime !== 0) {
       headers['Last-Modified'] = (new Date( metadata.lastModifiedTime * 1000 )).toUTCString();
     }
@@ -215,11 +221,6 @@ export class PublisherServer {
       return preconditionResponse;
     }
 
-    const acceptEncodings = this.findAcceptEncodings(request);
-    const storeEntryAndContentType = await asset.getStoreEntryAndContentType(acceptEncodings);
-    if (storeEntryAndContentType.contentEncoding != null) {
-      headers['Content-Encoding'] = storeEntryAndContentType.contentEncoding;
-    }
     return new Response(storeEntryAndContentType.storeEntry.body, {
       status: init?.status ?? 200,
       headers,

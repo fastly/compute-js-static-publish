@@ -47,7 +47,6 @@ import { createStringId } from "./util/id.js";
 import { FastlyApiContext, loadApiKey } from "./util/fastly-api.js";
 import { objectStoreEntryExists, objectStoreSubmitFile } from "./util/object-store.js";
 import { mergeContentTypes, testFileContentType } from "../util/content-types.js";
-import { compressionTypes } from "../constants/compression.js";
 import { algs } from "./compression/index.js";
 
 import type {
@@ -63,6 +62,14 @@ import type {
   ModuleAssetInclusionResultNormalized,
   PublisherServerConfigNormalized,
 } from "../types/config-normalized.js";
+import type {
+  ContentCompressionTypes,
+} from "../constants/compression.js";
+import type {
+  CompressedFileInfos,
+  ContentFileInfo,
+  ContentFileInfoForObjectStore,
+} from "../types/content-assets.js";
 
 type AssetInfo =
   ContentTypeTestResult &
@@ -352,6 +359,8 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
 
   });
 
+  console.log("🚀 Preparing content assets ...");
+
   // Create "static content" dir that will be used to hold a copy of static files.
   // NOTE: this is needed because includeBytes doesn't seem to be able to traverse up to parent dir of the Compute project.
   const staticContentDir = './src/static-content';
@@ -361,123 +370,134 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
   // Build content assets metadata
   const contentAssetMetadataMap: ContentAssetMetadataMap = {};
 
-  let contentItems = 0;
-  for (const assetInfo of assetInfos) {
-    if (!assetInfo.includeContent) {
-      continue;
-    }
-    contentItems++;
-    console.log(`✔️ [${contentItems}] ${assetInfo.assetKey}: ${JSON.stringify(assetInfo.contentType)}`);
-
-    const {
-      assetKey,
-      contentType,
-      text,
-      lastModifiedTime,
-    } = assetInfo;
-
-    let metadata: ContentAssetMetadataMapEntry;
-
-    if (objectStoreName == null || assetInfo.inline) {
-      metadata = {
-        assetKey,
-        contentType,
-        lastModifiedTime,
-        etag: `"${assetInfo.hash}"`,
-        text,
-        isInline: true,
-        staticFilePath: `${staticContentDir}/file${contentItems}.${assetInfo.text ? 'txt' : 'bin'}`,
-        staticFilePathsCompressed: {},
-      };
-    } else {
-      // Use the hash as part of the object store key name.  This avoids having to
-      // re-upload a file if it already exists.
-
-      metadata = {
-        assetKey,
-        contentType,
-        lastModifiedTime,
-        etag: `"${assetInfo.hash}"`,
-        text,
-        isInline: false,
-        staticFilePath: `${staticContentDir}/file${contentItems}.${assetInfo.text ? 'txt' : 'bin'}`,
-        staticFilePathsCompressed: {},
-        objectStoreKey: `${publishId}:${assetInfo.assetKey}_${assetInfo.hash}`,
-        objectStoreKeysCompressed: {},
-      };
-    }
-
-    contentAssetMetadataMap[assetKey] = metadata;
-  }
-
-  console.log("🚀 Preparing content assets ...");
-
   // Object store items to upload
   const objectStoreItems: ObjectStoreItemDesc[] = [];
 
-  // Prepare content asset
+  let contentItems = 0;
   const counts = {
     inline: 0,
     objectStore: 0,
     excluded: 0,
   }
   for (const assetInfo of assetInfos) {
-    const metadata = contentAssetMetadataMap[assetInfo.assetKey];
-    if (metadata == null) {
+    if (!assetInfo.includeContent) {
       // Non-content asset
       counts.excluded++;
       continue;
     }
+    contentItems++;
+    console.log(`✔️ [${contentItems}] ${assetInfo.assetKey}: ${JSON.stringify(assetInfo.contentType)}`);
 
-    const { file } = assetInfo;
+    const {
+      file,
+      assetKey,
+      contentType,
+      text,
+      hash,
+      lastModifiedTime,
+    } = assetInfo;
 
-    // Copy file to static-content directory
-    fs.cpSync(file, metadata.staticFilePath);
-    console.log(`✔️ Copied ${metadata.text ? 'text' : 'binary'} asset "${file}" to "${metadata.staticFilePath}".`)
+    const entryBase = {
+      assetKey,
+      contentType,
+      lastModifiedTime,
+      hash,
+      text,
+      fileInfo: {
+        hash,
+      },
+    };
 
-    for (const alg of config.contentCompression) {
-      const encodedStaticFilePath = `${metadata.staticFilePath}_${alg}`;
+    let metadata: ContentAssetMetadataMapEntry;
 
-      const compressTo = algs[alg];
-      if (compressTo != null) {
-        if (await compressTo(file, encodedStaticFilePath, metadata.text)) {
-          metadata.staticFilePathsCompressed[alg] = encodedStaticFilePath;
-          console.log(`✔️ Compressed ${metadata.text ? 'text' : 'binary'} asset "${file}" to "${encodedStaticFilePath}" [${alg}].`)
+    const isInline = objectStoreName == null || assetInfo.inline;
+
+    const staticContentFilePath = `${staticContentDir}/file${contentItems}.${assetInfo.text ? 'txt' : 'bin'}`;
+
+    type PrepareCompressionVersionFunc = (alg: ContentCompressionTypes, staticFilePath: string, hash: string) => void;
+    async function prepareCompressedVersions(contentCompressions: ContentCompressionTypes[], func: PrepareCompressionVersionFunc) {
+      for (const alg of contentCompression) {
+        const compressTo = algs[alg];
+        if (compressTo != null) {
+
+          // Even for items that are not inlined, compressed copies of the file are
+          // always created in the static content directory.
+          const staticFilePath = `${staticContentFilePath}_${alg}`;
+          if (await compressTo(file, staticFilePath, text)) {
+            console.log(`✔️ Compressed ${text ? 'text' : 'binary'} asset "${file}" to "${staticFilePath}" [${alg}].`)
+            const hash = calculateFileHash(staticFilePath);
+            func(alg, staticFilePath, hash);
+          }
+
         }
       }
     }
 
-    if (metadata.isInline) {
-      // Inline using includeBytes()
-      counts.inline++;
-    } else {
-      // fastlyApiContext and objectStoreName will not be null at this point.
+    const contentCompression = config.contentCompression;
 
-      objectStoreItems.push({
-        objectStoreKey: metadata.objectStoreKey,
-        staticFilePath: metadata.staticFilePath,
-        text: metadata.text,
+    if (isInline) {
+      // We will inline this file using includeBytes()
+      // so we copy it to the static-content directory.
+      const staticFilePath = staticContentFilePath;
+      fs.cpSync(file, staticFilePath);
+      console.log(`✔️ Copied ${text ? 'text' : 'binary'} asset "${file}" to "${staticFilePath}".`);
+
+      const compressedFileInfos: CompressedFileInfos<ContentFileInfo> = {};
+      await prepareCompressedVersions(contentCompression, (alg, staticFilePath, hash) => {
+        compressedFileInfos[alg] = { staticFilePath, hash };
       });
 
-      // For each supported compression type, see if we have a file
-      // and then if we do, we upload it to the object store too.
-      for (const alg of compressionTypes) {
-        const staticFilePath = metadata.staticFilePathsCompressed[alg];
-        if (staticFilePath == null) {
-          continue;
-        }
-        const hash = calculateFileHash(staticFilePath);
-        const objectStoreKey = `${publishId}:${assetInfo.assetKey}_${alg}_${hash}`;
+      metadata = {
+        ...entryBase,
+        isInline,
+        fileInfo: {
+          ...entryBase.fileInfo,
+          staticFilePath,
+        },
+        compressedFileInfos,
+      };
+
+      counts.inline++;
+    } else {
+      // For object store mode, we don't need to make a copy of the original file
+      const staticFilePath = file;
+
+      // Use the hash as part of the object store key name.  This avoids having to
+      // re-upload a file if it already exists.
+      const objectStoreKey = `${publishId}:${assetKey}_${hash}`;
+
+      objectStoreItems.push({
+        objectStoreKey,
+        staticFilePath,
+        text,
+      });
+
+      const compressedFileInfos: CompressedFileInfos<ContentFileInfoForObjectStore> = {};
+      await prepareCompressedVersions(contentCompression, (alg, staticFilePath, hash) => {
+        const objectStoreKey = `${publishId}:${assetKey}_${alg}_${hash}`;
+        compressedFileInfos[alg] = { staticFilePath, objectStoreKey, hash };
         objectStoreItems.push({
           objectStoreKey,
           staticFilePath,
-          text: metadata.text,
+          text,
         });
-        metadata.objectStoreKeysCompressed[alg] = objectStoreKey;
-      }
+      });
+
+      metadata = {
+        ...entryBase,
+        isInline,
+        fileInfo: {
+          ...entryBase.fileInfo,
+          staticFilePath,
+          objectStoreKey,
+        },
+        compressedFileInfos,
+      };
 
       counts.objectStore++;
     }
+
+    contentAssetMetadataMap[assetKey] = metadata;
   }
 
   if (objectStoreName != null) {

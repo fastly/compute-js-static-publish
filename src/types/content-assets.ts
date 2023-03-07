@@ -1,26 +1,34 @@
 import type { ContentCompressionTypes } from "../constants/compression.js";
-import type { StoreEntryAndContentType } from "../types/compute.js";
+import type { StoreEntryInfo } from "../types/compute.js";
 
-export type StaticPublisherCompressedFilePaths = Partial<Record<ContentCompressionTypes, string>>;
+export type CompressedFileInfos<TData> = Partial<Record<ContentCompressionTypes, TData>>;
 
-export type ContentAssetMetadataMapEntryBase = {
-  assetKey: string;
+export type ContentFileInfo = {
+  hash: string, // same as hash of file
+  staticFilePath: string,
+};
+
+export type ContentFileInfoForObjectStore = ContentFileInfo & {
+  objectStoreKey: string,
+}
+
+export type ContentAssetMetadataMapEntryBase<TFileInfo> = {
+  assetKey: string,
   contentType: string,
   text: boolean,
   lastModifiedTime: number, // as unix time
-  etag: string, // same as hash of file
-  staticFilePath: string,
-  staticFilePathsCompressed: StaticPublisherCompressedFilePaths,
+  fileInfo: TFileInfo,
+  compressedFileInfos: CompressedFileInfos<TFileInfo>
 };
 
-export type ContentAssetMetadataMapEntryInline = ContentAssetMetadataMapEntryBase & {
+export type ContentAssetMetadataMapEntryInline = {
   isInline: true,
-};
-export type ContentAssetMetadataMapEntryObjectStore = ContentAssetMetadataMapEntryBase & {
+} & ContentAssetMetadataMapEntryBase<ContentFileInfo>;
+
+export type ContentAssetMetadataMapEntryObjectStore = {
   isInline: false,
-  objectStoreKey: string,
-  objectStoreKeysCompressed: StaticPublisherCompressedFilePaths,
-};
+} & ContentAssetMetadataMapEntryBase<ContentFileInfoForObjectStore>;
+
 export type ContentAssetMetadataMapEntry =
   ContentAssetMetadataMapEntryInline | ContentAssetMetadataMapEntryObjectStore;
 
@@ -31,7 +39,7 @@ export type ContentAssetMetadataMap = {
 export interface ContentAsset {
   readonly assetKey: string;
   getMetadata(): ContentAssetMetadataMapEntry;
-  getStoreEntryAndContentType(acceptEncodings?: ContentCompressionTypes[]): Promise<StoreEntryAndContentType>;
+  getStoreEntryInfo(acceptEncodings?: ContentCompressionTypes[]): Promise<StoreEntryInfo>;
   getBytes(): Uint8Array;
   getText(): string;
   readonly isInline: boolean;

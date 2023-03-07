@@ -1,6 +1,7 @@
-export type StoreEntryAndContentType = {
+export type StoreEntryInfo = {
   readonly storeEntry: StoreEntry;
   readonly contentEncoding: string | null;
+  readonly hash: string;
 }
 
 export interface StoreEntry {
