@@ -4,6 +4,7 @@ import commandLineArgs, { OptionDefinition } from "command-line-args";
 
 import { initApp } from "./commands/init-app.js";
 import { buildStaticLoader } from "./commands/build-static.js";
+import { cleanObjectStore } from "./commands/clean-object-store.js";
 
 const optionDefinitions: OptionDefinition[] = [
   // (optional) Should be one of:
@@ -68,15 +69,20 @@ const optionDefinitions: OptionDefinition[] = [
 
   // Fastly Service ID to be added to the fastly.toml that is generated.
   { name: 'service-id', type: String },
+
+  // Clean object store mode
+  { name: 'clean-object-store', type: Boolean, },
 ];
 
 const commandLineValues = commandLineArgs(optionDefinitions);
 
 console.log("Fastly Compute@Edge JavaScript Static Publisher");
 
-let mode: 'init-app' | 'build-static' = 'init-app';
+let mode: 'init-app' | 'build-static' | 'clean-object-store' = 'init-app';
 if(commandLineValues['build-static']) {
   mode = 'build-static';
+} else if(commandLineValues['clean-object-store']) {
+  mode = 'clean-object-store';
 }
 
 switch(mode) {
@@ -85,5 +91,8 @@ case 'build-static':
   break;
 case 'init-app':
   initApp(commandLineValues);
+  break;
+case 'clean-object-store':
+  await cleanObjectStore(commandLineValues);
   break;
 }
