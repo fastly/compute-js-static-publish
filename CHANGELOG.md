@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+### Added
+
+- Much cleaner separation between Content Assets and Module Assets, enabling applications to clearly define which files
+  generate which type of asset.
+- Object Store mode, enabling content assets to selectively be uploaded to and served from the Object Store rather than
+  having them bundled into and served from the Wasm binary, allowing the binary to be much smaller.
+- Defined `StoreEntry`, a common interface that can be used to stream data from content assets, regardless of whether that
+  data exists inlined into the Wasm artifact or uploaded to Object Store.
+- Added support for Brotli and Gzip compression. These assets are pre-compressed at publish time and uploaded alongside
+  their raw counterparts, and does not use runtime compute for compression.
+- Added support for returning `304 Not Modified` status based on `If-None-Match` and `If-Modified-Since` request headers.
+- A simple `PublisherServer` class that maps incoming requests to asset paths
+- Content and metadata available to your application.
+- Load JavaScript module assets as code into your Compute@Edge JavaScript application
+- `clean-object-store` mode, which can be used to remove no-longer-used entries from the object store.
+- Moved [Migration Guide](./MIGRATING.md) into its own separate file with even more information.
+- Exported `getObjectStoreKeysFromMetadata()` metadata handling utility from main package. 
+- Exported `getDefaultContentTypes()` and other content type utilities from main package. 
+
+### Changed
+
+- Webpack is no longer required as a dependency, and is disabled by default. If you wish to use Webpack, you can enable
+  it by using the `--webpack` command line option during project scaffolding.
+- No longer uses Expressly to route requests. `index.js` has been simplified using the `PublisherServer` class instead.
+- Separated `--root-dir` and `--public-dir`. The public directory is now a `PublisherServer` configuration that represents
+  the subset of the published files that map to the web root. This effectively adds the ability to include files in the
+  publishing that aren't accessible from the web (at least through `PublisherServer`).
+- `static-publish.rc.js` cleaned up:
+  - Items related to including/excluding files have been reorganized
+  - `PublisherServer`-specific settings moved to `server` key.
+- Moved default content types into the main package.
+ 
 ## [3.6.0] - 2023-02-28
 
 ### Added
