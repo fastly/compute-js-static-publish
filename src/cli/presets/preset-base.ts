@@ -1,14 +1,15 @@
 export type AppOptions = {
-  'public-dir': string | undefined,
-  'static-dir': string | undefined,
-  spa: string | null | undefined,
-  'not-found-page': string | null | undefined,
-  'auto-index': string[] | null | undefined,
-  'auto-ext': string[] | null | undefined,
-  name: string,
-  author: string,
-  description: string,
-  'service-id': string | undefined,
+  rootDir: string | undefined,
+  publicDir: string | undefined,
+  staticDirs: string[],
+  spa: string | undefined,
+  notFoundPage: string | undefined,
+  autoIndex: string[],
+  autoExt: string[],
+  name: string | undefined,
+  author: string | undefined,
+  description: string | undefined,
+  serviceId: string | undefined,
 };
 
 export interface IPresetBase {

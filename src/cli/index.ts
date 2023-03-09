@@ -19,52 +19,58 @@ const optionDefinitions: OptionDefinition[] = [
   { name: 'build-static', type: Boolean },
   { name: 'suppress-framework-warnings', type: Boolean },
   { name: 'output', alias: 'o', type: String, defaultValue: './compute-js', },
+
+  // The 'root' directory for the publishing.
+  // All assets are expected to exist under this root. Required.
+  // For backwards compatibility, if this value is not provided,
+  // then the value of 'public-dir' is used.
+  { name: 'root-dir', type: String, },
+
+  // The 'public' directory. The Publisher Server will
+  // resolve requests relative to this directory. Specify this as
+  // a relative path from 'root-dir'. Defaults to './'.
   { name: 'public-dir', type: String, },
-  { name: 'static-dir', type: String, },
+
+  // Directories to specify as containing 'static' files. The
+  // Publisher Server will serve files from these directories
+  // with a long TTL. Each entry should be a relative path
+  // from 'public-dir'.
+  { name: 'static-dir', type: String, multiple: true, },
+
+  // Path to a file to be used to serve in a SPA application.
+  // The Publisher Server will serve this file with a 200 status code
+  // when the request doesn't match a known file, and the accept
+  // header includes text/html.  Specify this as a relative path
+  // from 'root-dir'. You may use the '[public-dir]' token if you wish
+  // to specify this as a relative path from the 'public-dir'.
+  { name: 'spa', type: String, },
+
+  // Path to a file to be used to serve as a 404 not found page.
+  // The Publisher Server will serve this file with a 404 status code
+  // when the request doesn't match a known file, and the accept
+  // header includes text/html.  Specify this as a relative path
+  // from 'root-dir'. You may use the '[public-dir]' token if you wish
+  // to specify this as a relative path from the 'public-dir'.
+  { name: 'not-found-page', type: String, },
 
   // List of files to automatically use as index, for example, index.html,index.htm
   // If a request comes in but the route does not exist, we check the route
   // plus a slash plus the items in this array.
-  {
-    name: 'auto-index',
-    type: (val: string | null) => {
-      if(val == null) {
-        return null;
-      }
-      const values = val
-        .split(',')
-        .map(x => x.trim())
-        .filter(x => x !== '');
-      return values.length > 0 ? values : null;
-    },
-  },
+  { name: 'auto-index', type: String, multiple: true, },
 
   // List of extensions to apply to a path name, for example, if
   // http://example.com/about is requested, we can respond with http://example.com/about.html
-  {
-    name: 'auto-ext',
-    type: (val: string | null) => {
-      if(val == null) {
-        return null;
-      }
-      const values = val
-        .split(',')
-        .map(x => x.trim())
-        .map(x => {
-          while(x.startsWith('.')) {
-            x = x.slice(1);
-          }
-          return '.' + x;
-        })
-        .filter(x => x !== '');
-      return values.length > 0 ? values : null;
-    },
-  },
+  { name: 'auto-ext', type: String, multiple: true, },
 
-  { name: 'spa', type: String, },
-  { name: 'not-found-page', type: String, },
+  // Components from fastly.toml
+
+  // Name of the application, to be inserted into fastly.toml
   { name: 'name', type: String, },
+
+  // Name of the author, to be inserted into fastly.toml
   { name: 'author', type: String, },
+
+  // Description of the application, to be inserted into fastly.toml
   { name: 'description', type: String, },
 
   // Fastly Service ID to be added to the fastly.toml that is generated.

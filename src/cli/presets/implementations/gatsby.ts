@@ -1,9 +1,9 @@
-import { IPresetBase } from '../preset-base.js';
+import { AppOptions, IPresetBase } from '../preset-base.js';
 
 export class GatsbyPreset implements IPresetBase {
   name = 'Gatsby';
-  defaultOptions = {
-    'public-dir': './public',
+  defaultOptions: Partial<AppOptions> = {
+    rootDir: './public',
     name: 'my-gatsby-app',
     description: 'Compute@Edge static site from Gatsby',
   };

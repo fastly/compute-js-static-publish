@@ -1,10 +1,10 @@
-import { IPresetBase } from '../preset-base.js';
+import { AppOptions, IPresetBase } from '../preset-base.js';
 
 export class CreateReactAppPreset implements IPresetBase {
   name = 'Create React App';
-  defaultOptions = {
-    'public-dir': './build',
-    'static-dir': '[public-dir]/static',
+  defaultOptions: Partial<AppOptions> = {
+    rootDir: './build',
+    staticDirs: [ '[public-dir]/static' ],
     name: 'my-create-react-app',
     description: 'Compute@Edge static site from create-react-app',
   };

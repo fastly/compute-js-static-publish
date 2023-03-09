@@ -14,21 +14,199 @@ import { AppOptions, IPresetBase } from '../presets/preset-base.js';
 import { presets } from '../presets/index.js';
 
 const defaultOptions: AppOptions = {
-  'public-dir': undefined,
-  'static-dir': undefined,
+  rootDir: undefined,
+  publicDir: undefined,
+  staticDirs: [],
   spa: undefined,
-  'not-found-page': '[public-dir]/404.html',
-  'auto-index': [ 'index.html', 'index.htm' ],
-  'auto-ext': [ '.html', '.htm' ],
+  notFoundPage: '[public-dir]/404.html',
+  autoIndex: [ 'index.html', 'index.htm' ],
+  autoExt: [ '.html', '.htm' ],
   author: 'you@example.com',
   name: 'compute-js-static-site',
   description: 'Compute@Edge static site',
-  'service-id': undefined,
+  serviceId: undefined,
 };
 
-function pickKeys(keys: string[], object: Record<string, any>): Record<string, any> {
+function processCommandLineArgs(commandLineValues: CommandLineOptions): Partial<AppOptions> {
 
-  const result: Record<string, any> = {};
+  // All paths are relative to CWD.
+
+  let preset: string | undefined;
+  {
+    const presetValue = commandLineValues['preset'];
+    if (presetValue == null || typeof presetValue === 'string') {
+      preset = presetValue;
+    }
+  }
+
+  let rootDir: string | undefined;
+  let publicDir: string | undefined;
+  {
+    const rootDirValue = commandLineValues['root-dir'];
+    if (rootDirValue == null || typeof rootDirValue === 'string') {
+      rootDir = rootDirValue;
+    }
+    if (rootDir != null) {
+      rootDir = path.resolve(rootDir);
+    }
+
+    const publicDirValue = commandLineValues['public-dir'];
+    if (publicDirValue == null || typeof publicDirValue === 'string') {
+      publicDir = publicDirValue;
+    }
+    if (publicDir != null) {
+      publicDir = path.resolve(publicDir);
+    }
+
+    // If we don't have a preset, then for backwards compatibility
+    // we check if we have public-dir but no root-dir. If that is
+    // the case then we use the value public-dir as root-dir.
+    if (preset == null && rootDir == null && publicDir != null) {
+      rootDir = publicDir;
+      publicDir = undefined;
+    }
+
+  }
+
+  // Filepaths provided on the command line are always given relative to CWD,
+  // so we need to resolve them.
+
+  let staticDirs: string[] | undefined;
+  {
+    const staticDirsValue = commandLineValues['static-dir'];
+
+    const asArray = Array.isArray(staticDirsValue) ? staticDirsValue : [ staticDirsValue ];
+    if (asArray.every((x: any) => typeof x === 'string')) {
+      staticDirs = (asArray as string[]).map(x => path.resolve(x));
+    }
+  }
+
+  let spa: string | undefined;
+  {
+    const spaValue = commandLineValues['spa'];
+    if (spaValue === null) {
+      // If 'spa' is provided with a null value, then the flag was provided
+      // with no value. Assumed to be './index.html' relative to the public directory.
+      spa = '[public-dir]/index.html';
+      console.log('--spa provided, but no value specified.  Assuming ' + spa);
+    } else if (spaValue == null || typeof spaValue === 'string') {
+      spa = spaValue;
+    }
+  }
+
+  let notFoundPage: string | undefined;
+  {
+    const notFoundPageValue = commandLineValues['not-found-page'];
+    if (notFoundPageValue === null) {
+      // If 'spa' is provided with a null value, then the flag was provided
+      // with no value. Assumed to be './404.html' relative to the public directory.
+      notFoundPage = '[public-dir]/404.html';
+      console.log('--not-found-page provided, but no value specified.  Assuming ' + notFoundPage);
+    } else if (notFoundPageValue == null || typeof notFoundPageValue === 'string') {
+      notFoundPage = notFoundPageValue;
+    }
+  }
+
+  let autoIndex: string[] | undefined;
+  {
+    const autoIndexValue = commandLineValues['auto-index'];
+
+    const asArray = Array.isArray(autoIndexValue) ? autoIndexValue : [ autoIndexValue ];
+    if (asArray.every((x: any) => typeof x === 'string')) {
+
+      autoIndex = (asArray as string[]).reduce<string[]>((acc, entry) => {
+
+        const segments = entry
+          .split(',')
+          .map(x => x.trim())
+          .filter(x => Boolean(x));
+
+        for (const segment of segments) {
+          acc.push(segment);
+        }
+
+        return acc;
+      }, []);
+
+    }
+  }
+
+  let autoExt: string[] = [];
+  {
+    const autoExtValue = commandLineValues['auto-ext'];
+
+    const asArray = Array.isArray(autoExtValue) ? autoExtValue : [ autoExtValue ];
+    if (asArray.every((x: any) => typeof x === 'string')) {
+
+      autoExt = (asArray as string[]).reduce<string[]>((acc, entry) => {
+
+        const segments = entry
+          .split(',')
+          .map(x => x.trim())
+          .filter(x => Boolean(x))
+          .map(x => !x.startsWith('.') ? '.' + x : x);
+
+        for (const segment of segments) {
+          acc.push(segment);
+        }
+
+        return acc;
+      }, []);
+
+    }
+  }
+
+  let name: string | undefined;
+  {
+    const nameValue = commandLineValues['name'];
+    if (nameValue == null || typeof nameValue === 'string') {
+      name = nameValue;
+    }
+  }
+
+  let author: string | undefined;
+  {
+    const authorValue = commandLineValues['author'];
+    if (authorValue == null || typeof authorValue === 'string') {
+      author = authorValue;
+    }
+  }
+
+  let description: string | undefined;
+  {
+    const descriptionValue = commandLineValues['description'];
+    if (descriptionValue == null || typeof descriptionValue === 'string') {
+      description = descriptionValue;
+    }
+  }
+
+  let serviceId: string | undefined;
+  {
+    const serviceIdValue = commandLineValues['service-id'];
+    if (serviceIdValue == null || typeof serviceIdValue === 'string') {
+      serviceId = serviceIdValue;
+    }
+  }
+
+  return {
+    rootDir,
+    publicDir,
+    staticDirs,
+    spa,
+    notFoundPage,
+    autoIndex,
+    autoExt,
+    name,
+    author,
+    description,
+    serviceId,
+  };
+
+}
+
+function pickKeys<TModel extends Record<string, unknown>>(keys: (keyof TModel)[], object: TModel): Partial<TModel> {
+
+  const result: Partial<TModel> = {};
 
   for (const key of keys) {
     if(object[key] !== undefined) {
@@ -40,11 +218,15 @@ function pickKeys(keys: string[], object: Record<string, any>): Record<string, a
 
 }
 
-function applyPublicDir(optionValue: string | null | undefined, publicDir: string) {
-  if(optionValue == null) {
-    return optionValue;
+const PUBLIC_DIR_TOKEN = '[public-dir]';
+function processPublicDirToken(filepath: string, publicDir: string) {
+  if (!filepath.startsWith(PUBLIC_DIR_TOKEN)) {
+    return filepath;
   }
-  return optionValue.replace('[public-dir]', publicDir);
+
+  const processedPath = '.' + filepath.slice(PUBLIC_DIR_TOKEN.length);
+  const resolvedPath = path.resolve(publicDir, processedPath)
+  return path.relative(path.resolve(), resolvedPath);
 }
 
 export function initApp(commandLineValues: CommandLineOptions) {
@@ -73,11 +255,15 @@ export function initApp(commandLineValues: CommandLineOptions) {
     packageJson = null;
   }
 
+  const commandLineAppOptions = processCommandLineArgs(commandLineValues);
+
+  type PackageJsonAppOptions = Pick<AppOptions, 'author' | 'name' | 'description'>;
+
   options = {
     ...options,
     ...(preset != null ? preset.defaultOptions : {}),
-    ...pickKeys(['author', 'name', 'description'], packageJson ?? {}),
-    ...pickKeys(['public-dir', 'static-dir', 'spa', 'not-found-page', 'auto-index', 'auto-ext', 'author', 'name', 'description', 'service-id'], commandLineValues)
+    ...pickKeys(['author', 'name', 'description'], (packageJson ?? {}) as PackageJsonAppOptions),
+    ...pickKeys(['rootDir', 'publicDir', 'staticDirs', 'spa', 'notFoundPage', 'autoIndex', 'autoExt', 'author', 'name', 'description', 'serviceId'], commandLineAppOptions),
   };
 
   if(preset != null) {
@@ -91,98 +277,132 @@ export function initApp(commandLineValues: CommandLineOptions) {
   const COMPUTE_JS_DIR = commandLineValues.output as string;
   const computeJsDir = path.resolve(COMPUTE_JS_DIR);
 
-  const PUBLIC_DIR = options['public-dir'];
-  if(PUBLIC_DIR == null) {
-    console.error("❌ required parameter --public-dir not provided.");
+  // Resolve the root dir, relative to current directory, and make sure it exists.
+  const ROOT_DIR = options.rootDir;
+  if (ROOT_DIR == null) {
+    console.error("❌ required parameter --root-dir not provided.");
     process.exitCode = 1;
     return;
   }
+  const rootDir = path.resolve(ROOT_DIR);
+  if (!fs.existsSync(rootDir) || !fs.statSync(rootDir).isDirectory()) {
+    console.error(`❌ Specified root directory '${ROOT_DIR}' does not exist.`);
+    console.error(`  * ${rootDir} must exist and be a directory.`);
+    process.exitCode = 1;
+    return;
+  }
+
+  // Resolve the public dir as well. If it's not specified, we use the root directory.
+  const PUBLIC_DIR = options.publicDir ?? ROOT_DIR;
   const publicDir = path.resolve(PUBLIC_DIR);
-
-  const BUILD_STATIC_DIR = applyPublicDir(options['static-dir'], PUBLIC_DIR);
-  const buildStaticDir = BUILD_STATIC_DIR != null ? path.resolve(BUILD_STATIC_DIR) : null;
-
-  const spa = applyPublicDir(options['spa'], PUBLIC_DIR);
-  const notFoundPage = applyPublicDir(options['not-found-page'], PUBLIC_DIR);
-
-  const autoIndex = options['auto-index'];
-  const autoExt = options['auto-ext'];
-
-  let spaFilename = spa;
-
-  // Specifically check for null instead of undefined
-  if(spa === null) {
-    spaFilename = path.resolve(publicDir, './index.html');
-    let rel = path.relative(path.resolve(), spaFilename);
-    if(!rel.startsWith('..')) {
-      rel = './' + rel;
-    }
-    console.log('--spa provided with no value, assuming ' + rel);
+  if (!fs.existsSync(publicDir) || !fs.statSync(publicDir).isDirectory()) {
+    console.error(`❌ Specified public directory '${PUBLIC_DIR}' does not exist.`);
+    console.error(`  * ${publicDir} must exist and be a directory.`);
+    process.exitCode = 1;
+    return;
   }
 
-  if(spaFilename != null) {
-    spaFilename = path.resolve(spaFilename);
-    if(!spaFilename.startsWith(publicDir)) {
-      console.error(`❌ SPA file '${spaFilename}' not inside public directory!`);
-      process.exitCode = 1;
-      return;
+  // Public dir must be inside the root dir.
+  if (!publicDir.startsWith(rootDir)) {
+    console.error(`❌ Specified public directory '${PUBLIC_DIR}' is not under the asset root directory.`);
+    console.error(`  * ${publicDir} must be under ${rootDir}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  // Static dirs must be inside the public dir.
+  const STATIC_DIRS = options.staticDirs;
+  const staticDirs: string[] = [];
+  for (const STATIC_DIR of STATIC_DIRS) {
+    // For backwards compatibility, these values can start with [public-dir]
+    const staticDir = path.resolve(processPublicDirToken(STATIC_DIR, publicDir));
+    if (!staticDir.startsWith(publicDir)) {
+      console.log(`⚠️ Ignoring static directory '${STATIC_DIR}'`);
+      console.log(`  * ${staticDir} is not under ${publicDir}`);
+      continue;
+    }
+    if (!fs.existsSync(staticDir) || !fs.statSync(staticDir).isDirectory()) {
+      console.log(`⚠️ Ignoring static directory '${STATIC_DIR}'`);
+      console.log(`  * ${staticDir} does not exist or is not a directory.`);
+      continue;
+    }
+    staticDirs.push(staticDir);
+  }
+
+  // SPA and Not Found are relative to the asset root dir.
+
+  const SPA = options.spa;
+  let spaFilename: string | undefined;
+  if (SPA != null) {
+    // If it starts with [public-dir], then resolve it relative to public directory.
+    spaFilename = path.resolve(processPublicDirToken(SPA, publicDir));
+    // At any rate it must exist under the root directory
+    if (!spaFilename.startsWith(rootDir)) {
+      console.log(`⚠️ Ignoring specified SPA file '${SPA}' as is not under the asset root directory.`);
+      console.log(`  * ${spaFilename} is not under ${rootDir}`);
+      spaFilename = undefined;
+    } else if (!fs.existsSync(spaFilename)) {
+      console.log(`⚠️ Ignoring specified SPA file '${SPA}' as it does not exist.`);
+      console.log(`  * ${spaFilename} does not exist.`);
+      spaFilename = undefined;
     }
   }
 
-  let notFoundPageFilename = notFoundPage;
-
-  // Specifically check for null instead of undefined
-  if(notFoundPage === null) {
-    notFoundPageFilename = path.resolve(publicDir, './404.html');
-    let rel = path.relative(path.resolve(), notFoundPageFilename);
-    if(!rel.startsWith('..')) {
-      rel = './' + rel;
-    }
-    console.log('--not-found-page provided with no value, assuming ' + rel);
-  }
-
-  if(notFoundPageFilename != null) {
-    notFoundPageFilename = path.resolve(notFoundPageFilename);
-    if(!notFoundPageFilename.startsWith(publicDir)) {
-      console.error(`❌ --not-found-page file '${notFoundPageFilename}' not inside public directory!`);
-      process.exitCode = 1;
-      return;
+  const NOT_FOUND_PAGE = options.notFoundPage;
+  let notFoundPageFilename: string | undefined;
+  if (NOT_FOUND_PAGE != null) {
+    // If it starts with [public-dir], then resolve it relative to public directory.
+    notFoundPageFilename = path.resolve(processPublicDirToken(NOT_FOUND_PAGE, publicDir));
+    // At any rate it must exist under the root directory
+    if (!notFoundPageFilename.startsWith(rootDir)) {
+      console.log(`⚠️ Ignoring specified Not Found file '${NOT_FOUND_PAGE}' as is not under the asset root directory.`);
+      console.log(`  * ${notFoundPageFilename} is not under ${rootDir}`);
+      notFoundPageFilename = undefined;
+    } else if (!fs.existsSync(notFoundPageFilename)) {
+      console.log(`⚠️ Ignoring specified Not Found file '${NOT_FOUND_PAGE}' as it does not exist.`);
+      console.log(`  * ${notFoundPageFilename} does not exist.`);
+      notFoundPageFilename = undefined;
     }
   }
+
+  const autoIndex = options.autoIndex;
+  const autoExt = options.autoExt;
 
   const exists = fs.existsSync(computeJsDir);
   if(exists) {
     console.error(`❌ '${COMPUTE_JS_DIR}' directory already exists!`);
+    console.error(`  You should not run this command if this directory exists.`);
+    console.error(`  If you need to re-scaffold the static publisher, delete the following directory and then try again:`);
+    console.error(`  ${computeJsDir}`);
     process.exitCode = 1;
     return;
   }
 
-  const author = options['author'];
-  const name = options['name'];
-  const description = options['description'];
-  const fastlyServiceId = options['service-id'];
+  const author = options.author;
+  const name = options.name;
+  const description = options.description;
+  const fastlyServiceId = options.serviceId;
 
-  let spaRel: string | null = spaFilename != null ? path.relative(path.resolve(), spaFilename) : null;
-  if(spaRel != null && !spaRel.startsWith('..')) {
-    spaRel = './' + spaRel;
-  }
-
-  let notFoundRel: string | null = notFoundPageFilename != null ? path.relative(path.resolve(), notFoundPageFilename) : null;
-  if(notFoundRel != null && !notFoundRel.startsWith('..')) {
-    notFoundRel = './' + notFoundRel;
+  function rootRelative(itemPath: string | null | undefined) {
+    if (itemPath == null) {
+      return null;
+    }
+    const v = path.relative(path.resolve(), itemPath);
+    return v.startsWith('..') ? v : './' + v;
   }
 
   console.log('');
-  console.log('Public Dir  :', PUBLIC_DIR);
-  console.log('Static Dir  :', BUILD_STATIC_DIR ?? '(None)');
-  console.log('SPA         :', spaRel ?? '(None)');
-  console.log('404 Page    :', notFoundRel ?? '(None)');
-  console.log('Auto-Index  :', autoIndex ?? '(None)')
-  console.log('Auto-Ext    :', autoExt ?? '(None)')
-  console.log('name        :', name);
-  console.log('author      :', author);
-  console.log('description :', description);
-  console.log('Service ID  :', fastlyServiceId ?? '(None)');
+  console.log('Asset Root Dir  :', rootRelative(rootDir));
+  console.log('Public Dir      :', rootRelative(publicDir));
+  console.log('Static Dir      :', staticDirs.length > 0 ? staticDirs.map(rootRelative) : '(None)');
+  console.log('SPA             :', rootRelative(spaFilename) ?? '(None)');
+  console.log('404 Page        :', rootRelative(notFoundPageFilename) ?? '(None)');
+  console.log('Auto-Index      :', autoIndex.length > 0 ? autoIndex.map(rootRelative) : '(None)')
+  console.log('Auto-Ext        :', autoExt.length > 0 ? autoExt.map(rootRelative) : '(None)')
+  console.log('name            :', name);
+  console.log('author          :', author);
+  console.log('description     :', description);
+  console.log('Service ID      :', fastlyServiceId ?? '(None)');
   console.log('');
 
   console.log("Initializing Compute@Edge Application in " + computeJsDir + "...");
@@ -196,6 +416,8 @@ export function initApp(commandLineValues: CommandLineOptions) {
 /pkg
 /src/statics.js
 /src/statics.d.ts
+/src/statics-metadata.js
+/src/statics-metadata.d.ts
 /src/static-content
 `;
   const gitIgnorePath = path.resolve(computeJsDir, '.gitignore');
@@ -222,15 +444,15 @@ export function initApp(commandLineValues: CommandLineOptions) {
     },
     "license": "MIT",
     "private": true,
-    "main": "src/index.js",
+    "main": "./src/index.js",
     "scripts": {
         "deploy": "fastly compute deploy",
         "prebuild": "npx @fastly/compute-js-static-publish --build-static && webpack",
         "build": "js-compute-runtime ./bin/index.js ./bin/main.wasm"
     },
-    "version": "0.2.1"
+    "version": "0.1.0"
 }
-`;
+  `;
 
   const packageJsonPath = path.resolve(computeJsDir, 'package.json');
   fs.writeFileSync(packageJsonPath, packageJsonContent, "utf-8");
@@ -251,51 +473,78 @@ ${fastlyServiceId != null ? `service_id = "${fastlyServiceId}"
 ` : ''}
 [scripts]
   build = "npm run build"
-`;
+  `;
 
   const fastlyTomlPath = path.resolve(computeJsDir, 'fastly.toml');
   fs.writeFileSync(fastlyTomlPath, fastlyTomlContent, "utf-8");
 
   // static-publish.rc.js
+  const rootDirRel = path.relative(computeJsDir, rootDir);
   const publicDirRel = path.relative(computeJsDir, publicDir);
 
-  const staticDirs = [];
-  if (buildStaticDir != null) {
-    staticDirs.push(buildStaticDir);
+  // publicDirPrefix -- if public dir is deeper than the root dir, then
+  // public dir is used as a prefix to drill into asset names.
+  // e.g.,
+  // root dir   : /path/to/root
+  // public dir : /path/to/root/public
+  // then publicDirPrefix = /public
+
+  // We've already established publicDir.startsWith(rootDir)
+  let publicDirPrefix = '';
+  if (rootDir !== publicDir) {
+    publicDirPrefix = rootDir.slice(rootDir.length);
   }
 
-  const staticDirsRel = [];
+  // staticItems - specified as prefixes, relative to publicDir
+  const staticItems: string[] = [];
   for (const staticDir of staticDirs) {
-    const rel = path.relative(publicDir, staticDir);
-    if(rel.startsWith('../')) {
-      // we can't have a path outside the public dir, so we ignore it
-      console.warn(`Specified static dir '${staticDir}' is not inside public directory, ignoring...`);
-      continue;
+    // We've already established staticDir.startsWith(publicDir)
+    let staticItem = staticDir.slice(publicDir.length);
+    if (!staticItem.endsWith('/')) {
+      // Ending with a slash denotes that this is a directory.
+      staticItem = staticItem + '/';
     }
-    staticDirsRel.push('./' + rel);
+    staticItems.push(staticItem);
   }
 
-  let spaFileRel: string | false = false;
-  if(spaFilename != null) {
-    spaFileRel = '/' + path.relative(publicDir, spaFilename);
+  // spaFile - asset key of spa file
+  let spaFile: string | false = false;
+  if (spaFilename != null) {
+    // We've already established spaFilename.startsWith(rootDir)
+    // and that it exists
+    spaFile = spaFilename.slice(rootDir.length);
   }
 
-  let notFoundFileRel: string | false = false;
+  let notFoundPageFile: string | false = false;
   if(notFoundPageFilename != null) {
-    notFoundFileRel = '/' + path.relative(publicDir, notFoundPageFilename);
+    // We've already established notFoundPageFilename.startsWith(rootDir)
+    // and that it exists
+    notFoundPageFile = notFoundPageFilename.slice(rootDir.length);
   }
 
   const staticPublishJsContent = `\
-/** @type {import('@fastly/compute-js-static-publish').Config} */
+/** @type {import('@fastly/compute-js-static-publish').StaticPublisherConfig} */
 module.exports = {
-  publicDir: ${JSON.stringify(publicDirRel)},
-  excludeDirs: [ './node_modules' ],
-  includeDirs: [ './.well-known' ],
-  staticDirs: ${JSON.stringify(staticDirsRel)},
-  spa: ${JSON.stringify(spaFileRel)},
-  notFoundPage: ${JSON.stringify(notFoundFileRel)},
-  autoIndex: ${JSON.stringify(autoIndex)},
-  autoExt: ${JSON.stringify(autoExt)},
+  rootDir: ${JSON.stringify(rootDirRel)},
+  objectStore: false,
+  excludeDirs: [ 'node_modules' ],
+  // excludeDotFiles: true,
+  // includeWellKnown: true,
+  // contentAssetInclusionTest: (filename) => true,
+  // contentCompression: [ 'br', 'gzip' ],
+  // moduleAssetInclusionTest: (filename) => false,
+  // contentTypes: [
+  //   { test: /.custom$/, contentType: 'application/x-custom', text: false },
+  // ],
+  server: {
+    publicDirPrefix: ${JSON.stringify(publicDirPrefix)},
+    staticItems: ${JSON.stringify(staticItems)},
+    // compression: [ 'br', 'gzip' ],
+    spaFile: ${JSON.stringify(spaFile)},
+    notFoundPageFile: ${JSON.stringify(notFoundPageFile)}, 
+    autoExt: ${JSON.stringify(autoExt)},
+    autoIndex: ${JSON.stringify(autoIndex)},
+  },
 };`;
 
   const staticPublishJsonPath = path.resolve(computeJsDir, 'static-publish.rc.js');
@@ -305,12 +554,12 @@ module.exports = {
   const __dirname = url.fileURLToPath(new URL('.', import.meta.url));
 
   // webpack.config.js
-  const webpackConfigJsSrcPath = path.resolve(__dirname, '../../resources/webpack.config.js');
+  const webpackConfigJsSrcPath = path.resolve(__dirname, '../../../resources/webpack.config.js');
   const webpackConfigJsPath = path.resolve(computeJsDir, 'webpack.config.js');
   fs.copyFileSync(webpackConfigJsSrcPath, webpackConfigJsPath);
 
   // src/index.js
-  const indexJsSrcPath = path.resolve(__dirname, '../../resources/index.js');
+  const indexJsSrcPath = path.resolve(__dirname, '../../../resources/index.js');
   const indexJsPath = path.resolve(computeJsDir, './src/index.js');
   fs.copyFileSync(indexJsSrcPath, indexJsPath);
 
