@@ -590,7 +590,7 @@ ${fastlyServiceId != null ? `service_id = "${fastlyServiceId}"
 const config = {
   rootDir: ${JSON.stringify(rootDirRel)},
   // objectStore: false,
-  excludeDirs: [ 'node_modules' ],
+  // excludeDirs: [ './node_modules' ],
   // excludeDotFiles: true,
   // includeWellKnown: true,
   // contentAssetInclusionTest: (filename) => true,

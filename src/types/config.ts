@@ -49,9 +49,10 @@ export type StaticPublisherConfig = {
   // Service ID must also be specified in fastly.toml, or this will be an error.
   objectStore?: string | false | null,
 
-  // Files in directories with names matching the specified directories are excluded from having their contents included
-  // in this publish. Each entry in the array can be a string, which will be checked as an exact match, or a RegExp.
-  // Defaults to [ 'node_modules' ].  Set to an empty array or specifically to null to include all files.
+  // An array of values used to exclude files and directories (as well as files within those directories) from being
+  // included in this publish. Each entry in the array can be a string or a RegExp and will be tested against the relative
+  // path from 'rootDir' of each file or directory.
+  // Defaults to [ './node_modules' ].  Set to an empty array or specifically to null to include all files.
   excludeDirs?: (string | ExcludeDirTest)[] | string | ExcludeDirTest | null,
 
   // If true, then files whose names begin with a dot, as well as files in directories whose names begin with a .dot,

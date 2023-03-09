@@ -6,6 +6,7 @@ export interface FilenameTest {
 }
 
 export type GetFilesOpts = {
+  publicDirRoot: string,
   excludeDirs: FilenameTest[],
   excludeDotFiles: boolean,
   includeWellKnown: boolean,
@@ -23,12 +24,15 @@ function getFilesWorker(results: string[], dir: string, opts: GetFilesOpts) {
     const { name } = entry;
 
     const {
+      publicDirRoot,
       excludeDirs,
       excludeDotFiles,
       includeWellKnown,
     } = opts;
 
-    if (excludeDirs.some(excludeDir => excludeDir.test(name))) {
+    const fullpath = path.resolve(dir, name);
+    const relative = '/' + path.relative(publicDirRoot, fullpath);
+    if (excludeDirs.some(excludeDir => excludeDir.test(relative))) {
       continue;
     }
 
@@ -40,7 +44,6 @@ function getFilesWorker(results: string[], dir: string, opts: GetFilesOpts) {
       }
     }
 
-    const fullpath = path.resolve(dir, name);
     if (entry.isDirectory()) {
       getFilesWorker(results, fullpath, opts);
     } else {

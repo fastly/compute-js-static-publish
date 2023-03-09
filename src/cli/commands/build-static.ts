@@ -253,7 +253,7 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
   const finalContentTypes: ContentTypeDef[] = mergeContentTypes(config.contentTypes);
 
   // getFiles() applies excludeDirs, excludeDotFiles, and includeWellKnown.
-  let files = getFiles(publicDirRoot, config);
+  let files = getFiles(publicDirRoot, { ...config, publicDirRoot });
 
   // If public dir is not inside the c@e dir, then
   // exclude files that come from C@E app dir

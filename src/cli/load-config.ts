@@ -240,7 +240,7 @@ const normalizeConfig = buildNormalizeFunctionForObject<StaticPublisherConfigNor
   }
 
   if (!isSpecified(config, 'excludeDirs')) {
-    excludeDirs = [ 'node_modules' ];
+    excludeDirs = [ './node_modules' ];
   } else {
     if (excludeDirs === null) {
       excludeDirs = [];
@@ -252,7 +252,18 @@ const normalizeConfig = buildNormalizeFunctionForObject<StaticPublisherConfigNor
   }
   excludeDirs = excludeDirs.map((x: unknown) => {
     if (typeof x === 'string') {
-      return { test:(name: string) => name === x };
+      let testString = x;
+      if (!testString.startsWith('/')) {
+        if (testString.startsWith('./')) {
+          testString = testString.slice(1);
+        } else {
+          testString = '/' + testString;
+        }
+      }
+      if (testString.endsWith('/')) {
+        testString = testString.slice(0, testString.length - 1);
+      }
+      return { test: (name: string) => name === testString, toString: () => testString };
     }
     if ((typeof x === 'object' || typeof x === 'function') && x != null) {
       if ('test' in x && typeof x.test === 'function') {
