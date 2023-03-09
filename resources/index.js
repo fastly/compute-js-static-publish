@@ -2,6 +2,7 @@
 
 import { getServer } from './statics.js';
 
+// eslint-disable-next-line no-restricted-globals
 addEventListener("fetch", (event) => event.respondWith(handleRequest(event)));
 async function handleRequest(event) {
 
