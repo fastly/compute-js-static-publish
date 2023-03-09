@@ -27,6 +27,9 @@ const defaultOptions: AppOptions = {
   serviceId: undefined,
 };
 
+// Current directory of this program that's running.
+const __dirname = url.fileURLToPath(new URL('.', import.meta.url));
+
 function processCommandLineArgs(commandLineValues: CommandLineOptions): Partial<AppOptions> {
 
   // All paths are relative to CWD.
@@ -255,6 +258,42 @@ export function initApp(commandLineValues: CommandLineOptions) {
     packageJson = null;
   }
 
+  // Get the current compute js static publisher version.
+  let computeJsStaticPublisherVersion: string | null = null;
+  if (packageJson != null) {
+    // First try current project's package.json
+    computeJsStaticPublisherVersion =
+      packageJson.dependencies["@fastly/compute-js-static-publish"] ??
+      packageJson.devDependencies["@fastly/compute-js-static-publish"];
+
+    // This may be a file url if during development
+    if (computeJsStaticPublisherVersion != null) {
+
+      if (computeJsStaticPublisherVersion.startsWith('file:')) {
+        // this is a relative path from the current directory.
+        // we replace it with an absolute path
+        const relPath = computeJsStaticPublisherVersion.slice('file:'.length);
+        const absPath = path.resolve(relPath);
+        computeJsStaticPublisherVersion = 'file:' + absPath;
+      }
+
+    }
+  }
+
+  if (computeJsStaticPublisherVersion == null) {
+    // Also try package.json of the package that contains the currently running program
+    // This is used when the program doesn't actually install the package (running via npx).
+    const computeJsStaticPublishPackageJsonPath = path.resolve(__dirname, '../../../package.json');
+    const computeJsStaticPublishPackageJsonText = fs.readFileSync(computeJsStaticPublishPackageJsonPath, 'utf-8');
+    const computeJsStaticPublishPackageJson = JSON.parse(computeJsStaticPublishPackageJsonText);
+    computeJsStaticPublisherVersion = computeJsStaticPublishPackageJson?.version;
+  }
+
+  if (computeJsStaticPublisherVersion == null) {
+    // Unexpected, but if it's still null then we go to a literal
+    computeJsStaticPublisherVersion = '^4.0.0';
+  }
+
   const commandLineAppOptions = processCommandLineArgs(commandLineValues);
 
   type PackageJsonAppOptions = Pick<AppOptions, 'author' | 'name' | 'description'>;
@@ -273,6 +312,9 @@ export function initApp(commandLineValues: CommandLineOptions) {
       return;
     }
   }
+
+  // Webpack now optional as of v4
+  const useWebpack = commandLineValues['webpack'] as boolean;
 
   const COMPUTE_JS_DIR = commandLineValues.output as string;
   const computeJsDir = path.resolve(COMPUTE_JS_DIR);
@@ -404,6 +446,10 @@ export function initApp(commandLineValues: CommandLineOptions) {
   console.log('description     :', description);
   console.log('Service ID      :', fastlyServiceId ?? '(None)');
   console.log('');
+  if (useWebpack) {
+    console.log('Creating project with Webpack.');
+    console.log('');
+  }
 
   console.log("Initializing Compute@Edge Application in " + computeJsDir + "...");
   fs.mkdirSync(computeJsDir);
@@ -424,38 +470,47 @@ export function initApp(commandLineValues: CommandLineOptions) {
   fs.writeFileSync(gitIgnorePath, gitIgnoreContent, "utf-8");
 
   // package.json
+  const packageJsonContent: Record<string, any> = {
+    name,
+    version: '0.1.0',
+    description,
+    author,
+    type: 'module',
+    devDependencies: {
+      '@fastly/compute-js-static-publish': computeJsStaticPublisherVersion,
+    },
+    dependencies: {
+      '@fastly/js-compute': '^1.4.0',
+    },
+    engines: {
+      node: '>=18.0.0',
+    },
+    license: 'UNLICENSED',
+    private: true,
+    scripts: {
+      deploy: 'fastly compute deploy',
+      prebuild: 'npx @fastly/compute-js-static-publish --build-static',
+      build: 'js-compute-runtime ./src/index.js ./bin/main.wasm'
+    },
+  };
 
-  // language=JSON
-  const packageJsonContent = `\
-{
-    "name": ${JSON.stringify(name)},
-    "description": ${JSON.stringify(description)},
-    "author": ${JSON.stringify(author)},
-    "devDependencies": {
-        "@fastly/compute-js-static-publish": "^4.0.0-alpha.0",
-        "webpack": "^5.75.0",
-        "webpack-cli": "^5.0.0"
-    },
-    "dependencies": {
-        "@fastly/js-compute": "^1.4.0"
-    },
-    "engines": {
-        "node": ">=16.0.0"
-    },
-    "license": "MIT",
-    "private": true,
-    "main": "./src/index.js",
-    "scripts": {
-        "deploy": "fastly compute deploy",
-        "prebuild": "npx @fastly/compute-js-static-publish --build-static && webpack",
-        "build": "js-compute-runtime ./bin/index.js ./bin/main.wasm"
-    },
-    "version": "0.1.0"
-}
-  `;
+  if (useWebpack) {
+    delete packageJsonContent.type;
+    packageJsonContent.devDependencies = {
+      ...packageJsonContent.devDependencies,
+      'webpack': '^5.75.0',
+      'webpack-cli': '^5.0.0',
+    };
+    packageJsonContent.scripts = {
+      ...packageJsonContent.scripts,
+      prebuild: 'npx @fastly/compute-js-static-publish --build-static && webpack',
+      build: 'js-compute-runtime ./bin/index.js ./bin/main.wasm'
+    };
+  }
 
+  const packageJsonContentJson = JSON.stringify(packageJsonContent, undefined, 2);
   const packageJsonPath = path.resolve(computeJsDir, 'package.json');
-  fs.writeFileSync(packageJsonPath, packageJsonContent, "utf-8");
+  fs.writeFileSync(packageJsonPath, packageJsonContentJson, "utf-8");
 
   // fastly.toml
 
@@ -523,10 +578,18 @@ ${fastlyServiceId != null ? `service_id = "${fastlyServiceId}"
   }
 
   const staticPublishJsContent = `\
+/*
+ * Copyright Fastly, Inc.
+ * Licensed under the MIT license. See LICENSE file for details.
+ */
+
+// Commented items are defaults, feel free to modify and experiment!
+// See README for a detailed explanation of the configuration options.
+
 /** @type {import('@fastly/compute-js-static-publish').StaticPublisherConfig} */
-module.exports = {
+const config = {
   rootDir: ${JSON.stringify(rootDirRel)},
-  objectStore: false,
+  // objectStore: false,
   excludeDirs: [ 'node_modules' ],
   // excludeDotFiles: true,
   // includeWellKnown: true,
@@ -545,18 +608,22 @@ module.exports = {
     autoExt: ${JSON.stringify(autoExt)},
     autoIndex: ${JSON.stringify(autoIndex)},
   },
-};`;
+};
+
+${useWebpack ? 'module.exports =' : 'export default'} config;
+`;
 
   const staticPublishJsonPath = path.resolve(computeJsDir, 'static-publish.rc.js');
   fs.writeFileSync(staticPublishJsonPath, staticPublishJsContent, "utf-8");
 
   // Copy resource files
-  const __dirname = url.fileURLToPath(new URL('.', import.meta.url));
 
-  // webpack.config.js
-  const webpackConfigJsSrcPath = path.resolve(__dirname, '../../../resources/webpack.config.js');
-  const webpackConfigJsPath = path.resolve(computeJsDir, 'webpack.config.js');
-  fs.copyFileSync(webpackConfigJsSrcPath, webpackConfigJsPath);
+  if (useWebpack) {
+    // webpack.config.js
+    const webpackConfigJsSrcPath = path.resolve(__dirname, '../../../resources/webpack.config.js');
+    const webpackConfigJsPath = path.resolve(computeJsDir, 'webpack.config.js');
+    fs.copyFileSync(webpackConfigJsSrcPath, webpackConfigJsPath);
+  }
 
   // src/index.js
   const indexJsSrcPath = path.resolve(__dirname, '../../../resources/index.js');

@@ -20,6 +20,9 @@ const optionDefinitions: OptionDefinition[] = [
   { name: 'suppress-framework-warnings', type: Boolean },
   { name: 'output', alias: 'o', type: String, defaultValue: './compute-js', },
 
+  // Whether the scaffolded project should use Webpack to bundle assets.
+  { name: 'webpack', type: Boolean, defaultValue: false },
+
   // The 'root' directory for the publishing.
   // All assets are expected to exist under this root. Required.
   // For backwards compatibility, if this value is not provided,
