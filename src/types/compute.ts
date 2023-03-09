@@ -1,9 +1,3 @@
-export type StoreEntryInfo = {
-  readonly storeEntry: StoreEntry;
-  readonly contentEncoding: string | null;
-  readonly hash: string;
-}
-
 export interface StoreEntry {
   readonly body: ReadableStream<Uint8Array> | null;
   readonly bodyUsed: boolean;
@@ -12,4 +6,6 @@ export interface StoreEntry {
   // formData(): Promise<FormData>;
   json(): Promise<any>;
   text(): Promise<string>;
+  readonly contentEncoding: string | null;
+  readonly hash: string;
 }

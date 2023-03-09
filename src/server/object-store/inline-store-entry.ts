@@ -8,9 +8,15 @@ export class InlineStoreEntry implements StoreEntry {
 
   _body: ReadableStreamForBytes;
 
-  constructor(array: Uint8Array) {
+  _contentEncoding: string | null;
+
+  _hash: string;
+
+  constructor(array: Uint8Array, contentEncoding: string | null, hash: string) {
     this._body = new ReadableStreamForBytes(array);
     this._consumed = false;
+    this._contentEncoding = contentEncoding;
+    this._hash = hash;
   }
 
   get body(): ReadableStream<Uint8Array> {
@@ -63,6 +69,14 @@ export class InlineStoreEntry implements StoreEntry {
   async json(): Promise<any> {
     const text = await this.text();
     return JSON.parse(text);
+  }
+
+  get contentEncoding() {
+    return this._contentEncoding;
+  }
+
+  get hash() {
+    return this._hash;
   }
 }
 

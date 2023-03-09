@@ -206,12 +206,12 @@ export class PublisherServer {
     }
 
     const acceptEncodings = this.findAcceptEncodings(request);
-    const storeEntryAndContentType = await asset.getStoreEntryInfo(acceptEncodings);
-    if (storeEntryAndContentType.contentEncoding != null) {
-      headers['Content-Encoding'] = storeEntryAndContentType.contentEncoding;
+    const storeEntry = await asset.getStoreEntry(acceptEncodings);
+    if (storeEntry.contentEncoding != null) {
+      headers['Content-Encoding'] = storeEntry.contentEncoding;
     }
 
-    headers['ETag'] = `"${storeEntryAndContentType.hash}"`;
+    headers['ETag'] = `"${storeEntry.hash}"`;
     if (metadata.lastModifiedTime !== 0) {
       headers['Last-Modified'] = (new Date( metadata.lastModifiedTime * 1000 )).toUTCString();
     }
@@ -221,7 +221,7 @@ export class PublisherServer {
       return preconditionResponse;
     }
 
-    return new Response(storeEntryAndContentType.storeEntry.body, {
+    return new Response(storeEntry.body, {
       status: init?.status ?? 200,
       headers,
     });

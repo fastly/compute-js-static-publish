@@ -12,7 +12,7 @@ import type {
   ContentAssetMetadataMapEntryInline,
   ContentAssetMetadataMapEntryObjectStore
 } from "../../types/content-assets.js";
-import type { StoreEntryInfo } from "../../types/compute.js";
+import type { StoreEntry } from "../../types/compute.js";
 import type { ContentCompressionTypes } from "../../constants/compression.js";
 
 const decoder = new TextDecoder();
@@ -52,7 +52,7 @@ export class ContentInlineAsset implements ContentAsset {
     return this.metadata.assetKey;
   }
 
-  async getStoreEntryInfo(acceptEncodings?: ContentCompressionTypes[]): Promise<StoreEntryInfo> {
+  async getStoreEntry(acceptEncodings?: ContentCompressionTypes[]): Promise<StoreEntry> {
     let sourceAndHash: SourceAndHash<Uint8Array> | undefined;
     let contentEncoding: ContentCompressionTypes | null = null;
     if (acceptEncodings != null) {
@@ -66,9 +66,7 @@ export class ContentInlineAsset implements ContentAsset {
     }
     sourceAndHash ??= this.sourceAndHash;
 
-    const storeEntry = new InlineStoreEntry(sourceAndHash.source);
-    const hash = sourceAndHash.hash;
-    return { storeEntry, contentEncoding, hash };
+    return new InlineStoreEntry(sourceAndHash.source, contentEncoding, sourceAndHash.hash);
   }
 
   getBytes(): Uint8Array {
@@ -120,7 +118,7 @@ export class ContentObjectStoreAsset implements ContentAsset {
     return this.metadata.assetKey;
   }
 
-  async getStoreEntryInfo(acceptEncodings: ContentCompressionTypes[] = []): Promise<StoreEntryInfo> {
+  async getStoreEntry(acceptEncodings: ContentCompressionTypes[] = []): Promise<StoreEntry> {
     let sourceAndHash: SourceAndHash<string> | undefined;
     let contentEncoding: ContentCompressionTypes | null = null;
     if (acceptEncodings != null) {
@@ -140,7 +138,7 @@ export class ContentObjectStoreAsset implements ContentAsset {
     while (retries > 0) {
       const storeEntry = await objectStore.get(sourceAndHash.source);
       if (storeEntry != null) {
-        return { storeEntry, contentEncoding, hash };
+        return Object.assign(storeEntry, { contentEncoding, hash });
       }
 
       // Note the null does NOT mean 404. The fact that we are here means
