@@ -252,7 +252,7 @@ const normalizeConfig = buildNormalizeFunctionForObject<StaticPublisherConfigNor
   }
   excludeDirs = excludeDirs.map((x: unknown) => {
     if (typeof x === 'string') {
-      return (name: string) => name === x;
+      return { test:(name: string) => name === x };
     }
     if ((typeof x === 'object' || typeof x === 'function') && x != null) {
       if ('test' in x && typeof x.test === 'function') {
