@@ -17,9 +17,10 @@ import type { ContentCompressionTypes } from "../../constants/compression.js";
 
 const decoder = new TextDecoder();
 
-type SourceAndHash<TSource> = {
+type SourceAndInfo<TSource> = {
   source: TSource,
   hash: string,
+  size: number,
 };
 
 export class ContentInlineAsset implements ContentAsset {
@@ -27,22 +28,24 @@ export class ContentInlineAsset implements ContentAsset {
 
   private readonly metadata: ContentAssetMetadataMapEntryInline;
 
-  private readonly sourceAndHash: SourceAndHash<Uint8Array>;
-  private readonly compressedSourcesAndHashes: CompressedFileInfos<SourceAndHash<Uint8Array>>;
+  private readonly sourceAndInfo: SourceAndInfo<Uint8Array>;
+  private readonly compressedSourcesAndInfo: CompressedFileInfos<SourceAndInfo<Uint8Array>>;
 
   constructor(metadata: ContentAssetMetadataMapEntryInline) {
     this.metadata = metadata;
 
-    this.sourceAndHash = {
+    this.sourceAndInfo = {
       source: includeBytes(metadata.fileInfo.staticFilePath),
       hash: metadata.fileInfo.hash,
+      size: metadata.fileInfo.size,
     };
 
-    this.compressedSourcesAndHashes = Object.entries(metadata.compressedFileInfos)
-      .reduce<CompressedFileInfos<SourceAndHash<Uint8Array>>>((obj, [key, value]) => {
+    this.compressedSourcesAndInfo = Object.entries(metadata.compressedFileInfos)
+      .reduce<CompressedFileInfos<SourceAndInfo<Uint8Array>>>((obj, [key, value]) => {
         obj[key as ContentCompressionTypes] = {
           source: includeBytes(value.staticFilePath),
           hash: value.hash,
+          size: value.size,
         };
         return obj;
       }, {});
@@ -53,31 +56,31 @@ export class ContentInlineAsset implements ContentAsset {
   }
 
   async getStoreEntry(acceptEncodings?: ContentCompressionTypes[]): Promise<StoreEntry> {
-    let sourceAndHash: SourceAndHash<Uint8Array> | undefined;
+    let sourceAndInfo: SourceAndInfo<Uint8Array> | undefined;
     let contentEncoding: ContentCompressionTypes | null = null;
     if (acceptEncodings != null) {
       for(const encoding of acceptEncodings) {
-        sourceAndHash = this.compressedSourcesAndHashes[encoding];
-        if (sourceAndHash != null) {
+        sourceAndInfo = this.compressedSourcesAndInfo[encoding];
+        if (sourceAndInfo != null) {
           contentEncoding = encoding;
           break;
         }
       }
     }
-    sourceAndHash ??= this.sourceAndHash;
+    sourceAndInfo ??= this.sourceAndInfo;
 
-    return new InlineStoreEntry(sourceAndHash.source, contentEncoding, sourceAndHash.hash);
+    return new InlineStoreEntry(sourceAndInfo.source, contentEncoding, sourceAndInfo.hash, sourceAndInfo.size);
   }
 
   getBytes(): Uint8Array {
-    return this.sourceAndHash.source;
+    return this.sourceAndInfo.source;
   }
 
   getText(): string {
     if (!this.metadata.text) {
       throw new Error("Can't getText() for non-text content");
     }
-    return decoder.decode(this.sourceAndHash.source);
+    return decoder.decode(this.sourceAndInfo.source);
   }
 
   getMetadata(): ContentAssetMetadataMapEntry {
@@ -92,23 +95,25 @@ export class ContentObjectStoreAsset implements ContentAsset {
 
   private readonly objectStoreName: string;
 
-  private readonly sourceAndHash: SourceAndHash<string>;
-  private readonly compressedSourcesAndHashes: CompressedFileInfos<SourceAndHash<string>>;
+  private readonly sourceAndInfo: SourceAndInfo<string>;
+  private readonly compressedSourcesAndInfo: CompressedFileInfos<SourceAndInfo<string>>;
 
   constructor(metadata: ContentAssetMetadataMapEntryObjectStore, objectStoreName: string) {
     this.metadata = metadata;
     this.objectStoreName = objectStoreName;
 
-    this.sourceAndHash = {
+    this.sourceAndInfo = {
       source: metadata.fileInfo.objectStoreKey,
       hash: metadata.fileInfo.hash,
+      size: metadata.fileInfo.size,
     };
 
-    this.compressedSourcesAndHashes = Object.entries(metadata.compressedFileInfos)
-      .reduce<CompressedFileInfos<SourceAndHash<string>>>((obj, [key, value]) => {
+    this.compressedSourcesAndInfo = Object.entries(metadata.compressedFileInfos)
+      .reduce<CompressedFileInfos<SourceAndInfo<string>>>((obj, [key, value]) => {
         obj[key as ContentCompressionTypes] = {
           source: value.objectStoreKey,
           hash: value.hash,
+          size: value.size,
         };
         return obj;
       }, {});
@@ -119,26 +124,27 @@ export class ContentObjectStoreAsset implements ContentAsset {
   }
 
   async getStoreEntry(acceptEncodings: ContentCompressionTypes[] = []): Promise<StoreEntry> {
-    let sourceAndHash: SourceAndHash<string> | undefined;
+    let sourceAndInfo: SourceAndInfo<string> | undefined;
     let contentEncoding: ContentCompressionTypes | null = null;
     if (acceptEncodings != null) {
       for(const encoding of acceptEncodings) {
-        sourceAndHash = this.compressedSourcesAndHashes[encoding];
-        if (sourceAndHash != null) {
+        sourceAndInfo = this.compressedSourcesAndInfo[encoding];
+        if (sourceAndInfo != null) {
           contentEncoding = encoding;
           break;
         }
       }
     }
-    sourceAndHash ??= this.sourceAndHash;
-    const hash = sourceAndHash.hash;
+    sourceAndInfo ??= this.sourceAndInfo;
+    const hash = sourceAndInfo.hash;
+    const size = sourceAndInfo.size;
 
     const objectStore = new ObjectStore(this.objectStoreName);
     let retries = 3;
     while (retries > 0) {
-      const storeEntry = await objectStore.get(sourceAndHash.source);
+      const storeEntry = await objectStore.get(sourceAndInfo.source);
       if (storeEntry != null) {
-        return Object.assign(storeEntry, { contentEncoding, hash });
+        return Object.assign(storeEntry, { contentEncoding, hash, size });
       }
 
       // Note the null does NOT mean 404. The fact that we are here means

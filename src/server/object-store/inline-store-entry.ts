@@ -12,11 +12,14 @@ export class InlineStoreEntry implements StoreEntry {
 
   _hash: string;
 
-  constructor(array: Uint8Array, contentEncoding: string | null, hash: string) {
+  _size: number;
+
+  constructor(array: Uint8Array, contentEncoding: string | null, hash: string, size: number) {
     this._body = new ReadableStreamForBytes(array);
     this._consumed = false;
     this._contentEncoding = contentEncoding;
     this._hash = hash;
+    this._size = size;
   }
 
   get body(): ReadableStream<Uint8Array> {
@@ -77,6 +80,10 @@ export class InlineStoreEntry implements StoreEntry {
 
   get hash() {
     return this._hash;
+  }
+
+  get size() {
+    return this._size;
   }
 }
 

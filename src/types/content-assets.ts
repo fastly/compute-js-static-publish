@@ -5,6 +5,7 @@ export type CompressedFileInfos<TData> = Partial<Record<ContentCompressionTypes,
 
 export type ContentFileInfo = {
   hash: string, // same as hash of file
+  size: number,
   staticFilePath: string,
 };
 

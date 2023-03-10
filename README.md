@@ -422,6 +422,7 @@ const storeEntry = await asset.getStoreEntry();
 
 storeEntry.contentEncoding; // null, 'br', 'gzip'
 storeEntry.hash; // SHA256 of the contents of the file
+storeEntry.size; // Size of file in bytes
 ```
 
 Regardless of which store these objects come from, they implement the `Body` interface as defined by `@fastly/js-compute`.

@@ -8,4 +8,5 @@ export interface StoreEntry {
   text(): Promise<string>;
   readonly contentEncoding: string | null;
   readonly hash: string;
+  readonly size: number;
 }

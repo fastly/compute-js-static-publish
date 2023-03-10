@@ -41,7 +41,7 @@ import commandLineArgs from "command-line-args";
 
 import { loadConfigFile } from "../load-config.js";
 import { applyDefaults } from "../util/data.js";
-import { calculateFileHash } from "../util/hash.js";
+import { calculateFileSizeAndHash } from "../util/hash.js";
 import { getFiles } from "../util/files.js";
 import { generateOrLoadPublishId } from "../util/publish-id.js";
 import { FastlyApiContext, loadApiKey } from "../util/fastly-api.js";
@@ -87,6 +87,9 @@ type AssetInfo =
 
     // Hash (to be used as etag and as part of file id)
     hash: string,
+
+    // Size of file
+    size: number,
   };
 
 type ObjectStoreItemDesc = {
@@ -313,13 +316,14 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
     const stats = fs.statSync(file);
     const lastModifiedTime = Math.floor((stats.mtime).getTime() / 1000);
 
-    const hash = calculateFileHash(file);
+    const { size, hash } = calculateFileSizeAndHash(file);
 
     return {
       file,
       assetKey,
       lastModifiedTime,
       hash,
+      size,
       ...contentAssetInclusionResult,
       ...moduleAssetInclusionResult,
       ...contentTypeTestResult,
@@ -362,6 +366,7 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
       contentType,
       text,
       hash,
+      size,
       lastModifiedTime,
     } = assetInfo;
 
@@ -369,10 +374,10 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
       assetKey,
       contentType,
       lastModifiedTime,
-      hash,
       text,
       fileInfo: {
         hash,
+        size,
       },
     };
 
@@ -382,7 +387,7 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
 
     const staticContentFilePath = `${staticContentDir}/file${contentItems}.${assetInfo.text ? 'txt' : 'bin'}`;
 
-    type PrepareCompressionVersionFunc = (alg: ContentCompressionTypes, staticFilePath: string, hash: string) => void;
+    type PrepareCompressionVersionFunc = (alg: ContentCompressionTypes, staticFilePath: string, hash: string, size: number) => void;
     async function prepareCompressedVersions(contentCompressions: ContentCompressionTypes[], func: PrepareCompressionVersionFunc) {
       for (const alg of contentCompression) {
         const compressTo = algs[alg];
@@ -393,8 +398,8 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
           const staticFilePath = `${staticContentFilePath}_${alg}`;
           if (await compressTo(file, staticFilePath, text)) {
             console.log(`✔️ Compressed ${text ? 'text' : 'binary'} asset "${file}" to "${staticFilePath}" [${alg}].`)
-            const hash = calculateFileHash(staticFilePath);
-            func(alg, staticFilePath, hash);
+            const { size, hash } = calculateFileSizeAndHash(staticFilePath);
+            func(alg, staticFilePath, hash, size);
           }
 
         }
@@ -411,8 +416,8 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
       console.log(`✔️ Copied ${text ? 'text' : 'binary'} asset "${file}" to "${staticFilePath}".`);
 
       const compressedFileInfos: CompressedFileInfos<ContentFileInfo> = {};
-      await prepareCompressedVersions(contentCompression, (alg, staticFilePath, hash) => {
-        compressedFileInfos[alg] = { staticFilePath, hash };
+      await prepareCompressedVersions(contentCompression, (alg, staticFilePath, hash, size) => {
+        compressedFileInfos[alg] = { staticFilePath, hash, size };
       });
 
       metadata = {
@@ -441,9 +446,9 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
       });
 
       const compressedFileInfos: CompressedFileInfos<ContentFileInfoForObjectStore> = {};
-      await prepareCompressedVersions(contentCompression, (alg, staticFilePath, hash) => {
+      await prepareCompressedVersions(contentCompression, (alg, staticFilePath, hash, size) => {
         const objectStoreKey = `${publishId}:${assetKey}_${alg}_${hash}`;
-        compressedFileInfos[alg] = { staticFilePath, objectStoreKey, hash };
+        compressedFileInfos[alg] = { staticFilePath, objectStoreKey, hash, size };
         objectStoreItems.push({
           objectStoreKey,
           staticFilePath,
