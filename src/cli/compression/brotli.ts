@@ -1,12 +1,12 @@
 import fs from 'fs';
-import brotliCompress from 'brotli-compress';
+import zlib from 'zlib';
 
 export const key = 'br';
 
 export async function compressTo(src: string, dest: string, isText: boolean): Promise<boolean> {
 
   const buffer = fs.readFileSync(src);
-  const resultBuffer = await brotliCompress.compress(buffer);
+  const resultBuffer = zlib.brotliCompressSync(buffer);
 
   // Don't actually create the file if it would be bigger
   if (resultBuffer.length < buffer.length) {
