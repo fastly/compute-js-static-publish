@@ -23,6 +23,38 @@ type SourceAndInfo<TSource> = {
   size: number,
 };
 
+type SourceAndInfoForEncodingFn<TSource> = (contentEncoding: ContentCompressionTypes) => SourceAndInfo<TSource> | undefined;
+function findMatchingSourceAndInfo<TSource>(acceptEncodingsGroups: ContentCompressionTypes[][], defaultSourceAndInfo: SourceAndInfo<TSource>, sourceAndInfoForEncodingFn: SourceAndInfoForEncodingFn<TSource>) {
+
+  let sourceAndInfo: SourceAndInfo<TSource> | undefined;
+  let contentEncoding: ContentCompressionTypes | null = null;
+  if (acceptEncodingsGroups != null) {
+    for(const encodingGroup of acceptEncodingsGroups) {
+      const sourceAndInfosForEncodingsGroup = encodingGroup
+        .map(encoding => ({ encoding, sourceAndInfo: sourceAndInfoForEncodingFn(encoding) }))
+        .filter(x => x.sourceAndInfo != null) as {encoding: ContentCompressionTypes, sourceAndInfo: SourceAndInfo<TSource>}[];
+
+      if (sourceAndInfosForEncodingsGroup.length === 0) {
+        // If no encoding in this group is available then move to next group
+        continue;
+      }
+
+      // Sort the items, putting the smallest size first
+      sourceAndInfosForEncodingsGroup
+        .sort((a, b) => a.sourceAndInfo.size - b.sourceAndInfo.size);
+
+      // The first item is the one we want.
+      sourceAndInfo = sourceAndInfosForEncodingsGroup[0].sourceAndInfo;
+      contentEncoding = sourceAndInfosForEncodingsGroup[0].encoding;
+      break;
+    }
+  }
+
+  sourceAndInfo ??= defaultSourceAndInfo;
+
+  return { sourceAndInfo, contentEncoding };
+}
+
 export class ContentInlineAsset implements ContentAsset {
   readonly isInline: boolean = true;
 
@@ -55,21 +87,10 @@ export class ContentInlineAsset implements ContentAsset {
     return this.metadata.assetKey;
   }
 
-  async getStoreEntry(acceptEncodings?: ContentCompressionTypes[]): Promise<StoreEntry> {
-    let sourceAndInfo: SourceAndInfo<Uint8Array> | undefined;
-    let contentEncoding: ContentCompressionTypes | null = null;
-    if (acceptEncodings != null) {
-      for(const encoding of acceptEncodings) {
-        sourceAndInfo = this.compressedSourcesAndInfo[encoding];
-        if (sourceAndInfo != null) {
-          contentEncoding = encoding;
-          break;
-        }
-      }
-    }
-    sourceAndInfo ??= this.sourceAndInfo;
-
-    return new InlineStoreEntry(sourceAndInfo.source, contentEncoding, sourceAndInfo.hash, sourceAndInfo.size);
+  async getStoreEntry(acceptEncodingsGroups: ContentCompressionTypes[][] = []): Promise<StoreEntry> {
+    const { sourceAndInfo, contentEncoding } = findMatchingSourceAndInfo(acceptEncodingsGroups, this.sourceAndInfo, encoding => this.compressedSourcesAndInfo[encoding]);
+    const { source, hash, size } = sourceAndInfo;
+    return new InlineStoreEntry(source, contentEncoding, hash, size);
   }
 
   getBytes(): Uint8Array {
@@ -123,27 +144,16 @@ export class ContentObjectStoreAsset implements ContentAsset {
     return this.metadata.assetKey;
   }
 
-  async getStoreEntry(acceptEncodings: ContentCompressionTypes[] = []): Promise<StoreEntry> {
-    let sourceAndInfo: SourceAndInfo<string> | undefined;
-    let contentEncoding: ContentCompressionTypes | null = null;
-    if (acceptEncodings != null) {
-      for(const encoding of acceptEncodings) {
-        sourceAndInfo = this.compressedSourcesAndInfo[encoding];
-        if (sourceAndInfo != null) {
-          contentEncoding = encoding;
-          break;
-        }
-      }
-    }
-    sourceAndInfo ??= this.sourceAndInfo;
-    const hash = sourceAndInfo.hash;
-    const size = sourceAndInfo.size;
+  async getStoreEntry(acceptEncodingsGroups: ContentCompressionTypes[][] = []): Promise<StoreEntry> {
+
+    const { sourceAndInfo, contentEncoding } = findMatchingSourceAndInfo(acceptEncodingsGroups, this.sourceAndInfo, encoding => this.compressedSourcesAndInfo[encoding]);
 
     const objectStore = new ObjectStore(this.objectStoreName);
     let retries = 3;
     while (retries > 0) {
       const storeEntry = await objectStore.get(sourceAndInfo.source);
       if (storeEntry != null) {
+        const { hash, size } = sourceAndInfo;
         return Object.assign(storeEntry, { contentEncoding, hash, size });
       }
 

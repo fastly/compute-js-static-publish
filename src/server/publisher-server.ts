@@ -100,15 +100,52 @@ export class PublisherServer {
     return null;
   }
 
-  findAcceptEncodings(request: Request): ContentCompressionTypes[] {
+  findAcceptEncodings(request: Request): ContentCompressionTypes[][] {
     if (this.serverConfig.compression.length === 0) {
       return [];
     }
     const found = (request.headers.get('accept-encoding') ?? '')
       .split(',')
-      .map(x => x.trim())
-      .filter(x => this.serverConfig.compression.includes(x as ContentCompressionTypes));
-    return found as ContentCompressionTypes[];
+      .map(x => {
+        let [encodingValue, qValueStr] = x.trim().split(';');
+        let qValue; // q value multiplied by 1000
+        if (qValueStr == null || !qValueStr.startsWith('q=')) {
+          // use default of 1.0
+          qValue = 1000;
+        } else {
+          qValueStr = qValueStr.slice(2); // remove the q=
+          qValue = parseFloat(qValueStr);
+          if (Number.isNaN(qValue) || qValue > 1) {
+            qValue = 1;
+          }
+          if (qValue < 0) {
+            qValue = 0;
+          }
+          // q values can have up to 3 decimal digits
+          qValue = Math.floor(qValue * 1000);
+        }
+        return [encodingValue.trim(), qValue] as const;
+      })
+      .filter(([encoding]) =>
+        this.serverConfig.compression.includes(encoding as ContentCompressionTypes)
+      );
+
+    const priorityMap = new Map<number, ContentCompressionTypes[]>;
+    for (const [encoding, qValue] of found) {
+      let typesForQValue = priorityMap.get(qValue);
+      if (typesForQValue == null) {
+        typesForQValue = [];
+        priorityMap.set(qValue, typesForQValue);
+      }
+      typesForQValue.push(encoding as ContentCompressionTypes);
+    }
+
+    // Sort keys, larger numbers to come first
+    const keysSorted = [...priorityMap.keys()]
+      .sort((qValueA, qValueB) => qValueB - qValueA);
+
+    return keysSorted
+      .map(qValue => priorityMap.get(qValue)!);
   }
 
   testExtendedCache(pathname: string) {

@@ -40,7 +40,7 @@ export type ContentAssetMetadataMap = {
 export interface ContentAsset {
   readonly assetKey: string;
   getMetadata(): ContentAssetMetadataMapEntry;
-  getStoreEntry(acceptEncodings?: ContentCompressionTypes[]): Promise<StoreEntry>;
+  getStoreEntry(acceptEncodingsGroups?: ContentCompressionTypes[][]): Promise<StoreEntry>;
   getBytes(): Uint8Array;
   getText(): string;
   readonly isInline: boolean;
