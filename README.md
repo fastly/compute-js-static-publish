@@ -78,16 +78,18 @@ If the files in `--root-dir` have changed, then a new set of files will be publi
 
 ## CLI options
 
-Most arguments are optional, and if provided, override the defaults described below.
+Except for `--root-dir`, most arguments are optional.
 
 ```shell
 npx @fastly/compute-js-static-publish \
     --root-dir=./build \
-    --root-dir=./build/public \
+    --public-dir=./build/public \
     --static-dir=./build/public/static \
     --output=./compute-js \
     --spa=./build/spa.html
 ```
+
+If you provide options, they override the defaults described below.
 
 Any configuration options will be written to a `static-publish.rc.js` file, and used each time you build your Compute@Edge
 application.
