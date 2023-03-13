@@ -606,7 +606,7 @@ const config = {
   // excludeDotFiles: true,
   // includeWellKnown: true,
   // contentAssetInclusionTest: (filename) => true,
-  // contentCompression: [ 'br', 'gzip' ],
+  // contentCompression: [ 'br', 'gzip' ], // For this config value, default is [] if objectStoreName is null. 
   // moduleAssetInclusionTest: (filename) => false,
   // contentTypes: [
   //   { test: /.custom$/, contentType: 'application/x-custom', text: false },
