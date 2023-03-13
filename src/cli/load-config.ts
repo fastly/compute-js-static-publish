@@ -285,7 +285,11 @@ const normalizeConfig = buildNormalizeFunctionForObject<StaticPublisherConfigNor
   }
 
   if (!isSpecified(config, 'contentCompression')) {
-    contentCompression = [ 'br', 'gzip' ];
+    if (objectStore != null) {
+      contentCompression = ['br', 'gzip'];
+    } else {
+      contentCompression = [];
+    }
   } else if (contentCompression === null) {
     contentCompression = []
   } else {

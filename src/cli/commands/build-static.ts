@@ -333,6 +333,11 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
 
   console.log("🚀 Preparing content assets ...");
 
+  if (objectStoreName == null && configRaw != null && !("contentCompression" in configRaw)) {
+    console.log(`⚠️ Notice: By default, pre-compressed content assets are not generated when object store is not used.`);
+    console.log("  If you want to pre-compress assets, add a value for 'contentCompression' to your static-publish.rc.js.");
+  }
+
   // Create "static content" dir that will be used to hold a copy of static files.
   // NOTE: this is needed because includeBytes doesn't seem to be able to traverse up to parent dir of the Compute project.
   const staticContentDir = './src/static-content';

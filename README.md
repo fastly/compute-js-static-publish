@@ -76,6 +76,16 @@ For more advanced uses, such as accessing the contents of these file in your own
 Publishing is meant to run each time before building your Compute@Edge application into a Wasm file.
 If the files in `--root-dir` have changed, then a new set of files will be published.
 
+### Content Compression
+
+During publishing, this tool supports pre-compression of content. By default, your assets are compressed using the Brotli
+and gzip algorithms, and then stored alongside the original files in your Wasm artifact (or Object Store).
+
+> Note: By default, pre-compressed content assets are not generated when the object store is not used.
+This is done to prevent the inclusion multiple of copies of each asset from making the Wasm binary too large.
+If you want to pre-compress assets when not using Object Store, add a value for 'contentCompression' to your
+`static-publish.rc.js` file.
+
 ## CLI options
 
 Except for `--root-dir`, most arguments are optional.
@@ -183,7 +193,7 @@ You can further configure the server by making modifications to the `server` key
 |--------------------|--------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `publicDirPrefix`  | `''`               | Prefix to apply to web requests. Effectively, a directory within `rootDir` that is used by the web server to determine the asset to respond with.                                                                                    |
 | `staticItems`      | `[]`               | A test to apply to item names to decide whether to serve them as "static" files, in other words, with a long TTL. These are used for files that are not expected to change. They can be provided as a string or array of strings.    |
-| `compression`      | `[ 'br', 'gzip' ]` | If the request contains an `Accept-Encoding` header, they are checked in the order listed in the header for the values listed here. The compression algorithm represented by the first match is applied.                             |
+| `compression`      | `[ 'br', 'gzip' ]` | If the request contains an `Accept-Encoding` header, they are checked for the values listed here. The compression algorithm that produces the smallest transfer size is applied.                                                     |
 | `autoExt`          | `[]`               | When a file is not found, and it doesn't end in a slash, then try auto-ext: we try to serve a file with the same name post-fixed with the specified strings, tested in the order listed. These are tested before auto-index, if any. |
 | `autoIndex`        | `[]`               | When a file is not found, then try auto-index: we treat it as a directory, then try to serve a file that has the specified strings, tested in the order listed.                                                                      |
 | `spaFile`          | `null`             | Asset key of a content item to serve with a status code of `200` when a GET request comes arrives for an unknown asset, and the Accept header includes text/html.                                                                    |
@@ -309,7 +319,8 @@ And that's it! It should be possible to run this task to clean up once in a whil
   binary if Object Store mode is not enabled.
 
 * `contentCompression` - During the publishing, the tool will pre-generate compressed versions of content assets in these
-  formats and make them available to the Publisher Server or your application. Default value is [ 'br' | 'gzip' ].
+  formats and make them available to the Publisher Server or your application. Default value is [ 'br' | 'gzip' ] if
+  Object Store is enabled, or [] if Object Store is not enabled.
 
 * `moduleAssetInclusionTest` - Optionally specify a test function that can be run against each enumerated asset during
   the publishing, to determine whether to include the asset as a module asset. For every file, this function is passed
