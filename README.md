@@ -130,12 +130,13 @@ Note that the files referenced by `--spa` and `--not-found-page` do not necessar
 
 These arguments are used to populate the `fastly.toml` and `package.json` files of your Compute@Edge application.
 
-| Option        | Default                                                          | Description                                                                  |
-|---------------|------------------------------------------------------------------|------------------------------------------------------------------------------|
-| `name`        | `name` from `package.json`, or `compute-js-static-site`          | The name of your Compute@Edge application.                                   |
-| `description` | `description` from `package.json`, or `Compute@Edge static site` | The description of your Compute@Edge application.                            |
-| `author`      | `author` from `package.json`, or `you@example.com`               | The author of your Compute@Edge application.                                 |
-| `service-id`  | (None)                                                           | The ID of an existing Fastly WASM service for your Compute@Edge application. |
+| Option              | Default                                                          | Description                                                                                                                 |
+|---------------------|------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------|
+| `name`              | `name` from `package.json`, or `compute-js-static-site`          | The name of your Compute@Edge application.                                                                                  |
+| `description`       | `description` from `package.json`, or `Compute@Edge static site` | The description of your Compute@Edge application.                                                                           |
+| `author`            | `author` from `package.json`, or `you@example.com`               | The author of your Compute@Edge application.                                                                                |
+| `service-id`        | (None)                                                           | The ID of an existing Fastly WASM service for your Compute@Edge application.                                                |
+| `object-store-name` | (None)                                                           | The name of a Fastly Object Store to hold the content assets. It must be linked to the service specified by `--service-id`. |
 
 ## Usage with frameworks and static site generators
 

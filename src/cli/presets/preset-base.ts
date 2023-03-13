@@ -10,6 +10,7 @@ export type AppOptions = {
   author: string | undefined,
   description: string | undefined,
   serviceId: string | undefined,
+  objectStoreName: string | undefined,
 };
 
 export interface IPresetBase {

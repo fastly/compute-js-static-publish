@@ -25,6 +25,7 @@ const defaultOptions: AppOptions = {
   name: 'compute-js-static-site',
   description: 'Compute@Edge static site',
   serviceId: undefined,
+  objectStoreName: undefined,
 };
 
 // Current directory of this program that's running.
@@ -191,6 +192,14 @@ function processCommandLineArgs(commandLineValues: CommandLineOptions): Partial<
     }
   }
 
+  let objectStoreName: string | undefined;
+  {
+    const objectStoreNameValue = commandLineValues['object-store-name'];
+    if (objectStoreNameValue == null || typeof objectStoreNameValue === 'string') {
+      objectStoreName = objectStoreNameValue;
+    }
+  }
+
   return {
     rootDir,
     publicDir,
@@ -203,6 +212,7 @@ function processCommandLineArgs(commandLineValues: CommandLineOptions): Partial<
     author,
     description,
     serviceId,
+    objectStoreName,
   };
 
 }
@@ -302,7 +312,7 @@ export function initApp(commandLineValues: CommandLineOptions) {
     ...options,
     ...(preset != null ? preset.defaultOptions : {}),
     ...pickKeys(['author', 'name', 'description'], (packageJson ?? {}) as PackageJsonAppOptions),
-    ...pickKeys(['rootDir', 'publicDir', 'staticDirs', 'spa', 'notFoundPage', 'autoIndex', 'autoExt', 'author', 'name', 'description', 'serviceId'], commandLineAppOptions),
+    ...pickKeys(['rootDir', 'publicDir', 'staticDirs', 'spa', 'notFoundPage', 'autoIndex', 'autoExt', 'author', 'name', 'description', 'serviceId', 'objectStoreName'], commandLineAppOptions),
   };
 
   if(preset != null) {
@@ -424,6 +434,7 @@ export function initApp(commandLineValues: CommandLineOptions) {
   const name = options.name;
   const description = options.description;
   const fastlyServiceId = options.serviceId;
+  const objectStoreName = options.objectStoreName;
 
   function rootRelative(itemPath: string | null | undefined) {
     if (itemPath == null) {
@@ -434,17 +445,18 @@ export function initApp(commandLineValues: CommandLineOptions) {
   }
 
   console.log('');
-  console.log('Asset Root Dir  :', rootRelative(rootDir));
-  console.log('Public Dir      :', rootRelative(publicDir));
-  console.log('Static Dir      :', staticDirs.length > 0 ? staticDirs.map(rootRelative) : '(None)');
-  console.log('SPA             :', rootRelative(spaFilename) ?? '(None)');
-  console.log('404 Page        :', rootRelative(notFoundPageFilename) ?? '(None)');
-  console.log('Auto-Index      :', autoIndex.length > 0 ? autoIndex.map(rootRelative) : '(None)')
-  console.log('Auto-Ext        :', autoExt.length > 0 ? autoExt.map(rootRelative) : '(None)')
-  console.log('name            :', name);
-  console.log('author          :', author);
-  console.log('description     :', description);
-  console.log('Service ID      :', fastlyServiceId ?? '(None)');
+  console.log('Asset Root Dir    :', rootRelative(rootDir));
+  console.log('Public Dir        :', rootRelative(publicDir));
+  console.log('Static Dir        :', staticDirs.length > 0 ? staticDirs.map(rootRelative) : '(None)');
+  console.log('SPA               :', rootRelative(spaFilename) ?? '(None)');
+  console.log('404 Page          :', rootRelative(notFoundPageFilename) ?? '(None)');
+  console.log('Auto-Index        :', autoIndex.length > 0 ? autoIndex.map(rootRelative) : '(None)')
+  console.log('Auto-Ext          :', autoExt.length > 0 ? autoExt.map(rootRelative) : '(None)')
+  console.log('name              :', name);
+  console.log('author            :', author);
+  console.log('description       :', description);
+  console.log('Service ID        :', fastlyServiceId ?? '(None)');
+  console.log('Object Store Name :', objectStoreName ?? '(None)');
   console.log('');
   if (useWebpack) {
     console.log('Creating project with Webpack.');
@@ -589,7 +601,7 @@ ${fastlyServiceId != null ? `service_id = "${fastlyServiceId}"
 /** @type {import('@fastly/compute-js-static-publish').StaticPublisherConfig} */
 const config = {
   rootDir: ${JSON.stringify(rootDirRel)},
-  // objectStore: false,
+  ${(objectStoreName != null ? 'objectStore: ' + JSON.stringify(objectStoreName) : '// objectStore: false')},
   // excludeDirs: [ './node_modules' ],
   // excludeDotFiles: true,
   // includeWellKnown: true,

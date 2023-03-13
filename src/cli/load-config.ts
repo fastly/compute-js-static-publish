@@ -355,20 +355,21 @@ const normalizeConfig = buildNormalizeFunctionForObject<StaticPublisherConfigNor
   };
 });
 
-export async function loadConfigFile(errors: string[] = []): Promise<StaticPublisherConfigNormalized | null> {
+export async function loadConfigFile(errors: string[] = []): Promise<{normalized: StaticPublisherConfigNormalized | null, raw: any}> {
 
-  let config: any = undefined;
+  let raw: any = undefined;
   const staticPublishRcPath = path.resolve('./static-publish.rc.js');
   try {
-    config = (await import(staticPublishRcPath)).default;
+    raw = (await import(staticPublishRcPath)).default;
   } catch {
     errors.push('Unable to load ' + staticPublishRcPath);
   }
 
-  if (config != null) {
-    config = normalizeConfig(config, errors);
+  let normalized: any = undefined;
+  if (raw != null) {
+    normalized = normalizeConfig(raw, errors);
   }
 
-  return config ?? null;
+  return { normalized: normalized ?? null, raw };
 
 }

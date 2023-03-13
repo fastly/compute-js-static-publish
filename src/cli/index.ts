@@ -79,6 +79,10 @@ const optionDefinitions: OptionDefinition[] = [
   // Fastly Service ID to be added to the fastly.toml that is generated.
   { name: 'service-id', type: String },
 
+  // The name of a Fastly Object Store to hold the content assets.
+  // It must be linked to the service specified by `--service-id`.
+  { name: 'object-store-name', type: String },
+
   // Clean object store mode
   { name: 'clean-object-store', type: Boolean, },
 ];

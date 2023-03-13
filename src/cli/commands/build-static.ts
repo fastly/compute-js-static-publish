@@ -194,7 +194,7 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
   console.log("🚀 Building loader...");
 
   const errors: string[] = [];
-  const config = await loadConfigFile(errors);
+  const { normalized: config, raw: configRaw } = await loadConfigFile(errors);
 
   if (config == null) {
     console.error("❌ Can't load static-publish.rc.js");

@@ -13,7 +13,7 @@ export async function cleanObjectStore(commandLineValues: CommandLineOptions) {
   const { publishId } = generateOrLoadPublishId();
 
   const errors: string[] = [];
-  const config = await loadConfigFile(errors);
+  const { normalized: config } = await loadConfigFile(errors);
 
   if (config == null) {
     console.error("❌ Can't load static-publish.rc.js");
