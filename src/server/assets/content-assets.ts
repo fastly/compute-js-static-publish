@@ -207,7 +207,7 @@ export class ContentAssets extends AssetManager<ContentAsset> {
         asset = new ContentObjectStoreAsset(metadata, objectStoreName);
       }
 
-      this.setAsset(assetKey, asset);
+      this.initAsset(assetKey, asset);
     }
   }
 }

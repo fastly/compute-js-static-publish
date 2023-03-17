@@ -65,7 +65,7 @@ export class ModuleAssets extends AssetManager<ModuleAsset> {
 
       }
 
-      this.setAsset(assetKey, asset);
+      this.initAsset(assetKey, asset);
     }
   }
 }

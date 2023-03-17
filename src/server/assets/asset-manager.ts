@@ -6,7 +6,7 @@ export abstract class AssetManager<TAsset> {
     this.assets = {};
   }
 
-  setAsset(assetKey: string, asset: TAsset) {
+  protected initAsset(assetKey: string, asset: TAsset) {
     this.assets[assetKey] = asset;
   }
 
