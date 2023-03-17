@@ -107,19 +107,20 @@ As of `v4`, the `src/index.js` entry point no longer uses Expressly, and looks l
 
 ```js
 /// <reference types="@fastly/js-compute" />
-
 import { getServer } from './statics.js';
-const server = getServer();
+const staticContentServer = getServer();
 
 // eslint-disable-next-line no-restricted-globals
 addEventListener("fetch", (event) => event.respondWith(handleRequest(event)));
 async function handleRequest(event) {
 
-  const response = await server.serveRequest(event.request);
-
+  const response = await staticContentServer.serveRequest(event.request);
   if (response != null) {
     return response;
   }
+
+  // Do custom things here!
+  // Handle API requests, serve non-static responses, etc.
 
   return new Response('Not found', { status: 404 });
 }

@@ -125,10 +125,10 @@ Used to populate the `server` key under `static-publish.rc.js`.
 |------------------|-------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `public-dir`     | <root-dir>              | The directory that contains your website's public files.                                                                                                                                                 |
 | `static-dir`     | (None)                  | Any directories under `--public-dir` that contain the website's static assets that will be served with a very long TTL. You can specify as many such directories as you wish, by listing multiple items. |
-| `auto-ext`       | `.html,.htm`            | Configuration for automatic file extensions.                                                                                                                                                             |
-| `auto-index`     | `index.html,index.htm`  | Configuration for automatically serving an index file.                                                                                                                                                   |
-| `spa`            | (None)                  | Configuration for serving a fallback file for SPA applications.                                                                                                                                          |
-| `not-found-page` | `<public-dir>/404.html` | Configuration for serving a 404 not found file.                                                                                                                                                          |
+| `auto-ext`       | `.html,.htm`            | Specify automatic file extensions.                                                                                                                                                                       |
+| `auto-index`     | `index.html,index.htm`  | Specify filenames for automatically serving an index file.                                                                                                                                               |
+| `spa`            | (None)                  | Path to a fallback file for SPA applications.                                                                                                                                                            |
+| `not-found-page` | `<public-dir>/404.html` | Path to a fallback file for 404 Not Found.                                                                                                                                                               |
 
 See [PublisherServer](#publisherserver) for more information about these features.
 
@@ -140,12 +140,12 @@ Note that the files referenced by `--spa` and `--not-found-page` do not necessar
 
 These arguments are used to populate the `fastly.toml` and `package.json` files of your Compute@Edge application.
 
-| Option              | Default                                                          | Description                                                                                                                 |
-|---------------------|------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------|
-| `name`              | `name` from `package.json`, or `compute-js-static-site`          | The name of your Compute@Edge application.                                                                                  |
-| `description`       | `description` from `package.json`, or `Compute@Edge static site` | The description of your Compute@Edge application.                                                                           |
-| `author`            | `author` from `package.json`, or `you@example.com`               | The author of your Compute@Edge application.                                                                                |
-| `service-id`        | (None)                                                           | The ID of an existing Fastly WASM service for your Compute@Edge application.                                                |
+| Option              | Default                                                          | Description                                                                                                                                                                                                                                          |
+|---------------------|------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `name`              | `name` from `package.json`, or `compute-js-static-site`          | The name of your Compute@Edge application.                                                                                                                                                                                                           |
+| `description`       | `description` from `package.json`, or `Compute@Edge static site` | The description of your Compute@Edge application.                                                                                                                                                                                                    |
+| `author`            | `author` from `package.json`, or `you@example.com`               | The author of your Compute@Edge application.                                                                                                                                                                                                         |
+| `service-id`        | (None)                                                           | The ID of an existing Fastly WASM service for your Compute@Edge application.                                                                                                                                                                         |
 | `object-store-name` | (None)                                                           | The name of a [Fastly Object Store](https://www.fastly.com/blog/introducing-the-compute-edge-object-store-global-persistent-storage-for-compute-functions) to hold the content assets. It must be linked to the service specified by `--service-id`. |
 
 ## Usage with frameworks and static site generators
@@ -358,22 +358,23 @@ The generated `./src/index.js` program instantiates the server and simply asks i
 
 You are free to add code to this file.
 
-For example, if the server is unable to formulate a response to the request, then it returns `null`. You may add your
-own code to handle these cases, such as to provide custom responses.
+For example, if the `PublisherServer` is unable to formulate a response to the request, then it returns `null`. You may
+add your own code to handle these cases, such as to provide custom responses.
 
 ```js
 import { getServer } from './statics.js';
-const server = getServer();
+const staticContentServer = getServer();
 
 addEventListener("fetch", (event) => event.respondWith(handleRequest(event)));
 async function handleRequest(event) {
 
-  const response = await server.serveRequest(event.request);
+  const response = await staticContentServer.serveRequest(event.request);
   if (response != null) {
     return response;
   }
   
   // Do custom things here!
+  // Handle API requests, serve non-static responses, etc.
 
   return new Response('Not found', { status: 404 });
 }
