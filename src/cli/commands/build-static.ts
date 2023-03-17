@@ -3,36 +3,60 @@
 // e.g., with create-react-app, this would be the ./build directory.
 
 // Outputs:
-
+//
 // statics-metadata.js
-// deploymentId: string - deployment ID
-// contentAssetMetadataMap: Map<string, ContentAssetMetadata> - mapping of asset keys to their metadata
-//   - key: filename relative to public dir (e.g., /foo/index.html)
-//   - value:
-//     - size (to be implemented soon): number - File size in bytes
-//     - contentType: string - MIME type
-//     - timestamp (to be implemented soon): last modified time as unix time
-//     - etag (to be implemented soon): string - Etag
-//     - text: boolean - whether this is a text file
-
+//
+// objectStoreName: string - Name of object store, or null if not used.
+// contentAssetMetadataMap: Map<string, ContentAssetMetadataMapEntry> - mapping of asset keys to their metadata
+//   - key: string - assetKey, the filename relative to root dir (e.g., /public/foo/index.html)
+//   - value: ContentAssetMetadataMapEntry - metadata for asset
+//
+// ContentAssetMetadataMapEntry structure
+//   - assetKey: string - filename relative to root dir
+//   - contentType: string - MIME type
+//   - text: boolean - whether this is a text file
+//   - lastModifiedTime: number - last modified time as unix time (seconds)
+//   - fileInfo: FileInfo - information about the file
+//   - compressedFileInfos: Map<string, FileInfo> - information about any compressed versions
+//     - key: string - compression algorithm name (e.g., "gzip", "br", etc.)
+//     - value: FileInfo - information about the compressed version of the file
+//   - isInline: boolean - whether this file is "inline". If false, object is in the object store.
+// FileInfo structure
+//   - hash: string - SHA-256 hash of file
+//   - size: number - file size in bytes
+//   - staticFilePath: string - path to file in local filesystem, relative to root dir
+//   - objectStoreKey: string - object store key, present only for items in object store
+//
 // statics.js
-// imports statics-metadata.js and adds utilities to load the files
-// contentAssetMap: Map<string, ContentAsset>
-//   - key: filename relative to public dir (e.g., /foo/index.html)
-//   - value:
-//     - getMetadata()      - gets the metadata entry
-//     - getBody()          - gets a Body object that represents the asset
-// moduleAssetMap: Map<string, ModuleAsset>
-//   - key: filename relative to public dir (e.g., /foo/index.html)
-//   - value:
-//     - getMetadata()      - gets the metadata entry
-//     - async getModule()  - Returns a promise that imports the module and returns a reference.
-//                            This simply returns the statically imported module if it is statically imported.
-//     - getStaticModule()  - Advanced. Returns the statically imported module, or null.
-
-// This also reexports values like the "spa" value in the static-publish.rc.js
-// file so that the C@E handler knows what file to serve up if
-// the resource doesn't map to a file.
+// imports statics-metadata.js and adds utilities for working with the content assets, as well as
+// for loading module assets. Also gives access to StaticPublisher and its config.
+// See README.md for details
+//
+// moduleAssetMap: Map<string, ModuleAssetMapEntry>
+//   - key: string - assetKey, the filename relative to root dir (e.g., /module/hello.js)
+//   - value: ModuleAssetMapEntry - information about the module
+//
+// ModuleAssetMapEntry structure
+//   - isStaticImport: boolean - if true, then uses a static import statement to load the module
+//                             - if false, then module is loaded when getModule is called
+//   - module: any - the statically loaded module if isStaticImport is true, or null
+//   - loadModule: function - a function that dynamically loads the module and returns it, if isStaticImport is false, or null
+//
+// contentAssets: ContentAssets instance
+// moduleAssets: ModuleAssets instance
+//
+// getServer(): function - instantiates PublisherServer singleton and returns it
+// serverConfig: PublisherServerConfigNormalized - publisher server config settings
+//
+// PublisherServerConfigNormalized structure
+//   - publicDirPrefix: string
+//   - staticItems: string[]
+//   - compression: string[]
+//   - spaFile: string or null
+//   - notFoundPageFile: string or null
+//   - autoExt: string[]
+//   - autoIndex: string[]
+//
 
 import * as fs from "fs";
 import * as path from "path";
