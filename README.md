@@ -8,16 +8,16 @@ Using a static site generator to build your website? Do you simply need to serve
 ## New! Version 4
 
 Version 4 of this tool has some awesome new features:
-  - Support for optionally serving files from Fastly's [Object Store](https://www.fastly.com/blog/introducing-the-compute-edge-object-store-global-persistent-storage-for-compute-functions) instead of bundling them into the Wasm module. See [Object Store](#object-store) below for more information.
-  - Your scaffolded application no longer uses a bundler by default, making the use of Webpack optional
-  - Brotli and Gzip compression
-  - Support for returning `304 Not Modified` status based on `If-None-Match` and `If-Modified-Since` request headers
-  - `PublisherServer` class to map incoming requests to asset paths
-  - Ability to include files in the publishing that won't necessarily be served by `PublisherServer`. The content of these files are available to your application and may be useful for reading data written by third-party tools, etc.
-  - Makes content and metadata available to your application, giving your applications access to their content by their pre-package path/file
-  - Even load JavaScript files as code into your Compute@Edge JavaScript application
+  - Support for serving files from Fastly's [Object Store](#object-store) instead of bundling them into the Wasm module. 
+  - Scaffolded applications no longer use a bundler by default (Webpack is optional).
+  - Brotli and Gzip compression.
+  - Support for returning `304 Not Modified` status based on `If-None-Match` and `If-Modified-Since` request headers.
+  - [`PublisherServer`](#publisherserver) class to map incoming requests to asset paths.
+  - Support for publishing files that won't necessarily be served by `PublisherServer`. File contents are made available to your application–useful, e.g., for reading data written by third-party tools, etc.
+  - Makes content and metadata available to your application, via pre-package path/file.
+  - Support for loading JavaScript files as code into your Compute@Edge application.
 
-If you wish to update to this version, you may need to re-scaffold your application, or follow the migrations steps outlined in [MIGRATING.md](./MIGRATING.md).
+If you wish to update to this version, you may need to re-scaffold your application, or follow the steps outlined in [MIGRATING.md](./MIGRATING.md).
 
 ## Prerequisites
 
@@ -35,7 +35,7 @@ Assuming the root of your output directory is `./public`,
 npx @fastly/compute-js-static-publish@latest --root-dir=./public
 ```
 
-This will generate a Compute@Edge application at `./compute-js`. It will add a default `./src/index.js` file that instantiates the `PublisherServer` class and runs it to serve the static files from your project.
+This will generate a Compute@Edge application at `./compute-js`. It will add a default `./src/index.js` file that instantiates the [`PublisherServer`](#publisherserver) class and runs it to serve the static files from your project.
 
 > This process creates a `./static-publish.rc.js` to hold your configuration. This, as well as the other files created in your new Compute@Edge program at `./compute-js`, can be committed to source control (except for the ones we specify in `.gitignore`!) 
 
@@ -65,12 +65,12 @@ Once your application is scaffolded, `@fastly/compute-js-static-publish` integra
 running as part of your build process.
 
 The files you have configured to be included (`--root-dir`) are enumerated and prepared. Their contents are included into
-your Wasm binary (or made available via Object Store, if so configured). This process is called "publishing".
+your Wasm binary (or made available via [Object Store](#object-store), if so configured). This process is called "publishing".
 
 Once the files are published, they are available to the other source files in the Compute@Edge application. For example,
-the stock application simply runs the [PublisherServer](#publisherserver) class to serve up these files.
+the stock application runs the [PublisherServer](#publisherserver) class to serve these files.
 
-For more advanced uses, such as accessing the contents of these file in your own application, see the
+For more advanced uses, such as accessing the contents of these file in your application, see the
 [Using the packaged objects in your own application](#using-published-assets-in-your-own-application) section below.
 
 Publishing is meant to run each time before building your Compute@Edge application into a Wasm file.
@@ -79,9 +79,9 @@ If the files in `--root-dir` have changed, then a new set of files will be publi
 ### Content Compression
 
 During publishing, this tool supports pre-compression of content. By default, your assets are compressed using the Brotli
-and gzip algorithms, and then stored alongside the original files in your Wasm artifact (or Object Store).
+and gzip algorithms, and then stored alongside the original files in your Wasm binary (or [Object Store](#object-store)).
 
-> Note: By default, pre-compressed content assets are not generated when the object store is not used.
+> Note: By default, pre-compressed content assets are not generated when the Object Store is not used.
 This is done to prevent the inclusion multiple of copies of each asset from making the Wasm binary too large.
 If you want to pre-compress assets when not using Object Store, add a value for 'contentCompression' to your
 `static-publish.rc.js` file.
@@ -146,7 +146,7 @@ These arguments are used to populate the `fastly.toml` and `package.json` files 
 | `description`       | `description` from `package.json`, or `Compute@Edge static site` | The description of your Compute@Edge application.                                                                           |
 | `author`            | `author` from `package.json`, or `you@example.com`               | The author of your Compute@Edge application.                                                                                |
 | `service-id`        | (None)                                                           | The ID of an existing Fastly WASM service for your Compute@Edge application.                                                |
-| `object-store-name` | (None)                                                           | The name of a Fastly Object Store to hold the content assets. It must be linked to the service specified by `--service-id`. |
+| `object-store-name` | (None)                                                           | The name of a [Fastly Object Store](https://www.fastly.com/blog/introducing-the-compute-edge-object-store-global-persistent-storage-for-compute-functions) to hold the content assets. It must be linked to the service specified by `--service-id`. |
 
 ## Usage with frameworks and static site generators
 
@@ -169,12 +169,12 @@ You may still override any of these options individually.
 
 ## PublisherServer
 
-Publisher Server is a simple yet powerful server that can be used out of the box to serve the files prepared by this tool.
+`PublisherServer` is a simple yet powerful server that can be used out of the box to serve the files prepared by this tool.
 
 This server handles the following automatically:
 
 * Maps the path of your request to a path under `--public-dir` and serves the content of the asset
-* Sources the content from the content packaged in the Wasm, or from the Object Store if so configured (see [Object Store](#object-store), below.)
+* Sources the content from the content packaged in the Wasm binary, or from the [Object Store](#object-store), if configured.
 * Applies long-lived cache headers to files served from `--static-dir` directories. Files under these directories will be cached by the browser for 1 year. (Use versioned or hashed filenames to avoid serving stale assets.)
 * Performs Brotli and gzip compression as requested by the `Accept-Encoding` headers.
 * Provides `Last-Modified` and `ETag` response headers, and uses them with `If-Modified-Since` and `If-None-Match` request headers to produce `304 Not Modified` responses.
@@ -210,9 +210,9 @@ For `compression`, the following values are allowed:
 
 ## Using the Object Store (BETA) <a name="object-store"></a>
 
-Starting v4, it's now possible to upload assets to and serve them from the Fastly Object Store.
+Starting with v4, it's now possible to upload assets to and serve them from a [Fastly Object Store](https://www.fastly.com/blog/introducing-the-compute-edge-object-store-global-persistent-storage-for-compute-functions).
 
-Fastly Object Store is currently part of a [beta release](https://docs.fastly.com/products/fastly-product-lifecycle#beta),
+Fastly Object Store (globally persistent storage for Compute@Edge applications) is currently part of a [beta release](https://docs.fastly.com/products/fastly-product-lifecycle#beta),
 and to use it you will need to have the feature enabled for your account.
 
 To enable the use of Object Store with `@fastly/compute-js-static-publish`, you will need to perform the following steps:
@@ -221,7 +221,7 @@ To enable the use of Object Store with `@fastly/compute-js-static-publish`, you 
 compute publish` your application.
 
 * Create an Object Store under your Fastly account. At the moment you need to use the Fastly CLI. Once the Object Store
-is created, it must be linked to your Fastly service using the Resources API.
+is created, it must be linked to your Fastly service using the [Resource API](https://developer.fastly.com/reference/api/services/resource/#create-resource).
 
 ```shell
 # Create an object store
@@ -233,9 +233,9 @@ $ curl -i -X POST "https://api.fastly.com/service/YOUR_FASTLY_SERVICE_ID/version
 
 Object Store API: https://developer.fastly.com/reference/cli/object-store/create/
 
-Resources API: https://developer.fastly.com/reference/api/services/resource/
+Resource API: https://developer.fastly.com/reference/api/services/resource/
 
-* Once the object store is created and linked to your service, add the Object Store's name to your `static-publish.rc.js`
+* Once the Object Store is created and linked to your service, add its name to your `static-publish.rc.js`
 file under the `objectStore` key.
 
 After you have done the above steps, go ahead and build your application as normal. If you use `fastly compute build --verbose`
@@ -349,7 +349,7 @@ And that's it! It should be possible to run this task to clean up once in a whil
 
   > Note that content types are tested at publishing time, not at runtime.
 
-* `server` - Configuration of `PublisherServer()`.  See the [Configuring PublisherServer](#configuring-publisherserver) section
+* `server` - [Configuration of `PublisherServer()`](#configuring-publisherserver).  
   above.
 
 ### Running custom code alongside Publisher Server
@@ -385,7 +385,7 @@ Publishing, as described earlier, is the process of preparing files for inclusio
 This process also makes metadata available about each of the files that are included, such as its content type, the last
 modified date, the file hash, and so on.
 
-The `PublisherServer` class that is used by the default scaffolded application is one simple application of this content
+The [`PublisherServer` class](#publisherserver) used by the default scaffolded application is a simple application of this content
 and metadata. By importing `./statics.js` into your Compute@Edge application, you can just as easily access this
 information about the assets that were included during publishing.
 
@@ -516,8 +516,8 @@ See the definition of `ContentAssetMetadataMapEntry` in the [`types/content-asse
 
 ### Using Webpack
 
-As of v4, Webpack is no longer required, and by default is no longer part of the default scaffolded application.
-If you wish to use some features of Webpack, you can elect to include Webpack in your generated application by specifying
+As of v4, Webpack is no longer required, and is no longer part of the default scaffolded application.
+If you wish to use some features of Webpack, you may include Webpack in your generated application by specifying
 `--webpack` at the command line.
 
 ## Migrating

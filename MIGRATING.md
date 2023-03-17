@@ -1,26 +1,21 @@
 # Migration Guide
 
-When we update `@fastly/compute-js-static-publish` to a new major version, sometimes we make changes to the files that
-are generated during scaffolding. For this reason, if possible we recommended that you re-scaffold your application.
+New major versions of `@fastly/compute-js-static-publish` can involve changes to the files that
+are generated during scaffolding. For this reason, it is recommended that you re-scaffold your application.
 
-This is pretty simple if you've been using your `compute-js-static-publisher` application without modification, but we
-know that's not always possible, so the following is provided to help you overcome any breaking changes.
+This is straightforward if you're using `compute-js-static-publisher` out-of-the-box. Otherwise, read on.
 
 # Migrating to v4
 
 ## Webpack
 
-Starting with `v4.0.0` of this tool, Webpack is no longer required, and is disabled by default for new applications
-scaffolded using it. This can simplify your development and give you quicker build times. However, you may still wish
-to use Webpack if you need some of the features it provides, such as the ability to use loaders, asset modules, module
-replacement, dynamic imports, etc.
+Starting with `v4.0.0` of this tool, Webpack is no longer required and is disabled by default for new applications. This can simplify development and result in shorter build times. 
 
-If you have an application that you wish to migrate away from Webpack, you can do so by making the following changes
-in your `./compute-js` directory:
+You may still wish to use Webpack if you need some of the features it provides, e.g., the ability to use loaders, asset modules, module replacement, dynamic imports, etc.
 
-* First, make sure you aren't actually depending on any of the features that Webpack provides. You can refer to your
-  `webpack.config.js` file to see if it is doing anything fancy. When you're sure you're ready, continue to the next
-  step.
+To migrate away from using Webpack, make the following changes in your `./compute-js` directory:
+
+* First, check your `webpack.config.js` file to make sure you aren't actually depending on any custom Webpack features. When you're ready, continue to the next step.
 * Delete `webpack.config.js`.
 * Modify `static-publish.rc.js`:
   * Change the line `module.exports = {` to `const config = {`
@@ -43,7 +38,7 @@ in your `./compute-js` directory:
 If you aren't moving away from Webpack just yet, check that your `webpack.config.js` is up-to-date:
 
 * Starting `v3.0.0`, we depend on `v1.0.0` of the `js-compute` library, which provides namespaced exports for Fastly
-  features. To use them, you'll need to add a new `externals` array to the bottom if it doesn't exist already, and add
+  features. To use them, you'll need to add a new `externals` array to the bottom if it doesn't exist already, with
   the following entry:
 
   ```javascript
@@ -88,7 +83,7 @@ If you aren't moving away from Webpack just yet, check that your `webpack.config
     },
   ```
 
-If you need Webpack for a new project you are scaffolding with this site, then specify the `--webpack` command-line option
+If you need Webpack for a new project you are scaffolding with this site, specify the `--webpack` command-line option
 when you scaffold your application, e.g.:
 
 ```
@@ -98,20 +93,17 @@ npx @fastly/compute-js-static-publish@latest --webpack --root-dir=./public
 ## Removal of Expressly
 
 Previous versions of `@fastly/compute-js-static-publish` used [Expressly](https://expressly.edgecompute.app) to serve
-assets. This version no longer depends on that library, an order to implement its own server in the `PublisherServer`
+assets. `v4` does away with this dependency and implements its own server in the `PublisherServer`
 class.
 
-When using v4, you can remove Expressly from the dependencies:
+When using `v4`, you can remove the dependency on Expressly by deleting the `@fastly/expressly` entry from `dependencies` or `devDependencies`, in your `package.json` file.
 
-* In your `package.json` file:
-  * Under `dependencies` or `devDependencies`, remove the `@fastly/expressly` entry.
-
-This does mean that if your application was depending on Expressly for things like middleware, you will need to make some
+If your application depended on Expressly for things like middleware, you will need to make further
 changes.
 
 ## The entry point `src/index.js`
 
-As of v4, with Expressly no longer being used, the stock `src/index.js` file looks like this:
+As of `v4`, the `src/index.js` entry point no longer uses Expressly, and looks like this:
 
 ```js
 /// <reference types="@fastly/js-compute" />
@@ -133,11 +125,11 @@ async function handleRequest(event) {
 }
 ```
 
-If you had made your own changes to `src/index.js`, you will need to make the equivalent changes in this new format.
+If you've previously made changes to `src/index.js`, you will need to make the equivalent changes in this new format.
 
 ## `static-publish.rc.js`
 
-This configuration file has changed a bit in v4, and you may find that some features simply do not continue work after
+This configuration file has changed in v4, and you may find that some features have stopped working after
 upgrading from v3.
 
 * In v3, the configuration object was typed `Config`. In v4, it is now typed with a more descriptive name, `StaticPublisherConfig`.
@@ -150,7 +142,7 @@ export default {
 };
 ```
 
-* A new key, `server`, has been added to group configurations that pertain to Publisher Server.
+* A new key, `server`, was added to the group configurations that pertain to Publisher Server.
 
 To migrate this file, you'll need to make the following changes:
 
@@ -162,11 +154,11 @@ To migrate this file, you'll need to make the following changes:
   back. In addition, in v3 it was not possible to have a module asset that was not also already a content asset.
   In v4, these are more clearly defined. These four options should be rewritten in terms of
   `excludeDirs`, `excludeDotFiles`, `includeWellKnown`, `contentAssetInclusionTest`, and `moduleAssetInclusionTest`.
-* `staticDirs` - in v4, this has been renamed to `staticItems` and moved under the new `server` key.
-* `spa` - in v4, this has been renamed to `spaFile` and moved under the new `server` key.
-* `notFoundPage` - in v4, this has been renamed to `notFoundPageFile` and moved under the new `server` key.
-* `autoExt` - in v4, this has been moved under the new `server` key.
-* `autoIndex` - in v4, this has been moved under the new `server` key.
+* `staticDirs` - in v4, this was renamed to `staticItems` and moved under the new `server` key.
+* `spa` - in v4, this was renamed to `spaFile` and moved under the new `server` key.
+* `notFoundPage` - in v4, this was renamed to `notFoundPageFile` and moved under the new `server` key.
+* `autoExt` - in v4, this was moved under the new `server` key.
+* `autoIndex` - in v4, this was moved under the new `server` key.
 * `contentTypes` - This is unchanged.
 
 See [static-publish.rc.js config file](./README.md#static-publish-rc) for a detailed explanation of each of these new values. 
@@ -186,8 +178,7 @@ See [static-publish.rc.js config file](./README.md#static-publish-rc) for a deta
   ```
 
 * Build scripts
-  * Various versions of `@fastly/compute-js-static-publish` have specified different build scripts. At the current time,
-    the following is the recommended setup, regardless of the version of `@fastly/compute-js-static-publish` or Fastly CLI.
+  * Various versions of `@fastly/compute-js-static-publish` have specified different build scripts. We recommend the following setup, regardless of the version of `@fastly/compute-js-static-publish` or Fastly CLI.
 
     * The build script listed in `fastly.toml` of your `compute-js` directory should look like this:
       ```toml
@@ -196,7 +187,7 @@ See [static-publish.rc.js config file](./README.md#static-publish-rc) for a deta
       ```
 
     * If you're using Webpack, then the `scripts` section of `package.json` of your `compute-js` directory should contain
-      the following items (along with any other scripts that may have):
+      the following items (along with any other scripts):
       ```json
       {
           "prebuild": "npx @fastly/compute-js-static-publish --build-static && webpack",
@@ -205,7 +196,7 @@ See [static-publish.rc.js config file](./README.md#static-publish-rc) for a deta
       ```
  
     * If you're not using Webpack, then the `scripts` section of `package.json` of your `compute-js` directory should
-      contain the following items (along with any other scripts that may have):
+      contain the following items (along with any other scripts):
       ```json
       {
           "prebuild": "npx @fastly/compute-js-static-publish --build-static",
