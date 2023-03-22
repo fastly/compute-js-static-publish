@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Exported `getObjectStoreKeysFromMetadata()` metadata handling utility from main package. 
 - Exported `getDefaultContentTypes()` and other content type utilities from main package. 
 - Added preset for Vue (https://vuejs.org/).
+- Added preset for Astro (https://astro.build/).
 
 ### Changed
 

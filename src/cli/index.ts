@@ -13,6 +13,7 @@ const optionDefinitions: OptionDefinition[] = [
   // - sveltekit
   // - vue
   // - next
+  // - astro
   // - gatsby
   // - docusaurus
   { name: 'preset', type: String, },

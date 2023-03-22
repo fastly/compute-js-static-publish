@@ -4,6 +4,7 @@ import { VitePreset } from './implementations/vite.js';
 import { SvelteKitPreset } from './implementations/sveltekit.js';
 import { VuePreset } from './implementations/vue.js';
 import { NextJsPreset } from './implementations/next.js';
+import { AstroPreset } from "./implementations/astro.js";
 import { GatsbyPreset } from './implementations/gatsby.js';
 import { DocusaurusPreset } from './implementations/docusaurus.js';
 
@@ -15,6 +16,7 @@ export const presets: Record<string, new() => IPresetBase> = {
   'sveltekit': SvelteKitPreset,
   'vue': VuePreset,
   'next': NextJsPreset,
+  'astro': AstroPreset,
   'gatsby': GatsbyPreset,
   'docusaurus': DocusaurusPreset,
 };

@@ -16,7 +16,7 @@ Version 4 of this tool has some awesome new features:
   - Support for publishing files that won't necessarily be served by `PublisherServer`. File contents are made available to your application–useful, e.g., for reading data written by third-party tools, etc.
   - Makes content and metadata available to your application, via pre-package path/file.
   - Support for loading JavaScript files as code into your Compute@Edge application.
-  - Added preset for [Vue](https://vuejs.org/).
+  - Added presets for [Vue](https://vuejs.org/) and [Astro](https://astro.build/).
 
 If you wish to update to this version, you may need to re-scaffold your application, or follow the steps outlined in [MIGRATING.md](./MIGRATING.md).
 
@@ -161,6 +161,7 @@ These arguments are used to populate the `fastly.toml` and `package.json` files 
 | `sveltekit`                   | `./dist`     | (None)           | For apps written using [SvelteKit](https://kit.svelte.dev).                                                                         |
 | `vue`                         | `./dist`     | (None)           | For apps written using [Vue](https://vuejs.org), and that were created using [create-vue](https://github.com/vuejs/create-vue).     |
 | `next`                        | `./out`      | (None)           | For apps written using [Next.js](https://nextjs.org), using `npm run export`. *1                                                    |
+| `astro`                       | `./dist`     | (None)           | For apps written using [Astro](https://astro.build) (static apps only). *2                                                          |
 | `gatsby`                      | `./public`   | (None)           | For apps written using [Gatsby](https://www.gatsbyjs.com).                                                                          |
 | `docusaurus`                  | `./build`    | (None)           | For apps written using [Docusaurus](https://docusaurus.io)                                                                          |
 
@@ -168,6 +169,8 @@ You may still override any of these options individually.
 
 *1 - For Next.js, consider using `@fastly/next-compute-js`, a Next.js server implementation that allows you to run
    your Next.js application on Compute@Edge.
+
+*2 - Astro support does not support SSR.
 
 ## PublisherServer
 
