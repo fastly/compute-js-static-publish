@@ -18,7 +18,7 @@ export class CreateReactAppPreset implements IPresetBase {
     if(packageJson?.dependencies?.['react-scripts'] == null) {
       console.error("❌ Can't find react-scripts in dependencies");
       console.error("Run this from a create-react-app project directory.");
-      console.log("If this is a project created with create-react-app and has since been ejected, specify preset cra-eject to skip this check.")
+      console.log("If this is a project created with create-react-app and has since been ejected, specify preset cra-eject to skip this check.");
       return false;
     }
     return true;
