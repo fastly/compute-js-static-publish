@@ -11,6 +11,7 @@ const optionDefinitions: OptionDefinition[] = [
   // - cra (or create-react-app)
   // - vite
   // - sveltekit
+  // - vue
   // - next
   // - gatsby
   // - docusaurus

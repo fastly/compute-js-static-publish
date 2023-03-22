@@ -16,6 +16,7 @@ Version 4 of this tool has some awesome new features:
   - Support for publishing files that won't necessarily be served by `PublisherServer`. File contents are made available to your application–useful, e.g., for reading data written by third-party tools, etc.
   - Makes content and metadata available to your application, via pre-package path/file.
   - Support for loading JavaScript files as code into your Compute@Edge application.
+  - Added preset for [Vue](https://vuejs.org/).
 
 If you wish to update to this version, you may need to re-scaffold your application, or follow the steps outlined in [MIGRATING.md](./MIGRATING.md).
 
@@ -158,6 +159,7 @@ These arguments are used to populate the `fastly.toml` and `package.json` files 
 | `cra-eject`                   | `./build`    | `./build/static` | For apps written using Create React App, but which have since been ejected via `npm run eject`. Does not check for `react-scripts`. |
 | `vite`                        | `./dist`     | (None)           | For apps written using [Vite](https://vitejs.dev).                                                                                  |
 | `sveltekit`                   | `./dist`     | (None)           | For apps written using [SvelteKit](https://kit.svelte.dev).                                                                         |
+| `vue`                         | `./dist`     | (None)           | For apps written using [Vue](https://vuejs.org), and that were created using [create-vue](https://github.com/vuejs/create-vue).     |
 | `next`                        | `./out`      | (None)           | For apps written using [Next.js](https://nextjs.org), using `npm run export`. *1                                                    |
 | `gatsby`                      | `./public`   | (None)           | For apps written using [Gatsby](https://www.gatsbyjs.com).                                                                          |
 | `docusaurus`                  | `./build`    | (None)           | For apps written using [Docusaurus](https://docusaurus.io)                                                                          |

@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Moved [Migration Guide](./MIGRATING.md) into its own separate file with even more information.
 - Exported `getObjectStoreKeysFromMetadata()` metadata handling utility from main package. 
 - Exported `getDefaultContentTypes()` and other content type utilities from main package. 
+- Added preset for Vue (https://vuejs.org/).
 
 ### Changed
 
