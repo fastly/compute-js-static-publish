@@ -15,7 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Defined `StoreEntry`, a common interface that can be used to stream data from content assets, regardless of whether that
   data exists inlined into the Wasm artifact or uploaded to Object Store.
 - Added support for Brotli and Gzip compression. These assets are pre-compressed at publish time and uploaded alongside
-  their raw counterparts, rather than using runtime compression.
+  their raw counterparts, rather than using runtime compression. This feature is enabled automatically if Object Store mode
+  is used, and can be selectively enabled otherwise.
 - Added support for returning `304 Not Modified` status based on `If-None-Match` and `If-Modified-Since` request headers.
 - A `PublisherServer` class that maps incoming requests to asset paths.
 - Content and metadata available to your application.
