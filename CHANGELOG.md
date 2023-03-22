@@ -39,7 +39,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Items related to including/excluding files reorganized;
   - `PublisherServer`-specific settings moved to `server` key.
 - Moved default content types into the main package.
- 
+- Updated to TypeScript 5 
+
 ## [3.6.0] - 2023-02-28
 
 ### Added
