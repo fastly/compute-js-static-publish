@@ -1,6 +1,3 @@
-PRO TIP - If you are viewing this README in GitHub, click the hamburger menu on the row right above this to see a Table
-of Contents!
-
 # Static Publisher for JavaScript on Compute@Edge
 
 Using a static site generator to build your website? Do you simply need to serve some static files? With `compute-js-static-publish`, now you can deploy and serve everything from Fastly's blazing-fast [Compute@Edge](https://developer.fastly.com/learning/compute/).
