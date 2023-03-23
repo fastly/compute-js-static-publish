@@ -547,7 +547,6 @@ ${fastlyServiceId != null ? `service_id = "${fastlyServiceId}"
 
   // static-publish.rc.js
   const rootDirRel = path.relative(computeJsDir, rootDir);
-  const publicDirRel = path.relative(computeJsDir, publicDir);
 
   // publicDirPrefix -- if public dir is deeper than the root dir, then
   // public dir is used as a prefix to drill into asset names.
