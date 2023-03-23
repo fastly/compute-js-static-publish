@@ -141,13 +141,13 @@ Note that the files referenced by `--spa` and `--not-found-page` do not necessar
 
 These arguments are used to populate the `fastly.toml` and `package.json` files of your Compute@Edge application.
 
-| Option              | Default                                                          | Description                                                                                                                                                                                                                                          |
-|---------------------|------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `name`              | `name` from `package.json`, or `compute-js-static-site`          | The name of your Compute@Edge application.                                                                                                                                                                                                           |
-| `description`       | `description` from `package.json`, or `Compute@Edge static site` | The description of your Compute@Edge application.                                                                                                                                                                                                    |
-| `author`            | `author` from `package.json`, or `you@example.com`               | The author of your Compute@Edge application.                                                                                                                                                                                                         |
-| `service-id`        | (None)                                                           | The ID of an existing Fastly WASM service for your Compute@Edge application.                                                                                                                                                                         |
-| `object-store-name` | (None)                                                           | The name of a [Fastly Object Store](https://www.fastly.com/blog/introducing-the-compute-edge-object-store-global-persistent-storage-for-compute-functions) to hold the content assets. It must be linked to the service specified by `--service-id`. |
+| Option              | Default                                                          | Description                                                                                                                                                                                                                                         |
+|---------------------|------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `name`              | `name` from `package.json`, or `compute-js-static-site`          | The name of your Compute@Edge application.                                                                                                                                                                                                          |
+| `description`       | `description` from `package.json`, or `Compute@Edge static site` | The description of your Compute@Edge application.                                                                                                                                                                                                   |
+| `author`            | `author` from `package.json`, or `you@example.com`               | The author of your Compute@Edge application.                                                                                                                                                                                                        |
+| `service-id`        | (None)                                                           | The ID of an existing Fastly WASM service for your Compute@Edge application.                                                                                                                                                                        |
+| `object-store-name` | (None)                                                           | The name of an existing [Fastly Object Store](https://developer.fastly.com/learning/concepts/data-stores/#object-stores) to hold the content assets. In addition to already existing, it must be linked to the service specified by `--service-id`. |
 
 ## Usage with frameworks and static site generators
 
@@ -213,20 +213,42 @@ For `compression`, the following values are allowed:
 * `'br'` - Brotli
 * `'gzip'` - Gzip
 
+## Associating your project with a Fastly Service
+
+The project created by this tool is a Fastly Compute@Edge JavaScript application, complete with a `fastly.toml` file that
+describes your project to the Fastly CLI.
+
+To deploy your project to production, you deploy it to a [Fastly service](https://developer.fastly.com/reference/glossary#term-service)
+in your account. Usually, you create your service automatically as part of your first deployment of the project.
+
+In this case, `fastly.toml` has no value for `service_id` at the time you deploy, so `fastly compute publish` will prompt
+you to create a Fastly service in your account for you (afterwards saving the new service's ID to your `fastly.toml` file).
+
+Alternatively, you may deploy to a service that already exists. You can create this service using the
+[Fastly CLI](https://developer.fastly.com/reference/cli/service/create/) or the [Fastly web app](https://manage.fastly.com/).
+Note that since this is a Compute@Edge application, the service must be created as a Wasm service.
+
+Before deploying your application, specify the service by setting the `service_id` value in the `fastly.toml` file to the
+ID of the service. The `fastly compute publish` will deploy to the service identified by this value.
+
+To specify the service at the time you are scaffolding the project (for example, if you are running this tool and deploying
+as part of a CI process), specify the `--service-id` command line argument to populate `fastly.toml` with this value.
+
 ## Using the Object Store (BETA) <a name="object-store"></a>
 
-Starting with v4, it's now possible to upload assets to and serve them from a [Fastly Object Store](https://www.fastly.com/blog/introducing-the-compute-edge-object-store-global-persistent-storage-for-compute-functions).
+Starting with v4, it's now possible to upload assets to and serve them from a [Fastly Object Store](https://developer.fastly.com/learning/concepts/data-stores/#object-stores).
 
-Fastly Object Store (globally persistent storage for Compute@Edge applications) is currently part of a [beta release](https://docs.fastly.com/products/fastly-product-lifecycle#beta),
-and to use it you will need to have the feature enabled for your account.
+You can enable the use of Object Store with `@fastly/compute-js-static-publish` as you scaffold your application, or
+at any later time.
 
-To enable the use of Object Store with `@fastly/compute-js-static-publish`, you will need to perform the following steps:
+At the time you enable the use of Object Store:
 
-* Create a service on Fastly to host your Compute@Edge application. One way to do this would be to simply run `fastly
-compute publish` your application.
+* Your Fastly service must already exist. See [Associating your project with a Fastly Service](#associating-your-project-with-a-fastly-service) above.
 
-* Create an Object Store under your Fastly account. At the moment you need to use the Fastly CLI. Once the Object Store
-is created, it must be linked to your Fastly service using the [Resource API](https://developer.fastly.com/reference/api/services/resource/#create-resource).
+* Your Object Store must already exist under the same Fastly account, and be linked to the service.
+   As of this writing, to create the Object Store you will need to use either the Fastly CLI [fastly object-store create](https://developer.fastly.com/reference/cli/object-store/create/)
+   or the Fastly [Object Store API](https://developer.fastly.com/reference/api/services/resources/object-store/#create-store).
+   Once the Object Store is created, you must be link it to your Fastly service using the [Resource API](https://developer.fastly.com/reference/api/services/resource/#create-resource).
 
 ```shell
 # Create an object store
@@ -236,12 +258,12 @@ $ curl -i -X POST "https://api.fastly.com/resources/stores/object" -H "Fastly-Ke
 $ curl -i -X POST "https://api.fastly.com/service/YOUR_FASTLY_SERVICE_ID/version/YOUR_FASTLY_SERVICE_VERSION/resource" -H "Fastly-Key: YOUR_FASTLY_TOKEN" -H "Content-Type: application/x-www-form-urlencoded" -H "Accept: application/json" -d "name=example-store-service-a&resource_id=YOUR_OBJECT_STORE_ID"
 ```
 
-Object Store API: https://developer.fastly.com/reference/cli/object-store/create/
-
-Resource API: https://developer.fastly.com/reference/api/services/resource/
-
-* Once the Object Store is created and linked to your service, add its name to your `static-publish.rc.js`
+Once the Object Store is created and linked to your service, add its name to your `static-publish.rc.js`
 file under the `objectStore` key.
+
+To specify the Object Store at the time you are scaffolding the project (for example, if you are running this tool and
+deploying as part of a CI process), specify the `--service-id` and `--object-store-name` command line arguments to populate
+the respective files with these values.
 
 After you have done the above steps, go ahead and build your application as normal. If you use `fastly compute build --verbose`
 (or run `npm run build` directly), you should see output in your logs saying that files are being sent to the Object Store.
