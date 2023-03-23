@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+## [4.0.0] - 2023-03-23
+
 ### Added
 
 - Cleaner separation between Content Assets and Module Assets: applications can define which files
