@@ -14,4 +14,8 @@ export abstract class AssetManager<TAsset> {
     return this.assets[assetKey] ?? null;
   }
 
+  getAssetKeys(): string[] {
+    return Object.keys(this.assets);
+  }
+
 }
