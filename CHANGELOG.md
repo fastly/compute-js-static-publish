@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+### Added
+
+- Added 'bytes' and 'string' content asset types usable during testing.
+- AssetManager: added `getAssetKeys` method
+- ContentAsset: added `isLocal` property
+
+### Changed
+
+- Modified metadata to use string identifiers such as 'wasm-inline' and 'object-store'
+  instead of a single "isInline" boolean value. This allows other stores to be used during
+  tests.
+- Compute-Js Content Assets ('wasm-inline' and 'object-store') are only included when
+  `@fastly/compute-js-static-publish/build/compute-js` is imported.
+
+### Fixed
+
+- Fixed type of imported metadata file in clean-object-store program.
+
 ## [4.0.0] - 2023-03-23
 
 ### Added
