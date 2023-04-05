@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+## [4.1.0] - 2023-04-05
+
 ### Added
 
 - Added 'bytes' and 'string' content asset types usable during testing.
