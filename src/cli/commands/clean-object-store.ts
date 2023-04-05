@@ -6,7 +6,12 @@ import { loadConfigFile } from "../load-config.js";
 import { getObjectStoreKeys, objectStoreDeleteFile } from "../util/object-store.js";
 import { FastlyApiContext, loadApiKey } from "../util/fastly-api.js";
 import { getObjectStoreKeysFromMetadata } from "../../util/metadata.js";
-type StaticsMetadataModule = typeof import('../../../resources/statics-metadata.js');
+import { ContentAssetMetadataMap } from "../../types/index.js";
+
+type StaticsMetadataModule = {
+  objectStoreName: string | null,
+  contentAssetMetadataMap: ContentAssetMetadataMap,
+};
 
 export async function cleanObjectStore(commandLineValues: CommandLineOptions) {
 
