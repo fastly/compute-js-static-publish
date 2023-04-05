@@ -265,7 +265,7 @@ the respective files with these values.
 After you have done the above steps, go ahead and build your application as normal. If you use `fastly compute build --verbose`
 (or run `npm run build` directly), you should see output in your logs saying that files are being sent to the Object Store.
 
-The `statics-metadata.js` file should now show `"isInline":false` for content assets.
+The `statics-metadata.js` file should now show `"type": "object-store"` for content assets.
 Your Wasm binary should also be smaller, as the content of the files are no longer inlined in the build artifact.
 You can deploy this and run it from Fastly, and the referenced files will be served from Object Store.
 
@@ -452,9 +452,9 @@ import { contentAssets } from './statics';
 // Obtain a content asset named '/public/index.html'
 const asset = contentAssets.getAsset('/public/index.html');
 
-// true if object's data is 'inlined' into Wasm binary
-// false if object's data exists in Fastly Object Store
-const isInline = asset.isInline;
+// 'wasm-inline' if object's data is 'inlined' into Wasm binary
+// 'object-store' if object's data exists in Fastly Object Store
+asset.type;
 
 // Get the "store entry"
 const storeEntry = await asset.getStoreEntry();

@@ -9,7 +9,7 @@ import type {
   ContentAsset,
   ContentAssetMetadataMap,
   ContentAssetMetadataMapEntry,
-  ContentAssetMetadataMapEntryInline,
+  ContentAssetMetadataMapEntryWasmInline,
   ContentAssetMetadataMapEntryObjectStore
 } from "../../types/content-assets.js";
 import type { StoreEntry } from "../../types/compute.js";
@@ -55,15 +55,15 @@ function findMatchingSourceAndInfo<TSource>(acceptEncodingsGroups: ContentCompre
   return { sourceAndInfo, contentEncoding };
 }
 
-export class ContentInlineAsset implements ContentAsset {
-  readonly isInline: boolean = true;
+export class ContentWasmInlineAsset implements ContentAsset {
+  readonly type = 'wasm-inline';
 
-  private readonly metadata: ContentAssetMetadataMapEntryInline;
+  private readonly metadata: ContentAssetMetadataMapEntryWasmInline;
 
   private readonly sourceAndInfo: SourceAndInfo<Uint8Array>;
   private readonly compressedSourcesAndInfo: CompressedFileInfos<SourceAndInfo<Uint8Array>>;
 
-  constructor(metadata: ContentAssetMetadataMapEntryInline) {
+  constructor(metadata: ContentAssetMetadataMapEntryWasmInline) {
     this.metadata = metadata;
 
     this.sourceAndInfo = {
@@ -110,7 +110,7 @@ export class ContentInlineAsset implements ContentAsset {
 }
 
 export class ContentObjectStoreAsset implements ContentAsset {
-  readonly isInline: boolean = false;
+  readonly type = 'object-store';
 
   private readonly metadata: ContentAssetMetadataMapEntryObjectStore;
 
@@ -194,17 +194,16 @@ export class ContentAssets extends AssetManager<ContentAsset> {
     for (const [assetKey, metadata] of Object.entries(contentAssetMetadataMap)) {
 
       let asset: ContentAsset;
-      if (metadata.isInline) {
+      switch(metadata.type) {
+        case 'wasm-inline':
+          asset = new ContentWasmInlineAsset(metadata);
+          break;
+        case 'object-store':
+          if (objectStoreName == null) {
+            throw new Error("Unexpected! Object Store should be specified!!");
+          }
 
-        asset = new ContentInlineAsset(metadata);
-
-      } else {
-
-        if (objectStoreName == null) {
-          throw new Error("Unexpected! Object Store should be specified!!");
-        }
-
-        asset = new ContentObjectStoreAsset(metadata, objectStoreName);
+          asset = new ContentObjectStoreAsset(metadata, objectStoreName);
       }
 
       this.initAsset(assetKey, asset);

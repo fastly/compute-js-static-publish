@@ -6,12 +6,18 @@ export type CompressedFileInfos<TData> = Partial<Record<ContentCompressionTypes,
 export type ContentFileInfo = {
   hash: string, // same as hash of file
   size: number,
+};
+
+// For static publishing
+export type ContentFileInfoForStaticPublishing = ContentFileInfo & {
   staticFilePath: string,
 };
 
-export type ContentFileInfoForObjectStore = ContentFileInfo & {
+export type ContentFileInfoForWasmInline = ContentFileInfoForStaticPublishing;
+
+export type ContentFileInfoForObjectStore = ContentFileInfoForStaticPublishing & {
   objectStoreKey: string,
-}
+};
 
 export type ContentAssetMetadataMapEntryBase<TFileInfo> = {
   assetKey: string,
@@ -22,26 +28,27 @@ export type ContentAssetMetadataMapEntryBase<TFileInfo> = {
   compressedFileInfos: CompressedFileInfos<TFileInfo>
 };
 
-export type ContentAssetMetadataMapEntryInline = {
-  isInline: true,
-} & ContentAssetMetadataMapEntryBase<ContentFileInfo>;
+export type ContentAssetMetadataMapEntryWasmInline = {
+  type: 'wasm-inline',
+} & ContentAssetMetadataMapEntryBase<ContentFileInfoForWasmInline>;
 
 export type ContentAssetMetadataMapEntryObjectStore = {
-  isInline: false,
+  type: 'object-store',
 } & ContentAssetMetadataMapEntryBase<ContentFileInfoForObjectStore>;
 
 export type ContentAssetMetadataMapEntry =
-  ContentAssetMetadataMapEntryInline | ContentAssetMetadataMapEntryObjectStore;
+  | ContentAssetMetadataMapEntryWasmInline
+  | ContentAssetMetadataMapEntryObjectStore;
 
 export type ContentAssetMetadataMap = {
   [assetKey: string]: ContentAssetMetadataMapEntry,
 };
 
 export interface ContentAsset {
+  readonly type: ContentAssetMetadataMapEntry['type'];
   readonly assetKey: string;
   getMetadata(): ContentAssetMetadataMapEntry;
   getStoreEntry(acceptEncodingsGroups?: ContentCompressionTypes[][]): Promise<StoreEntry>;
   getBytes(): Uint8Array;
   getText(): string;
-  readonly isInline: boolean;
 }

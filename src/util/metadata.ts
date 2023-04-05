@@ -5,7 +5,7 @@ export function getObjectStoreKeysFromMetadata(contentAssetMetadataMap: ContentA
   const results = new Set<string>();
 
   for (const metadata of Object.values(contentAssetMetadataMap)) {
-    if (!metadata.isInline) {
+    if (metadata.type === 'object-store') {
       results.add(metadata.fileInfo.objectStoreKey);
       for (const fileInfo of Object.values(metadata.compressedFileInfos)) {
         results.add(fileInfo.objectStoreKey);

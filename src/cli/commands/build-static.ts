@@ -20,7 +20,7 @@
 //   - compressedFileInfos: Map<string, FileInfo> - information about any compressed versions
 //     - key: string - compression algorithm name (e.g., "gzip", "br", etc.)
 //     - value: FileInfo - information about the compressed version of the file
-//   - isInline: boolean - whether this file is "inline". If false, object is in the object store.
+//   - type: string - where the data is available. Usually 'wasm-inline' or 'object-store'.
 // FileInfo structure
 //   - hash: string - SHA-256 hash of file
 //   - size: number - file size in bytes
@@ -91,7 +91,7 @@ import type {
 } from "../../constants/compression.js";
 import type {
   CompressedFileInfos,
-  ContentFileInfo,
+  ContentFileInfoForWasmInline,
   ContentFileInfoForObjectStore,
 } from "../../types/content-assets.js";
 
@@ -444,14 +444,14 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
       fs.cpSync(file, staticFilePath);
       console.log(`✔️ Copied ${text ? 'text' : 'binary'} asset "${file}" to "${staticFilePath}".`);
 
-      const compressedFileInfos: CompressedFileInfos<ContentFileInfo> = {};
+      const compressedFileInfos: CompressedFileInfos<ContentFileInfoForWasmInline> = {};
       await prepareCompressedVersions(contentCompression, (alg, staticFilePath, hash, size) => {
         compressedFileInfos[alg] = { staticFilePath, hash, size };
       });
 
       metadata = {
         ...entryBase,
-        isInline,
+        type: 'wasm-inline',
         fileInfo: {
           ...entryBase.fileInfo,
           staticFilePath,
@@ -487,7 +487,7 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
 
       metadata = {
         ...entryBase,
-        isInline,
+        type: 'object-store',
         fileInfo: {
           ...entryBase.fileInfo,
           staticFilePath,
