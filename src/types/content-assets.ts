@@ -8,6 +8,14 @@ export type ContentFileInfo = {
   size: number,
 };
 
+// For runtime use e.g., testing
+export type ContentFileInfoForBytes = ContentFileInfo & {
+  bytes: Uint8Array,
+};
+export type ContentFileInfoForString = ContentFileInfo & {
+  content: string,
+};
+
 // For static publishing
 export type ContentFileInfoForStaticPublishing = ContentFileInfo & {
   staticFilePath: string,
@@ -28,6 +36,13 @@ export type ContentAssetMetadataMapEntryBase<TFileInfo> = {
   compressedFileInfos: CompressedFileInfos<TFileInfo>
 };
 
+export type ContentAssetMetadataMapEntryBytes = {
+  type: 'bytes',
+} & ContentAssetMetadataMapEntryBase<ContentFileInfoForBytes>;
+export type ContentAssetMetadataMapEntryString = {
+  type: 'string',
+} & ContentAssetMetadataMapEntryBase<ContentFileInfoForString>;
+
 export type ContentAssetMetadataMapEntryWasmInline = {
   type: 'wasm-inline',
 } & ContentAssetMetadataMapEntryBase<ContentFileInfoForWasmInline>;
@@ -37,6 +52,8 @@ export type ContentAssetMetadataMapEntryObjectStore = {
 } & ContentAssetMetadataMapEntryBase<ContentFileInfoForObjectStore>;
 
 export type ContentAssetMetadataMapEntry =
+  | ContentAssetMetadataMapEntryBytes
+  | ContentAssetMetadataMapEntryString
   | ContentAssetMetadataMapEntryWasmInline
   | ContentAssetMetadataMapEntryObjectStore;
 

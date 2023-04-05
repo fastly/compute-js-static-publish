@@ -9,8 +9,10 @@ import type {
   ContentAsset,
   ContentAssetMetadataMap,
   ContentAssetMetadataMapEntry,
+  ContentAssetMetadataMapEntryBytes,
+  ContentAssetMetadataMapEntryString,
   ContentAssetMetadataMapEntryWasmInline,
-  ContentAssetMetadataMapEntryObjectStore
+  ContentAssetMetadataMapEntryObjectStore,
 } from "../../types/content-assets.js";
 import type { StoreEntry } from "../../types/compute.js";
 import type { ContentCompressionTypes } from "../../constants/compression.js";
@@ -53,6 +55,68 @@ function findMatchingSourceAndInfo<TSource>(acceptEncodingsGroups: ContentCompre
   sourceAndInfo ??= defaultSourceAndInfo;
 
   return { sourceAndInfo, contentEncoding };
+}
+
+abstract class ContentRuntimeAsset<TMetadataMapEntry extends ContentAssetMetadataMapEntry> {
+  protected readonly metadata: TMetadataMapEntry;
+  protected sourceAndInfo: SourceAndInfo<Uint8Array>;
+  protected constructor(metadata: TMetadataMapEntry, sourceAndInfo: SourceAndInfo<Uint8Array>) {
+    this.metadata = metadata;
+    this.sourceAndInfo = sourceAndInfo;
+  }
+
+  get assetKey() {
+    return this.metadata.assetKey;
+  }
+
+  async getStoreEntry(): Promise<StoreEntry> {
+    const { source, hash, size } = this.sourceAndInfo;
+    return new InlineStoreEntry(source, null, hash, size);
+  }
+
+  getBytes(): Uint8Array {
+    return this.sourceAndInfo.source;
+  }
+
+  getText(): string {
+    if (!this.metadata.text) {
+      throw new Error("Can't getText() for non-text content");
+    }
+    return decoder.decode(this.sourceAndInfo.source);
+  }
+
+  getMetadata(): ContentAssetMetadataMapEntry {
+    return this.metadata;
+  }
+}
+
+export class ContentBytesAsset
+    extends ContentRuntimeAsset<ContentAssetMetadataMapEntryBytes>
+    implements ContentAsset {
+  readonly type = 'bytes';
+
+  constructor(metadata: ContentAssetMetadataMapEntryBytes) {
+    super(metadata, {
+      source: metadata.fileInfo.bytes,
+      hash: metadata.fileInfo.hash,
+      size: metadata.fileInfo.size,
+    });
+  }
+}
+
+export class ContentStringAsset
+    extends ContentRuntimeAsset<ContentAssetMetadataMapEntryString>
+    implements ContentAsset {
+  readonly type = 'string';
+
+  static encoder = new TextEncoder();
+  constructor(metadata: ContentAssetMetadataMapEntryString) {
+    super(metadata, {
+      source: ContentStringAsset.encoder.encode(metadata.fileInfo.content),
+      hash: metadata.fileInfo.hash,
+      size: metadata.fileInfo.size,
+    });
+  }
 }
 
 export class ContentWasmInlineAsset implements ContentAsset {
@@ -195,6 +259,12 @@ export class ContentAssets extends AssetManager<ContentAsset> {
 
       let asset: ContentAsset;
       switch(metadata.type) {
+        case 'bytes':
+          asset = new ContentBytesAsset(metadata);
+          break;
+        case 'string':
+          asset = new ContentStringAsset(metadata);
+          break;
         case 'wasm-inline':
           asset = new ContentWasmInlineAsset(metadata);
           break;
