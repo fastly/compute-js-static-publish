@@ -63,6 +63,7 @@ export type ContentAssetMetadataMap = {
 
 export interface ContentAsset {
   readonly type: ContentAssetMetadataMapEntry['type'];
+  readonly isLocal: boolean;
   readonly assetKey: string;
   getMetadata(): ContentAssetMetadataMapEntry;
   getStoreEntry(acceptEncodingsGroups?: ContentCompressionTypes[][]): Promise<StoreEntry>;

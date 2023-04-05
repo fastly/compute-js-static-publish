@@ -65,6 +65,10 @@ abstract class ContentRuntimeAsset<TMetadataMapEntry extends ContentAssetMetadat
     this.sourceAndInfo = sourceAndInfo;
   }
 
+  get isLocal() {
+    return true;
+  }
+
   get assetKey() {
     return this.metadata.assetKey;
   }
@@ -147,6 +151,10 @@ export class ContentWasmInlineAsset implements ContentAsset {
       }, {});
   }
 
+  get isLocal() {
+    return true;
+  }
+
   get assetKey() {
     return this.metadata.assetKey;
   }
@@ -202,6 +210,10 @@ export class ContentObjectStoreAsset implements ContentAsset {
         };
         return obj;
       }, {});
+  }
+
+  get isLocal() {
+    return false;
   }
 
   get assetKey() {
