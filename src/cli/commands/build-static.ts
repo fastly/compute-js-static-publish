@@ -549,6 +549,7 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
 `;
 
   fileContents += 'import { ContentAssets, ModuleAssets, PublisherServer } from "@fastly/compute-js-static-publish";\n\n';
+  fileContents += 'import "@fastly/compute-js-static-publish/build/compute-js";\n\n';
   fileContents += 'import { objectStoreName, contentAssetMetadataMap } from "./statics-metadata";\n';
 
   // Add import statements for assets that are modules and that need to be statically imported.
@@ -661,7 +662,7 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
 
   fileContents += `\nexport const serverConfig = ${JSON.stringify(serverConfig, null, 2)};\n`;
 
-  fileContents += '\nexport const contentAssets = new ContentAssets(objectStoreName, contentAssetMetadataMap);';
+  fileContents += '\nexport const contentAssets = new ContentAssets(contentAssetMetadataMap, {objectStoreName});';
   fileContents += '\nexport const moduleAssets = new ModuleAssets(moduleAssetsMap);\n';
 
   fileContents += '\nlet server = null;';

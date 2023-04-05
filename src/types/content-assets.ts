@@ -62,7 +62,7 @@ export type ContentAssetMetadataMap = {
 };
 
 export interface ContentAsset {
-  readonly type: ContentAssetMetadataMapEntry['type'];
+  readonly type: string;
   readonly isLocal: boolean;
   readonly assetKey: string;
   getMetadata(): ContentAssetMetadataMapEntry;
