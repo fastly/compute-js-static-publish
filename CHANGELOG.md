@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+### Fixed
+
+- Avoid a crash when the project doesn't have devDependencies in package.json.
+
 ## [4.1.0] - 2023-04-05
 
 ### Added

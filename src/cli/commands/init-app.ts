@@ -273,8 +273,8 @@ export function initApp(commandLineValues: CommandLineOptions) {
   if (packageJson != null) {
     // First try current project's package.json
     computeJsStaticPublisherVersion =
-      packageJson.dependencies["@fastly/compute-js-static-publish"] ??
-      packageJson.devDependencies["@fastly/compute-js-static-publish"];
+      packageJson.dependencies?.["@fastly/compute-js-static-publish"] ??
+      packageJson.devDependencies?.["@fastly/compute-js-static-publish"];
 
     // This may be a file url if during development
     if (computeJsStaticPublisherVersion != null) {
