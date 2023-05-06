@@ -16,9 +16,9 @@ import type {
   PublisherServerConfigNormalized,
 } from "../types/config-normalized.js";
 
-const normalizeContentTypeDef = buildNormalizeFunctionForObject<ContentTypeDef>((config, errors) => {
+const normalizeContentTypeDef = buildNormalizeFunctionForObject<ContentTypeDef>((config, errors): ContentTypeDef | null => {
 
-  let { test, type, binary } = config;
+  let { test, contentType, text } = config;
 
   if (typeof test === 'function' || test instanceof RegExp) {
     // ok
@@ -26,19 +26,19 @@ const normalizeContentTypeDef = buildNormalizeFunctionForObject<ContentTypeDef>(
     errors.push('test cannot be null.');
   }
 
-  if (isStringAndNotEmpty(type)) {
+  if (isStringAndNotEmpty(contentType)) {
     // ok
   } else {
-    errors.push('type must be a non-empty string.');
+    errors.push('contentType must be a non-empty string.');
   }
 
-  if (!isSpecified(config, 'binary')) {
-    binary = false;
+  if (!isSpecified(config, 'text')) {
+    text = true;
   } else {
-    if (typeof binary === 'boolean') {
+    if (typeof text === 'boolean') {
       // ok
     } else {
-      errors.push('binary, if specified, must be a boolean value.');
+      errors.push('text, if specified, must be a boolean value.');
     }
   }
 
@@ -48,8 +48,8 @@ const normalizeContentTypeDef = buildNormalizeFunctionForObject<ContentTypeDef>(
 
   return {
     test,
-    contentType: type,
-    binary,
+    contentType,
+    text,
   };
 
 });

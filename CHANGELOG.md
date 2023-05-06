@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+### Fixed
+
+- Fix parsing of contentTypes[] in static-publish.rc.js
+
 ## [4.2.0] - 2023-04-26
 
 ### Fixed
