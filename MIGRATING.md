@@ -5,7 +5,37 @@ are generated during scaffolding. For this reason, it is recommended that you re
 
 This is straightforward if you're using `compute-js-static-publisher` out-of-the-box. Otherwise, read on.
 
-# Migrating to v4
+# Migrating to v5
+
+## KV Store
+
+Starting with `v5.0.0`, this tool refers to the KV Store using its finalized product name, "KV Store". References in
+code and in configuration that used the previous "Object Store" name have been changed to the new name. If you have
+been using the feature, you can take the following steps:
+
+* In your `static-publish.rc.js` file:
+  * Rename the `objectStore` key to `kvStoreName`. For example, if your KV Store is named `'my-store'`, then change:
+    ```
+    objectStore: 'my-store'
+    ```
+    to
+    ```
+    kvStoreName: 'my-store'
+    ```
+
+* In your `fastly.toml` file, find all lines that pertain to object store entries.
+  * Such lines may look like this and there may be many:
+    ```toml
+    [[local_server.object_store.my-store]]
+    key = "4QEM5nIpyLiNF3wwsbnda5:/404.html_aeed29478691e636b4ded20c17e9eae437614617067a8751882368b965a21bcb"
+    path = "output/404.html"
+    ```
+  * Change the `object_store` of these lines to `kv_stores`. For example:
+    ```toml
+    [[local_server.kv_stores.my-store]]
+    key = "4QEM5nIpyLiNF3wwsbnda5:/404.html_aeed29478691e636b4ded20c17e9eae437614617067a8751882368b965a21bcb"
+    path = "output/404.html"
+    ```
 
 ## Webpack
 
