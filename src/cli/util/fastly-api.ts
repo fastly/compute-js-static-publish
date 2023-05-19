@@ -23,7 +23,7 @@ export function loadApiKey(): LoadApiKeyResult | null {
   if (apiToken == null) {
     // Try to get API key from fastly cli
     try {
-      apiToken = execSync('fastly profile token', {
+      apiToken = execSync('fastly profile token --quiet', {
         encoding: 'utf-8',
       })?.trim() || null;
     } catch {

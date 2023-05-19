@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+### Fixed
+
+- Avoid a crash caused by extra output when `fastly` CLI tool detects a newer available version.
+
 ## [5.0.0] - 2023-05-19
 
 ### Changed
