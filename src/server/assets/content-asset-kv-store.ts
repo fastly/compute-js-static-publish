@@ -1,4 +1,4 @@
-import { ObjectStore } from "fastly:object-store";
+import { KVStore } from "fastly:kv-store";
 import {
   ContentAsset,
   ContentAssetMetadataMapEntry,
@@ -6,27 +6,27 @@ import {
 } from "../../types/index.js";
 import {
   CompressedFileInfos,
-  ContentAssetMetadataMapEntryObjectStore,
+  ContentAssetMetadataMapEntryKVStore,
 } from "../../types/content-assets.js";
 import { ContentCompressionTypes } from "../../constants/compression.js";
 import { ContentAssets, findMatchingSourceAndInfo, SourceAndInfo } from "./content-assets.js";
 
-export class ContentObjectStoreAsset implements ContentAsset {
-  readonly type = 'object-store';
+export class ContentKVStoreAsset implements ContentAsset {
+  readonly type = 'kv-store';
 
-  private readonly metadata: ContentAssetMetadataMapEntryObjectStore;
+  private readonly metadata: ContentAssetMetadataMapEntryKVStore;
 
-  private readonly objectStoreName: string;
+  private readonly kvStoreName: string;
 
   private readonly sourceAndInfo: SourceAndInfo<string>;
   private readonly compressedSourcesAndInfo: CompressedFileInfos<SourceAndInfo<string>>;
 
-  constructor(metadata: ContentAssetMetadataMapEntryObjectStore, objectStoreName: string) {
+  constructor(metadata: ContentAssetMetadataMapEntryKVStore, kvStoreName: string) {
     this.metadata = metadata;
-    this.objectStoreName = objectStoreName;
+    this.kvStoreName = kvStoreName;
 
     this.sourceAndInfo = {
-      source: metadata.fileInfo.objectStoreKey,
+      source: metadata.fileInfo.kvStoreKey,
       hash: metadata.fileInfo.hash,
       size: metadata.fileInfo.size,
     };
@@ -34,7 +34,7 @@ export class ContentObjectStoreAsset implements ContentAsset {
     this.compressedSourcesAndInfo = Object.entries(metadata.compressedFileInfos)
       .reduce<CompressedFileInfos<SourceAndInfo<string>>>((obj, [key, value]) => {
         obj[key as ContentCompressionTypes] = {
-          source: value.objectStoreKey,
+          source: value.kvStoreKey,
           hash: value.hash,
           size: value.size,
         };
@@ -54,10 +54,10 @@ export class ContentObjectStoreAsset implements ContentAsset {
 
     const { sourceAndInfo, contentEncoding } = findMatchingSourceAndInfo(acceptEncodingsGroups, this.sourceAndInfo, encoding => this.compressedSourcesAndInfo[encoding]);
 
-    const objectStore = new ObjectStore(this.objectStoreName);
+    const kvStore = new KVStore(this.kvStoreName);
     let retries = 3;
     while (retries > 0) {
-      const storeEntry = await objectStore.get(sourceAndInfo.source);
+      const storeEntry = await kvStore.get(sourceAndInfo.source);
       if (storeEntry != null) {
         const { hash, size } = sourceAndInfo;
         return Object.assign(storeEntry, { contentEncoding, hash, size });
@@ -65,7 +65,7 @@ export class ContentObjectStoreAsset implements ContentAsset {
 
       // Note the null does NOT mean 404. The fact that we are here means
       // metadata exists for this path, and we're just trying to get the data from
-      // the object store.
+      // the KV Store.
 
       // So if we're here then the data is either not available yet (in which case
       // we can wait just a bit and try again), or the data was deleted.
@@ -75,15 +75,15 @@ export class ContentObjectStoreAsset implements ContentAsset {
       const delay = (3-retries) * 250;
       await new Promise(resolve => setTimeout(resolve, delay));
     }
-    throw new Error("Asset could not be retrieved from the Object Store.");
+    throw new Error("Asset could not be retrieved from the KV Store.");
   }
 
   getBytes(): Uint8Array {
-    throw new Error("Can't getBytes() for Object Store asset");
+    throw new Error("Can't getBytes() for KV Store asset");
   }
 
   getText(): string {
-    throw new Error("Can't getText() for Object Store asset");
+    throw new Error("Can't getText() for KV Store asset");
   }
 
   getMetadata(): ContentAssetMetadataMapEntry {
@@ -92,12 +92,12 @@ export class ContentObjectStoreAsset implements ContentAsset {
 
 }
 
-ContentAssets.registerAssetBuilder('object-store', (metadata, context) => {
-  const { objectStoreName } = context;
+ContentAssets.registerAssetBuilder('kv-store', (metadata, context) => {
+  const { kvStoreName } = context;
 
-  if (objectStoreName == null) {
-    throw new Error("Unexpected! Object Store should be specified!!");
+  if (kvStoreName == null) {
+    throw new Error("Unexpected! KV Store name should be specified!!");
   }
 
-  return new ContentObjectStoreAsset(metadata, objectStoreName);
+  return new ContentKVStoreAsset(metadata, kvStoreName);
 });

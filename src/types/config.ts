@@ -9,13 +9,13 @@ export type ContentAssetInclusionResult = {
 
   // includeContent:
   // true  - Include in Wasm binary and serve using includeBytes() function, or
-  //         serve from Object Store if enabled. Default.
+  //         serve from KV Store if enabled. Default.
   // false - Exclude from this publish.
   includeContent?: boolean,
 
   // inline:
-  // true  - Use includeBytes() for this asset, even if Object Store is enabled.
-  // false - If Object Store is enabled, serve the file from it. Default.
+  // true  - Use includeBytes() for this asset, even if KV Store is enabled.
+  // false - If KV Store is enabled, serve the file from it. Default.
   inline?: boolean,
 };
 
@@ -45,9 +45,9 @@ export type StaticPublisherConfig = {
   // Set to a directory that acts as the root of all files that will be included in this publish.
   rootDir: string,
 
-  // Set to a non-null string equal to the _name_ of an existing object store to enable "object store" mode for this publish.
+  // Set to a non-null string equal to the _name_ of an existing KV Store to enable "KV Store mode" for this publish.
   // Service ID must also be specified in fastly.toml, or this will be an error.
-  objectStore?: string | false | null,
+  kvStoreName?: string | false | null,
 
   // An array of values used to exclude files and directories (as well as files within those directories) from being
   // included in this publish. Each entry in the array can be a string or a RegExp and will be tested against the relative

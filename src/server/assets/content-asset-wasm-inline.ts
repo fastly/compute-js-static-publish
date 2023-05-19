@@ -9,7 +9,7 @@ import {
   ContentAssetMetadataMapEntryWasmInline,
 } from "../../types/content-assets.js";
 import { ContentCompressionTypes } from "../../constants/compression.js";
-import { InlineStoreEntry } from "../object-store/inline-store-entry.js";
+import { InlineStoreEntry } from "../kv-store/inline-store-entry.js";
 import { ContentAssets, findMatchingSourceAndInfo, SourceAndInfo } from "./content-assets.js";
 
 const decoder = new TextDecoder();

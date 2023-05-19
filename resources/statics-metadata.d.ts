@@ -6,5 +6,5 @@ import type {
   ContentAssetMetadataMap,
 } from "@fastly/compute-js-static-publish";
 
-export declare const objectStoreName: string | null;
+export declare const kvStoreName: string | null;
 export declare const contentAssetMetadataMap: ContentAssetMetadataMap;

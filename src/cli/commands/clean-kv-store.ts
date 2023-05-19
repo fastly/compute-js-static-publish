@@ -3,17 +3,17 @@ import type { CommandLineOptions } from "command-line-args";
 
 import { generateOrLoadPublishId } from "../util/publish-id.js";
 import { loadConfigFile } from "../load-config.js";
-import { getObjectStoreKeys, objectStoreDeleteFile } from "../util/object-store.js";
+import { getKVStoreKeys, kvStoreDeleteFile } from "../util/kv-store.js";
 import { FastlyApiContext, loadApiKey } from "../util/fastly-api.js";
-import { getObjectStoreKeysFromMetadata } from "../../util/metadata.js";
+import { getKVStoreKeysFromMetadata } from "../../util/metadata.js";
 import { ContentAssetMetadataMap } from "../../types/index.js";
 
 type StaticsMetadataModule = {
-  objectStoreName: string | null,
+  kvStoreName: string | null,
   contentAssetMetadataMap: ContentAssetMetadataMap,
 };
 
-export async function cleanObjectStore(commandLineValues: CommandLineOptions) {
+export async function cleanKVStore(commandLineValues: CommandLineOptions) {
 
   const { publishId } = generateOrLoadPublishId();
 
@@ -44,36 +44,36 @@ export async function cleanObjectStore(commandLineValues: CommandLineOptions) {
 
   const staticsMetadata: StaticsMetadataModule = await import(path.resolve('./src/statics-metadata.js'));
 
-  const { objectStoreName, contentAssetMetadataMap } = staticsMetadata;
+  const { kvStoreName, contentAssetMetadataMap } = staticsMetadata;
 
-  if (objectStoreName == null) {
-    console.error("❌ Object store not specified.");
-    console.error("This only has meaning in object store mode.");
+  if (kvStoreName == null) {
+    console.error("❌ KV Store not specified.");
+    console.error("This only has meaning in KV Store mode.");
     process.exitCode = 1;
     return;
   }
 
-  // TODO: Enable getting objectStoreName and publishId from command line
+  // TODO: Enable getting kvStoreName and publishId from command line
 
-  // These are the items that are currently in the object store and that belong to this publish ID.
-  const items = ((await getObjectStoreKeys(fastlyApiContext, objectStoreName)) ?? [])
+  // These are the items that are currently in the KV Store and that belong to this publish ID.
+  const items = ((await getKVStoreKeys(fastlyApiContext, kvStoreName)) ?? [])
     .filter(x => x.startsWith(`${publishId}:`));
 
   // These are the items that are currently are being used.
-  const keys = getObjectStoreKeysFromMetadata(contentAssetMetadataMap);
+  const keys = getKVStoreKeysFromMetadata(contentAssetMetadataMap);
 
   // So these are the items that we should be deleting.
   const itemsToDelete = items.filter(x => !keys.has(x));
 
   console.log("Publish ID: " + publishId);
-  console.log("Object Store contains " + items.length + " item(s) for this publish ID.");
+  console.log("KV Store contains " + items.length + " item(s) for this publish ID.");
   console.log("Current site metadata contains " + keys.size + " item(s) (including compressed alternates).");
 
   console.log("Number of items to delete: " + itemsToDelete.length);
 
   for (const [index, item] of itemsToDelete.entries()) {
     console.log("Deleting item [" + (index+1) + "]: " + item);
-    await objectStoreDeleteFile(fastlyApiContext, objectStoreName, item);
+    await kvStoreDeleteFile(fastlyApiContext, kvStoreName, item);
   }
 
   console.log("✅ Completed.")

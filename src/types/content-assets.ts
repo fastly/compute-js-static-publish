@@ -23,8 +23,8 @@ export type ContentFileInfoForStaticPublishing = ContentFileInfo & {
 
 export type ContentFileInfoForWasmInline = ContentFileInfoForStaticPublishing;
 
-export type ContentFileInfoForObjectStore = ContentFileInfoForStaticPublishing & {
-  objectStoreKey: string,
+export type ContentFileInfoForKVStore = ContentFileInfoForStaticPublishing & {
+  kvStoreKey: string,
 };
 
 export type ContentAssetMetadataMapEntryBase<TFileInfo> = {
@@ -47,15 +47,15 @@ export type ContentAssetMetadataMapEntryWasmInline = {
   type: 'wasm-inline',
 } & ContentAssetMetadataMapEntryBase<ContentFileInfoForWasmInline>;
 
-export type ContentAssetMetadataMapEntryObjectStore = {
-  type: 'object-store',
-} & ContentAssetMetadataMapEntryBase<ContentFileInfoForObjectStore>;
+export type ContentAssetMetadataMapEntryKVStore = {
+  type: 'kv-store',
+} & ContentAssetMetadataMapEntryBase<ContentFileInfoForKVStore>;
 
 export type ContentAssetMetadataMapEntry =
   | ContentAssetMetadataMapEntryBytes
   | ContentAssetMetadataMapEntryString
   | ContentAssetMetadataMapEntryWasmInline
-  | ContentAssetMetadataMapEntryObjectStore;
+  | ContentAssetMetadataMapEntryKVStore;
 
 export type ContentAssetMetadataMap = {
   [assetKey: string]: ContentAssetMetadataMapEntry,

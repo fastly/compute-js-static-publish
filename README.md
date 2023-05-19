@@ -5,7 +5,7 @@ Using a static site generator to build your website? Do you simply need to serve
 ## New! Version 4
 
 Version 4 of this tool has some awesome new features:
-  - Support for serving files from Fastly's [Object Store](#object-store) instead of bundling them into the Wasm module. 
+  - Support for serving files from Fastly's [KV Store](#kv-store) instead of/alongside bundling them into the Wasm module. 
   - Scaffolded applications no longer use a bundler by default (Webpack is optional).
   - Brotli and Gzip compression.
   - Support for returning `304 Not Modified` status based on `If-None-Match` and `If-Modified-Since` request headers.
@@ -63,7 +63,7 @@ Once your application is scaffolded, `@fastly/compute-js-static-publish` integra
 running as part of your build process.
 
 The files you have configured to be included (`--root-dir`) are enumerated and prepared. Their contents are included into
-your Wasm binary (or made available via [Object Store](#object-store), if so configured). This process is called "publishing".
+your Wasm binary (or made available via [KV Store](#kv-store), if so configured). This process is called "publishing".
 
 Once the files are published, they are available to the other source files in the Compute@Edge application. For example,
 the stock application runs the [PublisherServer](#publisherserver) class to serve these files.
@@ -77,11 +77,11 @@ If the files in `--root-dir` have changed, then a new set of files will be publi
 ### Content Compression
 
 During publishing, this tool supports pre-compression of content. By default, your assets are compressed using the Brotli
-and gzip algorithms, and then stored alongside the original files in your Wasm binary (or [Object Store](#object-store)).
+and gzip algorithms, and then stored alongside the original files in your Wasm binary (or [KV Store](#kv-store)).
 
-> Note: By default, pre-compressed content assets are not generated when the Object Store is not used.
+> Note: By default, pre-compressed content assets are not generated when the KV Store is not used.
 This is done to prevent the inclusion multiple of copies of each asset from making the Wasm binary too large.
-If you want to pre-compress assets when not using Object Store, add a value for 'contentCompression' to your
+If you want to pre-compress assets when not using KV Store, add a value for 'contentCompression' to your
 `static-publish.rc.js` file.
 
 ## CLI options
@@ -138,13 +138,13 @@ Note that the files referenced by `--spa` and `--not-found-page` do not necessar
 
 These arguments are used to populate the `fastly.toml` and `package.json` files of your Compute@Edge application.
 
-| Option              | Default                                                          | Description                                                                                                                                                                                                                                         |
-|---------------------|------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `name`              | `name` from `package.json`, or `compute-js-static-site`          | The name of your Compute@Edge application.                                                                                                                                                                                                          |
-| `description`       | `description` from `package.json`, or `Compute@Edge static site` | The description of your Compute@Edge application.                                                                                                                                                                                                   |
-| `author`            | `author` from `package.json`, or `you@example.com`               | The author of your Compute@Edge application.                                                                                                                                                                                                        |
-| `service-id`        | (None)                                                           | The ID of an existing Fastly WASM service for your Compute@Edge application.                                                                                                                                                                        |
-| `object-store-name` | (None)                                                           | The name of an existing [Fastly Object Store](https://developer.fastly.com/learning/concepts/data-stores/#object-stores) to hold the content assets. In addition to already existing, it must be linked to the service specified by `--service-id`. |
+| Option          | Default                                                          | Description                                                                                                                                                                                                                                 |
+|-----------------|------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `name`          | `name` from `package.json`, or `compute-js-static-site`          | The name of your Compute@Edge application.                                                                                                                                                                                                  |
+| `description`   | `description` from `package.json`, or `Compute@Edge static site` | The description of your Compute@Edge application.                                                                                                                                                                                           |
+| `author`        | `author` from `package.json`, or `you@example.com`               | The author of your Compute@Edge application.                                                                                                                                                                                                |
+| `service-id`    | (None)                                                           | The ID of an existing Fastly WASM service for your Compute@Edge application.                                                                                                                                                                |
+| `kv-store-name` | (None)                                                           | The name of an existing [Fastly KV Store](https://developer.fastly.com/learning/concepts/data-stores/#kv-stores) to hold the content assets. In addition to already existing, it must be linked to the service specified by `--service-id`. |
 
 ## Usage with frameworks and static site generators
 
@@ -176,7 +176,7 @@ You may still override any of these options individually.
 This server handles the following automatically:
 
 * Maps the path of your request to a path under `--public-dir` and serves the content of the asset
-* Sources the content from the content packaged in the Wasm binary, or from the [Object Store](#object-store), if configured.
+* Sources the content from the content packaged in the Wasm binary, or from the [KV Store](#kv-store), if configured.
 * Applies long-lived cache headers to files served from `--static-dir` directories. Files under these directories will be cached by the browser for 1 year. (Use versioned or hashed filenames to avoid serving stale assets.)
 * Performs Brotli and gzip compression as requested by the `Accept-Encoding` headers.
 * Provides `Last-Modified` and `ETag` response headers, and uses them with `If-Modified-Since` and `If-None-Match` request headers to produce `304 Not Modified` responses.
@@ -231,58 +231,58 @@ ID of the service. The `fastly compute publish` will deploy to the service ident
 To specify the service at the time you are scaffolding the project (for example, if you are running this tool and deploying
 as part of a CI process), specify the `--service-id` command line argument to populate `fastly.toml` with this value.
 
-## Using the Object Store (BETA) <a name="object-store"></a>
+## Using the KV Store (BETA) <a name="kv-store"></a>
 
-Starting with v4, it's now possible to upload assets to and serve them from a [Fastly Object Store](https://developer.fastly.com/learning/concepts/data-stores/#object-stores).
+Starting with v4, it's now possible to upload assets to and serve them from a [Fastly KV Store](https://developer.fastly.com/learning/concepts/data-stores/#kv-stores).
 
-You can enable the use of Object Store with `@fastly/compute-js-static-publish` as you scaffold your application, or
+You can enable the use of KV Store with `@fastly/compute-js-static-publish` as you scaffold your application, or
 at any later time.
 
-At the time you enable the use of Object Store:
+At the time you enable the use of KV Store:
 
 * Your Fastly service must already exist. See [Associating your project with a Fastly Service](#associating-your-project-with-a-fastly-service) above.
 
-* Your Object Store must already exist under the same Fastly account, and be linked to the service.
-   As of this writing, to create the Object Store you will need to use either the Fastly CLI [fastly object-store create](https://developer.fastly.com/reference/cli/object-store/create/)
-   or the Fastly [Object Store API](https://developer.fastly.com/reference/api/services/resources/object-store/#create-store).
-   Once the Object Store is created, you must be link it to your Fastly service using the [Resource API](https://developer.fastly.com/reference/api/services/resource/#create-resource).
+* Your KV Store must already exist under the same Fastly account, and be linked to the service.
+   As of this writing, to create the KV Store you will need to use either the Fastly CLI [fastly kv-store create](https://developer.fastly.com/reference/cli/kv-store/create/)
+   or the Fastly [KV Store API](https://developer.fastly.com/reference/api/services/resources/kv-store/#create-store).
+   Once the KV Store is created, you must be link it to your Fastly service using the [Resource API](https://developer.fastly.com/reference/api/services/resource/#create-resource).
 
 ```shell
-# Create an object store
-$ curl -i -X POST "https://api.fastly.com/resources/stores/object" -H "Fastly-Key: YOUR_FASTLY_TOKEN" -H "Content-Type: application/json" -H "Accept: application/json" -d '{"name":"example-store"}'
+# Create a KV Store
+$ curl -i -X POST "https://api.fastly.com/resources/stores/kv" -H "Fastly-Key: YOUR_FASTLY_TOKEN" -H "Content-Type: application/json" -H "Accept: application/json" -d '{"name":"example-store"}'
 
-# Link the object store to a service
-$ curl -i -X POST "https://api.fastly.com/service/YOUR_FASTLY_SERVICE_ID/version/YOUR_FASTLY_SERVICE_VERSION/resource" -H "Fastly-Key: YOUR_FASTLY_TOKEN" -H "Content-Type: application/x-www-form-urlencoded" -H "Accept: application/json" -d "name=example-store-service-a&resource_id=YOUR_OBJECT_STORE_ID"
+# Link the KV Store to a service
+$ curl -i -X POST "https://api.fastly.com/service/YOUR_FASTLY_SERVICE_ID/version/YOUR_FASTLY_SERVICE_VERSION/resource" -H "Fastly-Key: YOUR_FASTLY_TOKEN" -H "Content-Type: application/x-www-form-urlencoded" -H "Accept: application/json" -d "name=example-store-service-a&resource_id=YOUR_KV_STORE_ID"
 ```
 
-Once the Object Store is created and linked to your service, add its name to your `static-publish.rc.js`
-file under the `objectStore` key.
+Once the KV Store is created and linked to your service, add its name to your `static-publish.rc.js`
+file under the `kvStoreName` key.
 
-To specify the Object Store at the time you are scaffolding the project (for example, if you are running this tool and
-deploying as part of a CI process), specify the `--service-id` and `--object-store-name` command line arguments to populate
+To specify the KV Store at the time you are scaffolding the project (for example, if you are running this tool and
+deploying as part of a CI process), specify the `--service-id` and `--kv-store-name` command line arguments to populate
 the respective files with these values.
 
 After you have done the above steps, go ahead and build your application as normal. If you use `fastly compute build --verbose`
-(or run `npm run build` directly), you should see output in your logs saying that files are being sent to the Object Store.
+(or run `npm run build` directly), you should see output in your logs saying that files are being sent to the KV Store.
 
-The `statics-metadata.js` file should now show `"type": "object-store"` for content assets.
+The `statics-metadata.js` file should now show `"type": "kv-store"` for content assets.
 Your Wasm binary should also be smaller, as the content of the files are no longer inlined in the build artifact.
-You can deploy this and run it from Fastly, and the referenced files will be served from Object Store.
+You can deploy this and run it from Fastly, and the referenced files will be served from KV Store.
 
-You will also see entries in `fastly.toml` that represent the local object store.
+You will also see entries in `fastly.toml` that represent the local KV Store.
 These enable the site to also run correctly when served using the local development environment. 
 
-### Cleaning unused items from Object Store
+### Cleaning unused items from KV Store
 
-The files that are uploaded to the Object Store are submitted using keys of the following format:
+The files that are uploaded to the KV Store are submitted using keys of the following format:
 
 `<publish-id>:<asset-path>_<alg>_<hash>`
 
 For example:
 `12345abcde67890ABCDE00:/public/index.html_br_aeed29478691e67f6d5s36b4ded20c17e9eae437614617067a8751882368b965`
 
-Using such an object key ensures that whenever the file contents are identical, the same key will be generated.  
-This enables to detect whether an unchanged file already exists in the Object Store, avoiding having to re-submit
+Using such a key ensures that whenever the file contents are identical, the same key will be generated.  
+This enables to detect whether an unchanged file already exists in the KV Store, avoiding having to re-submit
 files that have not changed. If the file contents have changed, then a new hash is generated. This ensures that
 even during the brief amount of time between deploys, any request served by a prior version will still serve the same
 corresponding previous version of the content.
@@ -292,12 +292,12 @@ However, this system never deletes files automatically. After many deployments, 
 `@fastly/compute-js-static-publish` includes a feature to delete these old versions of the files that are no longer being
 used.  To run it, type the following command:
 
-`npx @fastly/compute-js-static-publish --clean-object-store`
+`npx @fastly/compute-js-static-publish --clean-kv-store`
 
-It works by scanning `statics-metadata.js` for all currently-used object store keys. Then it enumerates all the existing
-keys in the configured object store and that belong to this application (can do so by narrowing down all keys to the ones
+It works by scanning `statics-metadata.js` for all currently-used keys. Then it enumerates all the existing
+keys in the configured KV Store and that belong to this application (can do so by narrowing down all keys to the ones
 that begin with the "publish id"). If any of the keys is not in the list of currently-used keys, then a request is made
-to delete that object store entry.
+to delete that KV Store value.
 
 And that's it! It should be possible to run this task to clean up once in a while. 
 
@@ -309,8 +309,8 @@ And that's it! It should be possible to run this task to clean up once in a whil
   except for those that are excluded using some of the following features. Files outside this root cannot be
   included in the publishing.
 
-* `objectStore` - Set this value to the _name_ of an existing object store to enable uploading of content assets
-  to Fastly Object Store. See [Using the Object Store](#using-the-object-store) for more information.
+* `kvStoreName` - Set this value to the _name_ of an existing KV Store to enable uploading of content assets
+  to Fastly KV Store. See [Using the KV Store](#kv-store) for more information.
 
 * `excludeDirs` - Specifies names of files and directories within `rootDir` to exclude from the publishing. Each entry can
   be a string or a JavaScript `RegExp` object.  Every file and directory under `rootDir` is checked against each entry of
@@ -332,19 +332,19 @@ And that's it! It should be possible to run this task to clean up once in a whil
   the [asset key](#asset-keys), as well as its content type (MIME type string). You may return one of three values from
   this function:
   * Boolean `true` - Include the file as a content asset in this publishing. Upload the file to and serve it from the
-    Object Store if Object Store mode is enabled, or include the contents of the file in the Wasm binary if Object Store
+    KV Store if KV Store mode is enabled, or include the contents of the file in the Wasm binary if KV Store
     mode is not enabled.
   * String `"inline"` - Include the file as a content asset in this publishing. Include the contents of the file in the
-    Wasm binary, regardless of whether Object Store mode is enabled.
+    Wasm binary, regardless of whether KV Store mode is enabled.
   * Boolean `false` - Do not include this file as a content asset in this publishing.
 
   If you do not provide a function, then every file will be included in this publishing as a content asset, and their
-  contents will be uploaded to and served from the Object Store if Object Store mode is enabled, or included in the Wasm
-  binary if Object Store mode is not enabled.
+  contents will be uploaded to and served from the KV Store if KV Store mode is enabled, or included in the Wasm
+  binary if KV Store mode is not enabled.
 
 * `contentCompression` - During the publishing, the tool will pre-generate compressed versions of content assets in these
   formats and make them available to the Publisher Server or your application. Default value is [ 'br' | 'gzip' ] if
-  Object Store is enabled, or [] if Object Store is not enabled.
+  KV Store is enabled, or [] if KV Store is not enabled.
 
 * `moduleAssetInclusionTest` - Optionally specify a test function that can be run against each enumerated asset during
   the publishing, to determine whether to include the asset as a module asset. For every file, this function is passed
@@ -426,7 +426,7 @@ binary contents of an asset.
 
   The data of each content asset can exist in one of two stores:
   * Inline Store - this is a data store that exists within the Wasm binary.
-  * Fastly Object Store - Fastly's distributed edge data store. Data can be placed here without impacting the size of
+  * Fastly KV Store - Fastly's distributed edge data store. Data can be placed here without impacting the size of
     your Wasm binary.
 
   Your application can stream the contents of these assets to a visitor, or read from the stream itself and access its
@@ -453,7 +453,7 @@ import { contentAssets } from './statics';
 const asset = contentAssets.getAsset('/public/index.html');
 
 // 'wasm-inline' if object's data is 'inlined' into Wasm binary
-// 'object-store' if object's data exists in Fastly Object Store
+// 'kv-store' if object's data exists in Fastly KV Store
 asset.type;
 
 // Get the "store entry"

@@ -6,7 +6,7 @@
 //
 // statics-metadata.js
 //
-// objectStoreName: string - Name of object store, or null if not used.
+// kvStoreName: string - Name of KV Store, or null if not used.
 // contentAssetMetadataMap: Map<string, ContentAssetMetadataMapEntry> - mapping of asset keys to their metadata
 //   - key: string - assetKey, the filename relative to root dir (e.g., /public/foo/index.html)
 //   - value: ContentAssetMetadataMapEntry - metadata for asset
@@ -20,12 +20,12 @@
 //   - compressedFileInfos: Map<string, FileInfo> - information about any compressed versions
 //     - key: string - compression algorithm name (e.g., "gzip", "br", etc.)
 //     - value: FileInfo - information about the compressed version of the file
-//   - type: string - where the data is available. Usually 'wasm-inline' or 'object-store'.
+//   - type: string - where the data is available. Usually 'wasm-inline' or 'kv-store'.
 // FileInfo structure
 //   - hash: string - SHA-256 hash of file
 //   - size: number - file size in bytes
 //   - staticFilePath: string - path to file in local filesystem, relative to root dir
-//   - objectStoreKey: string - object store key, present only for items in object store
+//   - kvStoreKey: string - KV Store key, present only for items in KV Store
 //
 // statics.js
 // imports statics-metadata.js and adds utilities for working with the content assets, as well as
@@ -69,7 +69,7 @@ import { calculateFileSizeAndHash } from "../util/hash.js";
 import { getFiles } from "../util/files.js";
 import { generateOrLoadPublishId } from "../util/publish-id.js";
 import { FastlyApiContext, loadApiKey } from "../util/fastly-api.js";
-import { objectStoreEntryExists, objectStoreSubmitFile } from "../util/object-store.js";
+import { kvStoreEntryExists, kvStoreSubmitFile } from "../util/kv-store.js";
 import { mergeContentTypes, testFileContentType } from "../../util/content-types.js";
 import { algs } from "../compression/index.js";
 
@@ -92,7 +92,7 @@ import type {
 import type {
   CompressedFileInfos,
   ContentFileInfoForWasmInline,
-  ContentFileInfoForObjectStore,
+  ContentFileInfoForKVStore,
 } from "../../types/content-assets.js";
 
 type AssetInfo =
@@ -116,41 +116,41 @@ type AssetInfo =
     size: number,
   };
 
-type ObjectStoreItemDesc = {
-  objectStoreKey: string,
+type KVStoreItemDesc = {
+  kvStoreKey: string,
   staticFilePath: string,
   text: boolean,
 };
 
-async function uploadFilesToObjectStore(fastlyApiContext: FastlyApiContext, objectStoreName: string, objectStoreItems: ObjectStoreItemDesc[]) {
-  for (const { objectStoreKey, staticFilePath, text } of objectStoreItems) {
-    if (await objectStoreEntryExists(fastlyApiContext, objectStoreName, objectStoreKey)) {
-      // Already exists in Object Store
-      console.log(`✔️ Asset already exists in Object Store with key "${objectStoreKey}".`)
+async function uploadFilesToKVStore(fastlyApiContext: FastlyApiContext, kvStoreName: string, kvStoreItems: KVStoreItemDesc[]) {
+  for (const { kvStoreKey, staticFilePath, text } of kvStoreItems) {
+    if (await kvStoreEntryExists(fastlyApiContext, kvStoreName, kvStoreKey)) {
+      // Already exists in KV Store
+      console.log(`✔️ Asset already exists in KV Store with key "${kvStoreKey}".`)
     } else {
-      // Upload to Object Store
+      // Upload to KV Store
       const fileData = fs.readFileSync(staticFilePath);
-      await objectStoreSubmitFile(fastlyApiContext!, objectStoreName!, objectStoreKey, fileData);
-      console.log(`✔️ Submitted ${text ? 'text' : 'binary'} asset "${staticFilePath}" to Object Store at key "${objectStoreKey}".`)
+      await kvStoreSubmitFile(fastlyApiContext!, kvStoreName!, kvStoreKey, fileData);
+      console.log(`✔️ Submitted ${text ? 'text' : 'binary'} asset "${staticFilePath}" to KV Store with key "${kvStoreKey}".`)
     }
   }
 }
 
-function writeObjectStoreEntriesToFastlyToml(objectStoreName: string, objectStoreItems: ObjectStoreItemDesc[]) {
+function writeKVStoreEntriesToFastlyToml(kvStoreName: string, kvStoreItems: KVStoreItemDesc[]) {
 
   let fastlyToml = fs.readFileSync('./fastly.toml', 'utf-8');
 
   let before: string = '';
   let after: string = '';
 
-  const tableMarker = `[[local_server.object_store.${objectStoreName}]]`;
+  const tableMarker = `[[local_server.kv_stores.${kvStoreName}]]`;
 
   const startPos = fastlyToml.indexOf(tableMarker);
   if (startPos === -1) {
 
-    // Object store decl not in fastly.toml yet
+    // KV Store decl not in fastly.toml yet
 
-    if (fastlyToml.indexOf(objectStoreName) !== -1) {
+    if (fastlyToml.indexOf(kvStoreName) !== -1) {
       // don't do this!
       console.error("Don't do this!");
       throw "No"!
@@ -189,10 +189,10 @@ function writeObjectStoreEntriesToFastlyToml(objectStoreName: string, objectStor
 
   let tablesToml = '';
 
-  for (const {objectStoreKey, staticFilePath} of objectStoreItems) {
+  for (const {kvStoreKey, staticFilePath} of kvStoreItems) {
     // Probably, JSON.stringify is wrong, but it should do its job
     tablesToml += tableMarker + '\n';
-    tablesToml += 'key = ' + JSON.stringify(objectStoreKey) + '\n';
+    tablesToml += 'key = ' + JSON.stringify(kvStoreKey) + '\n';
     tablesToml += 'path = ' + JSON.stringify(path.relative('./', staticFilePath)) + '\n';
     tablesToml += '\n';
   }
@@ -235,9 +235,9 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
 
   console.log(`✔️ Public directory '${publicDirRoot}'.`);
 
-  const objectStoreName = config.objectStore;
+  const kvStoreName = config.kvStoreName;
   let fastlyApiContext: FastlyApiContext | null = null;
-  if (objectStoreName != null) {
+  if (kvStoreName != null) {
     // TODO: load api key from command line
     const apiKeyResult = loadApiKey();
     if (apiKeyResult == null) {
@@ -247,11 +247,11 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
       return;
     }
     fastlyApiContext = { apiToken: apiKeyResult.apiToken };
-    console.log(`✔️ Using Object Store mode, with object store: ${objectStoreName}`);
+    console.log(`✔️ Using KV Store mode, with KV Store: ${kvStoreName}`);
     console.log(`✔️ Fastly API Token: ${fastlyApiContext.apiToken.slice(0, 4)}${'*'.repeat(fastlyApiContext.apiToken.length-4)} from '${apiKeyResult.source}'`);
   } else {
     if (displayFrameworkWarnings) {
-      console.log(`✔️ Not using Object Store mode.`);
+      console.log(`✔️ Not using KV Store mode.`);
     }
   }
 
@@ -357,8 +357,8 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
 
   console.log("🚀 Preparing content assets ...");
 
-  if (objectStoreName == null && configRaw != null && !("contentCompression" in configRaw)) {
-    console.log(`⚠️ Notice: By default, pre-compressed content assets are not generated when object store is not used.`);
+  if (kvStoreName == null && configRaw != null && !("contentCompression" in configRaw)) {
+    console.log(`⚠️ Notice: By default, pre-compressed content assets are not generated when KV Store is not used.`);
     console.log("  If you want to pre-compress assets, add a value for 'contentCompression' to your static-publish.rc.js.");
   }
 
@@ -371,13 +371,13 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
   // Build content assets metadata
   const contentAssetMetadataMap: ContentAssetMetadataMap = {};
 
-  // Object store items to upload
-  const objectStoreItems: ObjectStoreItemDesc[] = [];
+  // KV Store items to upload
+  const kvStoreItems: KVStoreItemDesc[] = [];
 
   let contentItems = 0;
   const counts = {
     inline: 0,
-    objectStore: 0,
+    kvStore: 0,
     excluded: 0,
   }
   for (const assetInfo of assetInfos) {
@@ -412,7 +412,7 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
 
     let metadata: ContentAssetMetadataMapEntry;
 
-    const isInline = objectStoreName == null || assetInfo.inline;
+    const isInline = kvStoreName == null || assetInfo.inline;
 
     const staticContentFilePath = `${staticContentDir}/file${contentItems}.${assetInfo.text ? 'txt' : 'bin'}`;
 
@@ -461,25 +461,25 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
 
       counts.inline++;
     } else {
-      // For object store mode, we don't need to make a copy of the original file
+      // For KV Store mode, we don't need to make a copy of the original file
       const staticFilePath = file;
 
-      // Use the hash as part of the object store key name.  This avoids having to
+      // Use the hash as part of the key name.  This avoids having to
       // re-upload a file if it already exists.
-      const objectStoreKey = `${publishId}:${assetKey}_${hash}`;
+      const kvStoreKey = `${publishId}:${assetKey}_${hash}`;
 
-      objectStoreItems.push({
-        objectStoreKey,
+      kvStoreItems.push({
+        kvStoreKey,
         staticFilePath,
         text,
       });
 
-      const compressedFileInfos: CompressedFileInfos<ContentFileInfoForObjectStore> = {};
+      const compressedFileInfos: CompressedFileInfos<ContentFileInfoForKVStore> = {};
       await prepareCompressedVersions(contentCompression, (alg, staticFilePath, hash, size) => {
-        const objectStoreKey = `${publishId}:${assetKey}_${alg}_${hash}`;
-        compressedFileInfos[alg] = { staticFilePath, objectStoreKey, hash, size };
-        objectStoreItems.push({
-          objectStoreKey,
+        const kvStoreKey = `${publishId}:${assetKey}_${alg}_${hash}`;
+        compressedFileInfos[alg] = { staticFilePath, kvStoreKey, hash, size };
+        kvStoreItems.push({
+          kvStoreKey,
           staticFilePath,
           text,
         });
@@ -487,32 +487,32 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
 
       metadata = {
         ...entryBase,
-        type: 'object-store',
+        type: 'kv-store',
         fileInfo: {
           ...entryBase.fileInfo,
           staticFilePath,
-          objectStoreKey,
+          kvStoreKey,
         },
         compressedFileInfos,
       };
 
-      counts.objectStore++;
+      counts.kvStore++;
     }
 
     contentAssetMetadataMap[assetKey] = metadata;
   }
 
-  if (objectStoreName != null) {
-    await uploadFilesToObjectStore(fastlyApiContext!, objectStoreName, objectStoreItems);
-    writeObjectStoreEntriesToFastlyToml(objectStoreName, objectStoreItems);
+  if (kvStoreName != null) {
+    await uploadFilesToKVStore(fastlyApiContext!, kvStoreName, kvStoreItems);
+    writeKVStoreEntriesToFastlyToml(kvStoreName, kvStoreItems);
   }
 
-  console.log("✅  Prepared " + (counts.inline + counts.objectStore) + " content asset(s):");
+  console.log("✅  Prepared " + (counts.inline + counts.kvStore) + " content asset(s):");
   if (counts.inline > 0) {
     console.log("      " + counts.inline + " inline");
   }
-  if (counts.objectStore > 0) {
-    console.log("      " + counts.objectStore + " object store");
+  if (counts.kvStore > 0) {
+    console.log("      " + counts.kvStore + " KV Store");
   }
 
   // Build statics-metadata.js
@@ -521,7 +521,7 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
  */
 
 `;
-  metadataFileContents += `\nexport const objectStoreName = ${JSON.stringify(objectStoreName)};\n`;
+  metadataFileContents += `\nexport const kvStoreName = ${JSON.stringify(kvStoreName)};\n`;
   metadataFileContents += `\nexport const contentAssetMetadataMap = {\n`;
   for (const [key, value] of Object.entries(contentAssetMetadataMap)) {
     metadataFileContents += `  ${JSON.stringify(key)}: ${JSON.stringify(value)},\n`;
@@ -550,7 +550,7 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
 
   fileContents += 'import { ContentAssets, ModuleAssets, PublisherServer } from "@fastly/compute-js-static-publish";\n\n';
   fileContents += 'import "@fastly/compute-js-static-publish/build/compute-js";\n\n';
-  fileContents += 'import { objectStoreName, contentAssetMetadataMap } from "./statics-metadata";\n';
+  fileContents += 'import { kvStoreName, contentAssetMetadataMap } from "./statics-metadata";\n';
 
   // Add import statements for assets that are modules and that need to be statically imported.
   const staticImportModuleNumbers: Record<string, number> = {};
@@ -662,7 +662,7 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
 
   fileContents += `\nexport const serverConfig = ${JSON.stringify(serverConfig, null, 2)};\n`;
 
-  fileContents += '\nexport const contentAssets = new ContentAssets(contentAssetMetadataMap, {objectStoreName});';
+  fileContents += '\nexport const contentAssets = new ContentAssets(contentAssetMetadataMap, {kvStoreName});';
   fileContents += '\nexport const moduleAssets = new ModuleAssets(moduleAssetsMap);\n';
 
   fileContents += '\nlet server = null;';

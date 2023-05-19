@@ -4,7 +4,7 @@ import commandLineArgs, { OptionDefinition } from "command-line-args";
 
 import { initApp } from "./commands/init-app.js";
 import { buildStaticLoader } from "./commands/build-static.js";
-import { cleanObjectStore } from "./commands/clean-object-store.js";
+import { cleanKVStore } from "./commands/clean-kv-store.js";
 
 const optionDefinitions: OptionDefinition[] = [
   // (optional) Should be one of:
@@ -81,23 +81,23 @@ const optionDefinitions: OptionDefinition[] = [
   // Fastly Service ID to be added to the fastly.toml that is generated.
   { name: 'service-id', type: String },
 
-  // The name of a Fastly Object Store to hold the content assets.
+  // The name of a Fastly KV Store to hold the content assets.
   // It must be linked to the service specified by `--service-id`.
-  { name: 'object-store-name', type: String },
+  { name: 'kv-store-name', type: String },
 
-  // Clean object store mode
-  { name: 'clean-object-store', type: Boolean, },
+  // Clean KV Store mode
+  { name: 'clean-kv-store', type: Boolean, },
 ];
 
 const commandLineValues = commandLineArgs(optionDefinitions);
 
 console.log("Fastly Compute@Edge JavaScript Static Publisher");
 
-let mode: 'init-app' | 'build-static' | 'clean-object-store' = 'init-app';
+let mode: 'init-app' | 'build-static' | 'clean-kv-store' = 'init-app';
 if(commandLineValues['build-static']) {
   mode = 'build-static';
-} else if(commandLineValues['clean-object-store']) {
-  mode = 'clean-object-store';
+} else if(commandLineValues['clean-kv-store']) {
+  mode = 'clean-kv-store';
 }
 
 switch(mode) {
@@ -107,7 +107,7 @@ case 'build-static':
 case 'init-app':
   initApp(commandLineValues);
   break;
-case 'clean-object-store':
-  await cleanObjectStore(commandLineValues);
+case 'clean-kv-store':
+  await cleanKVStore(commandLineValues);
   break;
 }

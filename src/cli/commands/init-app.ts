@@ -25,7 +25,7 @@ const defaultOptions: AppOptions = {
   name: 'compute-js-static-site',
   description: 'Compute@Edge static site',
   serviceId: undefined,
-  objectStoreName: undefined,
+  kvStoreName: undefined,
 };
 
 // Current directory of this program that's running.
@@ -192,11 +192,11 @@ function processCommandLineArgs(commandLineValues: CommandLineOptions): Partial<
     }
   }
 
-  let objectStoreName: string | undefined;
+  let kvStoreName: string | undefined;
   {
-    const objectStoreNameValue = commandLineValues['object-store-name'];
-    if (objectStoreNameValue == null || typeof objectStoreNameValue === 'string') {
-      objectStoreName = objectStoreNameValue;
+    const kvStoreNameValue = commandLineValues['kv-store-name'];
+    if (kvStoreNameValue == null || typeof kvStoreNameValue === 'string') {
+      kvStoreName = kvStoreNameValue;
     }
   }
 
@@ -212,7 +212,7 @@ function processCommandLineArgs(commandLineValues: CommandLineOptions): Partial<
     author,
     description,
     serviceId,
-    objectStoreName,
+    kvStoreName,
   };
 
 }
@@ -312,7 +312,7 @@ export function initApp(commandLineValues: CommandLineOptions) {
     ...options,
     ...(preset != null ? preset.defaultOptions : {}),
     ...pickKeys(['author', 'name', 'description'], (packageJson ?? {}) as PackageJsonAppOptions),
-    ...pickKeys(['rootDir', 'publicDir', 'staticDirs', 'spa', 'notFoundPage', 'autoIndex', 'autoExt', 'author', 'name', 'description', 'serviceId', 'objectStoreName'], commandLineAppOptions),
+    ...pickKeys(['rootDir', 'publicDir', 'staticDirs', 'spa', 'notFoundPage', 'autoIndex', 'autoExt', 'author', 'name', 'description', 'serviceId', 'kvStoreName'], commandLineAppOptions),
   };
 
   if(preset != null) {
@@ -434,7 +434,7 @@ export function initApp(commandLineValues: CommandLineOptions) {
   const name = options.name;
   const description = options.description;
   const fastlyServiceId = options.serviceId;
-  const objectStoreName = options.objectStoreName;
+  const kvStoreName = options.kvStoreName;
 
   function rootRelative(itemPath: string | null | undefined) {
     if (itemPath == null) {
@@ -456,7 +456,7 @@ export function initApp(commandLineValues: CommandLineOptions) {
   console.log('author            :', author);
   console.log('description       :', description);
   console.log('Service ID        :', fastlyServiceId ?? '(None)');
-  console.log('Object Store Name :', objectStoreName ?? '(None)');
+  console.log('KV Store Name     :', kvStoreName ?? '(None)');
   console.log('');
   if (useWebpack) {
     console.log('Creating project with Webpack.');
@@ -600,12 +600,12 @@ ${fastlyServiceId != null ? `service_id = "${fastlyServiceId}"
 /** @type {import('@fastly/compute-js-static-publish').StaticPublisherConfig} */
 const config = {
   rootDir: ${JSON.stringify(rootDirRel)},
-  ${(objectStoreName != null ? 'objectStore: ' + JSON.stringify(objectStoreName) : '// objectStore: false')},
+  ${(kvStoreName != null ? 'kvStoreName: ' + JSON.stringify(kvStoreName) : '// kvStoreName: false')},
   // excludeDirs: [ './node_modules' ],
   // excludeDotFiles: true,
   // includeWellKnown: true,
   // contentAssetInclusionTest: (filename) => true,
-  // contentCompression: [ 'br', 'gzip' ], // For this config value, default is [] if objectStoreName is null. 
+  // contentCompression: [ 'br', 'gzip' ], // For this config value, default is [] if kvStoreName is null. 
   // moduleAssetInclusionTest: (filename) => false,
   // contentTypes: [
   //   { test: /.custom$/, contentType: 'application/x-custom', text: false },

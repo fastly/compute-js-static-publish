@@ -186,7 +186,7 @@ const normalizeConfig = buildNormalizeFunctionForObject<StaticPublisherConfigNor
 
   let {
     rootDir,
-    objectStore,
+    kvStoreName,
     excludeDirs,
     excludeDotFiles,
     includeWellKnown,
@@ -207,15 +207,15 @@ const normalizeConfig = buildNormalizeFunctionForObject<StaticPublisherConfigNor
     }
   }
 
-  if (!isSpecified(config, 'objectStore')) {
-    objectStore = null;
+  if (!isSpecified(config, 'kvStoreName')) {
+    kvStoreName = null;
   } else {
-    if (isStringAndNotEmpty(objectStore) || objectStore === null) {
+    if (isStringAndNotEmpty(kvStoreName) || kvStoreName === null) {
       // ok
-    } else if (objectStore === false) {
-      objectStore = null;
+    } else if (kvStoreName === false) {
+      kvStoreName = null;
     } else {
-      errors.push('objectStore, if specified, must be a non-empty string, false, or null.');
+      errors.push('kvStoreName, if specified, must be a non-empty string, false, or null.');
     }
   }
 
@@ -285,7 +285,7 @@ const normalizeConfig = buildNormalizeFunctionForObject<StaticPublisherConfigNor
   }
 
   if (!isSpecified(config, 'contentCompression')) {
-    if (objectStore != null) {
+    if (kvStoreName != null) {
       contentCompression = ['br', 'gzip'];
     } else {
       contentCompression = [];
@@ -347,7 +347,7 @@ const normalizeConfig = buildNormalizeFunctionForObject<StaticPublisherConfigNor
 
   return {
     rootDir,
-    objectStore,
+    kvStoreName,
     excludeDotFiles,
     includeWellKnown,
     excludeDirs,

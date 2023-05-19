@@ -1,5 +1,5 @@
 import { AssetManager } from "./asset-manager.js";
-import { InlineStoreEntry } from "../object-store/inline-store-entry.js";
+import { InlineStoreEntry } from "../kv-store/inline-store-entry.js";
 
 import type {
   ContentAsset,

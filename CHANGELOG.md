@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+### Changed
+
+- Update to js-compute@2.0.0
+- BREAKING: To correspond with Fastly's finalization of the name of KV Store,
+    all references have been updated to that naming. 
+
 ## [4.2.1] - 2023-05-06
 
 ### Fixed
