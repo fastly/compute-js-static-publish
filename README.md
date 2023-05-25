@@ -2,21 +2,6 @@
 
 Using a static site generator to build your website? Do you simply need to serve some static files? With `compute-js-static-publish`, now you can deploy and serve everything from Fastly's blazing-fast [Compute@Edge](https://developer.fastly.com/learning/compute/).
 
-## New! Version 4
-
-Version 4 of this tool has some awesome new features:
-  - Support for serving files from Fastly's [KV Store](#kv-store) instead of/alongside bundling them into the Wasm module. 
-  - Scaffolded applications no longer use a bundler by default (Webpack is optional).
-  - Brotli and Gzip compression.
-  - Support for returning `304 Not Modified` status based on `If-None-Match` and `If-Modified-Since` request headers.
-  - [`PublisherServer`](#publisherserver) class to map incoming requests to asset paths.
-  - Support for publishing files that won't necessarily be served by `PublisherServer`. File contents are made available to your application–useful, e.g., for reading data written by third-party tools, etc.
-  - Makes content and metadata available to your application, via pre-package path/file.
-  - Support for loading JavaScript files as code into your Compute@Edge application.
-  - Added presets for [Vue](https://vuejs.org/) and [Astro](https://astro.build/).
-
-If you wish to update to this version, you may need to re-scaffold your application, or follow the steps outlined in [MIGRATING.md](./MIGRATING.md).
-
 ## Prerequisites
 
 Node 18 or newer is required during the build step, as we now rely on its `experimental-fetch` feature.
@@ -56,6 +41,20 @@ However, you can modify `/src/index.js` to add your own processing as you need. 
 ```shell
 fastly compute publish
 ```
+
+## Features
+
+- Simple to set up, with a built-in server module.
+- Or, make file contents directly available to your application, so you can write your own server.
+- Content and metadata are available to your application, accessible by files' pre-package file paths.
+- Brotli and Gzip compression.
+- Support for `If-None-Match` and `If-Modified-Since` request headers.
+- Optionally use Webpack as a module bundler.
+- Selectively serve files from Fastly's [KV Store](#kv-store), or embedded into your Wasm module.
+- Supports loading JavaScript files as code into your Compute@Edge application.
+- Presets for several static site generators.
+
+Some of these features are new! If you wish to update to this version, you may need to re-scaffold your application, or follow the steps outlined in [MIGRATING.md](./MIGRATING.md).
 
 ## How does it work? Where are the files?
 
