@@ -492,7 +492,7 @@ export function initApp(commandLineValues: CommandLineOptions) {
       '@fastly/compute-js-static-publish': computeJsStaticPublisherVersion,
     },
     dependencies: {
-      '@fastly/js-compute': '^1.4.0',
+      '@fastly/js-compute': '^2.0.0',
     },
     engines: {
       node: '>=18.0.0',
