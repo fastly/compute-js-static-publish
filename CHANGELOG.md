@@ -199,6 +199,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated generated app's webpack and webpack-cli versions
 - Use atob() and removed dependency on Buffer
 
-[unreleased]: https://github.com/fastly/compute-js-static-publish/compare/v2.4.1...HEAD
-[2.4.1]: https://github.com/fastly/compute-js-static-publish/compare/v2.4.1...v2.4.0
+[unreleased]: https://github.com/fastly/compute-js-static-publish/compare/v5.0.2...HEAD
+[5.0.2]: https://github.com/fastly/compute-js-static-publish/compare/v5.0.1...v5.0.2
+[5.0.1]: https://github.com/fastly/compute-js-static-publish/compare/v5.0.0...v5.0.1
+[5.0.0]: https://github.com/fastly/compute-js-static-publish/compare/v4.2.1...v5.0.0
+[4.2.1]: https://github.com/fastly/compute-js-static-publish/compare/v4.2.0...v4.2.1
+[4.2.0]: https://github.com/fastly/compute-js-static-publish/compare/v4.1.0...v4.2.0
+[4.1.0]: https://github.com/fastly/compute-js-static-publish/compare/v4.0.0...v4.1.0
+[4.0.0]: https://github.com/fastly/compute-js-static-publish/compare/v3.6.0...v4.0.0
+[3.6.0]: https://github.com/fastly/compute-js-static-publish/compare/v3.5.0...v3.6.0
+[3.5.0]: https://github.com/fastly/compute-js-static-publish/compare/v3.4.0...v3.5.0
+[3.4.0]: https://github.com/fastly/compute-js-static-publish/compare/v3.3.0...v3.4.0
+[3.3.0]: https://github.com/fastly/compute-js-static-publish/compare/v3.2.1...v3.3.0
+[3.2.1]: https://github.com/fastly/compute-js-static-publish/compare/v3.2.0...v3.2.1
+[3.2.0]: https://github.com/fastly/compute-js-static-publish/compare/v3.1.0...v3.2.0
+[3.1.0]: https://github.com/fastly/compute-js-static-publish/compare/v3.0.1...v3.1.0
+[3.0.1]: https://github.com/fastly/compute-js-static-publish/compare/v3.0.0...v3.0.1
+[3.0.0]: https://github.com/fastly/compute-js-static-publish/compare/v2.4.2...v3.0.0
+[2.4.2]: https://github.com/fastly/compute-js-static-publish/compare/v2.4.1...v2.4.2
+[2.4.1]: https://github.com/fastly/compute-js-static-publish/compare/v2.4.0...v2.4.1
 [2.4.0]: https://github.com/fastly/compute-js-static-publish/releases/tag/v2.4.0
