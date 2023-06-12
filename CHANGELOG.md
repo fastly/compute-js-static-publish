@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+### Fixed
+
+- Fix: Correct package.json created by init-app to reference fastly/js-compute@2 (#8)
+
 ## [5.0.2] - 2023-05-25
 
 ### Updated
