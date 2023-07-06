@@ -549,8 +549,8 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
 `;
 
   fileContents += 'import { ContentAssets, ModuleAssets, PublisherServer } from "@fastly/compute-js-static-publish";\n\n';
-  fileContents += 'import "@fastly/compute-js-static-publish/build/compute-js";\n\n';
-  fileContents += 'import { kvStoreName, contentAssetMetadataMap } from "./statics-metadata";\n';
+  fileContents += 'import "@fastly/compute-js-static-publish/build/compute-js.js";\n\n';
+  fileContents += 'import { kvStoreName, contentAssetMetadataMap } from "./statics-metadata.js";\n';
 
   // Add import statements for assets that are modules and that need to be statically imported.
   const staticImportModuleNumbers: Record<string, number> = {};

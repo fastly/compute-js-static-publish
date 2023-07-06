@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+### Fixed
+
+- Fix: Specify full path in import directives in generated files to allow use in projects with "type": "module".
+
 ## [5.1.0] - 2023-06-12
 
 ### Fixed
