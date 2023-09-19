@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+### Changed
+
+- Use `@fastly/js-compute@3` for dev
+- Make generated project use `@fastly/js-compute@3`
+
 ## [5.1.2] - 2023-09-19
 
 ### Added
