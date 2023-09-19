@@ -35,6 +35,9 @@
     "command-line-args": "^5.2.1",
     "glob-to-regexp": "^0.4.1"
   },
+  "peerDependencies": {
+    "@fastly/js-compute": "^2.0.0 || ^3.0.0"
+  },
   "devDependencies": {
     "@types/command-line-args": "^5.2.0",
     "@types/glob-to-regexp": "^0.4.1",
