@@ -31,7 +31,6 @@
   },
   "homepage": "https://github.com/fastly/compute-js-static-publish#readme",
   "dependencies": {
-    "@fastly/js-compute": "^2.0.0",
     "command-line-args": "^5.2.1",
     "glob-to-regexp": "^0.4.1"
   },
@@ -39,6 +38,7 @@
     "@fastly/js-compute": "^2.0.0 || ^3.0.0"
   },
   "devDependencies": {
+    "@fastly/js-compute": "^3.0.0",
     "@types/command-line-args": "^5.2.0",
     "@types/glob-to-regexp": "^0.4.1",
     "@types/node": "^18.0.0",
