@@ -6,7 +6,7 @@ export class CreateReactAppPreset implements IPresetBase {
     rootDir: './build',
     staticDirs: [ '[public-dir]/static' ],
     name: 'my-create-react-app',
-    description: 'Compute@Edge static site from create-react-app',
+    description: 'Fastly Compute static site from create-react-app',
   };
 
   check(packageJson: any): boolean {

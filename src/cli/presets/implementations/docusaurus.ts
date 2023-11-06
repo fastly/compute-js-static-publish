@@ -5,7 +5,7 @@ export class DocusaurusPreset implements IPresetBase {
   defaultOptions: Partial<AppOptions> = {
     rootDir: './build',
     name: 'my-docusaurus-app',
-    description: 'Compute@Edge static site from docusaurus',
+    description: 'Fastly Compute static site from docusaurus',
   };
   check() {
     return true;
