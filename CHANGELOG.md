@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+## [5.2.1] - 2023-11-14
+
 ### Updated
 
 - Apply "Compute" branding change.
@@ -224,7 +226,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated generated app's webpack and webpack-cli versions
 - Use atob() and removed dependency on Buffer
 
-[unreleased]: https://github.com/fastly/compute-js-static-publish/compare/v5.2.0...HEAD
+[unreleased]: https://github.com/fastly/compute-js-static-publish/compare/v5.2.1...HEAD
+[5.2.1]: https://github.com/fastly/compute-js-static-publish/compare/v5.2.0...v5.2.1
 [5.2.0]: https://github.com/fastly/compute-js-static-publish/compare/v5.1.2...v5.2.0
 [5.1.2]: https://github.com/fastly/compute-js-static-publish/compare/v5.1.1...v5.1.2
 [5.1.1]: https://github.com/fastly/compute-js-static-publish/compare/v5.1.0...v5.1.1
