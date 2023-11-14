@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+### Updated
+
+- Apply "Compute" branding change.
+
 ## [5.2.0] - 2023-09-19
 
 ### Changed
@@ -99,7 +103,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added support for returning `304 Not Modified` status based on `If-None-Match` and `If-Modified-Since` request headers.
 - A `PublisherServer` class that maps incoming requests to asset paths.
 - Content and metadata available to your application.
-- Load JavaScript module assets as code into your Compute@Edge JavaScript application.
+- Load JavaScript module assets as code into your Compute JavaScript application.
 - `clean-object-store` mode can be used to remove no-longer-used entries from the Object Store.
 - Moved [Migration Guide](./MIGRATING.md) into its own separate file with even more information.
 - Exported `getObjectStoreKeysFromMetadata()` metadata handling utility from main package. 

@@ -91,7 +91,7 @@ const optionDefinitions: OptionDefinition[] = [
 
 const commandLineValues = commandLineArgs(optionDefinitions);
 
-console.log("Fastly Compute@Edge JavaScript Static Publisher");
+console.log("Fastly Compute JavaScript Static Publisher");
 
 let mode: 'init-app' | 'build-static' | 'clean-kv-store' = 'init-app';
 if(commandLineValues['build-static']) {

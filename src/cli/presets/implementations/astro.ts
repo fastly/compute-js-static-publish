@@ -5,7 +5,7 @@ export class AstroPreset implements IPresetBase {
   defaultOptions: Partial<AppOptions> = {
     rootDir: './dist',
     name: 'my-astro-app',
-    description: 'Compute@Edge static site from Astro',
+    description: 'Fastly Compute static site from Astro',
   };
   check(packageJson: any) {
     if(packageJson == null) {

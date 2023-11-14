@@ -5,7 +5,7 @@ export class SvelteKitPreset implements IPresetBase {
   defaultOptions: Partial<AppOptions> = {
     rootDir: './dist',
     name: 'my-sveltekit-app',
-    description: 'Compute@Edge static site from SvelteKit',
+    description: 'Fastly Compute static site from SvelteKit',
   };
   check() {
     return true;

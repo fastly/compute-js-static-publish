@@ -5,7 +5,7 @@ export class VuePreset implements IPresetBase {
   defaultOptions: Partial<AppOptions> = {
     rootDir: './dist',
     name: 'my-vue-app',
-    description: 'Compute@Edge static site from Vue (create-vue)',
+    description: 'Fastly Compute static site from Vue (create-vue)',
   };
   check(packageJson: any) {
     if(packageJson == null) {

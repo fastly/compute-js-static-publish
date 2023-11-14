@@ -5,7 +5,7 @@ export class GatsbyPreset implements IPresetBase {
   defaultOptions: Partial<AppOptions> = {
     rootDir: './public',
     name: 'my-gatsby-app',
-    description: 'Compute@Edge static site from Gatsby',
+    description: 'Fastly Compute static site from Gatsby',
   };
   check() {
     return true;

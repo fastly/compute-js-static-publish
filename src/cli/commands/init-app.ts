@@ -1,9 +1,9 @@
 import { CommandLineOptions } from "command-line-args";
 
-// This program creates a Compute@Edge JavaScript application
+// This program creates a Fastly Compute JavaScript application
 // in a subfolder named compute-js.
 // This project can be served using fastly compute serve
-// or deployed to a Compute@Edge service using fastly compute publish.
+// or deployed to a Compute service using fastly compute publish.
 
 import * as child_process from "child_process";
 import * as path from "path";
@@ -23,7 +23,7 @@ const defaultOptions: AppOptions = {
   autoExt: [ '.html', '.htm' ],
   author: 'you@example.com',
   name: 'compute-js-static-site',
-  description: 'Compute@Edge static site',
+  description: 'Fastly Compute static site',
   serviceId: undefined,
   kvStoreName: undefined,
 };
@@ -463,7 +463,7 @@ export function initApp(commandLineValues: CommandLineOptions) {
     console.log('');
   }
 
-  console.log("Initializing Compute@Edge Application in " + computeJsDir + "...");
+  console.log("Initializing Compute Application in " + computeJsDir + "...");
   fs.mkdirSync(computeJsDir);
   fs.mkdirSync(path.resolve(computeJsDir, './src'));
 
@@ -528,7 +528,7 @@ export function initApp(commandLineValues: CommandLineOptions) {
 
   // language=toml
   const fastlyTomlContent = `\
-# This file describes a Fastly Compute@Edge package. To learn more visit:
+# This file describes a Fastly Compute package. To learn more visit:
 # https://developer.fastly.com/reference/fastly-toml/
 
 authors = [ "${author}" ]
@@ -641,7 +641,7 @@ ${useWebpack ? 'module.exports =' : 'export default'} config;
   const indexJsPath = path.resolve(computeJsDir, './src/index.js');
   fs.copyFileSync(indexJsSrcPath, indexJsPath);
 
-  console.log("🚀 Compute@Edge application created!");
+  console.log("🚀 Compute application created!");
 
   console.log('Installing dependencies...');
   console.log(`npm --prefix ${COMPUTE_JS_DIR} install`);
@@ -649,12 +649,12 @@ ${useWebpack ? 'module.exports =' : 'export default'} config;
   console.log('');
 
   console.log('');
-  console.log('To run your Compute@Edge application locally:');
+  console.log('To run your Compute application locally:');
   console.log('');
   console.log('  cd ' + COMPUTE_JS_DIR);
   console.log('  fastly compute serve');
   console.log('');
-  console.log('To build and deploy to your Compute@Edge service:');
+  console.log('To build and deploy to your Compute service:');
   console.log('');
   console.log('  cd ' + COMPUTE_JS_DIR);
   console.log('  fastly compute publish');

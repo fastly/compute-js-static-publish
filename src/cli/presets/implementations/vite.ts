@@ -5,7 +5,7 @@ export class VitePreset implements IPresetBase {
   defaultOptions: Partial<AppOptions> = {
     rootDir: './dist',
     name: 'my-vite-app',
-    description: 'Compute@Edge static site from Vite',
+    description: 'Fastly Compute static site from Vite',
   };
   check() {
     return true;

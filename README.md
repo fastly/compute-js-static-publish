@@ -1,6 +1,6 @@
-# Static Publisher for JavaScript on Compute@Edge
+# Static Publisher for JavaScript on Fastly Compute
 
-Using a static site generator to build your website? Do you simply need to serve some static files? With `compute-js-static-publish`, now you can deploy and serve everything from Fastly's blazing-fast [Compute@Edge](https://developer.fastly.com/learning/compute/).
+Using a static site generator to build your website? Do you simply need to serve some static files? With `compute-js-static-publish`, now you can deploy and serve everything from Fastly's blazing-fast [Compute](https://developer.fastly.com/learning/compute/).
 
 ## Prerequisites
 
@@ -18,11 +18,11 @@ Assuming the root of your output directory is `./public`,
 npx @fastly/compute-js-static-publish@latest --root-dir=./public
 ```
 
-This will generate a Compute@Edge application at `./compute-js`. It will add a default `./src/index.js` file that instantiates the [`PublisherServer`](#publisherserver) class and runs it to serve the static files from your project.
+This will generate a Compute application at `./compute-js`. It will add a default `./src/index.js` file that instantiates the [`PublisherServer`](#publisherserver) class and runs it to serve the static files from your project.
 
-> This process creates a `./static-publish.rc.js` to hold your configuration. This, as well as the other files created in your new Compute@Edge program at `./compute-js`, can be committed to source control (except for the ones we specify in `.gitignore`!) 
+> This process creates a `./static-publish.rc.js` to hold your configuration. This, as well as the other files created in your new Compute program at `./compute-js`, can be committed to source control (except for the ones we specify in `.gitignore`!) 
 
-Now, each time you build this Compute@Edge project, `compute-js-static-publish` will re-scan your `./public` directory and regenerate `/src/statics-metadata.js` and `/src/statics.js`. These files hold references to your project's public files.
+Now, each time you build this Compute project, `compute-js-static-publish` will re-scan your `./public` directory and regenerate `/src/statics-metadata.js` and `/src/statics.js`. These files hold references to your project's public files.
 
 ### 2. Test your application using [Fastly's local development server](https://developer.fastly.com/learning/compute/testing/#running-a-local-testing-server)
 
@@ -36,7 +36,7 @@ This will serve your application using the default `PublisherServer()`.
 
 However, you can modify `/src/index.js` to add your own processing as you need. This file will not be overwritten after it is created.
 
-### 3. When you're ready to go live, [deploy your Compute@Edge service](https://developer.fastly.com/reference/cli/compute/publish/)
+### 3. When you're ready to go live, [deploy your Compute service](https://developer.fastly.com/reference/cli/compute/publish/)
 
 ```shell
 fastly compute publish
@@ -51,7 +51,7 @@ fastly compute publish
 - Support for `If-None-Match` and `If-Modified-Since` request headers.
 - Optionally use Webpack as a module bundler.
 - Selectively serve files from Fastly's [KV Store](#kv-store), or embedded into your Wasm module.
-- Supports loading JavaScript files as code into your Compute@Edge application.
+- Supports loading JavaScript files as code into your Compute application.
 - Presets for several static site generators.
 
 Some of these features are new! If you wish to update to this version, you may need to re-scaffold your application, or follow the steps outlined in [MIGRATING.md](./MIGRATING.md).
@@ -64,13 +64,13 @@ running as part of your build process.
 The files you have configured to be included (`--root-dir`) are enumerated and prepared. Their contents are included into
 your Wasm binary (or made available via [KV Store](#kv-store), if so configured). This process is called "publishing".
 
-Once the files are published, they are available to the other source files in the Compute@Edge application. For example,
+Once the files are published, they are available to the other source files in the Compute application. For example,
 the stock application runs the [PublisherServer](#publisherserver) class to serve these files.
 
 For more advanced uses, such as accessing the contents of these file in your application, see the
 [Using the packaged objects in your own application](#using-published-assets-in-your-own-application) section below.
 
-Publishing is meant to run each time before building your Compute@Edge application into a Wasm file.
+Publishing is meant to run each time before building your Compute application into a Wasm file.
 If the files in `--root-dir` have changed, then a new set of files will be published.
 
 ### Content Compression
@@ -98,21 +98,21 @@ npx @fastly/compute-js-static-publish \
 
 If you provide options, they override the defaults described below.
 
-Any configuration options will be written to a `static-publish.rc.js` file, and used each time you build your Compute@Edge
+Any configuration options will be written to a `static-publish.rc.js` file, and used each time you build your Compute
 application.
 
-On subsequent builds of your Compute@Edge application, `compute-js-static-publish` will run with a special flag, `build-static`,
+On subsequent builds of your Compute application, `compute-js-static-publish` will run with a special flag, `build-static`,
 reading from stored configuration, then scanning the `--public-dir` directory to recreate `./src/statics.js`.
 
 Any relative file and directory paths passed at the command line are handled as relative to the current directory.
 
 ### Publishing options:
 
-| Option           | Default                 | Description                                                                                                                                                                                                                                                                                              |
-|------------------|-------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `preset`         | (None)                  | Apply default options from a specified preset. See ["Frameworks and Static Site Generators"](#usage-with-frameworks-and-static-site-generators).                                                                                                                                                         |
-| `output`         | `./compute-js`          | The directory in which to create the Compute@Edge application.                                                                                                                                                                                                                                           |
-| `root-dir`       | (None)                  | **Required**. The root of the directory that contains the files to include in the publishing. All files you wish to include must reside under this root.                                                                                                                                                 |
+| Option           | Default                 | Description                                                                                                                                              |
+|------------------|-------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `preset`         | (None)                  | Apply default options from a specified preset. See ["Frameworks and Static Site Generators"](#usage-with-frameworks-and-static-site-generators).         |
+| `output`         | `./compute-js`          | The directory in which to create the Compute application.                                                                                                |
+| `root-dir`       | (None)                  | **Required**. The root of the directory that contains the files to include in the publishing. All files you wish to include must reside under this root. |
 
 ### Server options:
 
@@ -135,15 +135,15 @@ Note that the files referenced by `--spa` and `--not-found-page` do not necessar
 
 ### Fastly service options
 
-These arguments are used to populate the `fastly.toml` and `package.json` files of your Compute@Edge application.
+These arguments are used to populate the `fastly.toml` and `package.json` files of your Compute application.
 
-| Option          | Default                                                          | Description                                                                                                                                                                                                                                 |
-|-----------------|------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `name`          | `name` from `package.json`, or `compute-js-static-site`          | The name of your Compute@Edge application.                                                                                                                                                                                                  |
-| `description`   | `description` from `package.json`, or `Compute@Edge static site` | The description of your Compute@Edge application.                                                                                                                                                                                           |
-| `author`        | `author` from `package.json`, or `you@example.com`               | The author of your Compute@Edge application.                                                                                                                                                                                                |
-| `service-id`    | (None)                                                           | The ID of an existing Fastly WASM service for your Compute@Edge application.                                                                                                                                                                |
-| `kv-store-name` | (None)                                                           | The name of an existing [Fastly KV Store](https://developer.fastly.com/learning/concepts/data-stores/#kv-stores) to hold the content assets. In addition to already existing, it must be linked to the service specified by `--service-id`. |
+| Option          | Default                                                      | Description                                                                                                                                                                                                                                 |
+|-----------------|--------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `name`          | `name` from `package.json`, or `compute-js-static-site`      | The name of your Compute application.                                                                                                                                                                                                       |
+| `description`   | `description` from `package.json`, or `Compute static site`  | The description of your Compute application.                                                                                                                                                                                                |
+| `author`        | `author` from `package.json`, or `you@example.com`           | The author of your Compute application.                                                                                                                                                                                                     |
+| `service-id`    | (None)                                                       | The ID of an existing Fastly WASM service for your Compute application.                                                                                                                                                                     |
+| `kv-store-name` | (None)                                                       | The name of an existing [Fastly KV Store](https://developer.fastly.com/learning/concepts/data-stores/#kv-stores) to hold the content assets. In addition to already existing, it must be linked to the service specified by `--service-id`. |
 
 ## Usage with frameworks and static site generators
 
@@ -164,7 +164,7 @@ These arguments are used to populate the `fastly.toml` and `package.json` files 
 You may still override any of these options individually.
 
 *1 - For Next.js, consider using `@fastly/next-compute-js`, a Next.js server implementation that allows you to run
-   your Next.js application on Compute@Edge.
+   your Next.js application on Compute.
 
 *2 - Astro support does not support SSR.
 
@@ -211,7 +211,7 @@ For `compression`, the following values are allowed:
 
 ## Associating your project with a Fastly Service
 
-The project created by this tool is a Fastly Compute@Edge JavaScript application, complete with a `fastly.toml` file that
+The project created by this tool is a Fastly Compute JavaScript application, complete with a `fastly.toml` file that
 describes your project to the Fastly CLI.
 
 To deploy your project to production, you deploy it to a [Fastly service](https://developer.fastly.com/reference/glossary#term-service)
@@ -222,7 +222,7 @@ you to create a Fastly service in your account for you (afterwards saving the ne
 
 Alternatively, you may deploy to a service that already exists. You can create this service using the
 [Fastly CLI](https://developer.fastly.com/reference/cli/service/create/) or the [Fastly web app](https://manage.fastly.com/).
-Note that since this is a Compute@Edge application, the service must be created as a Wasm service.
+Note that since this is a Compute application, the service must be created as a Wasm service.
 
 Before deploying your application, specify the service by setting the `service_id` value in the `fastly.toml` file to the
 ID of the service. The `fastly compute publish` will deploy to the service identified by this value.
@@ -410,11 +410,11 @@ This process also makes metadata available about each of the files that are incl
 modified date, the file hash, and so on.
 
 The [`PublisherServer` class](#publisherserver) used by the default scaffolded application is a simple application of this content
-and metadata. By importing `./statics.js` into your Compute@Edge application, you can just as easily access this
+and metadata. By importing `./statics.js` into your Compute application, you can just as easily access this
 information about the assets that were included during publishing.
 
 > IMPORTANT: Use a static `import` statement, rather than using `await import()` to load `./statics.js`, in order to
-ensure that its top-level code runs during the initialization phase of your Compute@Edge application. 
+ensure that its top-level code runs during the initialization phase of your Compute application. 
 
 #### Assets
 
@@ -528,9 +528,9 @@ helloModule.hello(); // Will print "Hello, World!"
 #### Metadata
 
 In some use cases, you may have a use case where you need to know about the files that were included during publishing,
-but not in the context of Compute@Edge. (e.g., a tool that runs in Node.js that performs some maintenance task on assets).
+but not in the context of Compute. (e.g., a tool that runs in Node.js that performs some maintenance task on assets).
 
-You cannot import `./statics.js` from a Node.js application, as it holds dependencies on Compute@Edge.
+You cannot import `./statics.js` from a Node.js application, as it holds dependencies on Compute.
 
 Instead, you can import `./statics-metadata.js`, a companion file that is generated in the same directory. This file
 exposes plain JavaScript objects that contain the metadata about your content assets that were included in the final
