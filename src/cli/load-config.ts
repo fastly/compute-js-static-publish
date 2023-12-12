@@ -1,3 +1,4 @@
+import url from "url";
 import path from "path";
 import globToRegExp from 'glob-to-regexp';
 
@@ -363,10 +364,11 @@ export async function loadConfigFile(errors: string[] = []): Promise<{normalized
 
   let raw: any = undefined;
   const staticPublishRcPath = path.resolve('./static-publish.rc.js');
+  const staticPublishRcFileURL = url.pathToFileURL(staticPublishRcPath).toString()
   try {
-    raw = (await import(staticPublishRcPath)).default;
+    raw = (await import(staticPublishRcFileURL)).default;
   } catch {
-    errors.push('Unable to load ' + staticPublishRcPath);
+    errors.push('Unable to load ' + staticPublishRcFileURL);
   }
 
   let normalized: any = undefined;
