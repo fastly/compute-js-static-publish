@@ -397,21 +397,18 @@ export function initApp(commandLineValues: CommandLineOptions) {
   // Static Content Root Dir must be under the current dir
   let staticContentRootDir = options.staticContentRootDir;
   if (staticContentRootDir == null) {
-    staticContentRootDir = path.resolve('./static-publisher');
+    staticContentRootDir = path.resolve(computeJsDir, './static-publisher');
   }
   if (
     staticContentRootDir.includes('//') ||
-    !staticContentRootDir.startsWith(process.cwd())
+    staticContentRootDir === computeJsDir ||
+    !staticContentRootDir.startsWith(computeJsDir)
   ) {
-    console.error(`❌ Specified static content root directory '${staticContentRootDir}' must be a relative path.`);
-    console.error(`  * ${publicDir} must be under ${rootDir}`);
+    console.error(`❌ Specified static content root directory '${staticContentRootDir}' must be under ${computeJsDir}`);
     process.exitCode = 1;
     return;
   }
-  while (staticContentRootDir.endsWith('/')) {
-    staticContentRootDir = staticContentRootDir.slice(0, -1);
-  }
-  staticContentRootDir = path.relative(process.cwd(), staticContentRootDir);
+  staticContentRootDir = './' + path.relative(computeJsDir, staticContentRootDir);
 
   // SPA and Not Found are relative to the asset root dir.
 

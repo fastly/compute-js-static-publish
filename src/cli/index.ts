@@ -32,14 +32,14 @@ const optionDefinitions: OptionDefinition[] = [
   { name: 'root-dir', type: String, },
 
   // The 'public' directory. The Publisher Server will
-  // resolve requests relative to this directory. Specify this as
-  // a relative path from 'root-dir'. Defaults to './'.
+  // resolve requests relative to this directory. If not specified,
+  // defaults to the same value as 'root-dir'. See README for
+  // details.
   { name: 'public-dir', type: String, },
 
   // Directories to specify as containing 'static' files. The
   // Publisher Server will serve files from these directories
-  // with a long TTL. Each entry should be a relative path
-  // from 'public-dir'.
+  // with a long TTL.
   { name: 'static-dir', type: String, multiple: true, },
 
   // The 'static content root directory' where the Static Publisher
@@ -49,17 +49,15 @@ const optionDefinitions: OptionDefinition[] = [
   // Path to a file to be used to serve in a SPA application.
   // The Publisher Server will serve this file with a 200 status code
   // when the request doesn't match a known file, and the accept
-  // header includes text/html.  Specify this as a relative path
-  // from 'root-dir'. You may use the '[public-dir]' token if you wish
-  // to specify this as a relative path from the 'public-dir'.
+  // header includes text/html. You may use the '[public-dir]' token
+  // if you wish to specify this as a relative path from the 'public-dir'.
   { name: 'spa', type: String, },
 
   // Path to a file to be used to serve as a 404 not found page.
   // The Publisher Server will serve this file with a 404 status code
   // when the request doesn't match a known file, and the accept
-  // header includes text/html.  Specify this as a relative path
-  // from 'root-dir'. You may use the '[public-dir]' token if you wish
-  // to specify this as a relative path from the 'public-dir'.
+  // header includes text/html. You may use the '[public-dir]' token
+  // if you wish to specify this as a relative path from the 'public-dir'.
   { name: 'not-found-page', type: String, },
 
   // List of files to automatically use as index, for example, index.html,index.htm
