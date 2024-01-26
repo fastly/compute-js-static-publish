@@ -42,7 +42,9 @@ export async function cleanKVStore(commandLineValues: CommandLineOptions) {
 
   fastlyApiContext = { apiToken: apiKeyResult.apiToken };
 
-  const staticsMetadata: StaticsMetadataModule = await import(path.resolve('./src/statics-metadata.js'));
+  const staticContentRootDir = config.staticContentRootDir;
+
+  const staticsMetadata: StaticsMetadataModule = await import(path.resolve(`${staticContentRootDir}/statics-metadata.js`));
 
   const { kvStoreName, contentAssetMetadataMap } = staticsMetadata;
 
