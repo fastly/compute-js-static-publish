@@ -368,7 +368,7 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
   // Create "static content" dir that will be used to hold a copy of static files.
   // NOTE: This copy is created so that they can be loaded with includeBytes(), which requires
   // all files to be under the Compute project dir.
-  const staticContentDir = staticContentRootDir + '/static-content';
+  const staticContentDir = `${staticContentRootDir}/static-content`;
   fs.rmSync(staticContentDir, { recursive: true, force: true });
   fs.mkdirSync(staticContentDir, { recursive: true });
 
@@ -531,14 +531,14 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
     metadataFileContents += `  ${JSON.stringify(key)}: ${JSON.stringify(value)},\n`;
   }
   metadataFileContents += '};\n';
-  fs.writeFileSync(staticContentRootDir + '/statics-metadata.js', metadataFileContents);
+  fs.writeFileSync(`${staticContentRootDir}/statics-metadata.js`, metadataFileContents);
 
   console.log(`✅  Wrote static file metadata for ${contentItems} file(s).`);
 
   // Copy Types file for static file loader
   try {
     const typesFile = path.resolve(__dirname, '../../../resources/statics-metadata.d.ts');
-    fs.copyFileSync(typesFile, staticContentRootDir + '/statics-metadata.d.ts');
+    fs.copyFileSync(typesFile, `${staticContentRootDir}/statics-metadata.d.ts`);
 
     console.log("✅  Wrote content assets metadata types file statics-metadata.d.ts.");
   } catch {
@@ -677,14 +677,14 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
     '\n  return server;' +
     '\n}\n';
 
-  fs.writeFileSync(staticContentRootDir + '/statics.js', fileContents);
+  fs.writeFileSync(`${staticContentRootDir}/statics.js`, fileContents);
 
   console.log("✅  Wrote static file loader for " + files.length + " file(s).");
 
   // Copy Types file for static file loader
   try {
     const staticsTypeFile = path.resolve(__dirname, '../../../resources/statics.d.ts');
-    fs.copyFileSync(staticsTypeFile, staticContentRootDir + '/statics.d.ts');
+    fs.copyFileSync(staticsTypeFile, `${staticContentRootDir}/statics.d.ts`);
 
     console.log(`✅  Wrote static file loader types file ${staticContentRootDir}/statics.d.ts.`);
   } catch {
