@@ -108,11 +108,12 @@ Any relative file and directory paths passed at the command line are handled as 
 
 ### Publishing options:
 
-| Option           | Default                 | Description                                                                                                                                              |
-|------------------|-------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `preset`         | (None)                  | Apply default options from a specified preset. See ["Frameworks and Static Site Generators"](#usage-with-frameworks-and-static-site-generators).         |
-| `output`         | `./compute-js`          | The directory in which to create the Compute application.                                                                                                |
-| `root-dir`       | (None)                  | **Required**. The root of the directory that contains the files to include in the publishing. All files you wish to include must reside under this root. |
+| Option                    | Default                                  | Description                                                                                                                                              |
+|---------------------------|------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `preset`                  | (None)                                   | Apply default options from a specified preset. See ["Frameworks and Static Site Generators"](#usage-with-frameworks-and-static-site-generators).         |
+| `output`                  | `./compute-js`                           | The directory in which to create the Compute application.                                                                                                |
+| `static-content-root-dir` | (output directory) + `/static-publisher` | The directory under the Compute application where static asset and metadata are written.                                                                 |
+| `root-dir`                | (None)                                   | **Required**. The root of the directory that contains the files to include in the publishing. All files you wish to include must reside under this root. |
 
 ### Server options:
 
@@ -307,6 +308,9 @@ And that's it! It should be possible to run this task to clean up once in a whil
 * `rootDir` - All files under this root directory will be included by default in the publishing,
   except for those that are excluded using some of the following features. Files outside this root cannot be
   included in the publishing.
+
+* `staticContentRootDir` - Static asset loader and metadata files are created under this directory.
+  For legacy compatibility, if not provided, defaults to `'./src'`.
 
 * `kvStoreName` - Set this value to the _name_ of an existing KV Store to enable uploading of content assets
   to Fastly KV Store. See [Using the KV Store](#kv-store) for more information.
