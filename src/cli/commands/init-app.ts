@@ -400,11 +400,14 @@ export function initApp(commandLineValues: CommandLineOptions) {
     staticContentRootDir = path.resolve(computeJsDir, './static-publisher');
   }
   if (
-    staticContentRootDir.includes('//') ||
+    !staticContentRootDir.startsWith(computeJsDir) ||
     staticContentRootDir === computeJsDir ||
-    !staticContentRootDir.startsWith(computeJsDir)
+    staticContentRootDir === path.resolve(computeJsDir, './bin') ||
+    staticContentRootDir === path.resolve(computeJsDir, './pkg') ||
+    staticContentRootDir === path.resolve(computeJsDir, './node_modules')
   ) {
-    console.error(`❌ Specified static content root directory '${staticContentRootDir}' must be under ${computeJsDir}`);
+    console.error(`❌ Specified static content root directory '${staticContentRootDir}' must be under ${computeJsDir}.`);
+    console.error(`  It also must not be bin, pkg, or node_modules.`);
     process.exitCode = 1;
     return;
   }
@@ -499,16 +502,22 @@ export function initApp(commandLineValues: CommandLineOptions) {
 
   const staticContentRootDirFromRoot = staticContentRootDir.slice(1);
 
+  let staticFiles = staticContentRootDirFromRoot;
+  if (staticContentRootDirFromRoot === '/src') {
+    staticFiles = `\
+${staticContentRootDirFromRoot}/statics.js
+${staticContentRootDirFromRoot}/statics.d.ts
+${staticContentRootDirFromRoot}/statics-metadata.js
+${staticContentRootDirFromRoot}/statics-metadata.d.ts
+${staticContentRootDirFromRoot}/static-content`;
+  }
+
   // .gitignore
   const gitIgnoreContent = `\
 /node_modules
 /bin
 /pkg
-${staticContentRootDirFromRoot}/statics.js
-${staticContentRootDirFromRoot}/statics.d.ts
-${staticContentRootDirFromRoot}/statics-metadata.js
-${staticContentRootDirFromRoot}/statics-metadata.d.ts
-${staticContentRootDirFromRoot}/static-content
+${staticFiles}
 `;
   const gitIgnorePath = path.resolve(computeJsDir, '.gitignore');
   fs.writeFileSync(gitIgnorePath, gitIgnoreContent, "utf-8");
