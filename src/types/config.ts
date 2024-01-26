@@ -45,6 +45,10 @@ export type StaticPublisherConfig = {
   // Set to a directory that acts as the root of all files that will be included in this publish.
   rootDir: string,
 
+  // Set to a directory that will hold the static content built by Static Publisher
+  // These files should not be committed to source control. './src' if not specified.
+  staticContentRootDir: string,
+
   // Set to a non-null string equal to the _name_ of an existing KV Store to enable "KV Store mode" for this publish.
   // Service ID must also be specified in fastly.toml, or this will be an error.
   kvStoreName?: string | false | null,

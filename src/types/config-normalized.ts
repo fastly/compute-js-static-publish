@@ -14,6 +14,7 @@ export type ModuleAssetInclusionResultNormalized = {
 
 export type StaticPublisherConfigNormalized = {
   rootDir: string,
+  staticContentRootDir: string,
   kvStoreName: string | null,
   excludeDirs: ExcludeDirTest[],
   excludeDotFiles: boolean,

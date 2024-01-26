@@ -42,6 +42,10 @@ const optionDefinitions: OptionDefinition[] = [
   // from 'public-dir'.
   { name: 'static-dir', type: String, multiple: true, },
 
+  // The 'static content root directory' where the Static Publisher
+  // outputs its metadata files and loaders.
+  { name: 'static-content-root-dir', type: String, },
+
   // Path to a file to be used to serve in a SPA application.
   // The Publisher Server will serve this file with a 200 status code
   // when the request doesn't match a known file, and the accept

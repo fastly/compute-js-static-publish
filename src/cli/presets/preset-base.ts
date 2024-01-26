@@ -2,6 +2,7 @@ export type AppOptions = {
   rootDir: string | undefined,
   publicDir: string | undefined,
   staticDirs: string[],
+  staticContentRootDir: string | undefined,
   spa: string | undefined,
   notFoundPage: string | undefined,
   autoIndex: string[],

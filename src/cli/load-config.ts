@@ -186,6 +186,7 @@ const normalizeConfig = buildNormalizeFunctionForObject<StaticPublisherConfigNor
 
   let {
     rootDir,
+    staticContentRootDir,
     kvStoreName,
     excludeDirs,
     excludeDotFiles,
@@ -204,6 +205,24 @@ const normalizeConfig = buildNormalizeFunctionForObject<StaticPublisherConfigNor
       // ok
     } else {
       errors.push('rootDir must be a non-empty string.');
+    }
+  }
+
+  if (!isSpecified(config, 'staticContentRootDir')) {
+    staticContentRootDir = './src';
+  } else {
+    if (
+      staticContentRootDir.startsWith('./') &&
+      staticContentRootDir !== './' &&
+      !staticContentRootDir.includes('//')
+    ) {
+      // ok
+    } else {
+      errors.push('staticContentRootDir must be a relative subdirectory.');
+    }
+
+    while (staticContentRootDir.endsWith('/')) {
+      staticContentRootDir = staticContentRootDir.slice(0, -1);
     }
   }
 
@@ -347,6 +366,7 @@ const normalizeConfig = buildNormalizeFunctionForObject<StaticPublisherConfigNor
 
   return {
     rootDir,
+    staticContentRootDir,
     kvStoreName,
     excludeDotFiles,
     includeWellKnown,

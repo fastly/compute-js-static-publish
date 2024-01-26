@@ -17,6 +17,7 @@ const defaultOptions: AppOptions = {
   rootDir: undefined,
   publicDir: undefined,
   staticDirs: [],
+  staticContentRootDir: undefined,
   spa: undefined,
   notFoundPage: '[public-dir]/404.html',
   autoIndex: [ 'index.html', 'index.htm' ],
@@ -82,6 +83,17 @@ function processCommandLineArgs(commandLineValues: CommandLineOptions): Partial<
     const asArray = Array.isArray(staticDirsValue) ? staticDirsValue : [ staticDirsValue ];
     if (asArray.every((x: any) => typeof x === 'string')) {
       staticDirs = (asArray as string[]).map(x => path.resolve(x));
+    }
+  }
+
+  let staticContentRootDir: string | undefined;
+  {
+    const staticContentRootDirValue = commandLineValues['static-content-root-dir'];
+    if (staticContentRootDirValue == null || typeof staticContentRootDirValue === 'string') {
+      staticContentRootDir = staticContentRootDirValue;
+    }
+    if (staticContentRootDir != null) {
+      staticContentRootDir = path.resolve(staticContentRootDir);
     }
   }
 
@@ -204,6 +216,7 @@ function processCommandLineArgs(commandLineValues: CommandLineOptions): Partial<
     rootDir,
     publicDir,
     staticDirs,
+    staticContentRootDir,
     spa,
     notFoundPage,
     autoIndex,
@@ -312,7 +325,7 @@ export function initApp(commandLineValues: CommandLineOptions) {
     ...options,
     ...(preset != null ? preset.defaultOptions : {}),
     ...pickKeys(['author', 'name', 'description'], (packageJson ?? {}) as PackageJsonAppOptions),
-    ...pickKeys(['rootDir', 'publicDir', 'staticDirs', 'spa', 'notFoundPage', 'autoIndex', 'autoExt', 'author', 'name', 'description', 'serviceId', 'kvStoreName'], commandLineAppOptions),
+    ...pickKeys(['rootDir', 'publicDir', 'staticDirs', 'staticContentRootDir', 'spa', 'notFoundPage', 'autoIndex', 'autoExt', 'author', 'name', 'description', 'serviceId', 'kvStoreName'], commandLineAppOptions),
   };
 
   if(preset != null) {
@@ -381,6 +394,25 @@ export function initApp(commandLineValues: CommandLineOptions) {
     staticDirs.push(staticDir);
   }
 
+  // Static Content Root Dir must be under the current dir
+  let staticContentRootDir = options.staticContentRootDir;
+  if (staticContentRootDir == null) {
+    staticContentRootDir = path.resolve('./static-publisher');
+  }
+  if (
+    staticContentRootDir.includes('//') ||
+    !staticContentRootDir.startsWith(process.cwd())
+  ) {
+    console.error(`❌ Specified static content root directory '${staticContentRootDir}' must be a relative path.`);
+    console.error(`  * ${publicDir} must be under ${rootDir}`);
+    process.exitCode = 1;
+    return;
+  }
+  while (staticContentRootDir.endsWith('/')) {
+    staticContentRootDir = staticContentRootDir.slice(0, -1);
+  }
+  staticContentRootDir = path.relative(process.cwd(), staticContentRootDir);
+
   // SPA and Not Found are relative to the asset root dir.
 
   const SPA = options.spa;
@@ -445,18 +477,19 @@ export function initApp(commandLineValues: CommandLineOptions) {
   }
 
   console.log('');
-  console.log('Asset Root Dir    :', rootRelative(rootDir));
-  console.log('Public Dir        :', rootRelative(publicDir));
-  console.log('Static Dir        :', staticDirs.length > 0 ? staticDirs.map(rootRelative) : '(None)');
-  console.log('SPA               :', rootRelative(spaFilename) ?? '(None)');
-  console.log('404 Page          :', rootRelative(notFoundPageFilename) ?? '(None)');
-  console.log('Auto-Index        :', autoIndex.length > 0 ? autoIndex.map(rootRelative) : '(None)')
-  console.log('Auto-Ext          :', autoExt.length > 0 ? autoExt.map(rootRelative) : '(None)')
-  console.log('name              :', name);
-  console.log('author            :', author);
-  console.log('description       :', description);
-  console.log('Service ID        :', fastlyServiceId ?? '(None)');
-  console.log('KV Store Name     :', kvStoreName ?? '(None)');
+  console.log('Asset Root Dir          :', rootRelative(rootDir));
+  console.log('Public Dir              :', rootRelative(publicDir));
+  console.log('Static Dir              :', staticDirs.length > 0 ? staticDirs.map(rootRelative) : '(None)');
+  console.log('Static Content Root Dir :', staticContentRootDir);
+  console.log('SPA                     :', rootRelative(spaFilename) ?? '(None)');
+  console.log('404 Page                :', rootRelative(notFoundPageFilename) ?? '(None)');
+  console.log('Auto-Index              :', autoIndex.length > 0 ? autoIndex.map(rootRelative) : '(None)')
+  console.log('Auto-Ext                :', autoExt.length > 0 ? autoExt.map(rootRelative) : '(None)')
+  console.log('name                    :', name);
+  console.log('author                  :', author);
+  console.log('description             :', description);
+  console.log('Service ID              :', fastlyServiceId ?? '(None)');
+  console.log('KV Store Name           :', kvStoreName ?? '(None)');
   console.log('');
   if (useWebpack) {
     console.log('Creating project with Webpack.');
@@ -467,16 +500,18 @@ export function initApp(commandLineValues: CommandLineOptions) {
   fs.mkdirSync(computeJsDir);
   fs.mkdirSync(path.resolve(computeJsDir, './src'));
 
+  const staticContentRootDirFromRoot = staticContentRootDir.slice(1);
+
   // .gitignore
   const gitIgnoreContent = `\
 /node_modules
 /bin
 /pkg
-/src/statics.js
-/src/statics.d.ts
-/src/statics-metadata.js
-/src/statics-metadata.d.ts
-/src/static-content
+${staticContentRootDirFromRoot}/statics.js
+${staticContentRootDirFromRoot}/statics.d.ts
+${staticContentRootDirFromRoot}/statics-metadata.js
+${staticContentRootDirFromRoot}/statics-metadata.d.ts
+${staticContentRootDirFromRoot}/static-content
 `;
   const gitIgnorePath = path.resolve(computeJsDir, '.gitignore');
   fs.writeFileSync(gitIgnorePath, gitIgnoreContent, "utf-8");
@@ -600,6 +635,7 @@ ${fastlyServiceId != null ? `service_id = "${fastlyServiceId}"
 /** @type {import('@fastly/compute-js-static-publish').StaticPublisherConfig} */
 const config = {
   rootDir: ${JSON.stringify(rootDirRel)},
+  staticContentRootDir: ${JSON.stringify(staticContentRootDir)},
   ${(kvStoreName != null ? 'kvStoreName: ' + JSON.stringify(kvStoreName) : '// kvStoreName: false')},
   // excludeDirs: [ './node_modules' ],
   // excludeDotFiles: true,
@@ -637,9 +673,29 @@ ${useWebpack ? 'module.exports =' : 'export default'} config;
   }
 
   // src/index.js
-  const indexJsSrcPath = path.resolve(__dirname, '../../../resources/index.js');
+  const staticsRelativePath = path.relative('./src', staticContentRootDir);
+  const indexJsContent = /* language=JavaScript */ `\
+/// <reference types="@fastly/js-compute" />
+import { getServer } from '${staticsRelativePath}/statics.js';
+const staticContentServer = getServer();
+
+// eslint-disable-next-line no-restricted-globals
+addEventListener("fetch", (event) => event.respondWith(handleRequest(event)));
+async function handleRequest(event) {
+
+  const response = await staticContentServer.serveRequest(event.request);
+  if (response != null) {
+    return response;
+  }
+
+  // Do custom things here!
+  // Handle API requests, serve non-static responses, etc.
+
+  return new Response('Not found', { status: 404 });
+}
+`;
   const indexJsPath = path.resolve(computeJsDir, './src/index.js');
-  fs.copyFileSync(indexJsSrcPath, indexJsPath);
+  fs.writeFileSync(indexJsPath, indexJsContent, 'utf-8');
 
   console.log("🚀 Compute application created!");
 

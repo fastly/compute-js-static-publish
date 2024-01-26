@@ -362,9 +362,13 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
     console.log("  If you want to pre-compress assets, add a value for 'contentCompression' to your static-publish.rc.js.");
   }
 
+  // The Static Content Root Dir, which will hold the loaders and a copy of static files.
+  const staticContentRootDir = config.staticContentRootDir;
+
   // Create "static content" dir that will be used to hold a copy of static files.
-  // NOTE: this is needed because includeBytes doesn't seem to be able to traverse up to parent dir of the Compute project.
-  const staticContentDir = './src/static-content';
+  // NOTE: This copy is created so that they can be loaded with includeBytes(), which requires
+  // all files to be under the Compute project dir.
+  const staticContentDir = staticContentRootDir + '/static-content';
   fs.rmSync(staticContentDir, { recursive: true, force: true });
   fs.mkdirSync(staticContentDir, { recursive: true });
 
@@ -527,14 +531,14 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
     metadataFileContents += `  ${JSON.stringify(key)}: ${JSON.stringify(value)},\n`;
   }
   metadataFileContents += '};\n';
-  fs.writeFileSync('./src/statics-metadata.js', metadataFileContents);
+  fs.writeFileSync(staticContentRootDir + '/statics-metadata.js', metadataFileContents);
 
   console.log(`✅  Wrote static file metadata for ${contentItems} file(s).`);
 
   // Copy Types file for static file loader
   try {
     const typesFile = path.resolve(__dirname, '../../../resources/statics-metadata.d.ts');
-    fs.copyFileSync(typesFile, './src/statics-metadata.d.ts');
+    fs.copyFileSync(typesFile, staticContentRootDir + '/statics-metadata.d.ts');
 
     console.log("✅  Wrote content assets metadata types file statics-metadata.d.ts.");
   } catch {
@@ -560,9 +564,9 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
       staticImportModuleNumber++;
       staticImportModuleNumbers[assetInfo.assetKey] = staticImportModuleNumber;
 
-      // static-content lives in the src dir, so the import must be declared as
+      // static-content lives in the staticContentRootDir dir, so the import must be declared as
       // relative to that file.
-      const relativeFilePath = path.relative('./src', assetInfo.file);
+      const relativeFilePath = path.relative(staticContentRootDir, assetInfo.file);
       fileContents += `import * as fileModule${staticImportModuleNumber} from "${relativeFilePath}";\n`;
     }
   }
@@ -585,9 +589,9 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
       loadModuleFunction = `() => Promise.resolve(fileModule${moduleNumber})`;
       module = `fileModule${moduleNumber}`;
     } else {
-      // static-content lives in the src dir, so the import must be declared as
+      // static-content lives in the staticContentRootDir dir, so the import must be declared as
       // relative to that file.
-      const relativeFilePath = path.relative('./src', assetInfo.file);
+      const relativeFilePath = path.relative(staticContentRootDir, assetInfo.file);
       loadModuleFunction = `() => import("${relativeFilePath}")`;
       module = 'null';
     }
@@ -673,18 +677,18 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
     '\n  return server;' +
     '\n}\n';
 
-  fs.writeFileSync('./src/statics.js', fileContents);
+  fs.writeFileSync(staticContentRootDir + '/statics.js', fileContents);
 
   console.log("✅  Wrote static file loader for " + files.length + " file(s).");
 
   // Copy Types file for static file loader
   try {
     const staticsTypeFile = path.resolve(__dirname, '../../../resources/statics.d.ts');
-    fs.copyFileSync(staticsTypeFile, './src/statics.d.ts');
+    fs.copyFileSync(staticsTypeFile, staticContentRootDir + '/statics.d.ts');
 
-    console.log("✅  Wrote static file loader types file statics.d.ts.");
+    console.log(`✅  Wrote static file loader types file ${staticContentRootDir}/statics.d.ts.`);
   } catch {
-    console.log("⚠️ Notice: could not write static file loader types file statics.d.ts.");
+    console.log(`⚠️ Notice: could not write static file loader types file ${staticContentRootDir}/statics.d.ts.`);
   }
 
 }
