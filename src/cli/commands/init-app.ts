@@ -679,7 +679,9 @@ ${useWebpack ? 'module.exports =' : 'export default'} config;
   }
 
   // src/index.js
-  const staticsRelativePath = path.relative('./src', staticContentRootDir);
+  const staticsRelativePath = staticContentRootDir !== './src' ?
+    path.relative('./src', staticContentRootDir) :
+    '.';
   const indexJsContent = /* language=JavaScript */ `\
 /// <reference types="@fastly/js-compute" />
 import { getServer } from '${staticsRelativePath}/statics.js';
