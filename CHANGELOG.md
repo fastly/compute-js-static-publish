@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+### Updated
+
+- Add "static content root dir" to cleanly separate generated files
+
 ## [5.2.1] - 2023-11-14
 
 ### Updated
