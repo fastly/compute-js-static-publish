@@ -27,7 +27,7 @@ function requestAcceptsTextHtml(req: Request) {
 type AssetInit = {
   status?: number,
   headers?: Record<string, string>,
-  cache?: 'extended' | 'never' | null,
+  cache?: 'extended' | 'never' | null | string,
 };
 
 export class PublisherServer {
@@ -238,6 +238,8 @@ export class PublisherServer {
       case 'never':
         cacheControlValue = 'no-store';
         break;
+      default:
+        cacheControlValue = init.cache;
       }
       headers['Cache-Control'] = cacheControlValue;
     }
@@ -264,7 +266,7 @@ export class PublisherServer {
     });
   }
 
-  async serveRequest(request: Request): Promise<Response | null> {
+  async serveRequest(request: Request, cache: string): Promise<Response | null> {
 
     // Only handle GET and HEAD
     if (request.method !== 'GET' && request.method !== 'HEAD') {
@@ -274,10 +276,12 @@ export class PublisherServer {
     const url = new URL(request.url);
     const pathname = url.pathname;
 
+    const doCache = cache || (this.testExtendedCache(pathname) ? 'extended' : null);
+
     const asset = this.getMatchingAsset(pathname);
     if (asset != null) {
       return this.serveAsset(request, asset, {
-        cache: this.testExtendedCache(pathname) ? 'extended' : null,
+        cache: doCache,
       });
     }
 
