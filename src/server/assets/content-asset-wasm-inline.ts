@@ -67,6 +67,11 @@ export class ContentWasmInlineAsset implements ContentAsset {
     return decoder.decode(this.sourceAndInfo.source);
   }
 
+  getJson<T = unknown>(): T {
+    const text = this.getText();
+    return JSON.parse(text) as T;
+  }
+
   getMetadata(): ContentAssetMetadataMapEntry {
     return this.metadata;
   }

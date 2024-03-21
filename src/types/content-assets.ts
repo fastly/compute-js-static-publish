@@ -69,4 +69,5 @@ export interface ContentAsset {
   getStoreEntry(acceptEncodingsGroups?: ContentCompressionTypes[][]): Promise<StoreEntry>;
   getBytes(): Uint8Array;
   getText(): string;
+  getJson<T = unknown>(): T;
 }

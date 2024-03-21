@@ -86,6 +86,10 @@ export class ContentKVStoreAsset implements ContentAsset {
     throw new Error("Can't getText() for KV Store asset");
   }
 
+  getJson<T = unknown>(): T {
+    throw new Error("Can't getJson() for KV Store asset");
+  }
+
   getMetadata(): ContentAssetMetadataMapEntry {
     return this.metadata;
   }
