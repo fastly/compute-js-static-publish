@@ -290,7 +290,9 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
 
   // And then we apply assetInclusionTest.
   const assetInfos: AssetInfo[] = files.map(file => {
-    const assetKey = file.slice(publicDirRoot.length);
+    const assetKey = file.slice(publicDirRoot.length)
+      // in Windows, assetKey will otherwise end up as \path\file.html
+      .replace(/\\/g, '/');
 
     let contentTypeTestResult = testFileContentType(finalContentTypes, assetKey);
 
