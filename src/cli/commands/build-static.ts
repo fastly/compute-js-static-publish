@@ -122,18 +122,39 @@ type KVStoreItemDesc = {
   text: boolean,
 };
 
+function chunks(arr, size) {
+  const output = [];
+  for (let i = 0; i < arr.length; i += size) {
+    output.push(arr.slice(i, i + size));
+  }
+  return output;
+}
+
 async function uploadFilesToKVStore(fastlyApiContext: FastlyApiContext, kvStoreName: string, kvStoreItems: KVStoreItemDesc[]) {
-  return Promise.all(kvStoreItems.map(async ({ kvStoreKey, staticFilePath, text }) => {
-    if (await kvStoreEntryExists(fastlyApiContext, kvStoreName, kvStoreKey)) {
-      // Already exists in KV Store
-      console.log(`✔️ Asset already exists in KV Store with key "${kvStoreKey}".`)
-    } else {
-      // Upload to KV Store
-      const fileData = fs.readFileSync(staticFilePath);
-      await kvStoreSubmitFile(fastlyApiContext!, kvStoreName!, kvStoreKey, fileData);
-      console.log(`✔️ Submitted ${text ? 'text' : 'binary'} asset "${staticFilePath}" to KV Store with key "${kvStoreKey}".`)
-    }
-  }))
+  for (const chunk of chunks(kvStoreItems, 100)) {
+    await Promise.all(chunk.map(async ({ kvStoreKey, staticFilePath, text }) => {
+      if (await kvStoreEntryExists(fastlyApiContext, kvStoreName, kvStoreKey)) {
+          // Already exists in KV Store
+          console.log(`✔️ Asset already exists in KV Store with key "${kvStoreKey}".`);
+      } else {
+        // Upload to KV Store
+        const fileData = await fs.openAsBlob(staticFilePath);
+
+        const maxRetries = 5;
+        let uploadFile = Promise.reject();
+        for (let i = 0; i < maxRetries; i++) {
+          uploadFile = uploadFile.catch(() => kvStoreSubmitFile(fastlyApiContext, kvStoreName, kvStoreKey, fileData)).catch(reason => {
+            return new Promise(function (_, reject) {
+              setTimeout(() => reject(reason), 500)
+            })
+          })
+        }
+
+        await uploadFile
+        console.log(`✔️ Submitted ${text ? 'text' : 'binary'} asset "${staticFilePath}" to KV Store with key "${kvStoreKey}".`);
+      }
+    }))
+  }
 }
 
 function writeKVStoreEntriesToFastlyToml(kvStoreName: string, kvStoreItems: KVStoreItemDesc[]) {
