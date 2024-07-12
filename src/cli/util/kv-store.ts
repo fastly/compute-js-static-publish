@@ -122,11 +122,19 @@ export async function kvStoreEntryExists(fastlyApiContext: FastlyApiContext, kvS
   }
 
   const endpoint = `/resources/stores/kv/${encodeURIComponent(kvStoreId)}/keys/${encodeURIComponent(key)}`;
-
-  const response = await callFastlyApi(fastlyApiContext, endpoint, null, { method: 'HEAD' });
-
+  const maxRetries = 5;
+  let response = Promise.reject();
+  for (let i = 0; i < maxRetries; i++) {
+    response = response.catch(() => {
+      return callFastlyApi(fastlyApiContext, endpoint, null, { method: 'HEAD' })
+    }).catch(reason => {
+      return new Promise(function (_, reject) {
+        setTimeout(() => reject(reason), 500)
+      })
+    })
+  }
+  response = await response
   return response.status === 200;
-
 }
 
 const encoder = new TextEncoder();
