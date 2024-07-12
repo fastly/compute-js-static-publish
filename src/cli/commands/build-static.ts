@@ -133,7 +133,7 @@ async function uploadFilesToKVStore(fastlyApiContext: FastlyApiContext, kvStoreN
       await kvStoreSubmitFile(fastlyApiContext!, kvStoreName!, kvStoreKey, fileData);
       console.log(`✔️ Submitted ${text ? 'text' : 'binary'} asset "${staticFilePath}" to KV Store with key "${kvStoreKey}".`)
     }
-  })
+  }))
 }
 
 function writeKVStoreEntriesToFastlyToml(kvStoreName: string, kvStoreItems: KVStoreItemDesc[]) {
