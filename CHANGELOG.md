@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+### Fixed
+
+- fix: Windows compatibility issues (JohanLi)
+- fix: allow for dots in KV Store name (NeilHanlon)
+
 ## [6.1.0] - 2024-03-22
 
 ### Added
