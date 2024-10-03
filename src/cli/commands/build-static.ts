@@ -143,6 +143,8 @@ function writeKVStoreEntriesToFastlyToml(kvStoreName: string, kvStoreItems: KVSt
   let before: string = '';
   let after: string = '';
 
+  kvStoreName = kvStoreName.includes(".") ? `"${kvStoreName}"` : kvStoreName;
+
   const tableMarker = `[[local_server.kv_stores.${kvStoreName}]]`;
 
   const startPos = fastlyToml.indexOf(tableMarker);
@@ -152,7 +154,8 @@ function writeKVStoreEntriesToFastlyToml(kvStoreName: string, kvStoreItems: KVSt
 
     if (fastlyToml.indexOf(kvStoreName) !== -1) {
       // don't do this!
-      console.error("Don't do this!");
+      console.error("improperly configured entry for '${kvStoreName}' in fastly.toml");
+      // TODO: handle thrown exception from callers
       throw "No"!
     }
 
