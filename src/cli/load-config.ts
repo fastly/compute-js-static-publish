@@ -384,7 +384,7 @@ export async function loadConfigFile(errors: string[] = []): Promise<{normalized
 
   let raw: any = undefined;
   const staticPublishRcPath = path.resolve('./static-publish.rc.js');
-  const staticPublishRcFileURL = url.pathToFileURL(staticPublishRcPath).toString()
+  const staticPublishRcFileURL = String(url.pathToFileURL(staticPublishRcPath));
   try {
     raw = (await import(staticPublishRcFileURL)).default;
   } catch {
