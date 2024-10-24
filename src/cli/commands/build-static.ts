@@ -245,7 +245,7 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
     const apiKeyResult = loadApiKey();
     if (apiKeyResult == null) {
       console.error("❌ Fastly API Token not provided.");
-      console.error("Specify one on the command line, or use the FASTLY_API_TOKEN environment variable.");
+      console.error("Set the FASTLY_API_TOKEN environment variable to an API token that has write access to the KV Store.");
       process.exitCode = 1;
       return;
     }
