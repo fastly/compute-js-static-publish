@@ -108,25 +108,25 @@ Any relative file and directory paths passed at the command line are handled as 
 
 ### Publishing options:
 
-| Option                    | Default                                  | Description                                                                                                                                              |
-|---------------------------|------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `preset`                  | (None)                                   | Apply default options from a specified preset. See ["Frameworks and Static Site Generators"](#usage-with-frameworks-and-static-site-generators).         |
-| `output`                  | `./compute-js`                           | The directory in which to create the Compute application.                                                                                                |
-| `static-content-root-dir` | (output directory) + `/static-publisher` | The directory under the Compute application where static asset and metadata are written.                                                                 |
-| `root-dir`                | (None)                                   | **Required**. The root of the directory that contains the files to include in the publishing. All files you wish to include must reside under this root. |
+| Option                      | Default                                  | Description                                                                                                                                              |
+|-----------------------------|------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `--preset`                  | (None)                                   | Apply default options from a specified preset. See ["Frameworks and Static Site Generators"](#usage-with-frameworks-and-static-site-generators).         |
+| `--output`                  | `./compute-js`                           | The directory in which to create the Compute application.                                                                                                |
+| `--static-content-root-dir` | (output directory) + `/static-publisher` | The directory under the Compute application where static asset and metadata are written.                                                                 |
+| `--root-dir`                | (None)                                   | **Required**. The root of the directory that contains the files to include in the publishing. All files you wish to include must reside under this root. |
 
 ### Server options:
 
 Used to populate the `server` key under `static-publish.rc.js`. 
 
-| Option           | Default                 | Description                                                                                                                                                                                              |
-|------------------|-------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `public-dir`     | <root-dir>              | The directory that contains your website's public files.                                                                                                                                                 |
-| `static-dir`     | (None)                  | Any directories under `--public-dir` that contain the website's static assets that will be served with a very long TTL. You can specify as many such directories as you wish, by listing multiple items. |
-| `auto-ext`       | `.html,.htm`            | Specify automatic file extensions.                                                                                                                                                                       |
-| `auto-index`     | `index.html,index.htm`  | Specify filenames for automatically serving an index file.                                                                                                                                               |
-| `spa`            | (None)                  | Path to a fallback file for SPA applications.                                                                                                                                                            |
-| `not-found-page` | `<public-dir>/404.html` | Path to a fallback file for 404 Not Found.                                                                                                                                                               |
+| Option             | Default                 | Description                                                                                                                                                                                              |
+|--------------------|-------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `--public-dir`     | <root-dir>              | The directory that contains your website's public files.                                                                                                                                                 |
+| `--static-dir`     | (None)                  | Any directories under `--public-dir` that contain the website's static assets that will be served with a very long TTL. You can specify as many such directories as you wish, by listing multiple items. |
+| `--auto-ext`       | `.html,.htm`            | Specify automatic file extensions.                                                                                                                                                                       |
+| `--auto-index`     | `index.html,index.htm`  | Specify filenames for automatically serving an index file.                                                                                                                                               |
+| `--spa`            | (None)                  | Path to a fallback file for SPA applications.                                                                                                                                                            |
+| `--not-found-page` | `<public-dir>/404.html` | Path to a fallback file for 404 Not Found.                                                                                                                                                               |
 
 See [PublisherServer](#publisherserver) for more information about these features.
 
@@ -138,13 +138,13 @@ Note that the files referenced by `--spa` and `--not-found-page` do not necessar
 
 These arguments are used to populate the `fastly.toml` and `package.json` files of your Compute application.
 
-| Option          | Default                                                      | Description                                                                                                                                                                                                                                 |
-|-----------------|--------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `name`          | `name` from `package.json`, or `compute-js-static-site`      | The name of your Compute application.                                                                                                                                                                                                       |
-| `description`   | `description` from `package.json`, or `Compute static site`  | The description of your Compute application.                                                                                                                                                                                                |
-| `author`        | `author` from `package.json`, or `you@example.com`           | The author of your Compute application.                                                                                                                                                                                                     |
-| `service-id`    | (None)                                                       | The ID of an existing Fastly WASM service for your Compute application.                                                                                                                                                                     |
-| `kv-store-name` | (None)                                                       | The name of an existing [Fastly KV Store](https://developer.fastly.com/learning/concepts/data-stores/#kv-stores) to hold the content assets. In addition to already existing, it must be linked to the service specified by `--service-id`. |
+| Option            | Default                                                      | Description                                                                                                                                                                                                                                 |
+|-------------------|--------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `--name`          | `name` from `package.json`, or `compute-js-static-site`      | The name of your Compute application.                                                                                                                                                                                                       |
+| `--description`   | `description` from `package.json`, or `Compute static site`  | The description of your Compute application.                                                                                                                                                                                                |
+| `--author`        | `author` from `package.json`, or `you@example.com`           | The author of your Compute application.                                                                                                                                                                                                     |
+| `--service-id`    | (None)                                                       | The ID of an existing Fastly WASM service for your Compute application.                                                                                                                                                                     |
+| `--kv-store-name` | (None)                                                       | The name of an existing [Fastly KV Store](https://developer.fastly.com/learning/concepts/data-stores/#kv-stores) to hold the content assets. In addition to already existing, it must be linked to the service specified by `--service-id`. |
 
 ## Usage with frameworks and static site generators
 
