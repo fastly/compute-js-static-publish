@@ -235,6 +235,10 @@ as part of a CI process), specify the `--service-id` command line argument to po
 
 Starting with v4, it's now possible to upload assets to and serve them from a [Fastly KV Store](https://developer.fastly.com/learning/concepts/data-stores/#kv-stores).
 
+When this mode is enabled, you build your application as normal, and as a step during the build, your files
+are uploaded to the Fastly KV Store, and metadata in the application is marked to source them from there instead
+of from bytes in the Wasm binary.
+
 You can enable the use of KV Store with `@fastly/compute-js-static-publish` as you scaffold your application, or
 at any later time.
 
@@ -245,25 +249,33 @@ At the time you enable the use of KV Store:
 * Your KV Store must already exist under the same Fastly account, and be linked to the service.
    As of this writing, to create the KV Store you will need to use either the Fastly CLI [fastly kv-store create](https://developer.fastly.com/reference/cli/kv-store/create/)
    or the Fastly [KV Store API](https://developer.fastly.com/reference/api/services/resources/kv-store/#create-store).
-   Once the KV Store is created, you must be link it to your Fastly service using the [Resource API](https://developer.fastly.com/reference/api/services/resource/#create-resource).
+   Once the KV Store is created, you must link it to your Fastly service using the [Resource API](https://developer.fastly.com/reference/api/services/resource/#create-resource).
 
-```shell
-# Create a KV Store
-$ curl -i -X POST "https://api.fastly.com/resources/stores/kv" -H "Fastly-Key: YOUR_FASTLY_TOKEN" -H "Content-Type: application/json" -H "Accept: application/json" -d '{"name":"example-store"}'
+   ```shell
+   # Create a KV Store
+   $ curl -i -X POST "https://api.fastly.com/resources/stores/kv" -H "Fastly-Key: YOUR_FASTLY_TOKEN" -H "Content-Type: application/json" -H "Accept: application/json" -d '{"name":"example-store"}'
+   
+   # Link the KV Store to a service
+   $ curl -i -X POST "https://api.fastly.com/service/YOUR_FASTLY_SERVICE_ID/version/YOUR_FASTLY_SERVICE_VERSION/resource" -H "Fastly-Key: YOUR_FASTLY_TOKEN" -H "Content-Type: application/x-www-form-urlencoded" -H "Accept: application/json" -d "name=example-store-service-a&resource_id=YOUR_KV_STORE_ID"
+   ```
 
-# Link the KV Store to a service
-$ curl -i -X POST "https://api.fastly.com/service/YOUR_FASTLY_SERVICE_ID/version/YOUR_FASTLY_SERVICE_VERSION/resource" -H "Fastly-Key: YOUR_FASTLY_TOKEN" -H "Content-Type: application/x-www-form-urlencoded" -H "Accept: application/json" -d "name=example-store-service-a&resource_id=YOUR_KV_STORE_ID"
-```
+   Once the KV Store is created and linked to your service, add its name to your `static-publish.rc.js`
+   file under the `kvStoreName` key.
 
-Once the KV Store is created and linked to your service, add its name to your `static-publish.rc.js`
-file under the `kvStoreName` key.
+   To specify the KV Store at the time you are scaffolding the project (for example, if you are running this tool and
+   deploying as part of a CI process), specify the `--service-id` and `--kv-store-name` command line arguments to populate
+   the respective files with these values.
 
-To specify the KV Store at the time you are scaffolding the project (for example, if you are running this tool and
-deploying as part of a CI process), specify the `--service-id` and `--kv-store-name` command line arguments to populate
-the respective files with these values.
+After you have performed the above steps, go ahead and build your application as normal.
+As a new step during the build process, the tool will send these files to the KV Store.
 
-After you have done the above steps, go ahead and build your application as normal. If you use `fastly compute build --verbose`
-(or run `npm run build` directly), you should see output in your logs saying that files are being sent to the KV Store.
+> [!IMPORTANT]
+> This step writes to your KV Store. When building your application, you must set the environment variable `FASTLY_API_TOKEN` to a Fastly API token that has access to write to this KV Store.
+> 
+> Alternatively, if this environment variable is not found, the tool will attempt to detect an API token by calling `fastly profile token`. 
+
+> [!HINT]
+> If you use `fastly compute build --verbose` (or run `npm run build` directly), you should see output in your logs saying that files are being sent to the KV Store.
 
 The `statics-metadata.js` file should now show `"type": "kv-store"` for content assets.
 Your Wasm binary should also be smaller, as the content of the files are no longer inlined in the build artifact.
