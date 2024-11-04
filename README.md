@@ -29,7 +29,7 @@ Now, each time you build this Compute project, `compute-js-static-publish` will 
 ```shell
 cd ./compute-js
 npm install
-fastly compute serve
+npm run start
 ```
 
 This will serve your application using the default `PublisherServer()`.
@@ -39,7 +39,7 @@ However, you can modify `/src/index.js` to add your own processing as you need. 
 ### 3. When you're ready to go live, [deploy your Compute service](https://developer.fastly.com/reference/cli/compute/publish/)
 
 ```shell
-fastly compute publish
+npm run deploy
 ```
 
 ## Features
@@ -218,15 +218,15 @@ describes your project to the Fastly CLI.
 To deploy your project to production, you deploy it to a [Fastly service](https://developer.fastly.com/reference/glossary#term-service)
 in your account. Usually, you create your service automatically as part of your first deployment of the project.
 
-In this case, `fastly.toml` has no value for `service_id` at the time you deploy, so `fastly compute publish` will prompt
-you to create a Fastly service in your account for you (afterwards saving the new service's ID to your `fastly.toml` file).
+In this case, `fastly.toml` has no value for `service_id` at the time you deploy, so the Fastly CLI will prompt
+you to create a Fastly service in your account for you, after which it will save the new service's ID to your `fastly.toml` file.
 
 Alternatively, you may deploy to a service that already exists. You can create this service using the
 [Fastly CLI](https://developer.fastly.com/reference/cli/service/create/) or the [Fastly web app](https://manage.fastly.com/).
 Note that since this is a Compute application, the service must be created as a Wasm service.
 
 Before deploying your application, specify the service by setting the `service_id` value in the `fastly.toml` file to the
-ID of the service. The `fastly compute publish` will deploy to the service identified by this value.
+ID of the service. The Fastly CLI will deploy to the service identified by this value.
 
 To specify the service at the time you are scaffolding the project (for example, if you are running this tool and deploying
 as part of a CI process), specify the `--service-id` command line argument to populate `fastly.toml` with this value.
@@ -275,7 +275,7 @@ As a new step during the build process, the tool will send these files to the KV
 > Alternatively, if this environment variable is not found, the tool will attempt to detect an API token by calling `fastly profile token`. 
 
 > [!HINT]
-> If you use `fastly compute build --verbose` (or run `npm run build` directly), you should see output in your logs saying that files are being sent to the KV Store.
+> By running `npx @fastly/cli compute build --verbose` (or `npm run build` directly), you should see output in your logs saying that files are being sent to the KV Store.
 
 The `statics-metadata.js` file should now show `"type": "kv-store"` for content assets.
 Your Wasm binary should also be smaller, as the content of the files are no longer inlined in the build artifact.

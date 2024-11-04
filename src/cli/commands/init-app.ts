@@ -530,6 +530,7 @@ ${staticFiles}
     author,
     type: 'module',
     devDependencies: {
+      "@fastly/cli": "^10.14.0",
       '@fastly/compute-js-static-publish': computeJsStaticPublisherVersion,
     },
     dependencies: {
@@ -541,7 +542,8 @@ ${staticFiles}
     license: 'UNLICENSED',
     private: true,
     scripts: {
-      deploy: 'fastly compute deploy',
+      start: "fastly compute serve",
+      deploy: "fastly compute publish",
       prebuild: 'npx @fastly/compute-js-static-publish --build-static',
       build: 'js-compute-runtime ./src/index.js ./bin/main.wasm'
     },
@@ -716,12 +718,12 @@ async function handleRequest(event) {
   console.log('To run your Compute application locally:');
   console.log('');
   console.log('  cd ' + COMPUTE_JS_DIR);
-  console.log('  fastly compute serve');
+  console.log('  npm run start');
   console.log('');
   console.log('To build and deploy to your Compute service:');
   console.log('');
   console.log('  cd ' + COMPUTE_JS_DIR);
-  console.log('  fastly compute publish');
+  console.log('  npm run deploy');
   console.log('');
 
 }
