@@ -219,7 +219,7 @@ To deploy your project to production, you deploy it to a [Fastly service](https:
 in your account. Usually, you create your service automatically as part of your first deployment of the project.
 
 In this case, `fastly.toml` has no value for `service_id` at the time you deploy, so the Fastly CLI will prompt
-you to create a Fastly service in your account for you, after which it will save the new service's ID to your `fastly.toml` file.
+you to create a Fastly service in your account, after which it will save the new service's ID to your `fastly.toml` file.
 
 Alternatively, you may deploy to a service that already exists. You can create this service using the
 [Fastly CLI](https://developer.fastly.com/reference/cli/service/create/) or the [Fastly web app](https://manage.fastly.com/).
