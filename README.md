@@ -28,8 +28,7 @@ Now, each time you build this Compute project, `compute-js-static-publish` will 
 
 ```shell
 cd ./compute-js
-npm install
-npm run start
+fastly compute serve
 ```
 
 This will serve your application using the default `PublisherServer()`.
@@ -39,7 +38,7 @@ However, you can modify `/src/index.js` to add your own processing as you need. 
 ### 3. When you're ready to go live, [deploy your Compute service](https://developer.fastly.com/reference/cli/compute/publish/)
 
 ```shell
-npm run deploy
+fastly compute publish
 ```
 
 ## Features
