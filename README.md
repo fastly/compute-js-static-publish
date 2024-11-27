@@ -78,7 +78,8 @@ If the files in `--root-dir` have changed, then a new set of files will be publi
 During publishing, this tool supports pre-compression of content. By default, your assets are compressed using the Brotli
 and gzip algorithms, and then stored alongside the original files in your Wasm binary (or [KV Store](#kv-store)).
 
-> Note: By default, pre-compressed content assets are not generated when the KV Store is not used.
+> [!IMPORTANT]
+> By default, pre-compressed content assets are not generated when the KV Store is not used.
 This is done to prevent the inclusion multiple of copies of each asset from making the Wasm binary too large.
 If you want to pre-compress assets when not using KV Store, add a value for 'contentCompression' to your
 `static-publish.rc.js` file.
@@ -231,7 +232,9 @@ ID of the service. The Fastly CLI will deploy to the service identified by this 
 To specify the service at the time you are scaffolding the project (for example, if you are running this tool and deploying
 as part of a CI process), specify the `--service-id` command line argument to populate `fastly.toml` with this value.
 
-## Using the KV Store (BETA) <a name="kv-store"></a>
+## Using the KV Store (BETA)
+
+<div id="kv-store"></div>
 
 Starting with v4, it's now possible to upload assets to and serve them from a [Fastly KV Store](https://developer.fastly.com/learning/concepts/data-stores/#kv-stores).
 
@@ -274,7 +277,7 @@ As a new step during the build process, the tool will send these files to the KV
 > 
 > Alternatively, if this environment variable is not found, the tool will attempt to detect an API token by calling `fastly profile token`. 
 
-> [!HINT]
+> [!TIP]
 > By running `npx @fastly/cli compute build --verbose` (or `npm run build` directly), you should see output in your logs saying that files are being sent to the KV Store.
 
 The `statics-metadata.js` file should now show `"type": "kv-store"` for content assets.
