@@ -10,7 +10,7 @@ Node 18 or newer is required during the build step, as we now rely on its `exper
 
 You have some HTML files, along with some accompanying CSS, JavaScript, image, and font files in a directory. Perhaps you've used a framework or static site generator to build these files.
 
-Assuming the root of your output directory is `./public`,
+Assuming the root directory that contains your static files is `./public`,
 
 ### 1. Run `compute-js-static-publish`
 
@@ -18,13 +18,17 @@ Assuming the root of your output directory is `./public`,
 npx @fastly/compute-js-static-publish@latest --root-dir=./public
 ```
 
-This will generate a Compute application at `./compute-js`. It will add a default `./src/index.js` file that instantiates the [`PublisherServer`](#publisherserver) class and runs it to serve the static files from your project.
+This will generate a Compute application at `./compute-js`. It will add a default `./compute-js/src/index.js` file that instantiates the [`PublisherServer`](#publisherserver) class and runs it to serve the static files from your project.
 
-> This process creates a `./static-publish.rc.js` to hold your configuration. This, as well as the other files created in your new Compute program at `./compute-js`, can be committed to source control (except for the ones we specify in `.gitignore`!) 
+> [!TIP]
+> This process creates a `./compute-js/static-publish.rc.js` to hold your configuration. This, as well as the other files created in your new Compute program at `./compute-js`, can be committed to source control (except for the ones we specify in `.gitignore`!) 
 
-Now, each time you build this Compute project, `compute-js-static-publish` will re-scan your `./public` directory and regenerate `/src/statics-metadata.js` and `/src/statics.js`. These files hold references to your project's public files.
+> [!IMPORTANT]
+> This step generates an application that includes your files and a program that serves them, and needs to be run only once. To make modifications to your application, simply make changes to your static files and rebuild it. Read the rest of this section for more details.
 
-### 2. Test your application using [Fastly's local development server](https://developer.fastly.com/learning/compute/testing/#running-a-local-testing-server)
+### 2. Test your application locally
+
+The `start` script builds and runs your application using [Fastly's local development server](https://developer.fastly.com/learning/compute/testing/#running-a-local-testing-server).
 
 ```shell
 cd ./compute-js
@@ -32,11 +36,22 @@ npm install
 npm run start
 ```
 
-This will serve your application using the default `PublisherServer()`.
+The build process scans your `./public` directory to generate files in the `./compute-js/static-publisher` directory. These files are packaged into your application's Wasm binary.
 
-However, you can modify `/src/index.js` to add your own processing as you need. This file will not be overwritten after it is created.
+Once your application is running, your files will be served under `http://127.0.0.1:7676/` at the corresponding paths relative to the `./public` directory. For example, making a request to `http://127.0.0.1:7676/foo/bar.html` will attempt to serve the file at `./public/foo/bar.html`.
 
-### 3. When you're ready to go live, [deploy your Compute service](https://developer.fastly.com/reference/cli/compute/publish/)
+### 3. Make changes to your application
+
+Now, you're free to make changes to your static files. Add, modify, or remove files in the `./public` directory, and then re-build and re-run your application by typing `npm run start` again.
+
+Each time you re-build the project, `compute-js-static-publish` will re-scan your `./public` directory and regenerate the files in the `./compute-js/static-publisher` directory.
+
+> [!TIP]
+> You can make further customizations to the behavior of your application, such as specifying directories of your static files, specifying whether to use GZIP compression on your files, specifying custom MIME types of your files, and more. You can also run custom code alongside the default server behavior, or even access the contents of the files directly from custom code. See [Advanced Usages](#advanced-usages) below for details. Rebuilding will not modify the files in your `./compute-js/src` directory, so feel safe making customizations to your code.
+
+### 4. When you're ready to go live, deploy your Compute service
+
+The `deploy` script builds and [publishes your application to a Compute service in your Fastly account](https://developer.fastly.com/reference/cli/compute/publish/).
 
 ```shell
 npm run deploy
@@ -103,7 +118,7 @@ Any configuration options will be written to a `static-publish.rc.js` file, and 
 application.
 
 On subsequent builds of your Compute application, `compute-js-static-publish` will run with a special flag, `build-static`,
-reading from stored configuration, then scanning the `--public-dir` directory to recreate `./src/statics.js`.
+reading from stored configuration, then scanning the `--public-dir` directory to recreate `./compute-js/static-publisher/statics.js`.
 
 Any relative file and directory paths passed at the command line are handled as relative to the current directory.
 
