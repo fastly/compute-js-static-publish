@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+## [6.2.0] - 2024-11-27
+
+### Added
+
+-　Scaffolded application now uses @fastly/cli npm package to access the Fastly CLI
+
+### Updated
+
+- Improved README to clarify command line args syntax
+- Improved README to clarify KV Store mode usage
+- Improved README to clarify application generation and iteration
+
 ## [6.1.1] - 2024-10-03
 
 ### Fixed
@@ -245,7 +257,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated generated app's webpack and webpack-cli versions
 - Use atob() and removed dependency on Buffer
 
-[unreleased]: https://github.com/fastly/compute-js-static-publish/compare/v6.1.1...HEAD
+[unreleased]: https://github.com/fastly/compute-js-static-publish/compare/v6.2.0...HEAD
+[6.2.0]: https://github.com/fastly/compute-js-static-publish/compare/v6.1.1...v6.2.0
 [6.1.1]: https://github.com/fastly/compute-js-static-publish/compare/v6.1.0...v6.1.1
 [6.1.0]: https://github.com/fastly/compute-js-static-publish/compare/v6.0.0...v6.1.0
 [6.0.0]: https://github.com/fastly/compute-js-static-publish/compare/v5.2.1...v6.0.0
