@@ -40,7 +40,7 @@ jobs:
           else
             PRERELEASE="latest"
           fi
-          echo "dist-tag=$PRERELEASE" >> $GITHUB_ENV
+          echo "DIST_TAG=$PRERELEASE" >> $GITHUB_ENV
 
       - name: Install npm dependencies
         run: npm install
@@ -49,5 +49,5 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          echo "Publishing to npmjs.org using dist-tag: $dist-tag"
-          npm publish --access=public --tag "$dist-tag"
+          echo "Publishing to npmjs.org using dist-tag: $DIST_TAG"
+          npm publish --access=public --tag "$DIST_TAG"
