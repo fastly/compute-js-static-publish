@@ -160,7 +160,7 @@ These arguments are used to populate the `fastly.toml` and `package.json` files 
 | `--description`   | `description` from `package.json`, or `Compute static site`  | The description of your Compute application.                                                                                                                                                                                                |
 | `--author`        | `author` from `package.json`, or `you@example.com`           | The author of your Compute application.                                                                                                                                                                                                     |
 | `--service-id`    | (None)                                                       | The ID of an existing Fastly WASM service for your Compute application.                                                                                                                                                                     |
-| `--kv-store-name` | (None)                                                       | The name of an existing [Fastly KV Store](https://developer.fastly.com/learning/concepts/data-stores/#kv-stores) to hold the content assets. In addition to already existing, it must be linked to the service specified by `--service-id`. |
+| `--kv-store-name` | (None)                                                       | The name of an existing [Fastly KV Store](https://developer.fastly.com/learning/concepts/data-stores/#kv-stores) to hold the content assets. In addition to already existing, it must be linked to the service specified by `--service-id`, and the resource link must have the same name. |
 
 ## Usage with frameworks and static site generators
 
@@ -274,7 +274,7 @@ At the time you enable the use of KV Store:
    $ curl -i -X POST "https://api.fastly.com/resources/stores/kv" -H "Fastly-Key: YOUR_FASTLY_TOKEN" -H "Content-Type: application/json" -H "Accept: application/json" -d '{"name":"example-store"}'
    
    # Link the KV Store to a service
-   $ curl -i -X POST "https://api.fastly.com/service/YOUR_FASTLY_SERVICE_ID/version/YOUR_FASTLY_SERVICE_VERSION/resource" -H "Fastly-Key: YOUR_FASTLY_TOKEN" -H "Content-Type: application/x-www-form-urlencoded" -H "Accept: application/json" -d "name=example-store-service-a&resource_id=YOUR_KV_STORE_ID"
+   $ curl -i -X POST "https://api.fastly.com/service/YOUR_FASTLY_SERVICE_ID/version/YOUR_FASTLY_SERVICE_VERSION/resource" -H "Fastly-Key: YOUR_FASTLY_TOKEN" -H "Content-Type: application/x-www-form-urlencoded" -H "Accept: application/json" -d "name=example-store&resource_id=YOUR_KV_STORE_ID"
    ```
 
    Once the KV Store is created and linked to your service, add its name to your `static-publish.rc.js`
