@@ -391,11 +391,10 @@ And that's it! It should be possible to run this task to clean up once in a whil
 
 * `contentTypes` - Provide custom content types and/or override them.
 
-  This tool comes with a set of default content types defined for many common file extensions. This list can be used to
-  add to and/or override items in the default list.
-
+  This tool comes with a [default set of content types](./src/util/content-types.ts) defined for many common
+  file extensions. This list can be used to add to and/or override items in the default list.
   Content type definitions are checked in the provided order, and if none of them match, the default content types are
-  tested afterwards.
+  tested afterward.
 
   Provide these as an array of content type definition objects, each with the following keys and values:
   * `test` - a RegExp or function to perform on the asset key. If the test succeeds, then the content asset is considered
@@ -403,6 +402,18 @@ And that's it! It should be possible to run this task to clean up once in a whil
   * `contentType` - The content type header to apply when serving an asset of this content type definition.
   * `text` - If `true`, this content type definition is considered to contain textual data. This makes `.text()` and `.json()`
     available for calling on store entries. If not specified, this is treated as `false`.
+
+  For example, to add a custom content type `application/x-custom` for files that have a `.custom` extension, and not treat
+  it as a text file, add the following to your `static-publish.rc.js` file:
+
+    ```javascript
+    const config = {
+      /* ... other config ... */
+      contentTypes: [
+        { test: /\.custom$/, contentType: 'application/x-custom', text: false },
+      ],
+    };
+    ```
 
   > Note that content types are tested at publishing time, not at runtime.
 
