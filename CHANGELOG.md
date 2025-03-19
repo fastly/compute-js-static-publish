@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+### Added
+
+- feat: Added content type for WebP images
+- Added example of adding a custom content type to README 
+
+### Fixed
+
+- fix: Content Type test regexes were not checking period correctly
+
+### Updated
+
+- Uses new webpack recommendations from webpack starter kit
+- Minor updates to migration guide 
+
 ## [6.2.0] - 2024-11-27
 
 ### Added
