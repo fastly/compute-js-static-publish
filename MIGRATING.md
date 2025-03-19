@@ -5,8 +5,6 @@ are generated during scaffolding. For this reason, it is recommended that you re
 
 This is straightforward if you're using `compute-js-static-publisher` out-of-the-box. Otherwise, read on.
 
-# Migrating to v5
-
 ## KV Store
 
 Starting with `v5.0.0`, this tool refers to the KV Store using its finalized product name, "KV Store". References in
@@ -151,12 +149,13 @@ Previous versions of `@fastly/compute-js-static-publish` used [Expressly](https:
 assets. `v4` does away with this dependency and implements its own server in the `PublisherServer`
 class.
 
-When using `v4`, you can remove the dependency on Expressly by deleting the `@fastly/expressly` entry from `dependencies` or `devDependencies`, in your `package.json` file.
+When using `v4`, you can remove the dependency on Expressly by deleting the `@fastly/expressly` entry from
+`dependencies` or `devDependencies`, in your `package.json` file.
 
 If your application depended on Expressly for things like middleware, you will need to make further
 changes.
 
-## The entry point `src/index.js`
+### The entry point `src/index.js`
 
 As of `v4`, the `src/index.js` entry point no longer uses Expressly, and looks like this:
 
@@ -192,13 +191,13 @@ upgrading from v3.
 
 ```js
 /** @type {import('@fastly/compute-js-static-publish').StaticPublisherConfig} */
-export default {
+const config = {
   rootDir: './public',
   // ... and so on
 };
 ```
 
-* A new key, `server`, was added to the group configurations that pertain to Publisher Server.
+* A new key, `server`, was added to group configurations that pertain to Publisher Server.
 
 To migrate this file, you'll need to make the following changes:
 
