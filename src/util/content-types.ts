@@ -21,6 +21,7 @@ const defaultContentTypes: ContentTypeDef[] = [
   { test: /.jp(e)?g$/, contentType: 'image/jpeg', text: false },
   { test: /.ico$/, contentType: 'image/vnd.microsoft.icon', text: false },
   { test: /.tif(f)?$/, contentType: 'image/png', text: false },
+  { test: /.webp$/, contentType: 'image/webp', text: false },
   { test: /.aac$/, contentType: 'audio/aac', text: false },
   { test: /.mp3$/, contentType: 'audio/mpeg', text: false },
   { test: /.avi$/, contentType: 'video/x-msvideo', text: false },
