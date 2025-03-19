@@ -39,13 +39,13 @@ been using the feature, you can take the following steps:
 
 ## Webpack
 
-Starting with `v4.0.0` of this tool, Webpack is no longer required and is disabled by default for new applications. This can simplify development and result in shorter build times. 
+Starting with `v4.0.0` of this tool, webpack is no longer required and is disabled by default for new applications. This can simplify development and result in shorter build times. 
 
-You may still wish to use Webpack if you need some of the features it provides, e.g., the ability to use loaders, asset modules, module replacement, dynamic imports, etc.
+You may still wish to use webpack if you need some of the features it provides, e.g., the ability to use loaders, asset modules, module replacement, dynamic imports, etc.
 
-To migrate away from using Webpack, make the following changes in your `./compute-js` directory:
+To migrate away from using webpack, make the following changes in your `./compute-js` directory:
 
-* First, check your `webpack.config.js` file to make sure you aren't actually depending on any custom Webpack features. When you're ready, continue to the next step.
+* First, check your `webpack.config.js` file to make sure you aren't actually depending on any custom webpack features. When you're ready, continue to the next step.
 * Delete `webpack.config.js`.
 * Modify `static-publish.rc.js`:
   * Change the line `module.exports = {` to `const config = {`
@@ -65,27 +65,52 @@ To migrate away from using Webpack, make the following changes in your `./comput
     }
     ```
 
-If you aren't moving away from Webpack just yet, check that your `webpack.config.js` is up-to-date:
+If you aren't moving away from webpack just yet, check that your `webpack.config.js` is up-to-date. Refer
+to the [default `webpack.config.js` in this package](./resources/webpack.config.js) and add your changes,
+or modify your configuration file using the following steps:
+
+* To make the resulting bundle easier to debug, it is recommended to set the `devtool` value to `false`.
+
+* The JavaScript SDK automatically adds the named condition `fastly` when resolving dependency packages.
+  To match the behavior when bundling with webpack, set `resolve.conditionsNames` to the following:
+    ```
+    resolve: {
+      conditionNames: [
+        'fastly',
+        '...',
+      ],
+    ],
+    ``` 
 
 * Starting `v3.0.0`, we depend on `v1.0.0` of the `js-compute` library, which provides namespaced exports for Fastly
-  features. To use them, you'll need to add a new `externals` array to the bottom if it doesn't exist already, with
-  the following entry:
+  features. To use them, you'll need to make the following changes to `webpack.config.js`:
 
-  ```javascript
-  module.exports = {
-    /* ... other config ... */
-    externals: [
-      ({request,}, callback) => {
-         if (/^fastly:.*$/.test(request)) {
-             return callback(null, 'commonjs ' + request);
-         }
-         callback();
-      }
-    ],
-  }
-  ```
+  * Set the `target` value to `false`.
 
-* Starting `v3.0.0`, we no longer use Webpack static assets to include the contents of static files, and instead [use the
+  * The `output` section should look like this:
+    ```
+    output: {
+      filename: "index.js",
+      path: path.resolve(__dirname, "bin"),
+      chunkFormat: 'commonjs',
+      library: {
+        type: 'commonjs',
+      },
+    },
+    ``` 
+
+  * Add a new `externals` array to the bottom if it doesn't exist already. Add the following entry:
+
+    ```javascript
+    module.exports = {
+      /* ... other config ... */
+      externals: [
+        /^fastly:.*$/,
+      ],
+    }
+    ```
+
+* Starting `v3.0.0`, we no longer use webpack static assets to include the contents of static files, and instead [use the
   `includeBytes` function](https://js-compute-reference-docs.edgecompute.app/docs/fastly:experimental/includeBytes)
   to enable more performant loading, as well as a more size-efficient Wasm binary. As a result, the following code can
   safely be removed from the `module.rules` array.
@@ -113,7 +138,7 @@ If you aren't moving away from Webpack just yet, check that your `webpack.config
     },
   ```
 
-If you need Webpack for a new project you are scaffolding with this site, specify the `--webpack` command-line option
+If you need webpack for a new project you are scaffolding with this site, specify the `--webpack` command-line option
 when you scaffold your application, e.g.:
 
 ```
@@ -217,7 +242,7 @@ See [static-publish.rc.js config file](./README.md#static-publish-rc) for a deta
       build = "npm run build"
       ```
 
-    * If you're using Webpack, then the `scripts` section of `package.json` of your `compute-js` directory should contain
+    * If you're using webpack, then the `scripts` section of `package.json` of your `compute-js` directory should contain
       the following items (along with any other scripts):
       ```json
       {
@@ -226,7 +251,7 @@ See [static-publish.rc.js config file](./README.md#static-publish-rc) for a deta
       }
       ```
  
-    * If you're not using Webpack, then the `scripts` section of `package.json` of your `compute-js` directory should
+    * If you're not using webpack, then the `scripts` section of `package.json` of your `compute-js` directory should
       contain the following items (along with any other scripts):
       ```json
       {

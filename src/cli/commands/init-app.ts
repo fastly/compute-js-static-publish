@@ -492,7 +492,7 @@ export function initApp(commandLineValues: CommandLineOptions) {
   console.log('KV Store Name           :', kvStoreName ?? '(None)');
   console.log('');
   if (useWebpack) {
-    console.log('Creating project with Webpack.');
+    console.log('Creating project with webpack.');
     console.log('');
   }
 

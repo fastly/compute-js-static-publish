@@ -2,14 +2,18 @@ const path = require("path");
 
 module.exports = {
   entry: "./src/index.js",
+  target: false,
+  devtool: false,
   optimization: {
     minimize: true
   },
-  target: "webworker",
   output: {
     filename: "index.js",
     path: path.resolve(__dirname, "bin"),
-    libraryTarget: "this",
+    chunkFormat: 'commonjs',
+    library: {
+      type: 'commonjs',
+    },
   },
   module: {
     // Loaders go here.
@@ -17,17 +21,21 @@ module.exports = {
     // rules: [
     // ],
   },
+  resolve: {
+    conditionNames: [
+      'fastly',
+      '...',
+    ],
+  },
   plugins: [
-    // Polyfills go here.
-    // Used for, e.g., any cross-platform WHATWG,
-    // or core nodejs modules needed for your application.
+    // Webpack Plugins and Polyfills go here
+    // e.g., cross-platform WHATWG or core Node.js modules needed for your application.
+    // new webpack.ProvidePlugin({
+    // }),
   ],
   externals: [
-    ({request,}, callback) => {
-      if (/^fastly:.*$/.test(request)) {
-        return callback(null, 'commonjs ' + request);
-      }
-      callback();
-    }
+    // Allow webpack to handle 'fastly:*' namespaced module imports by treating
+    // them as modules rather than trying to process them as URLs
+    /^fastly:.*$/,
   ],
 };

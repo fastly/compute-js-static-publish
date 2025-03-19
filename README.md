@@ -64,7 +64,7 @@ npm run deploy
 - Content and metadata are available to your application, accessible by files' pre-package file paths.
 - Brotli and Gzip compression.
 - Support for `If-None-Match` and `If-Modified-Since` request headers.
-- Optionally use Webpack as a module bundler.
+- Optionally use webpack as a module bundler.
 - Selectively serve files from Fastly's [KV Store](#kv-store), or embedded into your Wasm module.
 - Supports loading JavaScript files as code into your Compute application.
 - Presets for several static site generators.
@@ -583,10 +583,10 @@ publishing event.
 
 See the definition of `ContentAssetMetadataMapEntry` in the [`types/content-assets` file](./src/types/content-assets.ts) for more details.
 
-### Using Webpack
+### Using webpack
 
-As of v4, Webpack is no longer required, and is no longer part of the default scaffolded application.
-If you wish to use some features of Webpack, you may include Webpack in your generated application by specifying
+As of v4, webpack is no longer required, and is no longer part of the default scaffolded application.
+If you wish to use some features of webpack, you may include webpack in your generated application by specifying
 `--webpack` at the command line.
 
 ## Migrating
