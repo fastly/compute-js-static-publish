@@ -303,6 +303,7 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
       contentTypeTestResult = {
         text: false,
         contentType: 'application/octet-stream',
+        precompressAsset: false,
       };
       if (displayFrameworkWarnings) {
         console.log('⚠️ Notice: Unknown file type ' + assetKey + '. Treating as binary file.');
@@ -403,6 +404,7 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
       assetKey,
       contentType,
       text,
+      precompressAsset,
       hash,
       size,
       lastModifiedTime,
@@ -429,7 +431,7 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
     async function prepareCompressedVersions(contentCompressions: ContentCompressionTypes[], func: PrepareCompressionVersionFunc) {
       for (const alg of contentCompressions) {
         const compressTo = algs[alg];
-        if (compressTo != null) {
+        if (precompressAsset && compressTo != null) {
 
           const staticFilePath = `${staticContentFilePath}_${alg}`;
           if (await compressTo(file, staticFilePath, text)) {

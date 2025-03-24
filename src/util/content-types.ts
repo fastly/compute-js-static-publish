@@ -15,7 +15,7 @@ const defaultContentTypes: ContentTypeDef[] = [
   { test: /\.svg$/, contentType: 'image/svg+xml', text: true },
 
   // Binary formats
-  { test: /\.bmp$/, contentType: 'image/bmp', text: false },
+  { test: /\.bmp$/, contentType: 'image/bmp', text: false, precompressAsset: true, },
   { test: /\.png$/, contentType: 'image/png', text: false },
   { test: /\.gif$/, contentType: 'image/gif', text: false },
   { test: /\.jp(e)?g$/, contentType: 'image/jpeg', text: false },
@@ -29,7 +29,7 @@ const defaultContentTypes: ContentTypeDef[] = [
   { test: /\.mpeg$/, contentType: 'video/mpeg', text: false },
   { test: /\.webm$/, contentType: 'video/webm', text: false },
   { test: /\.pdf$/, contentType: 'application/pdf', text: false },
-  { test: /\.tar$/, contentType: 'application/x-tar', text: false },
+  { test: /\.tar$/, contentType: 'application/x-tar', text: false, precompressAsset: true, },
   { test: /\.zip$/, contentType: 'application/zip', text: false },
   { test: /\.eot$/, contentType: 'application/vnd.ms-fontobject', text: false },
   { test: /\.otf$/, contentType: 'font/otf', text: false },
@@ -105,7 +105,11 @@ export function testFileContentType(contentTypes: ContentTypeDef[] | null | unde
       matched = contentType.test(assetKey);
     }
     if(matched) {
-      return { contentType: contentType.contentType, text: Boolean(contentType.text ?? false) };
+      return {
+        contentType: contentType.contentType,
+        text: Boolean(contentType.text ?? false),
+        precompressAsset: Boolean(contentType.precompressAsset ?? contentType.text ?? false)
+      };
     }
   }
   return null;
