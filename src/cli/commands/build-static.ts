@@ -194,7 +194,7 @@ function writeKVStoreEntriesToFastlyToml(kvStoreName: string, kvStoreItems: KVSt
 
     if (fastlyToml.indexOf(kvStoreName) !== -1) {
       // don't do this!
-      console.error("improperly configured entry for '${kvStoreName}' in fastly.toml");
+      console.error(`improperly configured entry for '${kvStoreName}' in fastly.toml`);
       // TODO: handle thrown exception from callers
       throw "No"!
     }
