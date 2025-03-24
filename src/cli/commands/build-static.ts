@@ -125,14 +125,12 @@ type KVStoreItemDesc = {
 async function uploadFilesToKVStore(fastlyApiContext: FastlyApiContext, kvStoreName: string, kvStoreItems: KVStoreItemDesc[]) {
   for (const { kvStoreKey, staticFilePath, text } of kvStoreItems) {
     if (await kvStoreEntryExists(fastlyApiContext, kvStoreName, kvStoreKey)) {
-      // Already exists in KV Store
-      console.log(`✔️ Asset already exists in KV Store with key "${kvStoreKey}".`)
-    } else {
-      // Upload to KV Store
-      const fileData = fs.readFileSync(staticFilePath);
-      await kvStoreSubmitFile(fastlyApiContext!, kvStoreName!, kvStoreKey, fileData);
-      console.log(`✔️ Submitted ${text ? 'text' : 'binary'} asset "${staticFilePath}" to KV Store with key "${kvStoreKey}".`)
+      console.log(`✔️ Asset already exists in KV Store with key "${kvStoreKey}".`);
+      continue;
     }
+    const fileData = fs.readFileSync(staticFilePath);
+    await kvStoreSubmitFile(fastlyApiContext!, kvStoreName!, kvStoreKey, fileData);
+    console.log(`✔️ Submitted ${text ? 'text' : 'binary'} asset "${staticFilePath}" to KV Store with key "${kvStoreKey}".`)
   }
 }
 
