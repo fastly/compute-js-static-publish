@@ -22,7 +22,7 @@ type CachedValues = {
 
 const cache = new WeakMap<FastlyApiContext, CachedValues>();
 
-export async function getKVStoreIdForNameMap(fastlyApiContext: FastlyApiContext): Promise<Record<string, string>> {
+export async function getKVStoreIdForNameMap(fastlyApiContext: FastlyApiContext) {
   const cacheEntry = cache.get(fastlyApiContext);
 
   let kvStoreNameMap = cacheEntry?.kvStoreNameMap;
@@ -42,15 +42,16 @@ export async function getKVStoreIdForNameMap(fastlyApiContext: FastlyApiContext)
   return kvStoreNameMap;
 }
 
-export async function getKVStoreIdForName(fastlyApiContext: FastlyApiContext, kvStoreName: string): Promise<string | null> {
+export async function getKVStoreIdForName(fastlyApiContext: FastlyApiContext, kvStoreName: string) {
 
   const kvStoreNameMap = await getKVStoreIdForNameMap(fastlyApiContext);
   return kvStoreNameMap[kvStoreName] ?? null;
+
 }
 
 function createArrayGetter<TEntry>() {
   return function<TFn extends (...args:any[]) => string>(fn: TFn) {
-    return async function(fastlyApiContext: FastlyApiContext, ...args: Parameters<TFn>): Promise<TEntry[]> {
+    return async function(fastlyApiContext: FastlyApiContext, ...args: Parameters<TFn>) {
       const results: TEntry[] = [];
 
       let cursor: string | null = null;
@@ -86,7 +87,7 @@ function createArrayGetter<TEntry>() {
 
 const _getKVStoreInfos = createArrayGetter<KVStoreInfo>()(() => `/resources/stores/kv`);
 
-export async function getKVStoreInfos(fastlyApiContext: FastlyApiContext): Promise<KVStoreInfo[]> {
+export async function getKVStoreInfos(fastlyApiContext: FastlyApiContext) {
 
   const cacheEntry = cache.get(fastlyApiContext);
 
@@ -104,7 +105,7 @@ export async function getKVStoreInfos(fastlyApiContext: FastlyApiContext): Promi
 
 export const _getKVStoreKeys = createArrayGetter<KVStoreEntryInfo>()((kvStoreId: string) => `/resources/stores/kv/${encodeURIComponent(kvStoreId)}/keys`);
 
-export async function getKVStoreKeys(fastlyApiContext: FastlyApiContext, kvStoreName: string): Promise<KVStoreEntryInfo[] | null> {
+export async function getKVStoreKeys(fastlyApiContext: FastlyApiContext, kvStoreName: string) {
 
   const kvStoreId = await getKVStoreIdForName(fastlyApiContext, kvStoreName);
   if (kvStoreId == null) {
@@ -114,7 +115,7 @@ export async function getKVStoreKeys(fastlyApiContext: FastlyApiContext, kvStore
   return await _getKVStoreKeys(fastlyApiContext, kvStoreId);
 }
 
-export async function kvStoreEntryExists(fastlyApiContext: FastlyApiContext, kvStoreName: string, key: string): Promise<boolean> {
+export async function kvStoreEntryExists(fastlyApiContext: FastlyApiContext, kvStoreName: string, key: string) {
 
   const kvStoreId = await getKVStoreIdForName(fastlyApiContext, kvStoreName);
   if (kvStoreId == null) {
@@ -130,7 +131,7 @@ export async function kvStoreEntryExists(fastlyApiContext: FastlyApiContext, kvS
 }
 
 const encoder = new TextEncoder();
-export async function kvStoreSubmitFile(fastlyApiContext: FastlyApiContext, kvStoreName: string, key: string, data: Uint8Array | string): Promise<void> {
+export async function kvStoreSubmitFile(fastlyApiContext: FastlyApiContext, kvStoreName: string, key: string, data: Uint8Array | string) {
 
   const kvStoreId = await getKVStoreIdForName(fastlyApiContext, kvStoreName);
   if (kvStoreId == null) {
@@ -154,7 +155,7 @@ export async function kvStoreSubmitFile(fastlyApiContext: FastlyApiContext, kvSt
 
 }
 
-export async function kvStoreDeleteFile(fastlyApiContext: FastlyApiContext, kvStoreName: string, key: string): Promise<void> {
+export async function kvStoreDeleteFile(fastlyApiContext: FastlyApiContext, kvStoreName: string, key: string) {
 
   const kvStoreId = await getKVStoreIdForName(fastlyApiContext, kvStoreName);
   if (kvStoreId == null) {
