@@ -543,7 +543,7 @@ ${staticFiles}
       '@fastly/js-compute': '^3.0.0',
     },
     engines: {
-      node: '>=18.0.0',
+      node: '>=20.0.0',
     },
     license: 'UNLICENSED',
     private: true,

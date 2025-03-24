@@ -41,12 +41,12 @@
     "@fastly/js-compute": "^3.0.0",
     "@types/command-line-args": "^5.2.0",
     "@types/glob-to-regexp": "^0.4.1",
-    "@types/node": "^18.0.0",
+    "@types/node": "^20.0.0",
     "rimraf": "^4.3.0",
     "typescript": "^5.0.2"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "files": [
     "build",
