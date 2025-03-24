@@ -317,6 +317,12 @@ export function initApp(commandLineValues: CommandLineOptions) {
     computeJsStaticPublisherVersion = '^4.0.0';
   }
 
+  if (!computeJsStaticPublisherVersion.startsWith('^') &&
+    !computeJsStaticPublisherVersion.startsWith('file:')
+  ) {
+    computeJsStaticPublisherVersion = '^' + computeJsStaticPublisherVersion;
+  }
+
   const commandLineAppOptions = processCommandLineArgs(commandLineValues);
 
   type PackageJsonAppOptions = Pick<AppOptions, 'author' | 'name' | 'description'>;
