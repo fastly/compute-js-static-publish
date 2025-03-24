@@ -1,4 +1,5 @@
 import { execSync } from 'child_process';
+import { makeRetryable } from './retryable.js';
 
 export interface FastlyApiContext {
   apiToken: string,
@@ -88,12 +89,21 @@ export async function callFastlyApi(
     headers,
     redirect: 'error',
   });
-  const response = await fetch(request);
+  let response;
+  try {
+    response = await fetch(request);
+  } catch(err) {
+    if (err instanceof TypeError) {
+      throw makeRetryable(err);
+    } else {
+      throw err;
+    }
+  }
   if (!response.ok) {
     if (!RETRYABLE_STATUS_CODES.includes(response.status)) {
       throw new FetchError(`${operationName} failed: ${response.status}`, response.status);
     }
-    throw new FetchError(`Retryable ${operationName} error: ${response.status}`, response.status);
+    throw makeRetryable(new FetchError(`Retryable ${operationName} error: ${response.status}`, response.status));
   }
   return response;
 
