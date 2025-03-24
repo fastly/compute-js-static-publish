@@ -317,6 +317,12 @@ export function initApp(commandLineValues: CommandLineOptions) {
     computeJsStaticPublisherVersion = '^4.0.0';
   }
 
+  if (!computeJsStaticPublisherVersion.startsWith('^') &&
+    !computeJsStaticPublisherVersion.startsWith('file:')
+  ) {
+    computeJsStaticPublisherVersion = '^' + computeJsStaticPublisherVersion;
+  }
+
   const commandLineAppOptions = processCommandLineArgs(commandLineValues);
 
   type PackageJsonAppOptions = Pick<AppOptions, 'author' | 'name' | 'description'>;
@@ -531,7 +537,7 @@ ${staticFiles}
     type: 'module',
     devDependencies: {
       "@fastly/cli": "^10.14.0",
-      '@fastly/compute-js-static-publish': "^" + computeJsStaticPublisherVersion,
+      '@fastly/compute-js-static-publish': computeJsStaticPublisherVersion,
     },
     dependencies: {
       '@fastly/js-compute': '^3.0.0',
