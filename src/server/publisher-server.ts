@@ -272,7 +272,7 @@ export class PublisherServer {
     }
 
     const url = new URL(request.url);
-    const pathname = url.pathname;
+    const pathname = decodeURI(url.pathname);
 
     const asset = this.getMatchingAsset(pathname);
     if (asset != null) {
