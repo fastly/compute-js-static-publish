@@ -154,13 +154,13 @@ Note that the files referenced by `--spa` and `--not-found-page` do not necessar
 
 These arguments are used to populate the `fastly.toml` and `package.json` files of your Compute application.
 
-| Option            | Default                                                      | Description                                                                                                                                                                                                                                 |
-|-------------------|--------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `--name`          | `name` from `package.json`, or `compute-js-static-site`      | The name of your Compute application.                                                                                                                                                                                                       |
-| `--description`   | `description` from `package.json`, or `Compute static site`  | The description of your Compute application.                                                                                                                                                                                                |
-| `--author`        | `author` from `package.json`, or `you@example.com`           | The author of your Compute application.                                                                                                                                                                                                     |
-| `--service-id`    | (None)                                                       | The ID of an existing Fastly WASM service for your Compute application.                                                                                                                                                                     |
-| `--kv-store-name` | (None)                                                       | The name of an existing [Fastly KV Store](https://developer.fastly.com/learning/concepts/data-stores/#kv-stores) to hold the content assets. In addition to already existing, it must be linked to the service specified by `--service-id`. |
+| Option            | Default                                                      | Description                                                                                                                                                                                                                                                                                      |
+|-------------------|--------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `--name`          | `name` from `package.json`, or `compute-js-static-site`      | The name of your Compute application.                                                                                                                                                                                                                                                            |
+| `--description`   | `description` from `package.json`, or `Compute static site`  | The description of your Compute application.                                                                                                                                                                                                                                                     |
+| `--author`        | `author` from `package.json`, or `you@example.com`           | The author of your Compute application.                                                                                                                                                                                                                                                          |
+| `--service-id`    | (None)                                                       | The ID of an existing Fastly WASM service for your Compute application.                                                                                                                                                                                                                          |
+| `--kv-store-name` | (None)                                                       | The name of an existing [Fastly KV Store](https://developer.fastly.com/learning/concepts/data-stores/#kv-stores) to hold the content assets. In addition, a Resource Link to this KV Store must already exist on the service specified by `--service-id` and have the same name as the KV Store. |
 
 ## Usage with frameworks and static site generators
 
@@ -264,25 +264,35 @@ At the time you enable the use of KV Store:
 
 * Your Fastly service must already exist. See [Associating your project with a Fastly Service](#associating-your-project-with-a-fastly-service) above.
 
-* Your KV Store must already exist under the same Fastly account, and be linked to the service.
-   As of this writing, to create the KV Store you will need to use either the Fastly CLI [fastly kv-store create](https://developer.fastly.com/reference/cli/kv-store/create/)
-   or the Fastly [KV Store API](https://developer.fastly.com/reference/api/services/resources/kv-store/#create-store).
-   Once the KV Store is created, you must link it to your Fastly service using the [Resource API](https://developer.fastly.com/reference/api/services/resource/#create-resource).
+* Your [KV Store](https://www.fastly.com/documentation/guides/concepts/edge-state/data-stores/#kv-stores) must already
+   exist under the same Fastly account, and be linked to the service. The
+   [Resource Link](https://www.fastly.com/documentation/guides/concepts/resources/) must have the same name as the
+   KV Store.
 
-   ```shell
-   # Create a KV Store
-   $ curl -i -X POST "https://api.fastly.com/resources/stores/kv" -H "Fastly-Key: YOUR_FASTLY_TOKEN" -H "Content-Type: application/json" -H "Accept: application/json" -d '{"name":"example-store"}'
-   
-   # Link the KV Store to a service
-   $ curl -i -X POST "https://api.fastly.com/service/YOUR_FASTLY_SERVICE_ID/version/YOUR_FASTLY_SERVICE_VERSION/resource" -H "Fastly-Key: YOUR_FASTLY_TOKEN" -H "Content-Type: application/x-www-form-urlencoded" -H "Accept: application/json" -d "name=example-store-service-a&resource_id=YOUR_KV_STORE_ID"
-   ```
+To create your KV Store and link it to the service, follow these steps:
 
-   Once the KV Store is created and linked to your service, add its name to your `static-publish.rc.js`
-   file under the `kvStoreName` key.
+```shell
+# Create a KV Store
+$ npx fastly kv-store create --name=example-store
+SUCCESS: Created KV Store 'example-store' (onvbnv9ntdvlnldtn1qwnb)
+```
 
-   To specify the KV Store at the time you are scaffolding the project (for example, if you are running this tool and
-   deploying as part of a CI process), specify the `--service-id` and `--kv-store-name` command line arguments to populate
-   the respective files with these values.
+Make a note of the KV Store ID in this response (`onvbnv9ntdvlnldtn1qwnb` in the above example). Next, use this ID 
+value to create a Resource Link between your service and the KV Store. You **MUST** use the same name for your Resource
+Link as you use for your KV Store. After linking the KV Store, activate the new version of the service.
+
+```shell
+# Link the KV Store to a service provide the KV Store ID as resource-id
+$ npx fastly resource-link create --version=latest --autoclone --resource-id=onvbnv9ntdvlnldtn1qwnb --name=example-store
+$ npx fastly service-version activate --version=latest
+```
+
+Once the KV Store is created and linked to your service, add the name of the KV Store (`example-store` in
+　the above example) name to your `static-publish.rc.js` file under the `kvStoreName` key.
+
+To specify the KV Store at the time you are scaffolding the project (for example, if you are running this tool and
+deploying as part of a CI process), specify the `--service-id` and `--kv-store-name` command line arguments to populate
+the respective files with these values.
 
 After you have performed the above steps, go ahead and build your application as normal.
 As a new step during the build process, the tool will send these files to the KV Store.
