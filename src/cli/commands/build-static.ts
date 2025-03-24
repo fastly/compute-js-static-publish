@@ -427,12 +427,10 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
 
     type PrepareCompressionVersionFunc = (alg: ContentCompressionTypes, staticFilePath: string, hash: string, size: number) => void;
     async function prepareCompressedVersions(contentCompressions: ContentCompressionTypes[], func: PrepareCompressionVersionFunc) {
-      for (const alg of contentCompression) {
+      for (const alg of contentCompressions) {
         const compressTo = algs[alg];
         if (compressTo != null) {
 
-          // Even for items that are not inlined, compressed copies of the file are
-          // always created in the static content directory.
           const staticFilePath = `${staticContentFilePath}_${alg}`;
           if (await compressTo(file, staticFilePath, text)) {
             console.log(`✔️ Compressed ${text ? 'text' : 'binary'} asset "${file}" to "${staticFilePath}" [${alg}].`)
@@ -453,6 +451,8 @@ export async function buildStaticLoader(commandLineValues: commandLineArgs.Comma
       fs.cpSync(file, staticFilePath);
       console.log(`✔️ Copied ${text ? 'text' : 'binary'} asset "${file}" to "${staticFilePath}".`);
 
+      // 'prepareCompressedVersions' uses the static content directory for compressed copies,
+      // even for 'inline' files.
       const compressedFileInfos: CompressedFileInfos<ContentFileInfoForWasmInline> = {};
       await prepareCompressedVersions(contentCompression, (alg, staticFilePath, hash, size) => {
         compressedFileInfos[alg] = { staticFilePath, hash, size };
