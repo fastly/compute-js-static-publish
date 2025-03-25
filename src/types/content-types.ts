@@ -11,9 +11,14 @@ export type ContentTypeDef = {
   // Whether this content type represents a text value encoded in utf-8.
   // If so, conveniences can be provided.
   text?: boolean,
+
+  // Binary formats are usually not candidates for compression, but certain
+  // types can benefit from it.
+  precompressAsset?: boolean,
 };
 
 export type ContentTypeTestResult = {
   contentType: string,
   text: boolean,
+  precompressAsset: boolean,
 };

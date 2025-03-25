@@ -90,8 +90,17 @@ If the files in `--root-dir` have changed, then a new set of files will be publi
 
 ### Content Compression
 
-During publishing, this tool supports pre-compression of content. By default, your assets are compressed using the Brotli
-and gzip algorithms, and then stored alongside the original files in your Wasm binary (or [KV Store](#kv-store)).
+During publishing, this tool supports pre-compression of content. By default, your assets for select content types are
+compressed using the Brotli and gzip algorithms, and then stored alongside the original files in your Wasm binary (or
+[KV Store](#kv-store)).
+
+The content types that are compressed include any that are considered `text` types, as well as certain binary types that
+expect to see a benefit of being compressed.
+
+* Compressed text types: `.txt` `.html` `.xml` `.json` `.map` `.js` `.css` `.svg`
+* Compressed binary types: `.bmp` `.tar`
+
+To configure these content types, use the `contentTypes` field of the [`static-publish.rc.js` config file](#static-publish-rc).
 
 > [!IMPORTANT]
 > By default, pre-compressed content assets are not generated when the KV Store is not used.
@@ -412,15 +421,19 @@ And that's it! It should be possible to run this task to clean up once in a whil
   * `contentType` - The content type header to apply when serving an asset of this content type definition.
   * `text` - If `true`, this content type definition is considered to contain textual data. This makes `.text()` and `.json()`
     available for calling on store entries. If not specified, this is treated as `false`.
-
-  For example, to add a custom content type `application/x-custom` for files that have a `.custom` extension, and not treat
-  it as a text file, add the following to your `static-publish.rc.js` file:
+  * `precompressAsset` - When `true`, this tool generates pre-compressed versions of content assets and serves them to user
+    agents that assert an appropriate `Accept` header. See [Content Compression*](#content-compression) for details. If
+    not specified, this is `true` if `text` is `true`, and `false` if `text` is not `true`.
+ 
+  For example, to add a custom content type `application/x-custom` for files that have a `.custom` extension, not treat
+  it as a text file, but precompress it during the generation of the application, add the following to your
+  `static-publish.rc.js` file:
 
     ```javascript
     const config = {
       /* ... other config ... */
       contentTypes: [
-        { test: /\.custom$/, contentType: 'application/x-custom', text: false },
+        { test: /\.custom$/, contentType: 'application/x-custom', text: false, precompressAsset: true },
       ],
     };
     ```
