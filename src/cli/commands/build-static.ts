@@ -131,6 +131,8 @@ async function uploadFilesToKVStore(fastlyApiContext: FastlyApiContext, kvStoreN
   let index = 0;
 
   async function worker() {
+    // This loop is safe because JavaScript is single-threaded.
+    // Workers pull work one item at a time using a shared index.
     while (index < kvStoreItems.length) {
       const currentIndex = index;
       index = index + 1;
