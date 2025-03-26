@@ -1,4 +1,5 @@
 import { execSync } from 'child_process';
+import { makeRetryable } from './retryable.js';
 
 export interface FastlyApiContext {
   apiToken: string,
@@ -42,7 +43,33 @@ export function loadApiKey(): LoadApiKeyResult | null {
 
 }
 
-export async function callFastlyApi(fastlyApiContext: FastlyApiContext, endpoint: string, queryParams?: URLSearchParams | null, requestInit?: RequestInit): Promise<Response> {
+const RETRYABLE_STATUS_CODES = [
+  408, // Request Timeout
+  409, // Conflict (depends)
+  423, // Locked
+  429, // Too Many Requests
+  500, // Internal Server Error
+  502, // Bad Gateway
+  503, // Service Unavailable
+  504, // Gateway Timeout
+];
+
+export class FetchError extends Error {
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'FetchError';
+    this.status = status;
+  }
+  status: number;
+}
+
+export async function callFastlyApi(
+  fastlyApiContext: FastlyApiContext,
+  endpoint: string,
+  operationName: string,
+  queryParams?: URLSearchParams | null,
+  requestInit?: RequestInit,
+): Promise<Response> {
 
   let finalEndpoint = endpoint;
   if (queryParams != null) {
@@ -60,8 +87,24 @@ export async function callFastlyApi(fastlyApiContext: FastlyApiContext, endpoint
   const request = new Request(url, {
     ...requestInit,
     headers,
+    redirect: 'error',
   });
-  const response = await fetch(request);
+  let response;
+  try {
+    response = await fetch(request);
+  } catch(err) {
+    if (err instanceof TypeError) {
+      throw makeRetryable(err);
+    } else {
+      throw err;
+    }
+  }
+  if (!response.ok) {
+    if (!RETRYABLE_STATUS_CODES.includes(response.status)) {
+      throw new FetchError(`${operationName} failed: ${response.status}`, response.status);
+    }
+    throw makeRetryable(new FetchError(`Retryable ${operationName} error: ${response.status}`, response.status));
+  }
   return response;
 
 }

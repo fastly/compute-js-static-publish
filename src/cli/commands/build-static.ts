@@ -68,7 +68,7 @@ import { applyDefaults } from "../util/data.js";
 import { calculateFileSizeAndHash } from "../util/hash.js";
 import { getFiles } from "../util/files.js";
 import { generateOrLoadPublishId } from "../util/publish-id.js";
-import { FastlyApiContext, loadApiKey } from "../util/fastly-api.js";
+import { FastlyApiContext, FetchError, loadApiKey } from "../util/fastly-api.js";
 import { kvStoreEntryExists, kvStoreSubmitFile } from "../util/kv-store.js";
 import { mergeContentTypes, testFileContentType } from "../../util/content-types.js";
 import { algs } from "../compression/index.js";
@@ -94,6 +94,9 @@ import type {
   ContentFileInfoForWasmInline,
   ContentFileInfoForKVStore,
 } from "../../types/content-assets.js";
+import {
+  attemptWithRetries,
+} from "../util/retryable.js";
 
 type AssetInfo =
   ContentTypeTestResult &
@@ -123,17 +126,54 @@ type KVStoreItemDesc = {
 };
 
 async function uploadFilesToKVStore(fastlyApiContext: FastlyApiContext, kvStoreName: string, kvStoreItems: KVStoreItemDesc[]) {
-  for (const { kvStoreKey, staticFilePath, text } of kvStoreItems) {
-    if (await kvStoreEntryExists(fastlyApiContext, kvStoreName, kvStoreKey)) {
-      // Already exists in KV Store
-      console.log(`✔️ Asset already exists in KV Store with key "${kvStoreKey}".`)
-    } else {
-      // Upload to KV Store
-      const fileData = fs.readFileSync(staticFilePath);
-      await kvStoreSubmitFile(fastlyApiContext!, kvStoreName!, kvStoreKey, fileData);
-      console.log(`✔️ Submitted ${text ? 'text' : 'binary'} asset "${staticFilePath}" to KV Store with key "${kvStoreKey}".`)
+
+  const maxConcurrent = 12;
+  let index = 0; // Shared among workers
+
+  async function worker() {
+    while (index < kvStoreItems.length) {
+      const currentIndex = index;
+      index = index + 1;
+      const { kvStoreKey, staticFilePath, text } = kvStoreItems[currentIndex];
+
+      try {
+        await attemptWithRetries(
+          async() => {
+            if (await kvStoreEntryExists(fastlyApiContext, kvStoreName, kvStoreKey)) {
+              console.log(`✔️ Asset already exists in KV Store with key "${kvStoreKey}".`);
+              return;
+            }
+            const fileData = fs.readFileSync(staticFilePath);
+            await kvStoreSubmitFile(fastlyApiContext, kvStoreName, kvStoreKey, fileData);
+            console.log(`✔️ Submitted ${text ? 'text' : 'binary'} asset "${staticFilePath}" to KV Store with key "${kvStoreKey}".`)
+          },
+          {
+            onAttempt(attempt) {
+              if (attempt > 0) {
+                console.log(`Attempt ${attempt + 1} for: ${kvStoreKey}`);
+              }
+            },
+            onRetry(attempt, err, delay) {
+              let statusMessage = 'unknown';
+              if (err instanceof FetchError) {
+                statusMessage = `HTTP ${err.status}`;
+              } else if (err instanceof TypeError) {
+                statusMessage = 'transport';
+              }
+              console.log(`Attempt ${attempt + 1} for ${kvStoreKey} gave retryable error (${statusMessage}), delaying ${delay} ms`);
+            },
+          }
+        );
+      } catch (err) {
+        const e = err instanceof Error ? err : new Error(String(err));
+        console.error(`❌ Failed: ${kvStoreKey} → ${e.message}`);
+        console.error(e.stack);
+      }
     }
   }
+
+  const workers = Array.from({ length: maxConcurrent }, () => worker());
+  await Promise.all(workers);
 }
 
 function writeKVStoreEntriesToFastlyToml(kvStoreName: string, kvStoreItems: KVStoreItemDesc[]) {
@@ -154,7 +194,7 @@ function writeKVStoreEntriesToFastlyToml(kvStoreName: string, kvStoreItems: KVSt
 
     if (fastlyToml.indexOf(kvStoreName) !== -1) {
       // don't do this!
-      console.error("improperly configured entry for '${kvStoreName}' in fastly.toml");
+      console.error(`improperly configured entry for '${kvStoreName}' in fastly.toml`);
       // TODO: handle thrown exception from callers
       throw "No"!
     }

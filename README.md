@@ -4,7 +4,7 @@ Using a static site generator to build your website? Do you simply need to serve
 
 ## Prerequisites
 
-Node 18 or newer is required during the build step, as we now rely on its `experimental-fetch` feature.
+Although your published application runs on a Fastly Compute service, the publishing process offered by this package requires Node.js 20 or newer.
 
 ## How it works
 
