@@ -128,11 +128,9 @@ type KVStoreItemDesc = {
 async function uploadFilesToKVStore(fastlyApiContext: FastlyApiContext, kvStoreName: string, kvStoreItems: KVStoreItemDesc[]) {
 
   const maxConcurrent = 12;
-  let index = 0;
+  let index = 0; // Shared among workers
 
   async function worker() {
-    // This loop is safe because JavaScript is single-threaded.
-    // Workers pull work one item at a time using a shared index.
     while (index < kvStoreItems.length) {
       const currentIndex = index;
       index = index + 1;
