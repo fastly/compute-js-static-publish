@@ -7,6 +7,8 @@ This is straightforward if you're using `compute-js-static-publisher` out-of-the
 
 ## KV Store
 
+KV Store is no longer optional as of v7
+
 Starting with `v5.0.0`, this tool refers to the KV Store using its finalized product name, "KV Store". References in
 code and in configuration that used the previous "Object Store" name have been changed to the new name. If you have
 been using the feature, you can take the following steps:
@@ -36,6 +38,8 @@ been using the feature, you can take the following steps:
     ```
 
 ## Webpack
+
+Webpack is no longer enabled for new projects
 
 Starting with `v4.0.0` of this tool, webpack is no longer required and is disabled by default for new applications. This can simplify development and result in shorter build times. 
 

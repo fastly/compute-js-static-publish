@@ -1,11 +1,16 @@
-export type NormalizeAction<T> = (value: any, errors: string[]) => T | null;
+/*
+ * Copyright Fastly, Inc.
+ * Licensed under the MIT license. See LICENSE file for details.
+ */
+
+export type NormalizeAction<T> = (value: Record<string, any>, errors: string[]) => T | null;
 
 export function buildNormalizeFunctionForObject<TObject>(action: NormalizeAction<TObject>) {
 
-  return (obj: any, errCtx: string[] = []): TObject | null => {
+  return (obj: unknown, errCtx: string[] = []): TObject | null => {
 
-    if (obj == null) {
-      errCtx.push('obj cannot be null.');
+    if (obj == null || typeof obj !== 'object') {
+      errCtx.push('obj must be an object.');
       return null;
     }
 
@@ -25,7 +30,7 @@ export function buildNormalizeFunctionForObject<TObject>(action: NormalizeAction
 
 export function buildNormalizeFunctionForArray<TEntry>(action: NormalizeAction<TEntry>) {
 
-  return (obj: any, errCtx: string[] = []): TEntry[] | null => {
+  return (obj: unknown, errCtx: string[] = []): TEntry[] | null => {
 
     if (!Array.isArray(obj)) {
       errCtx.push('obj must be array.');

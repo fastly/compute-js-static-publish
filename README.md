@@ -1,32 +1,38 @@
 # Static Publisher for JavaScript on Fastly Compute
 
-Using a static site generator to build your website? Do you simply need to serve some static files? With `compute-js-static-publish`, now you can deploy and serve everything from Fastly's blazing-fast [Compute](https://developer.fastly.com/learning/compute/).
-
-## Prerequisites
-
-Although your published application runs on a Fastly Compute service, the publishing process offered by this package requires Node.js 20 or newer.
+Using a static site generator to build your website? Do you simply need to serve some static files? With `compute-js-static-publish`, now you can deploy and serve everything from Fastly's [Compute](https://developer.fastly.com/learning/compute/) platform.
 
 ## How it works
 
-You have some HTML files, along with some accompanying CSS, JavaScript, image, and font files in a directory. Perhaps you've used a framework or static site generator to build these files.
+You have some HTML files, along with some accompanying CSS, JavaScript, image, and/or font files in a directory. Perhaps you've used a framework or static site generator to build these files.
 
-Assuming the root directory that contains your static files is `./public`,
+Assuming the root directory that contains your static files is `./public`:
 
 ### 1. Run `compute-js-static-publish`
 
 ```shell
-npx @fastly/compute-js-static-publish@latest --root-dir=./public
+npx @fastly/compute-js-static-publish@latest --root-dir=./public --kv-store-name=my-store
 ```
 
-This will generate a Compute application at `./compute-js`. It will add a default `./compute-js/src/index.js` file that instantiates the [`PublisherServer`](#publisherserver) class and runs it to serve the static files from your project.
+This will scaffold a Compute application at `./compute-js`. It will add a default `./compute-js/src/index.js` file that instantiates the [`PublisherServer`](#publisherserver) class and runs it to serve the static files from your project.
+
+You must also specify the name of a Fastly KV Store that you will be using when you deploy your application. The KV Store doesn't have to exist yet, we'll be doing that in the next step.
 
 > [!TIP]
 > This process creates a `./compute-js/static-publish.rc.js` to hold your configuration. This, as well as the other files created in your new Compute program at `./compute-js`, can be committed to source control (except for the ones we specify in `.gitignore`!) 
 
-> [!IMPORTANT]
-> This step generates an application that includes your files and a program that serves them, and needs to be run only once. To make modifications to your application, simply make changes to your static files and rebuild it. Read the rest of this section for more details.
+### 2. Set up your Fastly Service and KV Store
 
-### 2. Test your application locally
+
+
+
+
+The above step of generating your application that includes your files and a program that serves them, and needs to be run only once. To make modifications to your application, simply make changes to your static files and rebuild it. Read the rest of this section for more details.
+
+
+### 3. Test your application locally
+
+Once your application has been generated and your KV Store is ready, it's ready to be run!
 
 The `start` script builds and runs your application using [Fastly's local development server](https://developer.fastly.com/learning/compute/testing/#running-a-local-testing-server).
 
@@ -57,6 +63,10 @@ The `deploy` script builds and [publishes your application to a Compute service 
 npm run deploy
 ```
 
+## Prerequisites
+
+Although your published application runs on a Fastly Compute service, the publishing process offered by this package requires Node.js 20.11 or newer.
+
 ## Features
 
 - Simple to set up, with a built-in server module.
@@ -65,7 +75,8 @@ npm run deploy
 - Brotli and Gzip compression.
 - Support for `If-None-Match` and `If-Modified-Since` request headers.
 - Optionally use webpack as a module bundler.
-- Selectively serve files from Fastly's [KV Store](#kv-store), or embedded into your Wasm module.
+- Files are kept in Fastly's [KV Store](#kv-store). It is also possible to selectively serve some files
+  embedded into your Wasm module.
 - Supports loading JavaScript files as code into your Compute application.
 - Presets for several static site generators.
 
@@ -76,8 +87,8 @@ Some of these features are new! If you wish to update to this version, you may n
 Once your application is scaffolded, `@fastly/compute-js-static-publish` integrates into your development process by
 running as part of your build process.
 
-The files you have configured to be included (`--root-dir`) are enumerated and prepared. Their contents are included into
-your Wasm binary (or made available via [KV Store](#kv-store), if so configured). This process is called "publishing".
+The files you have configured to be included (`--root-dir`) are enumerated and prepared. Their contents are uploaded into
+Fastly's [KV Store](#kv-store). This process is called "publishing".
 
 Once the files are published, they are available to the other source files in the Compute application. For example,
 the stock application runs the [PublisherServer](#publisherserver) class to serve these files.
@@ -131,14 +142,19 @@ reading from stored configuration, then scanning the `--public-dir` directory to
 
 Any relative file and directory paths passed at the command line are handled as relative to the current directory.
 
+### Required options:
+
+| Option             | Description                                                                                                                                |
+|--------------------|--------------------------------------------------------------------------------------------------------------------------------------------|
+| `--root-dir`       | The root of the directory that contains the files to include in the publishing. All files you wish to include must reside under this root. |
+| `--kv-store-name`  | The name of a [Fastly KV Store](https://developer.fastly.com/learning/concepts/data-stores/#kv-stores) to hold your assets.                |
+
 ### Publishing options:
 
-| Option                      | Default                                  | Description                                                                                                                                              |
-|-----------------------------|------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `--preset`                  | (None)                                   | Apply default options from a specified preset. See ["Frameworks and Static Site Generators"](#usage-with-frameworks-and-static-site-generators).         |
-| `--output`                  | `./compute-js`                           | The directory in which to create the Compute application.                                                                                                |
-| `--static-content-root-dir` | (output directory) + `/static-publisher` | The directory under the Compute application where static asset and metadata are written.                                                                 |
-| `--root-dir`                | (None)                                   | **Required**. The root of the directory that contains the files to include in the publishing. All files you wish to include must reside under this root. |
+| Option                           | Default                                  | Description                                                                                                                                         |
+|----------------------------------|------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------|
+| `--output`                       | `./compute-js`                           | The directory in which to create the Compute application.                                                                                           |
+| `--static-publisher-working-dir` | (output directory) + `/static-publisher` | The directory under the Compute application where asset files are written in preparation for upload to the KV Store and for serving for local mode. |
 
 ### Server options:
 
@@ -169,30 +185,6 @@ These arguments are used to populate the `fastly.toml` and `package.json` files 
 | `--description`   | `description` from `package.json`, or `Compute static site`  | The description of your Compute application.                                                                                                                                                                                                                                                     |
 | `--author`        | `author` from `package.json`, or `you@example.com`           | The author of your Compute application.                                                                                                                                                                                                                                                          |
 | `--service-id`    | (None)                                                       | The ID of an existing Fastly WASM service for your Compute application.                                                                                                                                                                                                                          |
-| `--kv-store-name` | (None)                                                       | The name of an existing [Fastly KV Store](https://developer.fastly.com/learning/concepts/data-stores/#kv-stores) to hold the content assets. In addition, a Resource Link to this KV Store must already exist on the service specified by `--service-id` and have the same name as the KV Store. |
-
-## Usage with frameworks and static site generators
-
-`compute-js-static-publish` supports preset defaults for a number of frameworks and static site generators:
-
-| `--preset`                    | `--root-dir` | `--static-dir`   | Notes                                                                                                                               |
-|-------------------------------|--------------|------------------|-------------------------------------------------------------------------------------------------------------------------------------|
-| `cra` (or `create-react-app`) | `./build`    | `./build/static` | For apps written using [Create React App](https://create-react-app.dev). Checks for a dependency on `react-scripts`.                |
-| `cra-eject`                   | `./build`    | `./build/static` | For apps written using Create React App, but which have since been ejected via `npm run eject`. Does not check for `react-scripts`. |
-| `vite`                        | `./dist`     | (None)           | For apps written using [Vite](https://vitejs.dev).                                                                                  |
-| `sveltekit`                   | `./dist`     | (None)           | For apps written using [SvelteKit](https://kit.svelte.dev).                                                                         |
-| `vue`                         | `./dist`     | (None)           | For apps written using [Vue](https://vuejs.org), and that were created using [create-vue](https://github.com/vuejs/create-vue).     |
-| `next`                        | `./out`      | (None)           | For apps written using [Next.js](https://nextjs.org), using `npm run export`. *1                                                    |
-| `astro`                       | `./dist`     | (None)           | For apps written using [Astro](https://astro.build) (static apps only). *2                                                          |
-| `gatsby`                      | `./public`   | (None)           | For apps written using [Gatsby](https://www.gatsbyjs.com).                                                                          |
-| `docusaurus`                  | `./build`    | (None)           | For apps written using [Docusaurus](https://docusaurus.io)                                                                          |
-
-You may still override any of these options individually.
-
-*1 - For Next.js, consider using `@fastly/next-compute-js`, a Next.js server implementation that allows you to run
-   your Next.js application on Compute.
-
-*2 - Astro support does not support SSR.
 
 ## PublisherServer
 
@@ -210,7 +202,7 @@ This server handles the following automatically:
 * Can be configured to serve a 404 not found file.
 * Returns `null` if nothing matches, so that you can add your own handling if necessary.
 
-During initial scaffolding, the configuration based on the command-line parameters and preset are written to your `./static-publisher.rc.js` file under the `server` key.
+During initial scaffolding, the configuration based on the command-line parameters is written to your `./static-publisher.rc.js` file under the `server` key.
 
 ### Configuring PublisherServer
 
@@ -227,7 +219,8 @@ You can further configure the server by making modifications to the `server` key
 | `notFoundPageFile` | `null`             | Asset key of a content item to serve with a status code of `404` when a GET request comes arrives for an unknown asset, and the Accept header includes text/html.                                                                    |
 
 For `staticItems`:
-* Items that contain asterisks are interpreted as glob patterns (for example, `/public/static/**/*.js`)
+* The item name that is tested is the path of the request, without applying the publicDirPrefix.  
+* Items that contain asterisks are interpreted as glob patterns (for example, `/static/**/*.js`)
 * Items that end with a trailing slash are interpreted as a directory name.
 * Items that don't contain asterisks and that do not end in slash are checked for exact match.
 
@@ -256,20 +249,24 @@ ID of the service. The Fastly CLI will deploy to the service identified by this 
 To specify the service at the time you are scaffolding the project (for example, if you are running this tool and deploying
 as part of a CI process), specify the `--service-id` command line argument to populate `fastly.toml` with this value.
 
-## Using the KV Store (BETA)
+## Using the KV Store
 
 <div id="kv-store"></div>
 
-Starting with v4, it's now possible to upload assets to and serve them from a [Fastly KV Store](https://developer.fastly.com/learning/concepts/data-stores/#kv-stores).
+// Also, allow populating kv-store and publish id from command line
 
-When this mode is enabled, you build your application as normal, and as a step during the build, your files
-are uploaded to the Fastly KV Store, and metadata in the application is marked to source them from there instead
-of from bytes in the Wasm binary.
+Starting with v7, assets are uploaded to a [Fastly KV Store](https://developer.fastly.com/learning/concepts/data-stores/#kv-stores)
+during the publishing process. In addition, the index file is also saved to the KV store. As a result, building this way
+requires no deploy of your application to release a new version.
+
+// You build your application as normal, and as a step during the build, your files
+// are uploaded to the Fastly KV Store, and metadata in the application is marked to source them from there instead
+// of from bytes in the Wasm binary.
 
 You can enable the use of KV Store with `@fastly/compute-js-static-publish` as you scaffold your application, or
 at any later time.
 
-At the time you enable the use of KV Store:
+At the time you perform a publish:
 
 * Your Fastly service must already exist. See [Associating your project with a Fastly Service](#associating-your-project-with-a-fastly-service) above.
 
@@ -354,12 +351,11 @@ And that's it! It should be possible to run this task to clean up once in a whil
 
 ### The `static-publish.rc.js` config file <a name="static-publish-rc"></a>
 
-* `rootDir` - All files under this root directory will be included by default in the publishing,
+* `rootDir` - _Required._ All files under this root directory will be included by default in the publishing,
   except for those that are excluded using some of the following features. Files outside this root cannot be
   included in the publishing.
 
-* `staticContentRootDir` - Static asset loader and metadata files are created under this directory.
-  For legacy compatibility, if not provided, defaults to `'./src'`.
+* `staticPublisherWorkingDir` - _Required._ Static asset loader and metadata files are created under this directory.
 
 * `kvStoreName` - Set this value to the _name_ of an existing KV Store to enable uploading of content assets
   to Fastly KV Store. See [Using the KV Store](#kv-store) for more information.
@@ -379,34 +375,18 @@ And that's it! It should be possible to run this task to clean up once in a whil
 * `includeWellKnown` - Unless disabled, will include a file or directory called `.well-known`
   even if `excludeDotfiles` would normally exclude it. This is `true` by default.
 
-* `contentAssetInclusionTest` - Optionally specify a test function that can be run against each enumerated asset during
-  the publishing, to determine whether to include the asset as a content asset. For every file, this function is passed
+* `kvStoreAssetInclusionTest` - Optionally specify a test function that can be run against each enumerated asset during
+  the publishing, to determine whether to include the asset. For every file, this function is passed
   the [asset key](#asset-keys), as well as its content type (MIME type string). You may return one of three values from
   this function:
-  * Boolean `true` - Include the file as a content asset in this publishing. Upload the file to and serve it from the
-    KV Store if KV Store mode is enabled, or include the contents of the file in the Wasm binary if KV Store
-    mode is not enabled.
-  * String `"inline"` - Include the file as a content asset in this publishing. Include the contents of the file in the
-    Wasm binary, regardless of whether KV Store mode is enabled.
-  * Boolean `false` - Do not include this file as a content asset in this publishing.
-
-  If you do not provide a function, then every file will be included in this publishing as a content asset, and their
-  contents will be uploaded to and served from the KV Store if KV Store mode is enabled, or included in the Wasm
-  binary if KV Store mode is not enabled.
+  * Boolean `true` - Include the file. It is uploaded to the KV Store.
+  * Boolean `false` - exclude the file.
+  * Object. Include the file. It is uploaded to the KV Store. This object may specify, optionally:
+    * `contentType` to override the Content type
+    * `contentCompression` an array of strings to override the content compression types. Specify an empty array for no compression. 
 
 * `contentCompression` - During the publishing, the tool will pre-generate compressed versions of content assets in these
-  formats and make them available to the Publisher Server or your application. Default value is [ 'br' | 'gzip' ] if
-  KV Store is enabled, or [] if KV Store is not enabled.
-
-* `moduleAssetInclusionTest` - Optionally specify a test function that can be run against each enumerated asset during
-  the publishing, to determine whether to include the asset as a module asset. For every file, this function is passed
-  the [asset key](#asset-keys), as well as its content type (MIME type string). You may return one of three values from this function:
-  * `true` (boolean) - Include the file as a module asset in this publishing.
-  * `"static-import"` (string) - Include the file as a module asset in this publishing, and statically import it. This causes
-    any top-level code in these modules to run at application initialization time.
-  * `false` (boolean) - Do not include this file as a module asset in this publishing.
-
-  If you do not provide a function, then no module assets will be included in this publishing.
+  formats and make them available to the Publisher Server or your application. Default value is [ 'br' | 'gzip' ].
 
 * `contentTypes` - Provide custom content types and/or override them.
 
@@ -453,13 +433,13 @@ For example, if the `PublisherServer` is unable to formulate a response to the r
 add your own code to handle these cases, such as to provide custom responses.
 
 ```js
-import { getServer } from './statics.js';
-const staticContentServer = getServer();
+import { getPublisherServer } from './statics.js';
+const publisherServer = getPublisherServer();
 
 addEventListener("fetch", (event) => event.respondWith(handleRequest(event)));
 async function handleRequest(event) {
 
-  const response = await staticContentServer.serveRequest(event.request);
+  const response = await publisherServer.serveRequest(event.request);
   if (response != null) {
     return response;
   }
@@ -476,6 +456,9 @@ async function handleRequest(event) {
 Publishing, as described earlier, is the process of preparing files for inclusion into your application.
 This process also makes metadata available about each of the files that are included, such as its content type, the last
 modified date, the file hash, and so on.
+
+Publishing can also set up to embed content and modules into the Wasm binary of your Compute app if so configured,
+although this usage will require your Wasm binary to be rebuilt and deployed to your service.
 
 The [`PublisherServer` class](#publisherserver) used by the default scaffolded application is a simple application of this content
 and metadata. By importing `./statics.js` into your Compute application, you can just as easily access this
@@ -527,8 +510,6 @@ asset.type;
 const storeEntry = await asset.getStoreEntry();
 
 storeEntry.contentEncoding; // null, 'br', 'gzip'
-storeEntry.hash; // SHA256 of the contents of the file
-storeEntry.size; // Size of file in bytes
 ```
 
 Regardless of which store these objects come from, they implement the `Body` interface as defined by `@fastly/js-compute`.
@@ -585,7 +566,7 @@ export function hello() {
 import { moduleAssets } from './statics';
 
 // Obtain a module asset named '/module/hello.js'
-const asset = contentAssets.getAsset('/module/hello.js');
+const asset = moduleAssets.getAsset('/module/hello.js');
 
 // Load the module
 const helloModule = await asset.getModule();
@@ -605,12 +586,6 @@ exposes plain JavaScript objects that contain the metadata about your content as
 publishing event.
 
 See the definition of `ContentAssetMetadataMapEntry` in the [`types/content-assets` file](./src/types/content-assets.ts) for more details.
-
-### Using webpack
-
-As of v4, webpack is no longer required, and is no longer part of the default scaffolded application.
-If you wish to use some features of webpack, you may include webpack in your generated application by specifying
-`--webpack` at the command line.
 
 ## Migrating
 

@@ -1,23 +1,45 @@
-import { CommandLineOptions } from "command-line-args";
+/*
+ * Copyright Fastly, Inc.
+ * Licensed under the MIT license. See LICENSE file for details.
+ */
 
 // This program creates a Fastly Compute JavaScript application
 // in a subfolder named compute-js.
 // This project can be served using fastly compute serve
 // or deployed to a Compute service using fastly compute publish.
+import * as child_process from 'node:child_process';
+import * as path from 'node:path';
+import * as fs from 'node:fs';
 
-import * as child_process from "child_process";
-import * as path from "path";
-import * as fs from "fs";
-import * as url from 'url';
+import commandLineArgs, { type CommandLineOptions, type OptionDefinition } from 'command-line-args';
 
-import { AppOptions, IPresetBase } from '../presets/preset-base.js';
-import { presets } from '../presets/index.js';
+import { dotRelative, rootRelative } from '../util/files.js';
+import { findComputeJsStaticPublisherVersion, type PackageJson } from '../util/package.js';
 
-const defaultOptions: AppOptions = {
+export type InitAppOptions = {
+  outputDir: string | undefined,
+  rootDir: string | undefined,
+  publicDir: string | undefined,
+  staticDirs: string[],
+  staticPublisherWorkingDir: string | undefined,
+  spa: string | undefined,
+  notFoundPage: string | undefined,
+  autoIndex: string[],
+  autoExt: string[],
+  name: string | undefined,
+  author: string | undefined,
+  description: string | undefined,
+  serviceId: string | undefined,
+  publishId: string | undefined,
+  kvStoreName: string | undefined,
+};
+
+const defaultOptions: InitAppOptions = {
+  outputDir: undefined,
   rootDir: undefined,
   publicDir: undefined,
   staticDirs: [],
-  staticContentRootDir: undefined,
+  staticPublisherWorkingDir: undefined,
   spa: undefined,
   notFoundPage: '[public-dir]/404.html',
   autoIndex: [ 'index.html', 'index.htm' ],
@@ -26,79 +48,91 @@ const defaultOptions: AppOptions = {
   name: 'compute-js-static-site',
   description: 'Fastly Compute static site',
   serviceId: undefined,
+  publishId: undefined,
   kvStoreName: undefined,
 };
 
-// Current directory of this program that's running.
-const __dirname = url.fileURLToPath(new URL('.', import.meta.url));
+function buildOptions(
+  packageJson: PackageJson | null,
+  commandLineValues: CommandLineOptions,
+): InitAppOptions {
 
-function processCommandLineArgs(commandLineValues: CommandLineOptions): Partial<AppOptions> {
+  // Applied in this order for proper overriding
+  // 1. defaults
+  // 2. package.json
+  // 3. command-line args
 
-  // All paths are relative to CWD.
+  const options = structuredClone(defaultOptions);
 
-  let preset: string | undefined;
+  if (packageJson?.name !== undefined) {
+    options.name = packageJson!.name;
+  }
+  if (packageJson?.author !== undefined) {
+    options.author = packageJson!.author;
+  }
+  if (packageJson?.description !== undefined) {
+    options.description = packageJson!.description;
+  }
+
   {
-    const presetValue = commandLineValues['preset'];
-    if (presetValue == null || typeof presetValue === 'string') {
-      preset = presetValue;
+    let outputDir: string | undefined;
+    const outputDirValue = commandLineValues['output'];
+    if (outputDirValue == null || typeof outputDirValue === 'string') {
+      outputDir = outputDirValue;
+    }
+    if (outputDir !== undefined) {
+      options.outputDir = outputDir;
     }
   }
 
-  let rootDir: string | undefined;
-  let publicDir: string | undefined;
   {
+    let rootDir: string | undefined;
     const rootDirValue = commandLineValues['root-dir'];
     if (rootDirValue == null || typeof rootDirValue === 'string') {
       rootDir = rootDirValue;
     }
-    if (rootDir != null) {
-      rootDir = path.resolve(rootDir);
+    if (rootDir !== undefined) {
+      options.rootDir = rootDir;
     }
+  }
 
+  {
+    let publicDir: string | undefined;
     const publicDirValue = commandLineValues['public-dir'];
     if (publicDirValue == null || typeof publicDirValue === 'string') {
       publicDir = publicDirValue;
     }
-    if (publicDir != null) {
-      publicDir = path.resolve(publicDir);
+    if (publicDir !== undefined) {
+      options.publicDir = publicDir;
     }
-
-    // If we don't have a preset, then for backwards compatibility
-    // we check if we have public-dir but no root-dir. If that is
-    // the case then we use the value public-dir as root-dir.
-    if (preset == null && rootDir == null && publicDir != null) {
-      rootDir = publicDir;
-      publicDir = undefined;
-    }
-
   }
 
-  // Filepaths provided on the command line are always given relative to CWD,
-  // so we need to resolve them.
-
-  let staticDirs: string[] | undefined;
   {
+    let staticDirs: string[] | undefined;
     const staticDirsValue = commandLineValues['static-dir'];
 
     const asArray = Array.isArray(staticDirsValue) ? staticDirsValue : [ staticDirsValue ];
     if (asArray.every((x: any) => typeof x === 'string')) {
-      staticDirs = (asArray as string[]).map(x => path.resolve(x));
+      staticDirs = asArray;
+    }
+    if (staticDirs !== undefined) {
+      options.staticDirs = staticDirs;
     }
   }
 
-  let staticContentRootDir: string | undefined;
   {
-    const staticContentRootDirValue = commandLineValues['static-content-root-dir'];
-    if (staticContentRootDirValue == null || typeof staticContentRootDirValue === 'string') {
-      staticContentRootDir = staticContentRootDirValue;
+    let staticPublisherWorkingDir: string | undefined;
+    const staticPublisherWorkingDirValue = commandLineValues['static-publisher-working-dir'];
+    if (staticPublisherWorkingDirValue == null || typeof staticPublisherWorkingDirValue === 'string') {
+      staticPublisherWorkingDir = staticPublisherWorkingDirValue;
     }
-    if (staticContentRootDir != null) {
-      staticContentRootDir = path.resolve(staticContentRootDir);
+    if (staticPublisherWorkingDir !== undefined) {
+      options.staticPublisherWorkingDir = staticPublisherWorkingDir;
     }
   }
 
-  let spa: string | undefined;
   {
+    let spa: string | undefined;
     const spaValue = commandLineValues['spa'];
     if (spaValue === null) {
       // If 'spa' is provided with a null value, then the flag was provided
@@ -108,10 +142,13 @@ function processCommandLineArgs(commandLineValues: CommandLineOptions): Partial<
     } else if (spaValue == null || typeof spaValue === 'string') {
       spa = spaValue;
     }
+    if (spa !== undefined) {
+      options.spa = spa;
+    }
   }
 
-  let notFoundPage: string | undefined;
   {
+    let notFoundPage: string | undefined;
     const notFoundPageValue = commandLineValues['not-found-page'];
     if (notFoundPageValue === null) {
       // If 'spa' is provided with a null value, then the flag was provided
@@ -121,10 +158,13 @@ function processCommandLineArgs(commandLineValues: CommandLineOptions): Partial<
     } else if (notFoundPageValue == null || typeof notFoundPageValue === 'string') {
       notFoundPage = notFoundPageValue;
     }
+    if (notFoundPage !== undefined) {
+      options.notFoundPage = notFoundPage;
+    }
   }
 
-  let autoIndex: string[] | undefined;
   {
+    let autoIndex: string[] | undefined;
     const autoIndexValue = commandLineValues['auto-index'];
 
     const asArray = Array.isArray(autoIndexValue) ? autoIndexValue : [ autoIndexValue ];
@@ -145,10 +185,13 @@ function processCommandLineArgs(commandLineValues: CommandLineOptions): Partial<
       }, []);
 
     }
+    if (autoIndex !== undefined) {
+      options.autoIndex = autoIndex;
+    }
   }
 
-  let autoExt: string[] = [];
   {
+    let autoExt: string[] = [];
     const autoExtValue = commandLineValues['auto-ext'];
 
     const asArray = Array.isArray(autoExtValue) ? autoExtValue : [ autoExtValue ];
@@ -170,182 +213,187 @@ function processCommandLineArgs(commandLineValues: CommandLineOptions): Partial<
       }, []);
 
     }
+    if (autoExt !== undefined) {
+      options.autoExt = autoExt;
+    }
   }
 
-  let name: string | undefined;
   {
+    let name: string | undefined;
     const nameValue = commandLineValues['name'];
     if (nameValue == null || typeof nameValue === 'string') {
       name = nameValue;
     }
+    if (name !== undefined) {
+      options.name = name;
+    }
   }
 
-  let author: string | undefined;
   {
+    let author: string | undefined;
     const authorValue = commandLineValues['author'];
     if (authorValue == null || typeof authorValue === 'string') {
       author = authorValue;
     }
+    if (author !== undefined) {
+      options.author = author;
+    }
   }
 
-  let description: string | undefined;
   {
+    let description: string | undefined;
     const descriptionValue = commandLineValues['description'];
     if (descriptionValue == null || typeof descriptionValue === 'string') {
       description = descriptionValue;
     }
+    if (description !== undefined) {
+      options.description = description;
+    }
   }
 
-  let serviceId: string | undefined;
   {
+    let serviceId: string | undefined;
     const serviceIdValue = commandLineValues['service-id'];
     if (serviceIdValue == null || typeof serviceIdValue === 'string') {
       serviceId = serviceIdValue;
     }
+    if (serviceId !== undefined) {
+      options.serviceId = serviceId;
+    }
   }
 
-  let kvStoreName: string | undefined;
   {
+    let publishId: string | undefined;
+    const publishIdValue = commandLineValues['publish-id'];
+    if (publishIdValue == null || typeof publishIdValue === 'string') {
+      publishId = publishIdValue;
+    }
+    if (publishId !== undefined) {
+      options.publishId = publishId;
+    }
+  }
+
+  {
+    let kvStoreName: string | undefined;
     const kvStoreNameValue = commandLineValues['kv-store-name'];
     if (kvStoreNameValue == null || typeof kvStoreNameValue === 'string') {
       kvStoreName = kvStoreNameValue;
     }
-  }
-
-  return {
-    rootDir,
-    publicDir,
-    staticDirs,
-    staticContentRootDir,
-    spa,
-    notFoundPage,
-    autoIndex,
-    autoExt,
-    name,
-    author,
-    description,
-    serviceId,
-    kvStoreName,
-  };
-
-}
-
-function pickKeys<TModel extends Record<string, unknown>>(keys: (keyof TModel)[], object: TModel): Partial<TModel> {
-
-  const result: Partial<TModel> = {};
-
-  for (const key of keys) {
-    if(object[key] !== undefined) {
-      result[key] = object[key];
+    if (kvStoreName !== undefined) {
+      options.kvStoreName = kvStoreName;
     }
   }
 
-  return result;
+  return options;
 
 }
 
 const PUBLIC_DIR_TOKEN = '[public-dir]';
 function processPublicDirToken(filepath: string, publicDir: string) {
   if (!filepath.startsWith(PUBLIC_DIR_TOKEN)) {
-    return filepath;
+    return path.resolve(filepath);
   }
 
   const processedPath = '.' + filepath.slice(PUBLIC_DIR_TOKEN.length);
-  const resolvedPath = path.resolve(publicDir, processedPath)
-  return path.relative(path.resolve(), resolvedPath);
+  return path.resolve(publicDir, processedPath)
 }
 
-export function initApp(commandLineValues: CommandLineOptions) {
+export async function action(argv: string[]) {
 
-  let options: AppOptions = defaultOptions;
-  let preset: IPresetBase | null = null;
+  const optionDefinitions: OptionDefinition[] = [
+    { name: 'verbose', type: Boolean },
 
-  const presetName = (commandLineValues['preset'] as string | null) ?? 'none';
-  if(presetName !== 'none') {
-    const presetClass = presets[presetName];
-    if(presetClass == null) {
-      console.error('Unknown preset name.');
-      console.error("--preset must be one of: none, " + (Object.keys(presets).join(', ')));
-      process.exitCode = 1;
-      return;
-    }
-    preset = new presetClass();
-  }
+    // Required. The name of a Fastly KV Store to hold the content assets.
+    // It is also added to the fastly.toml that is generated.
+    { name: 'kv-store-name', type: String, },
+
+    // Output directory. "Required" (if not specified, then defaultValue is used).
+    { name: 'output', alias: 'o', type: String, defaultValue: './compute-js', },
+
+    // Name of the application, to be inserted into fastly.toml
+    { name: 'name', type: String, },
+
+    // Description of the application, to be inserted into fastly.toml
+    { name: 'description', type: String, },
+
+    // Name of the author, to be inserted into fastly.toml
+    { name: 'author', type: String, },
+
+    // Fastly Service ID to be added to the fastly.toml that is generated.
+    { name: 'service-id', type: String },
+
+    // Required. The 'root' directory for the publishing.
+    // All assets are expected to exist under this root. Required.
+    // For backwards compatibility, if this value is not provided,
+    // then the value of 'public-dir' is used.
+    { name: 'root-dir', type: String, },
+
+    // Publish ID to be used as a prefix for all KV Store entries.
+    // If not provided, the default value of 'default' is used.
+    { name: 'publish-id', type: String, },
+
+    // The 'static publisher working directory' is the directory under the Compute
+    // application where asset files are written in preparation for upload to the
+    // KV Store and for serving for local mode.
+    { name: 'static-publisher-working-dir', type: String, },
+
+    // The 'public' directory. The Publisher Server will
+    // resolve requests relative to this directory. If not specified,
+    // defaults to the same value as 'root-dir'. See README for
+    // details.
+    { name: 'public-dir', type: String, },
+
+    // Directories to specify as containing 'static' files. The
+    // Publisher Server will serve files from these directories
+    // with a long TTL.
+    { name: 'static-dir', type: String, multiple: true, },
+
+    // Path to a file to be used to serve in a SPA application.
+    // The Publisher Server will serve this file with a 200 status code
+    // when the request doesn't match a known file, and the accept
+    // header includes text/html. You may use the '[public-dir]' token
+    // if you wish to specify this as a relative path from the 'public-dir'.
+    { name: 'spa', type: String, },
+
+    // Path to a file to be used to serve as a 404 not found page.
+    // The Publisher Server will serve this file with a 404 status code
+    // when the request doesn't match a known file, and the accept
+    // header includes text/html. You may use the '[public-dir]' token
+    // if you wish to specify this as a relative path from the 'public-dir'.
+    { name: 'not-found-page', type: String, },
+
+    // List of files to automatically use as index, for example, index.html,index.htm
+    // If a request comes in but the route does not exist, we check the route
+    // plus a slash plus the items in this array.
+    { name: 'auto-index', type: String, multiple: true, },
+
+    // List of extensions to apply to a path name, for example, if
+    // http://example.com/about is requested, we can respond with http://example.com/about.html
+    { name: 'auto-ext', type: String, multiple: true, },
+  ];
+
+  const commandLineValues = commandLineArgs(optionDefinitions, { argv });
 
   let packageJson;
   try {
     const packageJsonText = fs.readFileSync("./package.json", "utf-8");
-    packageJson = JSON.parse(packageJsonText);
+    packageJson = JSON.parse(packageJsonText) as PackageJson;
   } catch {
     console.log("Can't read/parse package.json in current directory, making no assumptions!");
     packageJson = null;
   }
 
-  // Get the current compute js static publisher version.
-  let computeJsStaticPublisherVersion: string | null = null;
-  if (packageJson != null) {
-    // First try current project's package.json
-    computeJsStaticPublisherVersion =
-      packageJson.dependencies?.["@fastly/compute-js-static-publish"] ??
-      packageJson.devDependencies?.["@fastly/compute-js-static-publish"];
+  const options = buildOptions(
+    packageJson,
+    commandLineValues,
+  );
 
-    // This may be a file url if during development
-    if (computeJsStaticPublisherVersion != null) {
-
-      if (computeJsStaticPublisherVersion.startsWith('file:')) {
-        // this is a relative path from the current directory.
-        // we replace it with an absolute path
-        const relPath = computeJsStaticPublisherVersion.slice('file:'.length);
-        const absPath = path.resolve(relPath);
-        computeJsStaticPublisherVersion = 'file:' + absPath;
-      }
-
-    }
+  const COMPUTE_JS_DIR = options.outputDir;
+  if (COMPUTE_JS_DIR == null) {
+    console.error("❌ required parameter --output not provided.");
+    process.exitCode = 1;
+    return;
   }
-
-  if (computeJsStaticPublisherVersion == null) {
-    // Also try package.json of the package that contains the currently running program
-    // This is used when the program doesn't actually install the package (running via npx).
-    const computeJsStaticPublishPackageJsonPath = path.resolve(__dirname, '../../../package.json');
-    const computeJsStaticPublishPackageJsonText = fs.readFileSync(computeJsStaticPublishPackageJsonPath, 'utf-8');
-    const computeJsStaticPublishPackageJson = JSON.parse(computeJsStaticPublishPackageJsonText);
-    computeJsStaticPublisherVersion = computeJsStaticPublishPackageJson?.version;
-  }
-
-  if (computeJsStaticPublisherVersion == null) {
-    // Unexpected, but if it's still null then we go to a literal
-    computeJsStaticPublisherVersion = '^4.0.0';
-  }
-
-  if (!computeJsStaticPublisherVersion.startsWith('^') &&
-    !computeJsStaticPublisherVersion.startsWith('file:')
-  ) {
-    computeJsStaticPublisherVersion = '^' + computeJsStaticPublisherVersion;
-  }
-
-  const commandLineAppOptions = processCommandLineArgs(commandLineValues);
-
-  type PackageJsonAppOptions = Pick<AppOptions, 'author' | 'name' | 'description'>;
-
-  options = {
-    ...options,
-    ...(preset != null ? preset.defaultOptions : {}),
-    ...pickKeys(['author', 'name', 'description'], (packageJson ?? {}) as PackageJsonAppOptions),
-    ...pickKeys(['rootDir', 'publicDir', 'staticDirs', 'staticContentRootDir', 'spa', 'notFoundPage', 'autoIndex', 'autoExt', 'author', 'name', 'description', 'serviceId', 'kvStoreName'], commandLineAppOptions),
-  };
-
-  if(preset != null) {
-    if(!preset.check(packageJson, options)) {
-      console.log("Failed preset check.");
-      process.exitCode = 1;
-      return;
-    }
-  }
-
-  // Webpack now optional as of v4
-  const useWebpack = commandLineValues['webpack'] as boolean;
-
-  const COMPUTE_JS_DIR = commandLineValues.output as string;
   const computeJsDir = path.resolve(COMPUTE_JS_DIR);
 
   // Resolve the root dir, relative to current directory, and make sure it exists.
@@ -358,7 +406,7 @@ export function initApp(commandLineValues: CommandLineOptions) {
   const rootDir = path.resolve(ROOT_DIR);
   if (!fs.existsSync(rootDir) || !fs.statSync(rootDir).isDirectory()) {
     console.error(`❌ Specified root directory '${ROOT_DIR}' does not exist.`);
-    console.error(`  * ${rootDir} must exist and be a directory.`);
+    console.error(`  * ${rootRelative(rootDir)} must exist and be a directory.`);
     process.exitCode = 1;
     return;
   }
@@ -368,7 +416,7 @@ export function initApp(commandLineValues: CommandLineOptions) {
   const publicDir = path.resolve(PUBLIC_DIR);
   if (!fs.existsSync(publicDir) || !fs.statSync(publicDir).isDirectory()) {
     console.error(`❌ Specified public directory '${PUBLIC_DIR}' does not exist.`);
-    console.error(`  * ${publicDir} must exist and be a directory.`);
+    console.error(`  * ${rootRelative(publicDir)} must exist and be a directory.`);
     process.exitCode = 1;
     return;
   }
@@ -376,7 +424,7 @@ export function initApp(commandLineValues: CommandLineOptions) {
   // Public dir must be inside the root dir.
   if (!publicDir.startsWith(rootDir)) {
     console.error(`❌ Specified public directory '${PUBLIC_DIR}' is not under the asset root directory.`);
-    console.error(`  * ${publicDir} must be under ${rootDir}`);
+    console.error(`  * ${rootRelative(publicDir)} must be under ${rootRelative(rootDir)}`);
     process.exitCode = 1;
     return;
   }
@@ -386,38 +434,38 @@ export function initApp(commandLineValues: CommandLineOptions) {
   const staticDirs: string[] = [];
   for (const STATIC_DIR of STATIC_DIRS) {
     // For backwards compatibility, these values can start with [public-dir]
-    const staticDir = path.resolve(processPublicDirToken(STATIC_DIR, publicDir));
+    const staticDir = processPublicDirToken(STATIC_DIR, publicDir);
     if (!staticDir.startsWith(publicDir)) {
       console.log(`⚠️ Ignoring static directory '${STATIC_DIR}'`);
-      console.log(`  * ${staticDir} is not under ${publicDir}`);
+      console.log(`  * ${rootRelative(staticDir)} is not under ${rootRelative(publicDir)}`);
       continue;
     }
     if (!fs.existsSync(staticDir) || !fs.statSync(staticDir).isDirectory()) {
       console.log(`⚠️ Ignoring static directory '${STATIC_DIR}'`);
-      console.log(`  * ${staticDir} does not exist or is not a directory.`);
+      console.log(`  * ${rootRelative(staticDir)} does not exist or is not a directory.`);
       continue;
     }
     staticDirs.push(staticDir);
   }
 
-  // Static Content Root Dir must be under the current dir
-  let staticContentRootDir = options.staticContentRootDir;
-  if (staticContentRootDir == null) {
-    staticContentRootDir = path.resolve(computeJsDir, './static-publisher');
-  }
+  // Static Publisher Working Root Dir must be under the current dir
+  // This comes in relative to cwd.
+  const STATIC_PUBLISHER_WORKING_DIR = options.staticPublisherWorkingDir ??
+    path.resolve(computeJsDir, './static-publisher');
+  const staticPublisherWorkingDir = path.resolve(STATIC_PUBLISHER_WORKING_DIR);
   if (
-    !staticContentRootDir.startsWith(computeJsDir) ||
-    staticContentRootDir === computeJsDir ||
-    staticContentRootDir === path.resolve(computeJsDir, './bin') ||
-    staticContentRootDir === path.resolve(computeJsDir, './pkg') ||
-    staticContentRootDir === path.resolve(computeJsDir, './node_modules')
+    !staticPublisherWorkingDir.startsWith(computeJsDir) ||
+    staticPublisherWorkingDir === computeJsDir ||
+    staticPublisherWorkingDir === path.resolve(computeJsDir, './bin') ||
+    staticPublisherWorkingDir === path.resolve(computeJsDir, './pkg') ||
+    staticPublisherWorkingDir === path.resolve(computeJsDir, './src') ||
+    staticPublisherWorkingDir === path.resolve(computeJsDir, './node_modules')
   ) {
-    console.error(`❌ Specified static content root directory '${staticContentRootDir}' must be under ${computeJsDir}.`);
-    console.error(`  It also must not be bin, pkg, or node_modules.`);
+    console.error(`❌ Specified static publisher working directory '${rootRelative(staticPublisherWorkingDir)}' must be under ${rootRelative(computeJsDir)}.`);
+    console.error(`  It also must not be bin, pkg, src, or node_modules.`);
     process.exitCode = 1;
     return;
   }
-  staticContentRootDir = './' + path.relative(computeJsDir, staticContentRootDir);
 
   // SPA and Not Found are relative to the asset root dir.
 
@@ -425,16 +473,15 @@ export function initApp(commandLineValues: CommandLineOptions) {
   let spaFilename: string | undefined;
   if (SPA != null) {
     // If it starts with [public-dir], then resolve it relative to public directory.
-    spaFilename = path.resolve(processPublicDirToken(SPA, publicDir));
+    spaFilename = processPublicDirToken(SPA, publicDir);
     // At any rate it must exist under the root directory
     if (!spaFilename.startsWith(rootDir)) {
       console.log(`⚠️ Ignoring specified SPA file '${SPA}' as is not under the asset root directory.`);
-      console.log(`  * ${spaFilename} is not under ${rootDir}`);
+      console.log(`  * ${rootRelative(spaFilename)} is not under ${rootRelative(rootDir)}`);
       spaFilename = undefined;
     } else if (!fs.existsSync(spaFilename)) {
-      console.log(`⚠️ Ignoring specified SPA file '${SPA}' as it does not exist.`);
-      console.log(`  * ${spaFilename} does not exist.`);
-      spaFilename = undefined;
+      console.log(`⚠️ Warning: Ignoring specified SPA file '${SPA}' does not exist.`);
+      console.log(`  * ${rootRelative(spaFilename)} does not exist.`);
     }
   }
 
@@ -442,16 +489,15 @@ export function initApp(commandLineValues: CommandLineOptions) {
   let notFoundPageFilename: string | undefined;
   if (NOT_FOUND_PAGE != null) {
     // If it starts with [public-dir], then resolve it relative to public directory.
-    notFoundPageFilename = path.resolve(processPublicDirToken(NOT_FOUND_PAGE, publicDir));
+    notFoundPageFilename = processPublicDirToken(NOT_FOUND_PAGE, publicDir);
     // At any rate it must exist under the root directory
     if (!notFoundPageFilename.startsWith(rootDir)) {
       console.log(`⚠️ Ignoring specified Not Found file '${NOT_FOUND_PAGE}' as is not under the asset root directory.`);
-      console.log(`  * ${notFoundPageFilename} is not under ${rootDir}`);
+      console.log(`  * ${rootRelative(notFoundPageFilename)} is not under ${rootRelative(rootDir)}`);
       notFoundPageFilename = undefined;
     } else if (!fs.existsSync(notFoundPageFilename)) {
-      console.log(`⚠️ Ignoring specified Not Found file '${NOT_FOUND_PAGE}' as it does not exist.`);
-      console.log(`  * ${notFoundPageFilename} does not exist.`);
-      notFoundPageFilename = undefined;
+      console.log(`⚠️ Warning: Ignoring specified Not Found file '${NOT_FOUND_PAGE}' as it does not exist.`);
+      console.log(`  * ${rootRelative(notFoundPageFilename)} does not exist.`);
     }
   }
 
@@ -462,8 +508,9 @@ export function initApp(commandLineValues: CommandLineOptions) {
   if(exists) {
     console.error(`❌ '${COMPUTE_JS_DIR}' directory already exists!`);
     console.error(`  You should not run this command if this directory exists.`);
-    console.error(`  If you need to re-scaffold the static publisher, delete the following directory and then try again:`);
-    console.error(`  ${computeJsDir}`);
+    console.error(`  If you need to re-scaffold the static publisher Compute App,`);
+    console.error(`  delete the following directory and then try again:`);
+    console.error(`  ${rootRelative(computeJsDir)}`);
     process.exitCode = 1;
     return;
   }
@@ -473,130 +520,131 @@ export function initApp(commandLineValues: CommandLineOptions) {
   const description = options.description;
   const fastlyServiceId = options.serviceId;
   const kvStoreName = options.kvStoreName;
-
-  function rootRelative(itemPath: string | null | undefined) {
-    if (itemPath == null) {
-      return null;
-    }
-    const v = path.relative(path.resolve(), itemPath);
-    return v.startsWith('..') ? v : './' + v;
+  if (kvStoreName == null) {
+    console.error(`❌ required parameter --kv-store-name not provided.`);
+    process.exitCode = 1;
+    return;
+  }
+  let publishId = options.publishId;
+  if (publishId == null) {
+    publishId = 'default';
   }
 
+  const defaultCollectionName = 'live';
+
   console.log('');
-  console.log('Asset Root Dir          :', rootRelative(rootDir));
-  console.log('Public Dir              :', rootRelative(publicDir));
-  console.log('Static Dir              :', staticDirs.length > 0 ? staticDirs.map(rootRelative) : '(None)');
-  console.log('Static Content Root Dir :', staticContentRootDir);
-  console.log('SPA                     :', rootRelative(spaFilename) ?? '(None)');
-  console.log('404 Page                :', rootRelative(notFoundPageFilename) ?? '(None)');
-  console.log('Auto-Index              :', autoIndex.length > 0 ? autoIndex.map(rootRelative) : '(None)')
-  console.log('Auto-Ext                :', autoExt.length > 0 ? autoExt.map(rootRelative) : '(None)')
-  console.log('name                    :', name);
-  console.log('author                  :', author);
-  console.log('description             :', description);
-  console.log('Service ID              :', fastlyServiceId ?? '(None)');
-  console.log('KV Store Name           :', kvStoreName ?? '(None)');
+  console.log('Compute Application Settings');
+  console.log('----------------------------');
+  console.log('Compute Application Output Dir :', rootRelative(computeJsDir));
+  console.log('name                           :', name);
+  console.log('author                         :', author);
+  console.log('description                    :', description);
+  console.log('Service ID                     :', fastlyServiceId ?? '(None)');
+  console.log('KV Store Name                  :', kvStoreName);
+  console.log('Default Collection Name        :', defaultCollectionName);
+  console.log('Publish ID                     :', publishId);
+
   console.log('');
-  if (useWebpack) {
-    console.log('Creating project with webpack.');
-    console.log('');
-  }
+  console.log('Publish Settings');
+  console.log('----------------');
+  console.log('Publish Root Dir               :', rootRelative(rootDir));
+  console.log('Publisher Working Dir          :', rootRelative(staticPublisherWorkingDir));
+
+  console.log('');
+  console.log('Publisher Server Settings');
+  console.log('-------------------------');
+  console.log('Server Public Dir              :', rootRelative(publicDir));
+  console.log('SPA                            :', spaFilename != null ? rootRelative(spaFilename) : '(None)');
+  console.log('404 Page                       :', notFoundPageFilename != null ? rootRelative(notFoundPageFilename) : '(None)');
+  console.log('Auto-Index                     :', autoIndex.length > 0 ? autoIndex : '(None)')
+  console.log('Auto-Ext                       :', autoExt.length > 0 ? autoExt : '(None)')
+  console.log('Static Files Dir               :', staticDirs.length > 0 ? staticDirs.map(rootRelative) : '(None)');
+
+  console.log('');
 
   console.log("Initializing Compute Application in " + computeJsDir + "...");
   fs.mkdirSync(computeJsDir);
   fs.mkdirSync(path.resolve(computeJsDir, './src'));
 
-  const staticContentRootDirFromRoot = staticContentRootDir.slice(1);
-
-  let staticFiles = staticContentRootDirFromRoot;
-  if (staticContentRootDirFromRoot === '/src') {
-    staticFiles = `\
-${staticContentRootDirFromRoot}/statics.js
-${staticContentRootDirFromRoot}/statics.d.ts
-${staticContentRootDirFromRoot}/statics-metadata.js
-${staticContentRootDirFromRoot}/statics-metadata.d.ts
-${staticContentRootDirFromRoot}/static-content`;
-  }
+  const resourceFiles: Record<string, string> = {};
 
   // .gitignore
-  const gitIgnoreContent = `\
+  resourceFiles['.gitignore'] = `\
 /node_modules
 /bin
 /pkg
-${staticFiles}
+/${path.relative(computeJsDir, staticPublisherWorkingDir)}
 `;
-  const gitIgnorePath = path.resolve(computeJsDir, '.gitignore');
-  fs.writeFileSync(gitIgnorePath, gitIgnoreContent, "utf-8");
 
   // package.json
-  const packageJsonContent: Record<string, any> = {
+  const computeJsStaticPublisherVersion = findComputeJsStaticPublisherVersion(packageJson);
+  resourceFiles['package.json'] = JSON.stringify({
     name,
     version: '0.1.0',
     description,
     author,
     type: 'module',
     devDependencies: {
-      "@fastly/cli": "^10.14.0",
+      "@fastly/cli": "^11.2.0",
       '@fastly/compute-js-static-publish': computeJsStaticPublisherVersion,
     },
     dependencies: {
-      '@fastly/js-compute': '^3.0.0',
+      '@fastly/js-compute': '^3.26.0',
     },
     engines: {
-      node: '>=20.0.0',
+      node: '>=20.11.0',
     },
-    license: 'UNLICENSED',
     private: true,
     scripts: {
+      prestart: "npx @fastly/compute-js-static-publish publish-content --local-only",
       start: "fastly compute serve",
       deploy: "fastly compute publish",
-      prebuild: 'npx @fastly/compute-js-static-publish --build-static',
+      "publish-content": 'npx @fastly/compute-js-static-publish publish-content',
       build: 'js-compute-runtime ./src/index.js ./bin/main.wasm'
     },
-  };
-
-  if (useWebpack) {
-    delete packageJsonContent.type;
-    packageJsonContent.devDependencies = {
-      ...packageJsonContent.devDependencies,
-      'webpack': '^5.75.0',
-      'webpack-cli': '^5.0.0',
-    };
-    packageJsonContent.scripts = {
-      ...packageJsonContent.scripts,
-      prebuild: 'npx @fastly/compute-js-static-publish --build-static && webpack',
-      build: 'js-compute-runtime ./bin/index.js ./bin/main.wasm'
-    };
-  }
-
-  const packageJsonContentJson = JSON.stringify(packageJsonContent, undefined, 2);
-  const packageJsonPath = path.resolve(computeJsDir, 'package.json');
-  fs.writeFileSync(packageJsonPath, packageJsonContentJson, "utf-8");
+  }, undefined, 2);
 
   // fastly.toml
-
-  // language=toml
-  const fastlyTomlContent = `\
+  const localServerKvStorePath = dotRelative(computeJsDir, path.resolve(staticPublisherWorkingDir, 'kvstore.json'));
+  resourceFiles['fastly.toml'] = /* language=text */ `\
 # This file describes a Fastly Compute package. To learn more visit:
 # https://developer.fastly.com/reference/fastly-toml/
 
 authors = [ "${author}" ]
 description = "${description}"
 language = "javascript"
-manifest_version = 2
+manifest_version = 3
 name = "${name}"
-${fastlyServiceId != null ? `service_id = "${fastlyServiceId}"
-` : ''}
+${fastlyServiceId != null ? `service_id = "${fastlyServiceId}"\n` : ''}
 [scripts]
-  build = "npm run build"
-  `;
+build = "npm run build"
 
-  const fastlyTomlPath = path.resolve(computeJsDir, 'fastly.toml');
-  fs.writeFileSync(fastlyTomlPath, fastlyTomlContent, "utf-8");
+[local_server.kv_stores]
+${kvStoreName} = { file = "${localServerKvStorePath}", format = "json" }
+
+[setup.kv_stores.${kvStoreName}]
+`;
+
+  // kvstore.json
+  resourceFiles[localServerKvStorePath] = '{}';
 
   // static-publish.rc.js
-  const rootDirRel = path.relative(computeJsDir, rootDir);
+  resourceFiles['static-publish.rc.js'] = `\
+/*
+ * Generated by @fastly/compute-js-static-publish.
+ */
 
+/** @type {import('@fastly/compute-js-static-publish').StaticPublishRc} */
+const rc = {
+  kvStoreName: ${JSON.stringify(kvStoreName)},
+  publishId: ${JSON.stringify(publishId)},
+  defaultCollectionName: ${JSON.stringify(defaultCollectionName)},
+};
+
+export default rc;
+`;
+
+  // publish-content.config.js
   // publicDirPrefix -- if public dir is deeper than the root dir, then
   // public dir is used as a prefix to drill into asset names.
   // e.g.,
@@ -637,33 +685,32 @@ ${fastlyServiceId != null ? `service_id = "${fastlyServiceId}"
     notFoundPageFile = notFoundPageFilename.slice(rootDir.length);
   }
 
-  const staticPublishJsContent = `\
+  resourceFiles['publish-content.config.js'] = `\
 /*
- * Copyright Fastly, Inc.
- * Licensed under the MIT license. See LICENSE file for details.
+ * Generated by @fastly/compute-js-static-publish.
  */
 
 // Commented items are defaults, feel free to modify and experiment!
 // See README for a detailed explanation of the configuration options.
 
-/** @type {import('@fastly/compute-js-static-publish').StaticPublisherConfig} */
+/** @type {import('@fastly/compute-js-static-publish').PublishContentConfig} */
 const config = {
-  rootDir: ${JSON.stringify(rootDirRel)},
-  staticContentRootDir: ${JSON.stringify(staticContentRootDir)},
-  ${(kvStoreName != null ? 'kvStoreName: ' + JSON.stringify(kvStoreName) : '// kvStoreName: false')},
+  rootDir: ${JSON.stringify(dotRelative(computeJsDir, rootDir))},
+  staticPublisherWorkingDir: ${JSON.stringify(dotRelative(computeJsDir, staticPublisherWorkingDir))},
   // excludeDirs: [ './node_modules' ],
   // excludeDotFiles: true,
   // includeWellKnown: true,
-  // contentAssetInclusionTest: (filename) => true,
-  // contentCompression: [ 'br', 'gzip' ], // For this config value, default is [] if kvStoreName is null. 
-  // moduleAssetInclusionTest: (filename) => false,
+  // kvStoreAssetInclusionTest: (assetKey) => true,
+  // contentCompression: [ 'br', 'gzip' ], 
   // contentTypes: [
   //   { test: /.custom$/, contentType: 'application/x-custom', text: false },
   // ],
+  
+  // Server settings are saved to the KV Store per collection
   server: {
     publicDirPrefix: ${JSON.stringify(publicDirPrefix)},
     staticItems: ${JSON.stringify(staticItems)},
-    // compression: [ 'br', 'gzip' ],
+    allowedEncodings: [ 'br', 'gzip' ],
     spaFile: ${JSON.stringify(spaFile)},
     notFoundPageFile: ${JSON.stringify(notFoundPageFile)}, 
     autoExt: ${JSON.stringify(autoExt)},
@@ -671,35 +718,21 @@ const config = {
   },
 };
 
-${useWebpack ? 'module.exports =' : 'export default'} config;
+export default config;
 `;
 
-  const staticPublishJsonPath = path.resolve(computeJsDir, 'static-publish.rc.js');
-  fs.writeFileSync(staticPublishJsonPath, staticPublishJsContent, "utf-8");
-
-  // Copy resource files
-
-  if (useWebpack) {
-    // webpack.config.js
-    const webpackConfigJsSrcPath = path.resolve(__dirname, '../../../resources/webpack.config.js');
-    const webpackConfigJsPath = path.resolve(computeJsDir, 'webpack.config.js');
-    fs.copyFileSync(webpackConfigJsSrcPath, webpackConfigJsPath);
-  }
-
   // src/index.js
-  const staticsRelativePath = staticContentRootDir !== './src' ?
-    path.relative('./src', staticContentRootDir) :
-    '.';
-  const indexJsContent = /* language=JavaScript */ `\
+  resourceFiles['./src/index.js'] = /* language=text */ `\
 /// <reference types="@fastly/js-compute" />
-import { getServer } from '${staticsRelativePath}/statics.js';
-const staticContentServer = getServer();
+import { PublisherServer } from '@fastly/compute-js-static-publish';
+import rc from '../static-publish.rc.js';
+const publisherServer = PublisherServer.fromStaticPublishRc(rc);
 
 // eslint-disable-next-line no-restricted-globals
 addEventListener("fetch", (event) => event.respondWith(handleRequest(event)));
 async function handleRequest(event) {
 
-  const response = await staticContentServer.serveRequest(event.request);
+  const response = await publisherServer.serveRequest(event.request);
   if (response != null) {
     return response;
   }
@@ -710,8 +743,13 @@ async function handleRequest(event) {
   return new Response('Not found', { status: 404 });
 }
 `;
-  const indexJsPath = path.resolve(computeJsDir, './src/index.js');
-  fs.writeFileSync(indexJsPath, indexJsContent, 'utf-8');
+
+  // Write out the files
+  for (const [filename, content] of Object.entries(resourceFiles)) {
+    const filePath = path.resolve(computeJsDir, filename);
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, content, 'utf-8');
+  }
 
   console.log("🚀 Compute application created!");
 
@@ -731,5 +769,4 @@ async function handleRequest(event) {
   console.log('  cd ' + COMPUTE_JS_DIR);
   console.log('  npm run deploy');
   console.log('');
-
 }
