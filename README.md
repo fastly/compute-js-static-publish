@@ -1,606 +1,644 @@
 # Static Publisher for JavaScript on Fastly Compute
 
-Using a static site generator to build your website? Do you simply need to serve some static files? With `compute-js-static-publish`, now you can deploy and serve everything from Fastly's [Compute](https://developer.fastly.com/learning/compute/) platform.
+## 📖 Table of Contents
 
-## How it works
+- [✨ Key Features](#-key-features)
+- [🏁 Quick Start](#-quick-start)
+- [⚙️ Configuring `static-publish.rc.js`](#️-configuring-static-publishrcjs)
+- [🧾 Default Server Config: `publish-content.config.js`](#-default-server-config-publish-contentconfigjs)
+- [📦 Collections (Preview, Deploy, Promote)](#-collections-preview-deploy-promote)
+- [🧹 Cleaning Up](#-cleaning-up)
+- [🔄 Content Compression](#-content-compression)
+- [🧩 Using PublisherServer in Custom Apps](#-using-publisherserver-in-custom-apps)
+- [📥 Using Published Assets in Your Code](#-using-published-assets-in-your-code)
+- [📚 Next Steps](#-next-steps)
 
-You have some HTML files, along with some accompanying CSS, JavaScript, image, and/or font files in a directory. Perhaps you've used a framework or static site generator to build these files.
+Serve static websites and web apps at the edge &mdash; no backends and no CDN invalidation delays.
 
-Assuming the root directory that contains your static files is `./public`:
+`@fastly/compute-js-static-publish` helps you deploy static files to [Fastly Compute](https://developer.fastly.com/learning/compute/) using Fastly's KV Store for fast, cacheable, and content-addressed delivery.
 
-### 1. Run `compute-js-static-publish`
+## ✨ Key Features
 
-```shell
-npx @fastly/compute-js-static-publish@latest --root-dir=./public --kv-store-name=my-store
+- 📦 Easy to scaffold and deploy
+- 🚀 Content stored in Fastly KV Store using hashed keys
+- 🔁 Publish new content without deploying new Wasm binaries
+- 🗂 Organize releases into named collections which can be previewed (e.g. `live`, `staging`, `preview-123`)
+- 🧼 Cleanup tools to remove expired or orphaned files
+- ⚙️ Configurable per-collection server configurations (e.g. fallback files)
+- 🔒 Supports Brotli/gzip compression, conditional GET, and long cache TTLs
+
+---
+
+## 🏁 Quick Start
+
+### 1. Scaffold a Compute App
+
+Create a directory for your project, place your static files in `./public`, then type:
+
+```sh
+npx @fastly/compute-js-static-publish \
+  --root-dir=./public \
+  --kv-store-name=site-content
 ```
 
-This will scaffold a Compute application at `./compute-js`. It will add a default `./compute-js/src/index.js` file that instantiates the [`PublisherServer`](#publisherserver) class and runs it to serve the static files from your project.
+You get a Compute app in `./compute-js` with:
 
-You must also specify the name of a Fastly KV Store that you will be using when you deploy your application. The KV Store doesn't have to exist yet, we'll be doing that in the next step.
+- `fastly.toml` (service config)
+- `src/index.js` (entry point)
+- `static-publish.rc.js` (app config)
+- `publish-content.config.js` (publish-time / runtime behavior)
 
-> [!TIP]
-> This process creates a `./compute-js/static-publish.rc.js` to hold your configuration. This, as well as the other files created in your new Compute program at `./compute-js`, can be committed to source control (except for the ones we specify in `.gitignore`!) 
+### 2. Preview Locally
 
-### 2. Set up your Fastly Service and KV Store
+Type the following &mdash; no Fastly account or service required yet!
 
-
-
-
-
-The above step of generating your application that includes your files and a program that serves them, and needs to be run only once. To make modifications to your application, simply make changes to your static files and rebuild it. Read the rest of this section for more details.
-
-
-### 3. Test your application locally
-
-Once your application has been generated and your KV Store is ready, it's ready to be run!
-
-The `start` script builds and runs your application using [Fastly's local development server](https://developer.fastly.com/learning/compute/testing/#running-a-local-testing-server).
-
-```shell
-cd ./compute-js
+```sh
+cd compute-js
 npm install
 npm run start
 ```
 
-The build process scans your `./public` directory to generate files in the `./compute-js/static-publisher` directory. These files are packaged into your application's Wasm binary.
+Fastly's [local development environment](https://www.fastly.com/documentation/guides/compute/testing/#running-a-local-testing-server) serves your static website at `http://127.0.0.1:7676`, powered by a simulated KV Store.
 
-Once your application is running, your files will be served under `http://127.0.0.1:7676/` at the corresponding paths relative to the `./public` directory. For example, making a request to `http://127.0.0.1:7676/foo/bar.html` will attempt to serve the file at `./public/foo/bar.html`.
+### 3. Deploy Your App
 
-### 3. Make changes to your application
+Ready to go live? All you need is a [free Fastly account](https://www.fastly.com/signup/?tier=free)!
 
-Now, you're free to make changes to your static files. Add, modify, or remove files in the `./public` directory, and then re-build and re-run your application by typing `npm run start` again.
-
-Each time you re-build the project, `compute-js-static-publish` will re-scan your `./public` directory and regenerate the files in the `./compute-js/static-publisher` directory.
-
-> [!TIP]
-> You can make further customizations to the behavior of your application, such as specifying directories of your static files, specifying whether to use GZIP compression on your files, specifying custom MIME types of your files, and more. You can also run custom code alongside the default server behavior, or even access the contents of the files directly from custom code. See [Advanced Usages](#advanced-usages) below for details. Rebuilding will not modify the files in your `./compute-js/src` directory, so feel safe making customizations to your code.
-
-### 4. When you're ready to go live, deploy your Compute service
-
-The `deploy` script builds and [publishes your application to a Compute service in your Fastly account](https://developer.fastly.com/reference/cli/compute/publish/).
-
-```shell
+```sh
 npm run deploy
 ```
 
-## Prerequisites
+The command publishes your Compute app and creates the KV Store. (No content uploaded yet!)
 
-Although your published application runs on a Fastly Compute service, the publishing process offered by this package requires Node.js 20.11 or newer.
+### 4. Publish Content
 
-## Features
-
-- Simple to set up, with a built-in server module.
-- Or, make file contents directly available to your application, so you can write your own server.
-- Content and metadata are available to your application, accessible by files' pre-package file paths.
-- Brotli and Gzip compression.
-- Support for `If-None-Match` and `If-Modified-Since` request headers.
-- Optionally use webpack as a module bundler.
-- Files are kept in Fastly's [KV Store](#kv-store). It is also possible to selectively serve some files
-  embedded into your Wasm module.
-- Supports loading JavaScript files as code into your Compute application.
-- Presets for several static site generators.
-
-Some of these features are new! If you wish to update to this version, you may need to re-scaffold your application, or follow the steps outlined in [MIGRATING.md](./MIGRATING.md).
-
-## How does it work? Where are the files?
-
-Once your application is scaffolded, `@fastly/compute-js-static-publish` integrates into your development process by
-running as part of your build process.
-
-The files you have configured to be included (`--root-dir`) are enumerated and prepared. Their contents are uploaded into
-Fastly's [KV Store](#kv-store). This process is called "publishing".
-
-Once the files are published, they are available to the other source files in the Compute application. For example,
-the stock application runs the [PublisherServer](#publisherserver) class to serve these files.
-
-For more advanced uses, such as accessing the contents of these file in your application, see the
-[Using the packaged objects in your own application](#using-published-assets-in-your-own-application) section below.
-
-Publishing is meant to run each time before building your Compute application into a Wasm file.
-If the files in `--root-dir` have changed, then a new set of files will be published.
-
-### Content Compression
-
-During publishing, this tool supports pre-compression of content. By default, your assets for select content types are
-compressed using the Brotli and gzip algorithms, and then stored alongside the original files in your Wasm binary (or
-[KV Store](#kv-store)).
-
-The content types that are compressed include any that are considered `text` types, as well as certain binary types that
-expect to see a benefit of being compressed.
-
-* Compressed text types: `.txt` `.html` `.xml` `.json` `.map` `.js` `.css` `.svg`
-* Compressed binary types: `.bmp` `.tar`
-
-To configure these content types, use the `contentTypes` field of the [`static-publish.rc.js` config file](#static-publish-rc).
-
-> [!IMPORTANT]
-> By default, pre-compressed content assets are not generated when the KV Store is not used.
-This is done to prevent the inclusion multiple of copies of each asset from making the Wasm binary too large.
-If you want to pre-compress assets when not using KV Store, add a value for 'contentCompression' to your
-`static-publish.rc.js` file.
-
-## CLI options
-
-Except for `--root-dir`, most arguments are optional.
-
-```shell
-npx @fastly/compute-js-static-publish \
-    --root-dir=./build \
-    --public-dir=./build/public \
-    --static-dir=./build/public/static \
-    --output=./compute-js \
-    --spa=./build/spa.html
+```sh
+npm run publish-content
 ```
 
-If you provide options, they override the defaults described below.
+Upload static files to the KV Store and applies the server config.  Your website is now up and live!
 
-Any configuration options will be written to a `static-publish.rc.js` file, and used each time you build your Compute
-application.
+---
 
-On subsequent builds of your Compute application, `compute-js-static-publish` will run with a special flag, `build-static`,
-reading from stored configuration, then scanning the `--public-dir` directory to recreate `./compute-js/static-publisher/statics.js`.
+## 🗂 Project Layout
 
-Any relative file and directory paths passed at the command line are handled as relative to the current directory.
+Here's what your project might look like after scaffolding:
 
-### Required options:
-
-| Option             | Description                                                                                                                                |
-|--------------------|--------------------------------------------------------------------------------------------------------------------------------------------|
-| `--root-dir`       | The root of the directory that contains the files to include in the publishing. All files you wish to include must reside under this root. |
-| `--kv-store-name`  | The name of a [Fastly KV Store](https://developer.fastly.com/learning/concepts/data-stores/#kv-stores) to hold your assets.                |
-
-### Publishing options:
-
-| Option                           | Default                                  | Description                                                                                                                                         |
-|----------------------------------|------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------|
-| `--output`                       | `./compute-js`                           | The directory in which to create the Compute application.                                                                                           |
-| `--static-publisher-working-dir` | (output directory) + `/static-publisher` | The directory under the Compute application where asset files are written in preparation for upload to the KV Store and for serving for local mode. |
-
-### Server options:
-
-Used to populate the `server` key under `static-publish.rc.js`. 
-
-| Option             | Default                 | Description                                                                                                                                                                                              |
-|--------------------|-------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `--public-dir`     | <root-dir>              | The directory that contains your website's public files.                                                                                                                                                 |
-| `--static-dir`     | (None)                  | Any directories under `--public-dir` that contain the website's static assets that will be served with a very long TTL. You can specify as many such directories as you wish, by listing multiple items. |
-| `--auto-ext`       | `.html,.htm`            | Specify automatic file extensions.                                                                                                                                                                       |
-| `--auto-index`     | `index.html,index.htm`  | Specify filenames for automatically serving an index file.                                                                                                                                               |
-| `--spa`            | (None)                  | Path to a fallback file for SPA applications.                                                                                                                                                            |
-| `--not-found-page` | `<public-dir>/404.html` | Path to a fallback file for 404 Not Found.                                                                                                                                                               |
-
-See [PublisherServer](#publisherserver) for more information about these features.
-
-For backwards compatibility, if you do not specify a `--root-dir` but you have provided a `--public-dir`, then that value is used for `--root-dir`.
-
-Note that the files referenced by `--spa` and `--not-found-page` do not necessarily have to reside inside `--public-dir`.
-
-### Fastly service options
-
-These arguments are used to populate the `fastly.toml` and `package.json` files of your Compute application.
-
-| Option            | Default                                                      | Description                                                                                                                                                                                                                                                                                      |
-|-------------------|--------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `--name`          | `name` from `package.json`, or `compute-js-static-site`      | The name of your Compute application.                                                                                                                                                                                                                                                            |
-| `--description`   | `description` from `package.json`, or `Compute static site`  | The description of your Compute application.                                                                                                                                                                                                                                                     |
-| `--author`        | `author` from `package.json`, or `you@example.com`           | The author of your Compute application.                                                                                                                                                                                                                                                          |
-| `--service-id`    | (None)                                                       | The ID of an existing Fastly WASM service for your Compute application.                                                                                                                                                                                                                          |
-
-## PublisherServer
-
-`PublisherServer` is a simple yet powerful server that can be used out of the box to serve the files prepared by this tool.
-
-This server handles the following automatically:
-
-* Maps the path of your request to a path under `--public-dir` and serves the content of the asset
-* Sources the content from the content packaged in the Wasm binary, or from the [KV Store](#kv-store), if configured.
-* Applies long-lived cache headers to files served from `--static-dir` directories. Files under these directories will be cached by the browser for 1 year. (Use versioned or hashed filenames to avoid serving stale assets.)
-* Performs Brotli and gzip compression as requested by the `Accept-Encoding` headers.
-* Provides `Last-Modified` and `ETag` response headers, and uses them with `If-Modified-Since` and `If-None-Match` request headers to produce `304 Not Modified` responses.
-* If an exact match is not found for the request path, applies automatic extensions (e.g., `.html`) and automatic index files (e.g., `index.html`).
-* Can be configured to serve a fallback file for SPA apps. Useful for apps that use [client-side routing](https://create-react-app.dev/docs/deployment#serving-apps-with-client-side-routing).
-* Can be configured to serve a 404 not found file.
-* Returns `null` if nothing matches, so that you can add your own handling if necessary.
-
-During initial scaffolding, the configuration based on the command-line parameters is written to your `./static-publisher.rc.js` file under the `server` key.
-
-### Configuring PublisherServer
-
-You can further configure the server by making modifications to the `server` key under `./static-publisher.rc.js`.
-
-| Key                | Default            | Description                                                                                                                                                                                                                          |
-|--------------------|--------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `publicDirPrefix`  | `''`               | Prefix to apply to web requests. Effectively, a directory within `rootDir` that is used by the web server to determine the asset to respond with.                                                                                    |
-| `staticItems`      | `[]`               | A test to apply to item names to decide whether to serve them as "static" files, in other words, with a long TTL. These are used for files that are not expected to change. They can be provided as a string or array of strings.    |
-| `compression`      | `[ 'br', 'gzip' ]` | If the request contains an `Accept-Encoding` header, they are checked for the values listed here. The compression algorithm that produces the smallest transfer size is applied.                                                     |
-| `autoExt`          | `[]`               | When a file is not found, and it doesn't end in a slash, then try auto-ext: we try to serve a file with the same name post-fixed with the specified strings, tested in the order listed. These are tested before auto-index, if any. |
-| `autoIndex`        | `[]`               | When a file is not found, then try auto-index: we treat it as a directory, then try to serve a file that has the specified strings, tested in the order listed.                                                                      |
-| `spaFile`          | `null`             | Asset key of a content item to serve with a status code of `200` when a GET request comes arrives for an unknown asset, and the Accept header includes text/html.                                                                    |
-| `notFoundPageFile` | `null`             | Asset key of a content item to serve with a status code of `404` when a GET request comes arrives for an unknown asset, and the Accept header includes text/html.                                                                    |
-
-For `staticItems`:
-* The item name that is tested is the path of the request, without applying the publicDirPrefix.  
-* Items that contain asterisks are interpreted as glob patterns (for example, `/static/**/*.js`)
-* Items that end with a trailing slash are interpreted as a directory name.
-* Items that don't contain asterisks and that do not end in slash are checked for exact match.
-
-For `compression`, the following values are allowed:
-* `'br'` - Brotli
-* `'gzip'` - Gzip
-
-## Associating your project with a Fastly Service
-
-The project created by this tool is a Fastly Compute JavaScript application, complete with a `fastly.toml` file that
-describes your project to the Fastly CLI.
-
-To deploy your project to production, you deploy it to a [Fastly service](https://developer.fastly.com/reference/glossary#term-service)
-in your account. Usually, you create your service automatically as part of your first deployment of the project.
-
-In this case, `fastly.toml` has no value for `service_id` at the time you deploy, so the Fastly CLI will prompt
-you to create a Fastly service in your account, after which it will save the new service's ID to your `fastly.toml` file.
-
-Alternatively, you may deploy to a service that already exists. You can create this service using the
-[Fastly CLI](https://developer.fastly.com/reference/cli/service/create/) or the [Fastly web app](https://manage.fastly.com/).
-Note that since this is a Compute application, the service must be created as a Wasm service.
-
-Before deploying your application, specify the service by setting the `service_id` value in the `fastly.toml` file to the
-ID of the service. The Fastly CLI will deploy to the service identified by this value.
-
-To specify the service at the time you are scaffolding the project (for example, if you are running this tool and deploying
-as part of a CI process), specify the `--service-id` command line argument to populate `fastly.toml` with this value.
-
-## Using the KV Store
-
-<div id="kv-store"></div>
-
-// Also, allow populating kv-store and publish id from command line
-
-Starting with v7, assets are uploaded to a [Fastly KV Store](https://developer.fastly.com/learning/concepts/data-stores/#kv-stores)
-during the publishing process. In addition, the index file is also saved to the KV store. As a result, building this way
-requires no deploy of your application to release a new version.
-
-// You build your application as normal, and as a step during the build, your files
-// are uploaded to the Fastly KV Store, and metadata in the application is marked to source them from there instead
-// of from bytes in the Wasm binary.
-
-You can enable the use of KV Store with `@fastly/compute-js-static-publish` as you scaffold your application, or
-at any later time.
-
-At the time you perform a publish:
-
-* Your Fastly service must already exist. See [Associating your project with a Fastly Service](#associating-your-project-with-a-fastly-service) above.
-
-* Your [KV Store](https://www.fastly.com/documentation/guides/concepts/edge-state/data-stores/#kv-stores) must already
-   exist under the same Fastly account, and be linked to the service. The
-   [Resource Link](https://www.fastly.com/documentation/guides/concepts/resources/) must have the same name as the
-   KV Store.
-
-To create your KV Store and link it to the service, follow these steps:
-
-```shell
-# Create a KV Store
-$ npx fastly kv-store create --name=example-store
-SUCCESS: Created KV Store 'example-store' (onvbnv9ntdvlnldtn1qwnb)
+```
+my-project/
+├── public/                              # Your static site files (HTML, CSS, JS, etc.)
+│   ├── index.html
+│   ├── scripts.js
+│   ├── styles.css
+│   └── (... other static files ...)
+└── compute-js/                          # The scaffolded Compute application
+    ├── fastly.toml                      # Fastly service configuration
+    ├── package.json                     # Scaffolded package metadata
+    ├── package-lock.json                # Dependency lockfile
+    ├── .gitignore                       # Ignores build artifacts by default
+    ├── static-publish.rc.js             # App config
+    ├── publish-content.config.js        # Publishing / runtime config
+    ├── static-publisher/                # ⚠️ Do not commit - generated content for local dev and publishing
+    │   ├── kvstore.json                 # Simulates KV Store content for local preview
+    │   └── kv-store-content/            # Preprocessed and compressed files for KV upload
+    └── src/
+        └── index.js                     # Your Compute app entry point
 ```
 
-Make a note of the KV Store ID in this response (`onvbnv9ntdvlnldtn1qwnb` in the above example). Next, use this ID 
-value to create a Resource Link between your service and the KV Store. You **MUST** use the same name for your Resource
-Link as you use for your KV Store. After linking the KV Store, activate the new version of the service.
+## ⚙️ Configuring `static-publish.rc.js`
 
-```shell
-# Link the KV Store to a service provide the KV Store ID as resource-id
-$ npx fastly resource-link create --version=latest --autoclone --resource-id=onvbnv9ntdvlnldtn1qwnb --name=example-store
-$ npx fastly service-version activate --version=latest
+This file defines your compute-js-static-publish application's settings. A copy of this is also baked into the Wasm binary and loaded when running your Compute app locally or on the edge.
+
+### Example: `static-publish.rc.js`
+
+```js
+const rc = {
+  kvStoreName: 'site-content',
+  defaultCollectionName: 'live',
+  publishId: 'default',
+};
+
+export default rc;
 ```
 
-Once the KV Store is created and linked to your service, add the name of the KV Store (`example-store` in
-　the above example) name to your `static-publish.rc.js` file under the `kvStoreName` key.
+### Fields:
 
-To specify the KV Store at the time you are scaffolding the project (for example, if you are running this tool and
-deploying as part of a CI process), specify the `--service-id` and `--kv-store-name` command line arguments to populate
-the respective files with these values.
+- `kvStoreName` - The name of the KV Store used for publishing (required).
+- `defaultCollectionName` - Collection to serve when none is specified (required).
+- `publishId` - Unique prefix for all keys in the KV Store (required). Override only for advanced setups (e.g., multiple apps sharing the same KV Store).
 
-After you have performed the above steps, go ahead and build your application as normal.
-As a new step during the build process, the tool will send these files to the KV Store.
+> [!NOTE]
+> Changes to this file require rebuilding the Compute app, since a copy of it is baked into the Wasm binary.
 
-> [!IMPORTANT]
-> This step writes to your KV Store. When building your application, you must set the environment variable `FASTLY_API_TOKEN` to a Fastly API token that has access to write to this KV Store.
-> 
-> Alternatively, if this environment variable is not found, the tool will attempt to detect an API token by calling `fastly profile token`. 
+## 🧾 Default Server Config: `publish-content.config.js`
+
+This file is included as part of the scaffolding. Every time you publish content, the publish settings in this file are used for publishing the content, and the server settings are taken from this file and saved as the settings used by the server for that collection.
+
+You can override this file for a single `publish-content` command by specifying an alternative using `--config` on the command line.
+
+```js
+const config = {
+  // these paths are relative to compute-js dir
+  rootDir: '../public',
+  staticPublisherWorkingDir: './static-publisher',
+
+  // Include/exclude filters (optional):
+  excludeDirs: ['node_modules'],
+  excludeDotfiles: true,
+  includeWellKnown: true,
+
+  // Advanced filtering (optional):
+  kvStoreAssetInclusionTest: (key, contentType) => {
+    return true; // include everything by default
+  },
+
+  // Override which compressed variants to create for each asset during publish (optional):
+  contentCompression: ['br', 'gzip'],
+
+  // Content type definitions/overrides (optional):
+  contentTypes: [
+    { test: /\.custom$/, contentType: 'application/x-custom', text: false },
+  ],
+
+  // Server settings
+  server: {
+    publicDir: './public',
+    spaFile: '/spa.html',
+    notFoundPageFile: '/404.html',
+    autoIndex: ['index.html'],
+    autoExt: ['.html'],
+    staticItems: ['/static/', '/assets/'],
+    allowedEncodings: ['br', 'gzip'],
+  }
+};
+
+export default config;
+```
+
+> [!NOTE]
+> Changes to this file apply when content is published.
+
+### Fields:
+
+- `rootDir` - Directory to scan for content, relative to this file (required).
+- `staticPublisherWorkingDir` - Directory to hold working files during publish (default: `'./static-publisher'`).
+- `excludeDirs` - Array of directory names or regex patterns to exclude (default: `['./node_modules']`).
+- `excludeDotFiles` - Exclude dotfiles and dot-named directories (default: true).
+- `includeWellKnown` - Always include `.well-known` even if dotfiles are excluded (default: true).
+- `kvStoreAssetInclusionTest` - Function to determine inclusion and variant behavior per file.
+- `contentCompression` - Array of compression formats to pre-generate (`['br', 'gzip']` by default).
+- `contentTypes` - Additional or override content type definitions.
+
+- `server` - Server runtime config that contains the following fields:  
+   - `publicDir` - The 'public' directory. The Publisher Server will
+     resolve requests relative to this directory (default: same value as 'root-dir').
+   - `spaFile` - Path to a file to be used to serve in a SPA application.
+   - `notFoundPageFile` - Path to a file to be used to serve as a 404 not found page.
+   - `autoIndex` - List of files to automatically use as index.
+   - `autoExt` - List of extensions to automatically apply to a path and retry when
+     the requested path is not found.
+   - `staticItems` - Directories to specify as containing 'static' files. The
+     Publisher Server will serve files from these directories with a long TTL.
+   - `allowedEncodings` - Specifies which compression formats the server is allowed
+     to serve based on the client's `Accept-Encoding` header.
+
+## 📦 Collections (Preview, Deploy, Promote)
+
+Collections are a powerful feature that allow you to publish and manage multiple versions of your site simultaneously. Each collection is a named set of:
+
+- Static files
+- Server configuration (e.g., fallback file, static directories, etc.)
+- An index file that maps paths to those hashes
+
+Collections are published using a `--collection-name`, and can be reused, updated, or deleted independently. For example, you can create a staging version of your site using:
+
+```sh
+npx @fastly/compute-js-static-publish publish-content \
+  --collection-name=staging \
+  --expires-in=7d \
+  --config=./publish-content.config.js
+```
+
+You can overwrite or republish any collection at any time. Old file hashes will be reused automatically where contents match.
+
+### Expiration (Auto-cleanup)
+
+Collections can expire automatically:
+
+- Expired collections return 404s
+- They’re ignored by the server
+- Their files are cleaned up by `clean`
+
+```sh
+--expires-in=3d                  # relative (e.g. 1h, 2d, 1w)
+--expires-at=2025-05-01T12:00Z  # absolute (ISO 8601)
+```
+
+### Switching the active collection
+
+By default, the app serves from the collection named in `static-publish
+.rc.js` under `defaultCollectionName`. To switch the active collection, you add custom code to your Compute app that calls `publisherServer.setActiveCollectionName(name)`:
+
+```js
+publisherServer.setActiveCollectionName("preview-42");
+```
+
+This only affects the current request (in Compute, requests do not share state).
+
+#### Example: Subdomain-based Routing
+
+```js
+import { PublisherServer, collectionSelector } from '@fastly/compute-js-static-publish';
+import rc from '../static-publish.rc.js';
+
+const publisherServer = PublisherServer.fromStaticPublishRc(rc);
+
+addEventListener("fetch", event => {
+  const request = event.request;
+  const collectionName = collectionSelector.fromHostDomain(request, /^preview-(.*)\./);
+  if (collectionName != null) {
+    publisherServer.setActiveCollectionName(collectionName);
+  }
+
+  event.respondWith(publisherServer.serveRequest(request));
+});
+```
+
+### 🔀 Selecting a Collection at Runtime
+
+The `collectionSelector` module provides helpers to extract a collection name from different parts of a request:
+
+```js
+collectionSelector.fromHostDomain(request, /^preview-(.*)\./);
+```
+
+#### From the Request URL
+
+```js
+collectionSelector.fromRequestUrl(request, url => url.pathname.split('/')[2]);
+```
+
+#### With a Custom Request Matcher
+
+```js
+collectionSelector.fromRequest(request, req => req.headers.get('x-collection') ?? 'live');
+```
+
+#### From a Cookie
+
+```js
+const { collectionName, redirectResponse } = collectionSelector.fromCookie(request);
+```
+
+#### From a Fastly Config Store
+
+```js
+collectionSelector.fromConfigStore('my-config-store', 'collection-key');
+```
+
+### 🚀 Promoting a Collection
+
+If you're happy with a preview or staging collection and want to make it live, use the `collections promote` command:
+
+```sh
+npx @fastly/compute-js-static-publish collections promote \
+  --collection-name=staging
+```
+
+This copies all content and server settings from the `staging` collection to the collection named in your `defaultCollectionName`. To copy to a different name, add `--to=some-other-name`.
+
+You can also specify a new expiration:
+
+```sh
+npx @fastly/compute-js-static-publish collections promote \
+  --collection-name=preview-42 \
+  --to=staging \
+  --expires-in=7d
+```
+
+> [!NOTE]
+> The collection denoted by `defaultCollectionName` is exempt from expiration.
+
+## 🛠 Development → Production Workflow
+
+During development, starting the local preview server (`npm run start`) will run `publish-content --local-only` automatically via a `prestart hook`. This simulates publishing by writing to `kvstore.json` instead of uploading to the actual KV Store. You can preview your site at `http://127.0.0.1:7676` - no Fastly account or service required.
+
+When you're ready for production:
+
+1. [Create a free Fastly account](https://www.fastly.com/signup/?tier=free) if you haven't already.
+2. Run `npm run deploy`
+   - This builds your Compute app into a Wasm binary
+   - Deploys it to a new or existing Fastly Compute service
+   - If creating a new service:
+      - you'll be prompted for backend info - **you can skip this**, as no backend is needed (all content is served from KV)
+      - KV Store will be created if necessary and automatically linked to your new service.
+
+Once deployed, publish content like so:
+
+```sh
+npm run publish-content
+```
+
+This:
+
+- Uses the default collection name
+- Uploads static files to the KV Store
+- Stores server configuration for the collection
 
 > [!TIP]
-> By running `npx @fastly/cli compute build --verbose` (or `npm run build` directly), you should see output in your logs saying that files are being sent to the KV Store.
+> Upload to a specific collection by specifying the collection name when publishing content:
+> ```sh
+> npm run publish-content -- --collection-name=preview-42
+> ```
 
-The `statics-metadata.js` file should now show `"type": "kv-store"` for content assets.
-Your Wasm binary should also be smaller, as the content of the files are no longer inlined in the build artifact.
-You can deploy this and run it from Fastly, and the referenced files will be served from KV Store.
+**No Wasm redeploy needed** unless you:
 
-You will also see entries in `fastly.toml` that represent the local KV Store.
-These enable the site to also run correctly when served using the local development environment. 
+- Modify `src/index.js` - such as when you update your custom routing logic (e.g. collection selection) or  
+- Change `static-publish.rc.js`
 
-### Cleaning unused items from KV Store
+If you do need to redeploy, simply run:
 
-The files that are uploaded to the KV Store are submitted using keys of the following format:
+```sh
+npm run deploy
+```
 
-`<publish-id>:<asset-path>_<alg>_<hash>`
+## 🧹 Cleaning Up
 
-For example:
-`12345abcde67890ABCDE00:/public/index.html_br_aeed29478691e67f6d5s36b4ded20c17e9eae437614617067a8751882368b965`
+Every time you publish, old files are left behind for safety. **However, files with the same content will be re-used across collections and publishing events** - they are only stored once in the KV Store using their content hash as a key. This ensures that unchanged files aren't duplicated, keeping storage efficient and deduplicated. To avoid bloat, use:
 
-Using such a key ensures that whenever the file contents are identical, the same key will be generated.  
-This enables to detect whether an unchanged file already exists in the KV Store, avoiding having to re-submit
-files that have not changed. If the file contents have changed, then a new hash is generated. This ensures that
-even during the brief amount of time between deploys, any request served by a prior version will still serve the same
-corresponding previous version of the content.
+```sh
+npx @fastly/compute-js-static-publish clean --delete-expired-collections
+```
 
-However, this system never deletes files automatically. After many deployments, extraneous files may be left over.
+This removes:
 
-`@fastly/compute-js-static-publish` includes a feature to delete these old versions of the files that are no longer being
-used.  To run it, type the following command:
+- Expired collection index files (only if `--delete-expired-collections` is passed)
+- Unused content blobs (no longer referenced)
+- Orphaned server config files
 
-`npx @fastly/compute-js-static-publish --clean-kv-store`
+### 🔍 Dry Run Mode
 
-It works by scanning `statics-metadata.js` for all currently-used keys. Then it enumerates all the existing
-keys in the configured KV Store and that belong to this application (can do so by narrowing down all keys to the ones
-that begin with the "publish id"). If any of the keys is not in the list of currently-used keys, then a request is made
-to delete that KV Store value.
+Preview what will be deleted without making changes:
 
-And that's it! It should be possible to run this task to clean up once in a while. 
+```sh
+npx @fastly/compute-js-static-publish clean --dry-run
+```
 
-## Advanced Usages
+> ⚠️ Cleanup never deletes the default collection and never deletes content that’s still in use.
 
-### The `static-publish.rc.js` config file <a name="static-publish-rc"></a>
+## 🔄 Content Compression
 
-* `rootDir` - _Required._ All files under this root directory will be included by default in the publishing,
-  except for those that are excluded using some of the following features. Files outside this root cannot be
-  included in the publishing.
+This project supports pre-compressing and serving assets in Brotli and Gzip formats. Compression is controlled at two different stages:
 
-* `staticPublisherWorkingDir` - _Required._ Static asset loader and metadata files are created under this directory.
+- **During publishing**, the `contentCompression` field in the `publish` section of `publish-content.config.js` defines which compressed variants (e.g., `br`, `gzip`) should be generated and uploaded to the KV Store.
 
-* `kvStoreName` - Set this value to the _name_ of an existing KV Store to enable uploading of content assets
-  to Fastly KV Store. See [Using the KV Store](#kv-store) for more information.
+Assets are stored in multiple formats (uncompressed + compressed) if configured. The following file types are compressed by default:
 
-* `excludeDirs` - Specifies names of files and directories within `rootDir` to exclude from the publishing. Each entry can
-  be a string or a JavaScript `RegExp` object.  Every file and directory under `rootDir` is checked against each entry of
-  the array by testing its path relative to `rootDir`. The file or directory (included all children) and excluded if the
-  condition matches:
-  * If a string is specified, then an exact match is checked.
-  * If a `RegExp` is specified, then it is tested with the regular expression.
-  * If this setting is not set, then the default value is `['./node_modules']`.
-  * If you specifically set this to the empty array, then no files are excluded by this mechanism.
+- Text-based: `.html`, `.js`, `.css`, `.svg`, `.json`, `.txt`, `.xml`, `.map`
+- Certain binary formats: `.bmp`, `.tar`
 
-* `excludeDotfiles` - Unless disabled, will exclude all files and directories (and their children)
-  whose names begin with a `'.''`. This is `true` by default.
+- **At runtime**, the `allowedEncodings` field in the `server` section of `publish-content.config.js` specifies which compression formats the server is allowed to serve based on the client's `Accept-Encoding` header.
 
-* `includeWellKnown` - Unless disabled, will include a file or directory called `.well-known`
-  even if `excludeDotfiles` would normally exclude it. This is `true` by default.
+`PublisherServer` will serve the smallest appropriate version based on the `Accept-Encoding` header.
 
-* `kvStoreAssetInclusionTest` - Optionally specify a test function that can be run against each enumerated asset during
-  the publishing, to determine whether to include the asset. For every file, this function is passed
-  the [asset key](#asset-keys), as well as its content type (MIME type string). You may return one of three values from
-  this function:
-  * Boolean `true` - Include the file. It is uploaded to the KV Store.
-  * Boolean `false` - exclude the file.
-  * Object. Include the file. It is uploaded to the KV Store. This object may specify, optionally:
-    * `contentType` to override the Content type
-    * `contentCompression` an array of strings to override the content compression types. Specify an empty array for no compression. 
+## 🧩 Using PublisherServer in Custom Apps
 
-* `contentCompression` - During the publishing, the tool will pre-generate compressed versions of content assets in these
-  formats and make them available to the Publisher Server or your application. Default value is [ 'br' | 'gzip' ].
-
-* `contentTypes` - Provide custom content types and/or override them.
-
-  This tool comes with a [default set of content types](./src/util/content-types.ts) defined for many common
-  file extensions. This list can be used to add to and/or override items in the default list.
-  Content type definitions are checked in the provided order, and if none of them match, the default content types are
-  tested afterward.
-
-  Provide these as an array of content type definition objects, each with the following keys and values:
-  * `test` - a RegExp or function to perform on the asset key. If the test succeeds, then the content asset is considered
-    to be of this content type definition.
-  * `contentType` - The content type header to apply when serving an asset of this content type definition.
-  * `text` - If `true`, this content type definition is considered to contain textual data. This makes `.text()` and `.json()`
-    available for calling on store entries. If not specified, this is treated as `false`.
-  * `precompressAsset` - When `true`, this tool generates pre-compressed versions of content assets and serves them to user
-    agents that assert an appropriate `Accept` header. See [Content Compression*](#content-compression) for details. If
-    not specified, this is `true` if `text` is `true`, and `false` if `text` is not `true`.
- 
-  For example, to add a custom content type `application/x-custom` for files that have a `.custom` extension, not treat
-  it as a text file, but precompress it during the generation of the application, add the following to your
-  `static-publish.rc.js` file:
-
-    ```javascript
-    const config = {
-      /* ... other config ... */
-      contentTypes: [
-        { test: /\.custom$/, contentType: 'application/x-custom', text: false, precompressAsset: true },
-      ],
-    };
-    ```
-
-  > Note that content types are tested at publishing time, not at runtime.
-
-* `server` - [Configuration of `PublisherServer()`](#configuring-publisherserver).  
-  above.
-
-### Running custom code alongside Publisher Server
-
-The generated `./src/index.js` program instantiates the server and simply asks it to respond to a request.
-
-You are free to add code to this file.
-
-For example, if the `PublisherServer` is unable to formulate a response to the request, then it returns `null`. You may
-add your own code to handle these cases, such as to provide custom responses.
+You can combine PublisherServer with custom logic to support APIs, authentication, redirects, or A/B testing. `PublisherServer` returns `null` when it cannot handle a request, allowing you to chain in your own logic.
 
 ```js
-import { getPublisherServer } from './statics.js';
-const publisherServer = getPublisherServer();
+import { PublisherServer } from '@fastly/compute-js-static-publish';
+import rc from '../static-publish.rc.js';
 
-addEventListener("fetch", (event) => event.respondWith(handleRequest(event)));
-async function handleRequest(event) {
+const publisherServer = PublisherServer.fromStaticPublishRc(rc);
 
-  const response = await publisherServer.serveRequest(event.request);
-  if (response != null) {
+addEventListener("fetch", event => {
+  event.respondWith(handleRequest(event.request));
+});
+
+async function handleRequest(request) {
+  const response = await publisherServer.serveRequest(request);
+  if (response) {
     return response;
   }
-  
-  // Do custom things here!
-  // Handle API requests, serve non-static responses, etc.
 
-  return new Response('Not found', { status: 404 });
+  // Add your custom logic here
+  if (request.url.endsWith('/api/hello')) {
+    return new Response(JSON.stringify({ greeting: "hi" }), {
+      headers: { 'content-type': 'application/json' }
+    });
+  }
+
+  return new Response("Not Found", { status: 404 });
 }
 ```
 
-### Using published assets in your own application
+## 📥 Using Published Assets in Your Code
 
-Publishing, as described earlier, is the process of preparing files for inclusion into your application.
-This process also makes metadata available about each of the files that are included, such as its content type, the last
-modified date, the file hash, and so on.
+To access files you've published, use the `getMatchingAsset()` and `loadKvAssetVariant()` methods on `publisherServer`.
 
-Publishing can also set up to embed content and modules into the Wasm binary of your Compute app if so configured,
-although this usage will require your Wasm binary to be rebuilt and deployed to your service.
-
-The [`PublisherServer` class](#publisherserver) used by the default scaffolded application is a simple application of this content
-and metadata. By importing `./statics.js` into your Compute application, you can just as easily access this
-information about the assets that were included during publishing.
-
-> IMPORTANT: Use a static `import` statement, rather than using `await import()` to load `./statics.js`, in order to
-ensure that its top-level code runs during the initialization phase of your Compute application. 
-
-#### Assets
-
-There are two categories of assets: Content Assets and Module Assets.
-
-* A Content Asset is a type of asset where your application or a user of your application is interested in the text or 
-binary contents of an asset.
-
-  The data of each content asset can exist in one of two stores:
-  * Inline Store - this is a data store that exists within the Wasm binary.
-  * Fastly KV Store - Fastly's distributed edge data store. Data can be placed here without impacting the size of
-    your Wasm binary.
-
-  Your application can stream the contents of these assets to a visitor, or read from the stream itself and access its
-  contents.
-
-* A Module Asset is a type of asset where your application wants to load the asset as a module, and use it as part of its
-running code. Their contents are actually built at publishing time and their built representation is included in the Wasm
-binary. They can be imported statically at will, and your application is able to execute the code exported by these modules.
-
-##### Asset Keys
-
-When working with content assets or module assets from your application, they are referenced by their asset key, which
-is the relative path of the file from `rootDir`, including the leading slash.
-
-#### Content Assets
-
-You can obtain the content assets included in publishing by importing the `contentAssets` object exported from
-`./statics.js`.
+### Access Metadata for a File:
 
 ```js
-import { contentAssets } from './statics';
-
-// Obtain a content asset named '/public/index.html'
-const asset = contentAssets.getAsset('/public/index.html');
-
-// 'wasm-inline' if object's data is 'inlined' into Wasm binary
-// 'kv-store' if object's data exists in Fastly KV Store
-asset.type;
-
-// Get the "store entry"
-const storeEntry = await asset.getStoreEntry();
-
-storeEntry.contentEncoding; // null, 'br', 'gzip'
-```
-
-Regardless of which store these objects come from, they implement the `Body` interface as defined by `@fastly/js-compute`.
-As such, you are able to work with them in the same way to obtain their contents:
-
-```js
-storeEntry.body; // ReadableStream<Uint8Array>
-storeEntry.bodyUsed; // true if consumed or distrubed
-
-// Get the data as ArrayBuffer, parsed JSON, or string
-// The latter two are only available if the data is a text type
-const arrayBuffer = await storeEntry.arrayBuffer();
-const json = await storeEntry.json();
-const text = await storeEntry.text();
-```
-
-Or, if you don't care about the contents but just want to stream it to the visitor, you can pass the `.body` field directly
-to the Response constructor:
-
-```js
-const response = new Response(storeEntry.body, { status: 200 });
-```
-
-> IMPORTANT: Once a store entry is consumed, its body cannot be read from again. If you need to access the contents of the
-same asset more than once, you may obtain another store entry, as in the following example:
-```js
-import { contentAssets } from './statics';
-const asset = contentAssets.getAsset('/public/index.html');
-const entry1 = await asset.getStoreEntry(); // Get a new store entry
-const json1a = await entry1.json();
-const json1b = await entry1.json(); // Can't do this, the body has already been consumed!
-
-const entry2 = await asset.getStoreEntry(); // Get a new store entry for same asset
-const json2a = await entry2.json(); // This will work.
-```
-
-#### Module Assets
-
-Module assets are useful when an asset includes executable JavaScript code that you may want to execute at runtime.
-
-You can obtain the module assets included in publishing by importing the `moduleAssets` object exported from
-`./statics.js`. Keep in mind that by default, no modules are included in `moduleAssets`. If you wish to include module
-assets, you must configure your publishing to include them.  See [`moduleAssetInclusionTest` in the `static-publish.rc.js`
-config file](#static-publish-rc) for more details.
-
-`/module/hello.js`
-```js
-export function hello() {
-  console.log('Hello, World!');
+const asset = await publisherServer.getMatchingAsset('/index.html');
+if (asset != null) {
+  // Asset exists with that path
+  asset.contentType;      // e.g., 'text/html'
+  asset.lastModifiedTime; // Unix timestamp
+  asset.size;             // Size in bytes of the base version
+  asset.hash;             // SHA256 hash of base version
+  asset.variants;         // Available variants (e.g., ['gzip'])
 }
 ```
 
+### Load the File from KV Store:
+
 ```js
-import { moduleAssets } from './statics';
+const kvAssetVariant = await publisherServer.loadKvAssetVariant(asset, null); // pass 'gzip' or 'br' for compressed
 
-// Obtain a module asset named '/module/hello.js'
-const asset = moduleAssets.getAsset('/module/hello.js');
-
-// Load the module
-const helloModule = await asset.getModule();
-
-helloModule.hello(); // Will print "Hello, World!"
+kvAssetVariant.kvStoreEntry;      // KV Store entry
+kvAssetVariant.size;              // Size of the variant
+kvAssetVariant.hash;              // SHA256 of the variant
+kvAssetVariant.contentEncoding;   // 'gzip', 'br', or null
+kvAssetVariant.numChunks;         // Number of chunks (for large files)
 ```
 
-#### Metadata
+You can stream `kvAssetVariant.kvStoreEntry.body` directly to a `Response`, or read it using `.text()`, `.json()`, or `.arrayBuffer()` depending on its content type.
 
-In some use cases, you may have a use case where you need to know about the files that were included during publishing,
-but not in the context of Compute. (e.g., a tool that runs in Node.js that performs some maintenance task on assets).
+---
 
-You cannot import `./statics.js` from a Node.js application, as it holds dependencies on Compute.
+## 📚 CLI Reference
 
-Instead, you can import `./statics-metadata.js`, a companion file that is generated in the same directory. This file
-exposes plain JavaScript objects that contain the metadata about your content assets that were included in the final
-publishing event.
+### Available Commands
 
-See the definition of `ContentAssetMetadataMapEntry` in the [`types/content-assets` file](./src/types/content-assets.ts) for more details.
+#### Outside a Compute App Directory
+- `npx @fastly/compute-js-static-publish [options]` - Scaffold a new Compute app
 
-## Migrating
+#### Inside a Compute App Directory
+- `publish-content` - Publish static files to the KV Store under a named collection
+- `clean` - Delete expired and unreferenced KV entries
+- `collections list` - List all published collections
+- `collections delete` - Delete a specific collection index
+- `collections promote` - Copy a collection to another name
+- `collections update-expiration` - Modify expiration time for an existing collection
 
-See [MIGRATING.md](./MIGRATING.md).
+### 🛠 App Scaffolding
 
-## Issues
+Run outside an existing Compute app directory:
 
-If you encounter any non-security-related bug or unexpected behavior, please [file an issue][bug].
+```sh
+npx @fastly/compute-js-static-publish \
+  --root-dir=./public \
+  --kv-store-name=site-content \
+  [--output=./compute-js] \
+  [--publish-id=<prefix>] \
+  [--public-dir=./public] \
+  [--static-dir=./public/static] \
+  [--static-publisher-working-dir=./compute-js/static-publisher] \
+  [--spa=./public/spa.html] \
+  [--not-found-page=./public/404.html] \
+  [--auto-index=index.html,index.htm] \
+  [--auto-ext=.html,.htm] \
+  [--name=my-site] \
+  [--description='My Compute static site'] \
+  [--author='you@example.com'] \
+  [--service-id=your-fastly-service-id]
+```
 
-[bug]: https://github.com/fastly/compute-js-static-publish/issues/new?labels=bug
+#### Options:
 
-### Security issues
+**Used to generate the Compute app:**
+- `--kv-store-name`: Required. Name of KV Store to use.
+- `--output`: Compute app destination (default: `./compute-js`)
+- `--name`: Application name to insert into `fastly.toml`
+- `--description`: Application description to insert into `fastly.toml`
+- `--author`: Author to insert into `fastly.toml`
+- `--service-id`: Optional existing Fastly Compute service ID
 
-Please see our [SECURITY.md](./SECURITY.md) for guidance on reporting security-related issues.
+**Used in building config files:**
+- `--root-dir`: Required. Directory of static site content.
+- `--publish-id`: Optional key prefix for KV entries (default: `'default'`).
+- `--static-publisher-working-dir`: Directory to hold working files (default: `<output>/static-publisher`).
+- `--public-dir`: Public files base directory (default: same as `--root-dir`).
+- `--static-dir`: One or more directories to serve with long cache TTLs.
+- `--spa`: SPA fallback file path (e.g., `./public/spa.html`).
+- `--not-found-page`: 404 fallback file path (e.g., `./public/404.html`).
+- `--auto-index`: List of filenames to use as index files.
+- `--auto-ext`: Extensions to try when resolving URLs.
 
-## License
+### 🚀 Inside a Compute App Directory
 
-[MIT](./LICENSE).
+Once you're in the scaffolded Compute app directory (with `static-publish.rc.js` present), you can run these subcommands:
+
+#### `publish-content`
+
+```sh
+npx @fastly/compute-js-static-publish publish-content \
+  [--root-dir=./public] \
+  [--collection-name=preview-42] \
+  [--config=./publish-content.config.js] \
+  [--expires-in=7d | --expires-at=2025-05-01T12:00Z] \
+  [--local-only | --no-local] \
+  [--fastly-api-token=...]
+```
+
+Publishes your static files and server config for a given collection.
+
+#### Options:
+
+**Configuration:**
+
+- `--config`: Path to a config file to configure server behavior for this collection (default: `./publish-content.config.js`)
+
+**Content and Collection:**
+
+- `--root-dir`: Source directory to read files from (overrides value in `publish-content.config.js`)
+- `--collection-name`: Name of the collection to create/update (default: value in `static-publish.rc.js`)
+- `--expires-in`: Time-to-live from now (e.g. `1h`, `2d`, `1w`)
+- `--expires-at`: Absolute expiration time (ISO format: `2025-05-01T12:00Z`) *(Only one of **`--expires-in`** or **`--expires-at`** may be specified)*
+
+**Mode:**
+
+- `--local-only`: Do not upload files to Fastly KV Store; only simulate KV Store locally
+- `--no-local`: Do not prepare files for local simulated KV Store; upload to real KV Store only
+
+**Auth:**
+
+- `--fastly-api-token`: API token to use when publishing\
+  *(Overrides **`FASTLY_API_TOKEN`** environment variable and **`fastly profile token`**)*
+- Stores server config per collection
+- Supports expiration settings
+
+#### `clean`
+
+```sh
+npx @fastly/compute-js-static-publish clean \
+  [--delete-expired-collections] \
+  [--dry-run]
+```
+
+Removes unreferenced content from the KV Store.
+
+#### Options:
+
+- `--delete-expired-collections`: Also delete collection index files that have expired
+- `--dry-run`: Show what would be deleted without actually removing anything
+
+#### `collections list`
+
+```sh
+npx @fastly/compute-js-static-publish collections list
+```
+Lists all known collection names and metadata.
+
+#### `collections promote`
+
+```sh
+npx @fastly/compute-js-static-publish collections promote \
+  --collection-name=preview-42 \
+  --to=live \
+  [--expires-in=7d | --expires-at=2025-06-01T00:00Z]
+```
+Copies an existing collection (content + config) to a new collection name.
+
+#### Options:
+- `--collection-name`: The name of the source collection to promote (required)
+- `--to`: The name of the new (target) collection to create or overwrite (required)
+- `--expires-in`: Time-to-live from now (e.g. `1h`, `2d`, `1w`)
+- `--expires-at`: Absolute expiration time (ISO format)
+
+*Exactly one of **`--expires-in`** or **`--expires-at`** may be provided.*
+
+#### `collections update-expiration`
+
+```sh
+npx @fastly/compute-js-static-publish collections update-expiration \
+  --collection-name=preview-42 \
+  --expires-in=3d | --expires-at=2025-06-01T00:00Z
+```
+Sets or updates the expiration time of a collection.
+
+#### Options:
+- `--collection-name`: The name of the collection to update (required)
+- `--expires-in`: Time-to-live from now (e.g. `1h`, `2d`, `1w`)
+- `--expires-at`: Absolute expiration time (ISO format)
+
+*Exactly one of **`--expires-in`** or **`--expires-at`** must be provided.*
+
+#### `collections delete`
+
+```sh
+npx @fastly/compute-js-static-publish collections delete \
+  --collection-name=preview-42
+```
+Deletes a specific collection’s index and associated settings.
+
+#### Options:
+- `--collection-name`: The name of the collection to delete (required)
+
+---
+
+## 📚 Next Steps
+
+- View CLI command help: `npx @fastly/compute-js-static-publish --help`
+- Use in CI to automate branch previews
+- Visit [https://developer.fastly.com](https://developer.fastly.com) for Compute platform docs
