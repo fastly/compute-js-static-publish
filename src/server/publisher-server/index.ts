@@ -101,7 +101,6 @@ export class PublisherServer {
   }
 
   // Server config is obtained from the KV Store, and cached for the duration of this object.
-  // TODO get from simple cache
   async getServerConfig() {
     const settingsFileKey = `${this.publishId}_settings_${this.activeCollectionName}`;
     const kvStore = new KVStore(this.kvStoreName);
@@ -465,6 +464,12 @@ export class PublisherServer {
 
     const url = new URL(request.url);
     const pathname = decodeURI(url.pathname);
+
+    // Custom health check route
+    if (pathname === '/healthz') {
+      return new Response("OK", { status: 200 });
+    }
+
     const serverConfig = await this.getServerConfig();
     if (serverConfig == null) {
       return new Response(

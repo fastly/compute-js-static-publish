@@ -598,7 +598,7 @@ export async function action(argv: string[]) {
     scripts: {
       prestart: "npx @fastly/compute-js-static-publish publish-content --local-only",
       start: "fastly compute serve",
-      deploy: "fastly compute publish",
+      "publish-service": "fastly compute publish",
       "publish-content": 'npx @fastly/compute-js-static-publish publish-content',
       build: 'js-compute-runtime ./src/index.js ./bin/main.wasm'
     },
@@ -724,6 +724,7 @@ export default config;
   // src/index.js
   resourceFiles['./src/index.js'] = /* language=text */ `\
 /// <reference types="@fastly/js-compute" />
+import { env } from 'fastly:env';
 import { PublisherServer } from '@fastly/compute-js-static-publish';
 import rc from '../static-publish.rc.js';
 const publisherServer = PublisherServer.fromStaticPublishRc(rc);
@@ -732,7 +733,11 @@ const publisherServer = PublisherServer.fromStaticPublishRc(rc);
 addEventListener("fetch", (event) => event.respondWith(handleRequest(event)));
 async function handleRequest(event) {
 
-  const response = await publisherServer.serveRequest(event.request);
+  console.log('FASTLY_SERVICE_VERSION', env('FASTLY_SERVICE_VERSION'));
+
+  const request = event.request;
+
+  const response = await publisherServer.serveRequest(request);
   if (response != null) {
     return response;
   }
@@ -767,6 +772,7 @@ async function handleRequest(event) {
   console.log('To build and deploy to your Compute service:');
   console.log('');
   console.log('  cd ' + COMPUTE_JS_DIR);
-  console.log('  npm run deploy');
+  console.log('  npm run publish-service');
+  console.log('  npm run publish-content');
   console.log('');
 }
