@@ -6,7 +6,7 @@
 - [🏁 Quick Start](#-quick-start)
 - [⚙️ Configuring `static-publish.rc.js`](#️-configuring-static-publishrcjs)
 - [🧾 Default Server Config: `publish-content.config.js`](#-default-server-config-publish-contentconfigjs)
-- [📦 Collections (Preview, Deploy, Promote)](#-collections-preview-deploy-promote)
+- [📦 Collections (Publish, Preview, Promote)](#-collections-publish-preview-promote)
 - [🧹 Cleaning Up](#-cleaning-up)
 - [🔄 Content Compression](#-content-compression)
 - [🧩 Using PublisherServer in Custom Apps](#-using-publisherserver-in-custom-apps)
@@ -65,7 +65,7 @@ Fastly's [local development environment](https://www.fastly.com/documentation/gu
 Ready to go live? All you need is a [free Fastly account](https://www.fastly.com/signup/?tier=free)!
 
 ```sh
-npm run deploy
+npm run publish-service
 ```
 
 The command publishes your Compute app and creates the KV Store. (No content uploaded yet!)
@@ -202,7 +202,7 @@ export default config;
    - `allowedEncodings` - Specifies which compression formats the server is allowed
      to serve based on the client's `Accept-Encoding` header.
 
-## 📦 Collections (Preview, Deploy, Promote)
+## 📦 Collections (Publish, Preview, Promote)
 
 Collections are a powerful feature that allow you to publish and manage multiple versions of your site simultaneously. Each collection is a named set of:
 
@@ -326,7 +326,7 @@ During development, starting the local preview server (`npm run start`) will run
 When you're ready for production:
 
 1. [Create a free Fastly account](https://www.fastly.com/signup/?tier=free) if you haven't already.
-2. Run `npm run deploy`
+2. Run `npm run publish-service`
    - This builds your Compute app into a Wasm binary
    - Deploys it to a new or existing Fastly Compute service
    - If creating a new service:
@@ -356,10 +356,10 @@ This:
 - Modify `src/index.js` - such as when you update your custom routing logic (e.g. collection selection) or  
 - Change `static-publish.rc.js`
 
-If you do need to redeploy, simply run:
+If you do need to rebuild and redeploy the Compute app, simply run:
 
 ```sh
-npm run deploy
+npm run publish-service
 ```
 
 ## 🧹 Cleaning Up

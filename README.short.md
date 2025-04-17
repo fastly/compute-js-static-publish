@@ -36,8 +36,8 @@ When you're ready to go live, [create a free Fastly account](https://www.fastly.
 
 ```sh
 cd compute-js
-npm run deploy               # deploy the app
-npm run publish-content      # upload your static files
+npm run publish-service      # deploy the app (publish the "service")
+npm run publish-content      # upload your static files (publish the "content")
 ```
 
 ## Features
