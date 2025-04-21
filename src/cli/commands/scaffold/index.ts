@@ -11,10 +11,51 @@ import * as child_process from 'node:child_process';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 
-import commandLineArgs, { type CommandLineOptions, type OptionDefinition } from 'command-line-args';
+import { type CommandLineOptions, type OptionDefinition } from 'command-line-args';
 
-import { dotRelative, rootRelative } from '../util/files.js';
-import { findComputeJsStaticPublisherVersion, type PackageJson } from '../util/package.js';
+import { dotRelative, rootRelative } from '../../util/files.js';
+import { findComputeJsStaticPublisherVersion, type PackageJson } from '../../util/package.js';
+import { parseCommandLine } from "../../util/args.js";
+
+function help() {
+  console.log(`\
+
+Usage:
+  npx @fastly/compute-js-static-publish [options]
+
+Description:
+  Scaffold a new Compute app configured for static publishing.
+
+  Note: If run inside a scaffolded project, this tool will automatically enter project
+  management mode.
+
+Options:
+  --kv-store-name <name>                (required) KV Store name for content storage
+  --root-dir <path>                     (required) Path to static content (e.g., ./public)
+  -o, --output <dir>                    Output directory for Compute app (default: ./compute-js)
+  --publish-id <id>                     Advanced. Prefix for KV keys (default: "default")
+  --static-publisher-working-dir <dir>  Working directory for build artifacts
+                                        (default: ./compute-js/static-publisher)
+
+Compute Service Metadata:
+  --name <name>                         App name (for fastly.toml)
+  --description <text>                  App description (for fastly.toml)
+  --author <name/email>                 App author (for fastly.toml)
+  --service-id <id>                     (optional) Fastly service ID
+
+Server Config:
+  --public-dir <path>                   Base dir for content (default: root-dir)
+  --static-dir <path>,<path...>         Directory served with long TTL (can repeat)
+  --spa <file>                          SPA fallback file (e.g., /index.html)
+  --not-found-page <file>               404 fallback file (e.g., /404.html)
+  --auto-index <name>,<name...>         Index filename (e.g., index.html,index.htm)
+  --auto-ext <ext>,<ext...>             Automatic extensions (e.g., .html,.htm)
+
+Other:
+  --verbose                             Enable verbose output
+  -h, --help                            Show help
+`);
+}
 
 export type InitAppOptions = {
   outputDir: string | undefined,
@@ -54,7 +95,7 @@ const defaultOptions: InitAppOptions = {
 
 function buildOptions(
   packageJson: PackageJson | null,
-  commandLineValues: CommandLineOptions,
+  commandLineOptions: CommandLineOptions,
 ): InitAppOptions {
 
   // Applied in this order for proper overriding
@@ -76,7 +117,7 @@ function buildOptions(
 
   {
     let outputDir: string | undefined;
-    const outputDirValue = commandLineValues['output'];
+    const outputDirValue = commandLineOptions['output'];
     if (outputDirValue == null || typeof outputDirValue === 'string') {
       outputDir = outputDirValue;
     }
@@ -87,7 +128,7 @@ function buildOptions(
 
   {
     let rootDir: string | undefined;
-    const rootDirValue = commandLineValues['root-dir'];
+    const rootDirValue = commandLineOptions['root-dir'];
     if (rootDirValue == null || typeof rootDirValue === 'string') {
       rootDir = rootDirValue;
     }
@@ -98,7 +139,7 @@ function buildOptions(
 
   {
     let publicDir: string | undefined;
-    const publicDirValue = commandLineValues['public-dir'];
+    const publicDirValue = commandLineOptions['public-dir'];
     if (publicDirValue == null || typeof publicDirValue === 'string') {
       publicDir = publicDirValue;
     }
@@ -109,7 +150,7 @@ function buildOptions(
 
   {
     let staticDirs: string[] | undefined;
-    const staticDirsValue = commandLineValues['static-dir'];
+    const staticDirsValue = commandLineOptions['static-dir'];
 
     const asArray = Array.isArray(staticDirsValue) ? staticDirsValue : [ staticDirsValue ];
     if (asArray.every((x: any) => typeof x === 'string')) {
@@ -122,7 +163,7 @@ function buildOptions(
 
   {
     let staticPublisherWorkingDir: string | undefined;
-    const staticPublisherWorkingDirValue = commandLineValues['static-publisher-working-dir'];
+    const staticPublisherWorkingDirValue = commandLineOptions['static-publisher-working-dir'];
     if (staticPublisherWorkingDirValue == null || typeof staticPublisherWorkingDirValue === 'string') {
       staticPublisherWorkingDir = staticPublisherWorkingDirValue;
     }
@@ -133,7 +174,7 @@ function buildOptions(
 
   {
     let spa: string | undefined;
-    const spaValue = commandLineValues['spa'];
+    const spaValue = commandLineOptions['spa'];
     if (spaValue === null) {
       // If 'spa' is provided with a null value, then the flag was provided
       // with no value. Assumed to be './index.html' relative to the public directory.
@@ -149,7 +190,7 @@ function buildOptions(
 
   {
     let notFoundPage: string | undefined;
-    const notFoundPageValue = commandLineValues['not-found-page'];
+    const notFoundPageValue = commandLineOptions['not-found-page'];
     if (notFoundPageValue === null) {
       // If 'spa' is provided with a null value, then the flag was provided
       // with no value. Assumed to be './404.html' relative to the public directory.
@@ -165,7 +206,7 @@ function buildOptions(
 
   {
     let autoIndex: string[] | undefined;
-    const autoIndexValue = commandLineValues['auto-index'];
+    const autoIndexValue = commandLineOptions['auto-index'];
 
     const asArray = Array.isArray(autoIndexValue) ? autoIndexValue : [ autoIndexValue ];
     if (asArray.every((x: any) => typeof x === 'string')) {
@@ -192,7 +233,7 @@ function buildOptions(
 
   {
     let autoExt: string[] = [];
-    const autoExtValue = commandLineValues['auto-ext'];
+    const autoExtValue = commandLineOptions['auto-ext'];
 
     const asArray = Array.isArray(autoExtValue) ? autoExtValue : [ autoExtValue ];
     if (asArray.every((x: any) => typeof x === 'string')) {
@@ -220,7 +261,7 @@ function buildOptions(
 
   {
     let name: string | undefined;
-    const nameValue = commandLineValues['name'];
+    const nameValue = commandLineOptions['name'];
     if (nameValue == null || typeof nameValue === 'string') {
       name = nameValue;
     }
@@ -231,7 +272,7 @@ function buildOptions(
 
   {
     let author: string | undefined;
-    const authorValue = commandLineValues['author'];
+    const authorValue = commandLineOptions['author'];
     if (authorValue == null || typeof authorValue === 'string') {
       author = authorValue;
     }
@@ -242,7 +283,7 @@ function buildOptions(
 
   {
     let description: string | undefined;
-    const descriptionValue = commandLineValues['description'];
+    const descriptionValue = commandLineOptions['description'];
     if (descriptionValue == null || typeof descriptionValue === 'string') {
       description = descriptionValue;
     }
@@ -253,7 +294,7 @@ function buildOptions(
 
   {
     let serviceId: string | undefined;
-    const serviceIdValue = commandLineValues['service-id'];
+    const serviceIdValue = commandLineOptions['service-id'];
     if (serviceIdValue == null || typeof serviceIdValue === 'string') {
       serviceId = serviceIdValue;
     }
@@ -264,7 +305,7 @@ function buildOptions(
 
   {
     let publishId: string | undefined;
-    const publishIdValue = commandLineValues['publish-id'];
+    const publishIdValue = commandLineOptions['publish-id'];
     if (publishIdValue == null || typeof publishIdValue === 'string') {
       publishId = publishIdValue;
     }
@@ -275,7 +316,7 @@ function buildOptions(
 
   {
     let kvStoreName: string | undefined;
-    const kvStoreNameValue = commandLineValues['kv-store-name'];
+    const kvStoreNameValue = commandLineOptions['kv-store-name'];
     if (kvStoreNameValue == null || typeof kvStoreNameValue === 'string') {
       kvStoreName = kvStoreNameValue;
     }
@@ -298,7 +339,7 @@ function processPublicDirToken(filepath: string, publicDir: string) {
   return path.resolve(publicDir, processedPath)
 }
 
-export async function action(argv: string[]) {
+export async function action(actionArgs: string[]) {
 
   const optionDefinitions: OptionDefinition[] = [
     { name: 'verbose', type: Boolean },
@@ -372,7 +413,17 @@ export async function action(argv: string[]) {
     { name: 'auto-ext', type: String, multiple: true, },
   ];
 
-  const commandLineValues = commandLineArgs(optionDefinitions, { argv });
+  const parsed = parseCommandLine(actionArgs, optionDefinitions);
+  if (parsed.needHelp) {
+    if (parsed.error != null) {
+      console.error(String(parsed.error));
+      console.error();
+      process.exitCode = 1;
+    }
+
+    help();
+    return;
+  }
 
   let packageJson;
   try {
@@ -385,7 +436,7 @@ export async function action(argv: string[]) {
 
   const options = buildOptions(
     packageJson,
-    commandLineValues,
+    parsed.commandLineOptions,
   );
 
   const COMPUTE_JS_DIR = options.outputDir;

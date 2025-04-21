@@ -3,51 +3,12 @@
  * Licensed under the MIT license. See LICENSE file for details.
  */
 
-import fs from 'node:fs';
-
-import { getCommandAndArgs } from '../util/args.js';
-import * as initApp from './init-app.js';
-import * as publishContent from './publish-content.js';
-import * as collections from './collections/index.js';
-
-export async function action(actionArgs: string[]) {
-
-  if (!fs.existsSync('./static-publish.rc.js')) {
-
-    await initApp.action(actionArgs);
-    return;
-
-  }
-
-  const modes = {
-    'publish-content': publishContent,
-    'collections': collections,
-  };
-
-  const commandAndArgs = getCommandAndArgs<keyof typeof modes>(
-    actionArgs,
-    Object.keys(modes) as (keyof typeof modes)[],
-  );
-
-  if (commandAndArgs.needHelp) {
-    if (commandAndArgs.command != null) {
-      console.error(`Unknown command: ${commandAndArgs.command}`);
-      console.error(`Specify one of: ${Object.keys(modes).join(', ')}`);
-      console.error();
-      process.exitCode = 1;
-    }
-
-    help();
-    return;
-  }
-
-  const { command, argv, } = commandAndArgs;
-  await modes[command].action(argv);
-
-}
+import { getCommandAndArgs } from '../../util/args.js';
+import * as cleanCommand from './clean.js';
+import * as publishContentCommand from './publish-content.js';
+import * as collectionsCommands from './collections/index.js';
 
 function help() {
-
   console.log(`\
 
 Usage:
@@ -55,7 +16,8 @@ Usage:
 
 Description:
   Manage and publish static content to Fastly Compute using KV Store-backed collections.
-  If run outside a scaffolded project, this tool will automatically enter project initialization mode.
+
+  Note: If run outside a scaffolded project, this tool will automatically enter scaffolding mode.
 
 Available Commands:
   publish-content                  Publish static files to the KV Store under a named collection
@@ -81,5 +43,31 @@ Examples:
   npx @fastly/compute-js-static-publish collections list
   npx @fastly/compute-js-static-publish clean --dry-run
 `);
+}
+
+export async function action(actionArgs: string[]) {
+
+  const modes = {
+    'clean': cleanCommand,
+    'publish-content': publishContentCommand,
+    'collections': collectionsCommands,
+  };
+
+  const commandAndArgs = getCommandAndArgs(actionArgs, modes);
+
+  if (commandAndArgs.needHelp) {
+    if (commandAndArgs.command != null) {
+      console.error(`Unknown command: ${commandAndArgs.command}`);
+      console.error(`Specify one of: ${Object.keys(modes).join(', ')}`);
+      console.error();
+      process.exitCode = 1;
+    }
+
+    help();
+    return;
+  }
+
+  const { command, argv, } = commandAndArgs;
+  await modes[command].action(argv);
 
 }

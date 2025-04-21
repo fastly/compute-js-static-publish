@@ -21,9 +21,11 @@ import {
   type KVAssetEntryMap,
   type KVAssetVariantMetadata,
 } from '../../models/assets/kvstore-assets.js';
+import { type IndexMetadata } from '../../models/server/index.js';
 import { getKVStoreEntry } from '../util/kv-store.js';
 import { checkIfModifiedSince, getIfModifiedSinceHeader } from './serve-preconditions/if-modified-since.js';
 import { checkIfNoneMatch, getIfNoneMatchHeader } from './serve-preconditions/if-none-match.js';
+import { isExpired } from "../../models/time/index.js";
 
 type KVAssetVariant = {
   kvStoreEntry: KVStoreEntry,
@@ -92,8 +94,16 @@ export class PublisherServer {
   activeCollectionName: string;
   collectionNameHeader: string | null;
 
+  // Cached settings
+  settingsCached: PublisherServerConfigNormalized | null | undefined;
+
+  // Cached index
+  kvAssetsIndex: KVAssetEntryMap | null | undefined;
+
   setActiveCollectionName(collectionName: string) {
     this.activeCollectionName = collectionName;
+    this.settingsCached = undefined;
+    this.kvAssetsIndex = undefined;
   }
 
   setCollectionNameHeader(collectionHeader: string | null) {
@@ -102,15 +112,20 @@ export class PublisherServer {
 
   // Server config is obtained from the KV Store, and cached for the duration of this object.
   async getServerConfig() {
+    if (this.settingsCached !== undefined) {
+      return this.settingsCached;
+    }
     const settingsFileKey = `${this.publishId}_settings_${this.activeCollectionName}`;
     const kvStore = new KVStore(this.kvStoreName);
     const settingsFile = await getKVStoreEntry(kvStore, settingsFileKey);
     if (settingsFile == null) {
       console.error(`Settings File not found at ${settingsFileKey}.`);
       console.error(`You may need to publish your application.`);
-      return null;
+      this.settingsCached = null;
+    } else {
+      this.settingsCached = (await settingsFile.json()) as PublisherServerConfigNormalized;
     }
-    return (await settingsFile.json()) as PublisherServerConfigNormalized;
+    return this.settingsCached;
   }
 
   async getStaticItems() {
@@ -134,15 +149,39 @@ export class PublisherServer {
   }
 
   async getKvAssetsIndex() {
+    if (this.kvAssetsIndex !== undefined) {
+      return this.kvAssetsIndex;
+    }
     const indexFileKey = `${this.publishId}_index_${this.activeCollectionName}`;
     const kvStore = new KVStore(this.kvStoreName);
     const indexFile = await getKVStoreEntry(kvStore, indexFileKey);
     if (indexFile == null) {
       console.error(`Index File not found at ${indexFileKey}.`);
       console.error(`You may need to publish your application.`);
+      this.kvAssetsIndex = null;
       return null;
     }
-    return (await indexFile.json()) as KVAssetEntryMap;
+
+    let collectionIsExpired = false;
+    if (this.activeCollectionName !== this.defaultCollectionName) {
+      const metadataText = indexFile.metadataText()
+      if (metadataText != null) {
+        try {
+          const metadata = JSON.parse(metadataText) as IndexMetadata;
+          collectionIsExpired = metadata.expirationTime != null && isExpired(metadata.expirationTime);
+        } catch {
+        }
+      }
+    }
+
+    if (collectionIsExpired) {
+      console.error(`Requested collection expired at ${indexFileKey}.`);
+      this.kvAssetsIndex = null;
+      return null;
+    }
+
+    this.kvAssetsIndex = (await indexFile.json()) as KVAssetEntryMap;
+    return this.kvAssetsIndex;
   }
 
   async getMatchingAsset(assetKey: string, applyAuto: boolean = false): Promise<KVAssetEntry | null> {

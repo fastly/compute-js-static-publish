@@ -177,7 +177,7 @@ export async function getKvStoreEntry(
 }
 
 const encoder = new TextEncoder();
-export async function kvStoreSubmitFile(fastlyApiContext: FastlyApiContext, kvStoreName: string, key: string, data: Uint8Array | string, metadata: string | undefined) {
+export async function kvStoreSubmitEntry(fastlyApiContext: FastlyApiContext, kvStoreName: string, key: string, data: ReadableStream<Uint8Array> | Uint8Array | string, metadata: string | undefined) {
 
   const kvStoreId = await getKVStoreIdForName(fastlyApiContext, kvStoreName);
   if (kvStoreId == null) {
@@ -198,7 +198,7 @@ export async function kvStoreSubmitFile(fastlyApiContext: FastlyApiContext, kvSt
 
 }
 
-export async function kvStoreDeleteFile(fastlyApiContext: FastlyApiContext, kvStoreName: string, key: string) {
+export async function kvStoreDeleteEntry(fastlyApiContext: FastlyApiContext, kvStoreName: string, key: string) {
 
   const kvStoreId = await getKVStoreIdForName(fastlyApiContext, kvStoreName);
   if (kvStoreId == null) {

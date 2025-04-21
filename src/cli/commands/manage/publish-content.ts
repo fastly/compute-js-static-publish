@@ -6,22 +6,30 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-import commandLineArgs, { type OptionDefinition } from 'command-line-args';
+import { type OptionDefinition } from 'command-line-args';
 
-import { type KVAssetEntryMap, type KVAssetVariantMetadata, isKVAssetVariantMetadata } from '../../models/assets/kvstore-assets.js';
-import { type ContentCompressionTypes } from '../../models/compression/index.js';
-import { type PublisherServerConfigNormalized } from '../../models/config/publisher-server-config.js';
-import { type ContentTypeDef } from '../../models/config/publish-content-config.js';
-import { type FastlyApiContext, FetchError, loadApiToken } from '../fastly-api/api-token.js';
-import { getKvStoreEntryInfo } from '../fastly-api/kv-store.js';
-import { mergeContentTypes, testFileContentType } from '../util/content-types.js';
-import { LoadConfigError, loadPublishContentConfigFile, loadStaticPublisherRcFile } from '../util/config.js';
-import { applyDefaults } from '../util/data.js';
-import { calculateFileSizeAndHash, enumerateFiles, getFileSize, rootRelative } from '../util/files.js';
-import { applyKVStoreEntriesChunks, type KVStoreItemDesc, uploadFilesToKVStore } from '../util/kv-store-items.js';
-import { writeKVStoreEntriesForLocal } from '../util/kv-store-local-server.js';
-import { attemptWithRetries } from '../util/retryable.js';
-import { ensureVariantFileExists, type Variants } from '../util/variants.js';
+import { type KVAssetEntryMap, type KVAssetVariantMetadata, isKVAssetVariantMetadata } from '../../../models/assets/kvstore-assets.js';
+import { type ContentCompressionTypes } from '../../../models/compression/index.js';
+import { type PublisherServerConfigNormalized } from '../../../models/config/publisher-server-config.js';
+import { type ContentTypeDef } from '../../../models/config/publish-content-config.js';
+import { type IndexMetadata } from '../../../models/server/index.js';
+import { calcExpirationTime } from '../../../models/time/index.js';
+import { type FastlyApiContext, loadApiToken } from '../../fastly-api/api-token.js';
+import { getKvStoreEntryInfo, kvStoreSubmitEntry } from '../../fastly-api/kv-store.js';
+import { parseCommandLine } from '../../util/args.js';
+import { mergeContentTypes, testFileContentType } from '../../util/content-types.js';
+import { LoadConfigError, loadPublishContentConfigFile, loadStaticPublisherRcFile } from '../../util/config.js';
+import { applyDefaults } from '../../util/data.js';
+import { readServiceId } from '../../util/fastly-toml.js';
+import { calculateFileSizeAndHash, enumerateFiles, getFileSize, rootRelative } from '../../util/files.js';
+import {
+  applyKVStoreEntriesChunks,
+  doKvStoreItemsOperation,
+  type KVStoreItemDesc,
+} from '../../util/kv-store-items.js';
+import { writeKVStoreEntriesForLocal } from '../../util/kv-store-local-server.js';
+import { isNodeError } from '../../util/node.js';
+import { ensureVariantFileExists, type Variants } from '../../util/variants.js';
 
 // KV Store key format:
 // <publishId>_index_<preview_id>.json
@@ -31,16 +39,42 @@ import { ensureVariantFileExists, type Variants } from '../util/variants.js';
 // split large files into 20MiB chunks
 const KV_STORE_CHUNK_SIZE = 1_024 * 1_024 * 20;
 
-export async function action(argv: string[]) {
+function help() {
+  console.log(`\
+
+Usage:
+  npx @fastly/compute-js-static-publish publish-content [options]
+
+Description:
+  Publishes static files from your root directory into the configured Fastly KV Store,
+  under a named collection (e.g., "live", "staging", "preview-123").
+  Automatically skips uploading content that already exists in KV Store.
+
+Options:
+  --config <config-file>           Path to a publish-content.config.js file
+                                   (default: publish-content.config.js in the current directory)
+  --root-dir <dir>                 Override the root directory to publish from
+  --collection-name <name>         Publish under a specific collection name (defaults to value in static-publish.rc.js).
+  --expires-in <duration>          Set expiration for the collection relative to now (e.g., 3d, 6h, 1w).
+  --expires-at <timestamp>         Set expiration using an absolute ISO 8601 timestamp.
+  --local-only                     Write content to local KV Store for testing only. No remote uploads.
+  --no-local                       Skip local KV Store writes and upload only to the Fastly KV Store.
+  --kv-overwrite                   When Fastly KV Store is used, always overwrite existing items in the store.                   
+
+  --fastly-api-token <token>       Fastly API token used for KV Store access. If not provided,
+                                   the tool will try:
+                                     1. FASTLY_API_TOKEN environment variable
+                                     2. fastly profile token (via CLI)
+  -h, --help                       Show help for this command.
+`);
+}
+
+export async function action(actionArgs: string[]) {
 
   const optionDefinitions: OptionDefinition[] = [
     { name: 'verbose', type: Boolean, },
 
-    // Fastly API Token to use for this publishing.
-    { name: 'fastly-api-token', type: String, },
-
-    // Collection name to be used for this publishing.
-    { name: 'collection-name', type: String, },
+    { name: 'config', type: String },
 
     // The 'root' directory for the publishing.
     // All assets are expected to exist under this root. Required.
@@ -48,27 +82,44 @@ export async function action(argv: string[]) {
     // then the value of 'public-dir' is used.
     { name: 'root-dir', type: String, },
 
-    { name: 'force-upload', type: Boolean },
+    // Collection name to be used for this publishing.
+    { name: 'collection-name', type: String, },
 
-    { name: 'no-local', type: Boolean },
+    { name: 'expires-in', type: String },
+    { name: 'expires-at', type: String },
 
     { name: 'local-only', type: Boolean },
+    { name: 'no-local', type: Boolean },
+    { name: 'kv-overwrite', type: Boolean },
 
-    { name: 'config', type: String },
+    // Fastly API Token to use for this publishing.
+    { name: 'fastly-api-token', type: String, },
   ];
 
-  const commandLineValues = commandLineArgs(optionDefinitions, { argv });
+  const parsed = parseCommandLine(actionArgs, optionDefinitions);
+  if (parsed.needHelp) {
+    if (parsed.error != null) {
+      console.error(String(parsed.error));
+      console.error();
+      process.exitCode = 1;
+    }
+
+    help();
+    return;
+  }
 
   const {
     verbose,
-    ['fastly-api-token']: fastlyApiToken,
-    ['collection-name']: collectionNameValue,
-    ['root-dir']: rootDir,
-    ['force-upload']: forceUpload,
-    ['no-local']: noLocalMode,
-    ['local-only']: localOnlyMode,
     ['config']: configFilePathValue,
-  } = commandLineValues;
+    ['root-dir']: rootDir,
+    ['collection-name']: collectionNameValue,
+    ['expires-in']: expiresIn,
+    ['expires-at']: expiresAt,
+    ['local-only']: localOnlyMode,
+    ['no-local']: noLocalMode,
+    ['kv-overwrite']: overwriteKvStoreItems,
+    ['fastly-api-token']: fastlyApiToken,
+  } = parsed.commandLineOptions;
 
   // no-local and local-only are mutually exclusive
   if (noLocalMode && localOnlyMode) {
@@ -77,14 +128,48 @@ export async function action(argv: string[]) {
     return;
   }
 
+  // compute-js-static-publisher cli is always run from the Compute application directory
+  // in other words, the directory that contains `fastly.toml`.
+  const computeAppDir = path.resolve();
+
+  // Check to see if we have a service ID listed in `fastly.toml`.
+  // If we do NOT, then we do not use the KV Store.
+  let serviceId: string | undefined;
+  try {
+    serviceId = readServiceId(path.resolve(computeAppDir, './fastly.toml'));
+  } catch(err: unknown) {
+    if (isNodeError(err) && err.code === 'ENOENT') {
+      console.warn(`❌ ERROR: can't find 'fastly.toml'.`);
+      process.exitCode = 1;
+      return;
+    }
+
+    console.warn(`❌ ERROR: can't read or parse 'fastly.toml'.`);
+    process.exitCode = 1;
+    return;
+  }
+
   // Create local files unless 'no-local' is set
-  const createLocalFiles = !noLocalMode;
+  let createLocalFiles = false;
+  if (noLocalMode) {
+    console.log(`ℹ️ 'No local mode' - skipping creation of files for local simulated KV Store`);
+  } else {
+    createLocalFiles = true;
+  }
+
   // Use the KV Store unless 'local-only' is set
-  const useKvStore = !localOnlyMode;
+  let useKvStore = false;
+  if (serviceId == null) {
+    console.log(`ℹ️ 'service_id' not set in 'fastly.toml' - skipping creation of files for Fastly KV Store`);
+  } else if (localOnlyMode) {
+    console.log(`ℹ️ 'Local only mode' - skipping creation of files for Fastly KV Store`);
+  } else {
+    useKvStore = true;
+  }
 
   const segments: string[] = [];
   if (createLocalFiles) {
-    segments.push('for local simluated KV Store');
+    segments.push('for local simulated KV Store');
   }
   if (useKvStore) {
     segments.push('to the Fastly KV Store');
@@ -104,10 +189,6 @@ export async function action(argv: string[]) {
     fastlyApiContext = { apiToken: apiTokenResult.apiToken };
     console.log(`✔️ Fastly API Token: ${fastlyApiContext.apiToken.slice(0, 4)}${'*'.repeat(fastlyApiContext.apiToken.length-4)} from '${apiTokenResult.source}'`);
   }
-
-  // compute-js-static-publisher cli is always run from the Compute application directory
-  // in other words, the directory that contains `fastly.toml`.
-  const computeAppDir = path.resolve();
 
   // #### load config
   let staticPublisherRc;
@@ -150,16 +231,26 @@ export async function action(argv: string[]) {
     }
   }
 
+  let expirationTime: number | undefined;
+  try {
+    expirationTime = calcExpirationTime({expiresIn, expiresAt});
+  } catch(err: unknown) {
+    console.error(`❌ Cannot process expiration time`);
+    console.error(String(err));
+    process.exitCode = 1;
+    return;
+  }
+
   console.log(`✔️ Public directory '${rootRelative(publicDirRoot)}'.`);
 
   const publishId = staticPublisherRc.publishId;
-  console.log(`✔️ Publish ID: ${publishId}`);
+  console.log(`  | Publish ID: ${publishId}`);
 
   const kvStoreName = staticPublisherRc.kvStoreName;
-  console.log(`✔️ Using KV Store: ${kvStoreName}`);
+  console.log(`  | Using KV Store: ${kvStoreName}`);
 
   const defaultCollectionName = staticPublisherRc.defaultCollectionName;
-  console.log(`✔️ Default Collection Name: ${defaultCollectionName}`);
+  console.log(`  | Default Collection Name: ${defaultCollectionName}`);
 
   // The Static Content Root Dir, which will hold loaders and content generated by this publishing.
   const staticPublisherWorkingDir = publishContentConfig.staticPublisherWorkingDir;
@@ -189,6 +280,20 @@ export async function action(argv: string[]) {
     console.log(`✔️ (.well-known is exempt from exclusion.)`);
   }
 
+  // ### Collection name that we're currently publishing
+  // for example, live, staging
+  const collectionName = collectionNameValue ?? process.env.PUBLISHER_COLLECTION_NAME ?? defaultCollectionName;
+  console.log(`✔️ Collection Name: ${collectionName}`);
+
+  if (expirationTime != null) {
+    console.log(`✔️ Publishing with expiration timestamp: ${new Date(expirationTime * 1000).toISOString()}`);
+  } else {
+    console.log(`✔️ Publishing with no expiration timestamp.`);
+  }
+  if (collectionName === defaultCollectionName && expirationTime != null) {
+    console.log(`  ⚠️  NOTE: Expiration time not enforced for default collection.`);
+  }
+
   // files to be included in the build/publish
   const files = enumerateFiles({
     publicDirRoot,
@@ -196,10 +301,6 @@ export async function action(argv: string[]) {
     excludeDotFiles,
     includeWellKnown,
   });
-
-  // ### Collection name that we're currently publishing
-  // for example, live, staging
-  const collectionName = collectionNameValue ?? process.env.PUBLISHER_COLLECTION_NAME ?? defaultCollectionName;
 
   const stats = {
     kvStore: 0,
@@ -303,9 +404,14 @@ export async function action(argv: string[]) {
 
         let kvStoreItemMetadata: KVAssetVariantMetadata | null = null;
 
-        if (useKvStore && !forceUpload) {
-          await attemptWithRetries(
-            async () => {
+        if (useKvStore && !overwriteKvStoreItems) {
+          const items = [{
+            key: variantKey,
+          }];
+
+          await doKvStoreItemsOperation(
+            items,
+            async(_, variantKey) => {
               // fastlyApiContext is non-null if useKvStore is true
               const kvStoreEntryInfo = await getKvStoreEntryInfo(fastlyApiContext!, kvStoreName, variantKey);
               if (!kvStoreEntryInfo) {
@@ -347,23 +453,7 @@ export async function action(argv: string[]) {
                   };
                 }
               }
-            },
-            {
-              onAttempt(attempt) {
-                if (attempt > 0) {
-                  console.log(`Attempt ${attempt + 1} for: ${variantKey}`);
-                }
-              },
-              onRetry(attempt, err, delay) {
-                let statusMessage = 'unknown';
-                if (err instanceof FetchError) {
-                  statusMessage = `HTTP ${err.status}`;
-                } else if (err instanceof TypeError) {
-                  statusMessage = 'transport';
-                }
-                console.log(`Attempt ${attempt + 1} for ${variantKey} gave retryable error (${statusMessage}), delaying ${delay} ms`);
-              },
-            },
+            }
           );
         }
 
@@ -464,20 +554,22 @@ export async function action(argv: string[]) {
   const indexFileName = `index_${collectionName}.json`;
   const indexFileKey = `${publishId}_index_${collectionName}`;
 
-  // Metadata can have build time, expiration date, build name
-  // const indexMetadata = {};
-
   const indexFilePath = path.resolve(staticPublisherKvStoreContent, indexFileName);
   fs.writeFileSync(indexFilePath, JSON.stringify(kvAssetsIndex));
 
   const indexFileSize = getFileSize(indexFilePath);
+
+  const indexMetadata: IndexMetadata = {
+    publishedTime: Math.floor(Date.now() / 1000),
+    expirationTime,
+  };
 
   kvStoreItemDescriptions.push({
     write: true,
     size: indexFileSize,
     key: indexFileKey,
     filePath: indexFilePath,
-    // metadata: indexMetadata,
+    metadataJson: indexMetadata,
   });
   console.log(`✅  Index has been saved.`)
 
@@ -561,25 +653,32 @@ export async function action(argv: string[]) {
     key: settingsFileKey,
     filePath: settingsFilePath,
   });
-  console.log(`✅  Settings have been saved.`)
+  console.log(`✅  Settings have been saved.`);
 
-  console.log(`🍪 Chunking large files...`)
+  console.log(`🍪 Chunking large files...`);
   await applyKVStoreEntriesChunks(kvStoreItemDescriptions, KV_STORE_CHUNK_SIZE);
-  console.log(`✅  Large files have been chunked.`)
+  console.log(`✅  Large files have been chunked.`);
 
   if (useKvStore) {
-    console.log(`📤 Uploading entries to KV Store.`)
+    console.log(`📤 Uploading entries to KV Store.`);
     // fastlyApiContext is non-null if useKvStore is true
-    await uploadFilesToKVStore(fastlyApiContext!, kvStoreName, kvStoreItemDescriptions);
-    console.log(`✅  Uploaded entries to KV Store.`)
+    await doKvStoreItemsOperation(
+      kvStoreItemDescriptions.filter(x => x.write),
+      async ({ filePath, metadataJson }, key) => {
+        const fileBytes = fs.readFileSync(filePath);
+        await kvStoreSubmitEntry(fastlyApiContext!, kvStoreName, key, fileBytes, metadataJson != null ? JSON.stringify(metadataJson) : undefined);
+        console.log(` 🌐 Submitted asset "${rootRelative(filePath)}" to KV Store with key "${key}".`)
+      }
+    );
+    console.log(`✅  Uploaded entries to KV Store.`);
   }
   if (createLocalFiles) {
-    console.log(`📝 Writing local server KV Store entries.`)
+    console.log(`📝 Writing local server KV Store entries.`);
     const storeFile = path.resolve(staticPublisherWorkingDir, `./kvstore.json`);
     writeKVStoreEntriesForLocal(storeFile, computeAppDir, kvStoreItemDescriptions);
-    console.log(`✅  Wrote KV Store entries for local server.`)
+    console.log(`✅  Wrote KV Store entries for local server.`);
   }
 
-  console.log(`🎉 Completed.`)
+  console.log(`🎉 Completed.`);
 
 }

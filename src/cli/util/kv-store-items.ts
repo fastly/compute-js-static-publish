@@ -4,39 +4,30 @@
  */
 
 import fs from 'node:fs';
-import { directoryExists, getFileSize, rootRelative } from './files.js';
+import { directoryExists, getFileSize } from './files.js';
 import { attemptWithRetries } from './retryable.js';
-import { type FastlyApiContext, FetchError } from '../fastly-api/api-token.js';
-import { kvStoreSubmitFile } from '../fastly-api/kv-store.js';
+import { FetchError } from '../fastly-api/api-token.js';
 
-export type KVStoreItemDesc = {
-  write: boolean,
-  size: number,
-  key: string,
-  filePath: string,
-  metadataJson?: Record<string, any>,
-};
+export async function doKvStoreItemsOperation<TObject extends { key: string }>(
+  objects: TObject[],
+  fn: (obj: TObject, key: string, index: number) => Promise<void>,
+  maxConcurrent: number = 12,
+) {
 
-export async function uploadFilesToKVStore(fastlyApiContext: FastlyApiContext, kvStoreName: string, kvStoreItemDescriptions: KVStoreItemDesc[]) {
-
-  const maxConcurrent = 12;
   let index = 0; // Shared among workers
 
   async function worker() {
-    while (index < kvStoreItemDescriptions.length) {
+    while (index < objects.length) {
       const currentIndex = index;
       index = index + 1;
-      const { write, key, filePath, metadataJson } = kvStoreItemDescriptions[currentIndex];
-      if (!write) {
-        continue;
-      }
+
+      const object = objects[currentIndex];
+      const { key } = object;
 
       try {
         await attemptWithRetries(
           async() => {
-            const fileBytes = fs.readFileSync(filePath);
-            await kvStoreSubmitFile(fastlyApiContext, kvStoreName, key, fileBytes, metadataJson != null ? JSON.stringify(metadataJson) : undefined);
-            console.log(` 🌐 Submitted asset "${rootRelative(filePath)}" to KV Store with key "${key}".`)
+            await fn(object, key, currentIndex);
           },
           {
             onAttempt(attempt) {
@@ -66,6 +57,14 @@ export async function uploadFilesToKVStore(fastlyApiContext: FastlyApiContext, k
   const workers = Array.from({ length: maxConcurrent }, () => worker());
   await Promise.all(workers);
 }
+
+export type KVStoreItemDesc = {
+  write: boolean,
+  size: number,
+  key: string,
+  filePath: string,
+  metadataJson?: Record<string, any>,
+};
 
 export function shouldRecreateChunks(chunksDir: string, numChunks: number, item: KVStoreItemDesc, chunkSize: number) {
   console.log(` 📄 '${item.key}' - ${item.size} bytes → ${numChunks} chunks`)

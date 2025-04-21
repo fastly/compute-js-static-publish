@@ -10,7 +10,7 @@ import { makeRetryable } from '../util/retryable.js';
 
 export interface FastlyApiContext {
   apiToken: string,
-};
+}
 
 export type LoadApiTokenResult = {
   apiToken: string,
@@ -83,6 +83,15 @@ export class FetchError extends Error {
   status: number;
 }
 
+function isReadableStream(data: unknown): data is ReadableStream {
+  return (
+    typeof data === 'object' &&
+    data !== null &&
+    typeof (data as ReadableStream).getReader === 'function' &&
+    typeof (data as ReadableStream).tee === 'function'
+  );
+}
+
 export async function callFastlyApi(
   fastlyApiContext: FastlyApiContext,
   endpoint: string,
@@ -105,7 +114,9 @@ export async function callFastlyApi(
     ...requestInit,
     headers,
     redirect: 'error',
+    ...(isReadableStream(requestInit?.body) ? { duplex: 'half' } as RequestInit : null),
   });
+
   let response;
   try {
     response = await fetch(request);

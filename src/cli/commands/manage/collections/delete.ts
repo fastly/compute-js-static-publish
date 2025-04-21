@@ -3,34 +3,63 @@
  * Licensed under the MIT license. See LICENSE file for details.
  */
 
-import commandLineArgs, { type OptionDefinition } from 'command-line-args';
+import { type OptionDefinition } from 'command-line-args';
 
-import { LoadConfigError, loadStaticPublisherRcFile } from '../../util/config.js';
-import { getKVStoreKeys, kvStoreDeleteFile } from '../../fastly-api/kv-store.js';
-import { type FastlyApiContext, loadApiToken } from '../../fastly-api/api-token.js';
+import { LoadConfigError, loadStaticPublisherRcFile } from '../../../util/config.js';
+import { getKVStoreKeys, kvStoreDeleteEntry } from '../../../fastly-api/kv-store.js';
+import { type FastlyApiContext, loadApiToken } from '../../../fastly-api/api-token.js';
+import { parseCommandLine } from "../../../util/args.js";
+import { doKvStoreItemsOperation } from "../../../util/kv-store-items.js";
 
-export async function action(argv: string[]) {
+function help() {
+  console.log(`\
+
+Usage:
+  npx @fastly/compute-js-static-publish collections delete \\
+    --collection-name <name> \\
+    [options]
+
+Description:
+  Deletes a collection index from the KV Store. The content files will remain but will no longer be referenced.
+
+Options:
+  --collection-name <name>         (Required) The name of the collection to delete 
+
+  --fastly-api-token <token>       Fastly API token used for KV Store access. If not provided,
+                                   the tool will try:
+                                     1. FASTLY_API_TOKEN environment variable
+                                     2. fastly profile token (via CLI)
+  -h, --help                       Show help for this command.
+`);
+}
+
+export async function action(actionArgs: string[]) {
 
   const optionDefinitions: OptionDefinition[] = [
     { name: 'verbose', type: Boolean },
+    { name: 'collection-name', type: String },
     { name: 'fastly-api-token', type: String, },
-    { name: 'collection-name', type: String, multiple: true }
   ];
 
-  const commandLineValues = commandLineArgs(optionDefinitions, { argv });
+  const parsed = parseCommandLine(actionArgs, optionDefinitions);
+  if (parsed.needHelp) {
+    if (parsed.error != null) {
+      console.error(String(parsed.error));
+      console.error();
+      process.exitCode = 1;
+    }
+
+    help();
+    return;
+  }
+
   const {
     verbose,
     ['fastly-api-token']: fastlyApiToken,
     ['collection-name']: collectionNameValue,
-  } = commandLineValues;
+  } = parsed.commandLineOptions;
 
-  const collectionNamesAsArray = (Array.isArray(collectionNameValue) ? collectionNameValue : [ collectionNameValue ])
-    .filter(x => typeof x === 'string')
-    .map(x => x.split(','))
-    .flat()
-    .map(x => x.trim())
-    .filter(Boolean);
-  if (collectionNamesAsArray.length === 0) {
+  if (collectionNameValue == null) {
     console.error("❌ Required argument '--collection-name' not specified.");
     process.exitCode = 1;
     return;
@@ -63,16 +92,22 @@ export async function action(argv: string[]) {
   }
 
   const publishId = staticPublisherRc.publishId;
-  console.log(`✔️ Publish ID: ${publishId}`);
+  console.log(`  | Publish ID: ${publishId}`);
 
   const kvStoreName = staticPublisherRc.kvStoreName;
-  console.log(`✔️ Using KV Store: ${kvStoreName}`);
+  console.log(`  | Using KV Store: ${kvStoreName}`);
 
   const defaultCollectionName = staticPublisherRc.defaultCollectionName;
-  console.log(`✔️ Default Collection Name: ${defaultCollectionName}`);
+  console.log(`  | Default Collection Name: ${defaultCollectionName}`);
 
-  console.log(`✔️ Collections to delete: ${collectionNamesAsArray.map(x => `'${x}'`).join(', ')}`)
-  const collectionNames = new Set(collectionNamesAsArray);
+  const collectionName = collectionNameValue;
+  if (collectionName === defaultCollectionName) {
+    console.error(`❌ Cannot delete default collection: ${collectionName}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  console.log(`✔️ Collection to delete: ${collectionName}`);
 
   const kvKeysToDelete = new Set<string>();
 
@@ -94,7 +129,7 @@ export async function action(argv: string[]) {
   } else {
     console.log(`Found collections: ${foundCollections.map(x => `'${x.name}'`).join(', ')}`);
     for (const collection of foundCollections) {
-      if (collectionNames.has(collection.name)) {
+      if (collection.name === collectionName) {
         console.log(`Flagging collection '${collection.name}' for deletion: ${collection.key}`);
         kvKeysToDelete.add(collection.key);
       }
@@ -102,10 +137,14 @@ export async function action(argv: string[]) {
   }
 
   // ### Delete items that have been flagged
-  for (const key of kvKeysToDelete) {
-    console.log("Deleting key from KV Store: " + key);
-    await kvStoreDeleteFile(fastlyApiContext, kvStoreName, key);
-  }
+  const items = [...kvKeysToDelete].map(key => ({key}));
+  await doKvStoreItemsOperation(
+    items,
+    async(_, key) => {
+      console.log(`Deleting key from KV Store: ${key}`);
+      await kvStoreDeleteEntry(fastlyApiContext, kvStoreName, key);
+    }
+  );
 
   console.log("✅  Completed.")
 }
