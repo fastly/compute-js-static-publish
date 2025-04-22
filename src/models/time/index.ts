@@ -35,11 +35,16 @@ function parseDuration(durationStr: string) {
 export type CalcExpirationTimeArg = {
   expiresIn?: string,
   expiresAt?: string,
+  expiresNever?: boolean,
 };
 
-export function calcExpirationTime({ expiresIn, expiresAt }: CalcExpirationTimeArg) {
-  if (expiresIn && expiresAt) {
-    throw new Error('Only one of expiresIn or expiresAt may be provided');
+export function calcExpirationTime({ expiresIn, expiresAt, expiresNever }: CalcExpirationTimeArg) {
+  if ([expiresIn, expiresAt, expiresNever].filter(x => x !== undefined).length > 1) {
+    throw new Error('Only one of expiresIn or expiresAt or expiresNever may be provided');
+  }
+
+  if (expiresNever) {
+    return null;
   }
 
   if (expiresIn) {

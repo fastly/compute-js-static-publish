@@ -149,7 +149,7 @@ export async function getKvStoreEntry(
 
   const kvStoreId = await getKVStoreIdForName(fastlyApiContext, kvStoreName);
   if (kvStoreId == null) {
-    return false;
+    return null;
   }
 
   const endpoint = `/resources/stores/kv/${encodeURIComponent(kvStoreId)}/keys/${encodeURIComponent(key)}`;
@@ -161,7 +161,7 @@ export async function getKvStoreEntry(
 
   } catch(err) {
     if (err instanceof FetchError && err.status === 404) {
-      return false;
+      return null;
     }
     throw err;
   }
@@ -177,7 +177,13 @@ export async function getKvStoreEntry(
 }
 
 const encoder = new TextEncoder();
-export async function kvStoreSubmitEntry(fastlyApiContext: FastlyApiContext, kvStoreName: string, key: string, data: ReadableStream<Uint8Array> | Uint8Array | string, metadata: string | undefined) {
+export async function kvStoreSubmitEntry(
+  fastlyApiContext: FastlyApiContext,
+  kvStoreName: string,
+  key: string,
+  data: ReadableStream<Uint8Array> | Uint8Array | string,
+  metadata: string | undefined,
+) {
 
   const kvStoreId = await getKVStoreIdForName(fastlyApiContext, kvStoreName);
   if (kvStoreId == null) {

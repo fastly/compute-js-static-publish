@@ -65,6 +65,7 @@ export const normalizeStaticPublisherRc = buildNormalizeFunctionForObject<Static
     kvStoreName,
     publishId,
     defaultCollectionName,
+    staticPublisherWorkingDir,
   } = config;
 
   if (!isSpecified(config, 'kvStoreName')) {
@@ -97,10 +98,29 @@ export const normalizeStaticPublisherRc = buildNormalizeFunctionForObject<Static
     }
   }
 
+  if (!isSpecified(config, 'staticPublisherWorkingDir')) {
+    errors.push('staticPublisherWorkingDir must be specified.');
+  } else {
+    if (
+      staticPublisherWorkingDir.startsWith('./') &&
+      staticPublisherWorkingDir !== './' &&
+      !staticPublisherWorkingDir.includes('//')
+    ) {
+      // ok
+    } else {
+      errors.push('staticPublisherWorkingDir must be a relative subdirectory.');
+    }
+
+    while (staticPublisherWorkingDir.endsWith('/')) {
+      staticPublisherWorkingDir = staticPublisherWorkingDir.slice(0, -1);
+    }
+  }
+
   return {
     kvStoreName,
     publishId,
     defaultCollectionName,
+    staticPublisherWorkingDir,
   };
 });
 
@@ -177,7 +197,6 @@ export const normalizePublishContentConfig = buildNormalizeFunctionForObject<Pub
 
   let {
     rootDir,
-    staticPublisherWorkingDir,
     excludeDirs,
     excludeDotFiles,
     includeWellKnown,
@@ -194,24 +213,6 @@ export const normalizePublishContentConfig = buildNormalizeFunctionForObject<Pub
       // ok
     } else {
       errors.push('rootDir must be a non-empty string.');
-    }
-  }
-
-  if (!isSpecified(config, 'staticPublisherWorkingDir')) {
-    errors.push('staticPublisherWorkingDir must be specified.');
-  } else {
-    if (
-      staticPublisherWorkingDir.startsWith('./') &&
-      staticPublisherWorkingDir !== './' &&
-      !staticPublisherWorkingDir.includes('//')
-    ) {
-      // ok
-    } else {
-      errors.push('staticPublisherWorkingDir must be a relative subdirectory.');
-    }
-
-    while (staticPublisherWorkingDir.endsWith('/')) {
-      staticPublisherWorkingDir = staticPublisherWorkingDir.slice(0, -1);
     }
   }
 
@@ -331,7 +332,6 @@ export const normalizePublishContentConfig = buildNormalizeFunctionForObject<Pub
 
   return {
     rootDir,
-    staticPublisherWorkingDir,
     excludeDirs,
     excludeDotFiles,
     includeWellKnown,

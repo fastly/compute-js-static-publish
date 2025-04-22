@@ -46,10 +46,6 @@ export type PublishContentConfig = {
   // Set to a directory that acts as the root of all files that will be included in this publish.
   rootDir: string,
 
-  // Set to a directory that will hold the working files built by compute-js-static-publish
-  // These files should not be committed to source control.
-  staticPublisherWorkingDir: string,
-
   // An array of values used to exclude files and directories (as well as files within those directories) from being
   // included in this publish. Each entry in the array can be a string or a RegExp and will be tested against the relative
   // path from 'rootDir' of each file or directory.
@@ -80,7 +76,6 @@ export type PublishContentConfig = {
 
 export type PublishContentConfigNormalized = {
   rootDir: string,
-  staticPublisherWorkingDir: string,
   excludeDirs: ExcludeDirTest[],
   excludeDotFiles: boolean,
   includeWellKnown: boolean,

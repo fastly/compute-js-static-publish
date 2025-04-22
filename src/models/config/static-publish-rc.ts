@@ -13,4 +13,9 @@ export type StaticPublishRc = {
 
   // Default collection name.
   defaultCollectionName: string,
-}
+
+  // A directory that holds the working files built by compute-js-static-publish,
+  // relative to the Compute application.
+  // These files should not be committed to source control.
+  staticPublisherWorkingDir: string,
+};

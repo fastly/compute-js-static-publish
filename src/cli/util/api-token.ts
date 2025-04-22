@@ -6,7 +6,7 @@
 import { spawnSync } from 'node:child_process';
 import cli from '@fastly/cli';
 
-import { makeRetryable } from '../util/retryable.js';
+import { makeRetryable } from './retryable.js';
 
 export interface FastlyApiContext {
   apiToken: string,

@@ -8,10 +8,120 @@ import path from 'node:path';
 
 import { type KVStoreItemDesc } from './kv-store-items.js';
 
-export function writeKVStoreEntriesForLocal(storeFile: string, computeAppDir: string, kvStoreItemDescriptions: KVStoreItemDesc[]) {
+type KVStoreLocalServerEntry = ({ data: string, } | { file: string }) & { metadata?:string };
+type KVStoreLocalServerData = Record<string, KVStoreLocalServerEntry>;
 
-  type KVStoreLocalServerEntry = ({ data: string, } | { file: string }) & { metadata?:string };
-  type KVStoreLocalServerData = Record<string, KVStoreLocalServerEntry>;
+export async function getLocalKVStoreKeys(
+  storeFile: string,
+  prefix?: string,
+) {
+
+  let store: KVStoreLocalServerData;
+  try {
+    // If the local KV store file exists, we have to add to it.
+    const storeFileJson = fs.readFileSync(storeFile, 'utf-8')
+    store = JSON.parse(storeFileJson);
+  } catch {
+    store = {};
+  }
+
+  let keys = Object.keys(store);
+
+  if (prefix != null) {
+    keys = keys.filter(key => key.startsWith(prefix));
+  }
+
+  return keys;
+
+}
+
+export async function getLocalKvStoreEntry(
+  storeFile: string,
+  key: string,
+  metadataOnly?: boolean,
+) {
+
+  let store: KVStoreLocalServerData;
+  try {
+    // If the local KV store file exists, we have to add to it.
+    const storeFileJson = fs.readFileSync(storeFile, 'utf-8')
+    store = JSON.parse(storeFileJson);
+  } catch {
+    store = {};
+  }
+
+  const obj = store[key];
+  if (obj == null) {
+    return null;
+  }
+
+  let response;
+  if (metadataOnly) {
+    response = new Response(null);
+  } else if ('data' in obj) {
+    response = new Response(obj.data);
+  } else {
+    const fileData = fs.readFileSync(obj.file);
+    response = new Response(fileData);
+  }
+  return {
+    metadata: obj.metadata ?? null,
+    generation: null,
+    response,
+  };
+
+}
+
+export async function localKvStoreSubmitEntry(
+  storeFile: string,
+  key: string,
+  file: string,
+  metadata: string | undefined,
+) {
+
+  let store: KVStoreLocalServerData;
+  try {
+    // If the local KV store file exists, we have to add to it.
+    const storeFileJson = fs.readFileSync(storeFile, 'utf-8')
+    store = JSON.parse(storeFileJson);
+  } catch {
+    store = {};
+  }
+
+  store[key] = {
+    file,
+    metadata,
+  };
+
+  fs.writeFileSync(storeFile, JSON.stringify(store));
+
+}
+
+export async function localKvStoreDeleteEntry(
+  storeFile: string,
+  key: string,
+) {
+
+  let store: KVStoreLocalServerData;
+  try {
+    // If the local KV store file exists, we have to add to it.
+    const storeFileJson = fs.readFileSync(storeFile, 'utf-8')
+    store = JSON.parse(storeFileJson);
+  } catch {
+    store = {};
+  }
+
+  delete store[key];
+
+  fs.writeFileSync(storeFile, JSON.stringify(store));
+
+}
+
+export function writeKVStoreEntriesForLocal(
+  storeFile: string,
+  computeAppDir: string,
+  kvStoreItemDescriptions: KVStoreItemDesc[],
+) {
 
   let store: KVStoreLocalServerData;
   try {

@@ -6,7 +6,7 @@
 import fs from 'node:fs';
 import { directoryExists, getFileSize } from './files.js';
 import { attemptWithRetries } from './retryable.js';
-import { FetchError } from '../fastly-api/api-token.js';
+import { FetchError } from './api-token.js';
 
 export async function doKvStoreItemsOperation<TObject extends { key: string }>(
   objects: TObject[],

@@ -28,18 +28,23 @@ Available Commands:
   collections update-expiration    Modify expiration time for an existing collection
 
 Global Options:
-  --fastly-api-token <token>       Fastly API token used for KV Store access. If not provided,
-                                   the tool will try:
+  --local                          Instead of working with the Fastly KV Store, operate on
+                                   local files that will be used to simulate the KV Store
+                                   with the local development environment.
+
+  --fastly-api-token=<token>       Fastly API token for KV Store access.
+                                   If not set, the tool will check:
                                      1. FASTLY_API_TOKEN environment variable
-                                     2. fastly profile token (via CLI)
-  -h, --help                       Show help for this command or any subcommand
+                                     2. Logged-in Fastly CLI profile
+
+  -h, --help                       Show this help message and exit.
 
 Automatic Project Initialization:
   If run in a directory that does not contain a \`static-publish.rc.js\` file, this tool will scaffold a new
   Compute application for you, including Fastly configuration, default routes, and publishing setup.
 
 Examples:
-  npx @fastly/compute-js-static-publish publish-content --collection-name live
+  npx @fastly/compute-js-static-publish publish-content --collection-name=live
   npx @fastly/compute-js-static-publish collections list
   npx @fastly/compute-js-static-publish clean --dry-run
 `);

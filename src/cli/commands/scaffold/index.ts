@@ -33,8 +33,8 @@ Options:
   --kv-store-name <name>                (required) KV Store name for content storage
   --root-dir <path>                     (required) Path to static content (e.g., ./public)
   -o, --output <dir>                    Output directory for Compute app (default: ./compute-js)
+  --static-publisher-working-dir <dir>  Working directory for build artifacts (default: <output>/static-publisher)
   --publish-id <id>                     Advanced. Prefix for KV keys (default: "default")
-  --static-publisher-working-dir <dir>  Working directory for build artifacts
                                         (default: ./compute-js/static-publisher)
 
 Compute Service Metadata:
@@ -647,11 +647,11 @@ export async function action(actionArgs: string[]) {
     },
     private: true,
     scripts: {
-      prestart: "npx @fastly/compute-js-static-publish publish-content --local-only",
-      start: "fastly compute serve",
-      "publish-service": "fastly compute publish",
-      "publish-content": 'npx @fastly/compute-js-static-publish publish-content',
-      build: 'js-compute-runtime ./src/index.js ./bin/main.wasm'
+      'dev:publish': 'npx @fastly/compute-js-static-publish publish-content --local',
+      'dev:start': 'fastly compute serve',
+      'fastly:deploy': 'fastly compute publish',
+      'fastly:publish': 'npx @fastly/compute-js-static-publish publish-content',
+      'build': 'js-compute-runtime ./src/index.js ./bin/main.wasm'
     },
   }, undefined, 2);
 
@@ -690,6 +690,7 @@ const rc = {
   kvStoreName: ${JSON.stringify(kvStoreName)},
   publishId: ${JSON.stringify(publishId)},
   defaultCollectionName: ${JSON.stringify(defaultCollectionName)},
+  staticPublisherWorkingDir: ${JSON.stringify(dotRelative(computeJsDir, staticPublisherWorkingDir))},
 };
 
 export default rc;
@@ -747,7 +748,6 @@ export default rc;
 /** @type {import('@fastly/compute-js-static-publish').PublishContentConfig} */
 const config = {
   rootDir: ${JSON.stringify(dotRelative(computeJsDir, rootDir))},
-  staticPublisherWorkingDir: ${JSON.stringify(dotRelative(computeJsDir, staticPublisherWorkingDir))},
   // excludeDirs: [ './node_modules' ],
   // excludeDotFiles: true,
   // includeWellKnown: true,
@@ -818,12 +818,13 @@ async function handleRequest(event) {
   console.log('To run your Compute application locally:');
   console.log('');
   console.log('  cd ' + COMPUTE_JS_DIR);
-  console.log('  npm run start');
+  console.log('  npm run dev:publish');
+  console.log('  npm run dev:start');
   console.log('');
   console.log('To build and deploy to your Compute service:');
   console.log('');
   console.log('  cd ' + COMPUTE_JS_DIR);
-  console.log('  npm run publish-service');
-  console.log('  npm run publish-content');
+  console.log('  npm run fastly:deploy');
+  console.log('  npm run fastly:publish');
   console.log('');
 }

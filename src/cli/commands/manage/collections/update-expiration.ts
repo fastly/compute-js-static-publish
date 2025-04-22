@@ -11,29 +11,52 @@ import { LoadConfigError, loadStaticPublisherRcFile } from '../../../util/config
 import {
   getKvStoreEntry,
   kvStoreSubmitEntry,
-} from '../../../fastly-api/kv-store.js';
-import { type FastlyApiContext, loadApiToken } from '../../../fastly-api/api-token.js';
+} from '../../../util/kv-store.js';
+import { type FastlyApiContext, loadApiToken } from '../../../util/api-token.js';
 import { parseCommandLine } from '../../../util/args.js';
+import { readServiceId } from "../../../util/fastly-toml.js";
+import { isNodeError } from "../../../util/node.js";
+import path from "node:path";
+import fs from "node:fs";
+import { getLocalKvStoreEntry, localKvStoreSubmitEntry } from "../../../util/kv-store-local-server.js";
 
 function help() {
   console.log(`\
 
 Usage:
-  npx @fastly/compute-js-static-publish collections update-expiration [options]
+  npx @fastly/compute-js-static-publish collections update-expiration \\
+    --collection-name=<name> \\
+    [options]
 
 Description:
   Updates the expiration time of an existing collection.
 
-Options:
-  --collection-name <name>         (Required) The name of the collection to modify 
-  --expires-in <duration>          Set new expiration relative to now (e.g., 7d, 1h)
-  --expires-at <timestamp>         Set new expiration using an absolute ISO 8601 timestamp
+Required:
+  --collection-name=<name>         The name of the collection to modify
 
-  --fastly-api-token <token>       Fastly API token used for KV Store access. If not provided,
-                                   the tool will try:
+Expiration:
+  --expires-in=<duration>          Expiration duration from now.
+                                   Examples: 3d, 12h, 15m, 1w
+
+  --expires-at=<timestamp>         Absolute expiration in ISO 8601 format.
+                                   Example: 2025-05-01T00:00:00Z
+
+  --expires-never                  Prevent this collection from expiring.
+
+                                   ⚠ These three options are mutually exclusive.
+                                   Specify exactly one.
+
+Global Options:
+  --local                          Instead of working with the Fastly KV Store, operate on
+                                   local files that will be used to simulate the KV Store
+                                   with the local development environment.
+
+  --fastly-api-token=<token>       Fastly API token for KV Store access.
+                                   If not set, the tool will check:
                                      1. FASTLY_API_TOKEN environment variable
-                                     2. fastly profile token (via CLI)
-  -h, --help                       Show help for this command.
+                                     2. Logged-in Fastly CLI profile
+
+  -h, --help                       Show this help message and exit.
 `);
 }
 
@@ -41,9 +64,14 @@ export async function action(actionArgs: string[]) {
 
   const optionDefinitions: OptionDefinition[] = [
     { name: 'verbose', type: Boolean },
+
     { name: 'collection-name', type: String, },
+
     { name: 'expires-in', type: String },
     { name: 'expires-at', type: String },
+    { name: 'expires-never', type: Boolean },
+
+    { name: 'local', type: Boolean },
     { name: 'fastly-api-token', type: String, },
   ];
 
@@ -64,8 +92,14 @@ export async function action(actionArgs: string[]) {
     ['collection-name']: collectionNameValue,
     ['expires-in']: expiresIn,
     ['expires-at']: expiresAt,
+    ['expires-never']: expiresNever,
+    local: localMode,
     ['fastly-api-token']: fastlyApiToken,
   } = parsed.commandLineOptions;
+
+  // compute-js-static-publisher cli is always run from the Compute application directory
+  // in other words, the directory that contains `fastly.toml`.
+  const computeAppDir = path.resolve();
 
   if (collectionNameValue == null) {
     console.error("❌ Required argument '--collection-name' not specified.");
@@ -73,15 +107,61 @@ export async function action(actionArgs: string[]) {
     return;
   }
 
-  const apiTokenResult = loadApiToken({ commandLine: fastlyApiToken });
-  if (apiTokenResult == null) {
-    console.error("❌ Fastly API Token not provided.");
-    console.error("Set the FASTLY_API_TOKEN environment variable to an API token that has write access to the KV Store.");
+  let expirationTime: number | null | undefined;
+  try {
+    expirationTime = calcExpirationTime({expiresIn, expiresAt, expiresNever});
+  } catch(err: unknown) {
+    console.error(`❌ Cannot process expiration time`);
+    console.error(String(err));
     process.exitCode = 1;
     return;
   }
-  const fastlyApiContext = { apiToken: apiTokenResult.apiToken } satisfies FastlyApiContext;
-  console.log(`✔️ Fastly API Token: ${fastlyApiContext.apiToken.slice(0, 4)}${'*'.repeat(fastlyApiContext.apiToken.length-4)} from '${apiTokenResult.source}'`);
+  if (expirationTime === undefined) {
+    console.error("❌ Exactly one of '--expires-in', '--expires-at', or '--expires-never' is required.");
+    process.exitCode = 1;
+    return;
+  }
+
+  // Check to see if we have a service ID listed in `fastly.toml`.
+  // If we do NOT, then we do not use the KV Store.
+  let serviceId: string | undefined;
+  try {
+    serviceId = readServiceId(path.resolve(computeAppDir, './fastly.toml'));
+  } catch(err: unknown) {
+    if (isNodeError(err) && err.code === 'ENOENT') {
+      console.warn(`❌ ERROR: can't find 'fastly.toml'.`);
+      process.exitCode = 1;
+      return;
+    }
+
+    console.warn(`❌ ERROR: can't read or parse 'fastly.toml'.`);
+    process.exitCode = 1;
+    return;
+  }
+
+  console.log(`📃 Promoting collection...`);
+
+  // Verify targets
+  let fastlyApiContext: FastlyApiContext | undefined = undefined;
+  if (localMode) {
+    console.log(`  Working on local simulated KV Store...`);
+  } else {
+    if (serviceId === null) {
+      console.log(`❌️ 'service_id' not set in 'fastly.toml' - Deploy your Compute app to Fastly before publishing.`);
+      process.exitCode = 1;
+      return;
+    }
+    const apiTokenResult = loadApiToken({ commandLine: fastlyApiToken });
+    if (apiTokenResult == null) {
+      console.error("❌ Fastly API Token not provided.");
+      console.error("Set the FASTLY_API_TOKEN environment variable to an API token that has write access to the KV Store.");
+      process.exitCode = 1;
+      return;
+    }
+    fastlyApiContext = { apiToken: apiTokenResult.apiToken };
+    console.log(`✔️ Fastly API Token: ${fastlyApiContext.apiToken.slice(0, 4)}${'*'.repeat(fastlyApiContext.apiToken.length-4)} from '${apiTokenResult.source}'`);
+    console.log(`  Working on the Fastly KV Store...`);
+  }
 
   // #### load config
   let staticPublisherRc;
@@ -99,16 +179,6 @@ export async function action(actionArgs: string[]) {
     return;
   }
 
-  let expirationTime: number | undefined;
-  try {
-    expirationTime = calcExpirationTime({expiresIn, expiresAt});
-  } catch(err: unknown) {
-    console.error(`❌ Cannot process expiration time`);
-    console.error(String(err));
-    process.exitCode = 1;
-    return;
-  }
-
   const publishId = staticPublisherRc.publishId;
   console.log(`  | Publish ID: ${publishId}`);
 
@@ -118,13 +188,18 @@ export async function action(actionArgs: string[]) {
   const defaultCollectionName = staticPublisherRc.defaultCollectionName;
   console.log(`  | Default Collection Name: ${defaultCollectionName}`);
 
+  const staticPublisherWorkingDir = staticPublisherRc.staticPublisherWorkingDir;
+  console.log(`  | Static publisher working directory: ${staticPublisherWorkingDir}`);
+
+  const storeFile = path.resolve(staticPublisherWorkingDir, `./kvstore.json`);
+
   const collectionName = collectionNameValue;
   console.log(`✔️ Collection to update: ${collectionName}`);
 
-  if (expirationTime != null) {
+  if (expirationTime !== null) {
     console.log(`✔️ Updating expiration timestamp: ${new Date(expirationTime * 1000).toISOString()}`);
   } else {
-    console.log(`✔️ Not updating expiration timestamp.`);
+    console.log(`✔️ Updating expiration timestamp: never`);
   }
   if (collectionName === defaultCollectionName && expirationTime != null) {
     console.log(`  ⚠️  NOTE: Expiration time not enforced for default collection.`);
@@ -132,7 +207,19 @@ export async function action(actionArgs: string[]) {
 
   const collectionIndexKey = `${publishId}_index_${collectionName}`;
 
-  const indexEntryInfo = await getKvStoreEntry(fastlyApiContext, kvStoreName, collectionIndexKey);
+  let indexEntryInfo;
+  if (localMode) {
+    indexEntryInfo = await getLocalKvStoreEntry(
+      storeFile,
+      collectionIndexKey,
+    );
+  } else {
+    indexEntryInfo = await getKvStoreEntry(
+      fastlyApiContext!,
+      kvStoreName,
+      collectionIndexKey,
+    );
+  }
   if (!indexEntryInfo) {
     throw new Error(`Error querying index for '${collectionNameValue}' in KV Store`);
   }
@@ -147,13 +234,33 @@ export async function action(actionArgs: string[]) {
   if (indexMetadata.publishedTime == null) {
     indexMetadata.publishedTime = Math.floor(Date.now() / 1000);
   }
-  if (expirationTime != null) {
+  if (expirationTime === null) {
+    delete indexMetadata.expirationTime;
+  } else {
     indexMetadata.expirationTime = expirationTime;
   }
 
   console.log(`Uploading to KV Store: '${collectionName}'`);
 
-  await kvStoreSubmitEntry(fastlyApiContext, kvStoreName, collectionIndexKey, indexEntryInfo.response.body!, JSON.stringify(indexMetadata));
+  if (localMode) {
+
+    const staticPublisherKvStoreContent = `${staticPublisherWorkingDir}/kv-store-content`;
+    fs.mkdirSync(staticPublisherKvStoreContent, { recursive: true });
+
+    const indexFileName = `index_${collectionNameValue}.json`;
+    const indexFilePath = path.resolve(staticPublisherKvStoreContent, indexFileName);
+    const indexBody = await indexEntryInfo.response.arrayBuffer();
+    fs.writeFileSync(indexFilePath, Buffer.from(indexBody));
+    await localKvStoreSubmitEntry(
+      storeFile,
+      collectionIndexKey,
+      path.relative(computeAppDir, indexFilePath),
+      JSON.stringify(indexMetadata),
+    );
+
+  } else {
+    await kvStoreSubmitEntry(fastlyApiContext!, kvStoreName, collectionIndexKey, indexEntryInfo.response.body!, JSON.stringify(indexMetadata));
+  }
 
   console.log("✅  Completed.");
 }
