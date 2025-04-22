@@ -25,7 +25,8 @@ npx @fastly/compute-js-static-publish --root-dir=./public --kv-store-name=site-c
 ```sh
 cd compute-js
 npm install
-npm run start                # preview locally
+npm run dev:publish          # 'publish' your files to the simulated local KV Store
+npm run dev:start            # preview locally
 ```
 
 Serves your app at `http://127.0.0.1:7676`, powered by a simulated KV Store.
@@ -36,8 +37,15 @@ When you're ready to go live, [create a free Fastly account](https://www.fastly.
 
 ```sh
 cd compute-js
-npm run publish-service      # deploy the app (publish the "service")
-npm run publish-content      # upload your static files (publish the "content")
+npm run fastly:deploy        # deploy the app
+npm run fastly:publish       # upload your static files
+```
+
+In the future, unless you have further changes to make to your app itself, you can
+upload further updates to your static files:
+```sh
+cd compute-js
+npm run fastly:publish       # upload your static files
 ```
 
 ## Features

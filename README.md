@@ -5,7 +5,7 @@
 - [✨ Key Features](#-key-features)
 - [🏁 Quick Start](#-quick-start)
 - [⚙️ Configuring `static-publish.rc.js`](#️-configuring-static-publishrcjs)
-- [🧾 Default Server Config: `publish-content.config.js`](#-default-server-config-publish-contentconfigjs)
+- [🧾 Default Server Config: `publish-content.config.js`](#-publish-and-server-config-publish-contentconfigjs)
 - [📦 Collections (Publish, Preview, Promote)](#-collections-publish-preview-promote)
 - [🧹 Cleaning Up](#-cleaning-up)
 - [🔄 Content Compression](#-content-compression)
@@ -116,6 +116,7 @@ const rc = {
   kvStoreName: 'site-content',
   defaultCollectionName: 'live',
   publishId: 'default',
+  staticPublisherWorkingDir: './static-publisher',
 };
 
 export default rc;
@@ -123,24 +124,24 @@ export default rc;
 
 ### Fields:
 
-- `kvStoreName` - The name of the KV Store used for publishing (required).
-- `defaultCollectionName` - Collection to serve when none is specified (required).
-- `publishId` - Unique prefix for all keys in the KV Store (required). Override only for advanced setups (e.g., multiple apps sharing the same KV Store).
+All fields are required.
+
+- `kvStoreName` - The name of the KV Store used for publishing.
+- `defaultCollectionName` - Collection to serve when none is specified.
+- `publishId` - Unique prefix for all keys in the KV Store. Override only for advanced setups (e.g., multiple apps sharing the same KV Store).
+- `staticPublisherWorkingDir` - Directory to hold working files during publish.
 
 > [!NOTE]
 > Changes to this file require rebuilding the Compute app, since a copy of it is baked into the Wasm binary.
 
-## 🧾 Default Server Config: `publish-content.config.js`
+## 🧾 Publish and Server Config: `publish-content.config.js`
 
 This file is included as part of the scaffolding. Every time you publish content, the publish settings in this file are used for publishing the content, and the server settings are taken from this file and saved as the settings used by the server for that collection.
-
-You can override this file for a single `publish-content` command by specifying an alternative using `--config` on the command line.
 
 ```js
 const config = {
   // these paths are relative to compute-js dir
   rootDir: '../public',
-  staticPublisherWorkingDir: './static-publisher',
 
   // Include/exclude filters (optional):
   excludeDirs: ['node_modules'],
@@ -175,13 +176,11 @@ const config = {
 export default config;
 ```
 
-> [!NOTE]
-> Changes to this file apply when content is published.
+You can override this file for a single `publish-content` command by specifying an alternative using `--config` on the command line.
 
 ### Fields:
 
 - `rootDir` - Directory to scan for content, relative to this file (required).
-- `staticPublisherWorkingDir` - Directory to hold working files during publish (default: `'./static-publisher'`).
 - `excludeDirs` - Array of directory names or regex patterns to exclude (default: `['./node_modules']`).
 - `excludeDotFiles` - Exclude dotfiles and dot-named directories (default: true).
 - `includeWellKnown` - Always include `.well-known` even if dotfiles are excluded (default: true).
@@ -225,18 +224,19 @@ You can overwrite or republish any collection at any time. Old file hashes will 
 
 Collections can expire automatically:
 
-- Expired collections return 404s
-- They’re ignored by the server
-- Their files are cleaned up by `clean`
+- Expired collections are ignored by the server and return 404s
+- Expiration limits can be modified (shortened, extended, reenstated) using `collections update-expiration` 
+- They are cleaned up by `clean --delete-expired-collections`
 
 ```sh
 --expires-in=3d                  # relative (e.g. 1h, 2d, 1w)
 --expires-at=2025-05-01T12:00Z  # absolute (ISO 8601)
+--expires-never
 ```
 
 ### Switching the active collection
 
-By default, the app serves from the collection named in `static-publish
+By default, the server app serves assets from the "default collection", named in `static-publish
 .rc.js` under `defaultCollectionName`. To switch the active collection, you add custom code to your Compute app that calls `publisherServer.setActiveCollectionName(name)`:
 
 ```js
@@ -286,6 +286,8 @@ collectionSelector.fromRequest(request, req => req.headers.get('x-collection') ?
 
 #### From a Cookie
 
+See [fromCookie](#from-cookie) for details on this feature.
+
 ```js
 const { collectionName, redirectResponse } = collectionSelector.fromCookie(request);
 ```
@@ -303,9 +305,10 @@ If you're happy with a preview or staging collection and want to make it live, u
 ```sh
 npx @fastly/compute-js-static-publish collections promote \
   --collection-name=staging
+  --to=live
 ```
 
-This copies all content and server settings from the `staging` collection to the collection named in your `defaultCollectionName`. To copy to a different name, add `--to=some-other-name`.
+This copies all content and server settings from the `staging` collection to `live`.
 
 You can also specify a new expiration:
 
@@ -321,12 +324,33 @@ npx @fastly/compute-js-static-publish collections promote \
 
 ## 🛠 Development → Production Workflow
 
-During development, starting the local preview server (`npm run start`) will run `publish-content --local-only` automatically via a `prestart hook`. This simulates publishing by writing to `kvstore.json` instead of uploading to the actual KV Store. You can preview your site at `http://127.0.0.1:7676` - no Fastly account or service required.
+### Local development
+
+During development, the local preview server (`npm run dev:start`) will run against assets loaded into the simulated KV Store provided by the local development environment.
+
+Prior to starting the server, publish the content to the simulated KV Store:
+
+```sh
+npm run dev:publish          # 'publish' your files to the simulated local KV Store
+npm run dev:start            # preview locally
+```
+
+This simulates publishing by writing to `kvstore.json` instead of uploading to the actual KV Store. You can preview your site at `http://127.0.0.1:7676` - no Fastly account or service required.
+
+Note that for local development, you will have to stop and restart the local development server each time you publish updates to your content.
+
+To publish to an alternative collection name, use:
+
+```sh
+npm run dev:publish -- --collection-name=preview-123
+```
+
+### Production 
 
 When you're ready for production:
 
 1. [Create a free Fastly account](https://www.fastly.com/signup/?tier=free) if you haven't already.
-2. Run `npm run publish-service`
+2. Run `npm run fastly:deploy`
    - This builds your Compute app into a Wasm binary
    - Deploys it to a new or existing Fastly Compute service
    - If creating a new service:
@@ -336,7 +360,7 @@ When you're ready for production:
 Once deployed, publish content like so:
 
 ```sh
-npm run publish-content
+npm run fastly:publish
 ```
 
 This:
@@ -348,7 +372,7 @@ This:
 > [!TIP]
 > Upload to a specific collection by specifying the collection name when publishing content:
 > ```sh
-> npm run publish-content -- --collection-name=preview-42
+> npm run fastly:publish -- --collection-name=preview-42
 > ```
 
 **No Wasm redeploy needed** unless you:
@@ -359,14 +383,25 @@ This:
 If you do need to rebuild and redeploy the Compute app, simply run:
 
 ```sh
-npm run publish-service
+npm run dev:deploy
 ```
 
 ## 🧹 Cleaning Up
 
-Every time you publish, old files are left behind for safety. **However, files with the same content will be re-used across collections and publishing events** - they are only stored once in the KV Store using their content hash as a key. This ensures that unchanged files aren't duplicated, keeping storage efficient and deduplicated. To avoid bloat, use:
+Every time you publish, old files are left behind for safety. **However, files with the same content will be re-used across collections and publishing events.** They are only stored once in the KV Store using their content hash as a key. This ensures that unchanged files aren't duplicated, keeping storage efficient and deduplicated.
+
+Over time, however, collections may expire, old versions of files will be left behind, and some assets in the KV Store will no longer be referenced by any live collection. To avoid bloat, use:
 
 ```sh
+npm run dev:clean
+```
+and
+```sh
+npm run fastly:clean
+```
+
+These scripts run against the local and Fastly KV Stores respectively, and run the following command:
+```
 npx @fastly/compute-js-static-publish clean --delete-expired-collections
 ```
 
@@ -490,10 +525,10 @@ npx @fastly/compute-js-static-publish \
   --root-dir=./public \
   --kv-store-name=site-content \
   [--output=./compute-js] \
+  [--static-publisher-working-dir=<output>/static-publisher] \
   [--publish-id=<prefix>] \
   [--public-dir=./public] \
   [--static-dir=./public/static] \
-  [--static-publisher-working-dir=./compute-js/static-publisher] \
   [--spa=./public/spa.html] \
   [--not-found-page=./public/404.html] \
   [--auto-index=index.html,index.htm] \
@@ -509,6 +544,7 @@ npx @fastly/compute-js-static-publish \
 **Used to generate the Compute app:**
 - `--kv-store-name`: Required. Name of KV Store to use.
 - `--output`: Compute app destination (default: `./compute-js`)
+- `--static-publisher-working-dir`: Directory to hold working files (default: `<output>/static-publisher`).
 - `--name`: Application name to insert into `fastly.toml`
 - `--description`: Application description to insert into `fastly.toml`
 - `--author`: Author to insert into `fastly.toml`
@@ -517,7 +553,6 @@ npx @fastly/compute-js-static-publish \
 **Used in building config files:**
 - `--root-dir`: Required. Directory of static site content.
 - `--publish-id`: Optional key prefix for KV entries (default: `'default'`).
-- `--static-publisher-working-dir`: Directory to hold working files (default: `<output>/static-publisher`).
 - `--public-dir`: Public files base directory (default: same as `--root-dir`).
 - `--static-dir`: One or more directories to serve with long cache TTLs.
 - `--spa`: SPA fallback file path (e.g., `./public/spa.html`).
@@ -634,6 +669,99 @@ Deletes a specific collection’s index and associated settings.
 
 #### Options:
 - `--collection-name`: The name of the collection to delete (required)
+
+---
+
+## Appendix
+
+### fromCookie
+
+`collectionSelector.fromCookie` is a utility function that enables the use of a browser
+cookie to select the active collection.
+
+```js
+import { collectionSelector } from '@fastly/compute-js-static-publish';
+
+const { collectionName, redirectResponse } =
+  collectionSelector.fromCookie(request, {
+    // Everything here is optional – these are just examples
+    cookieName:      'publisher-collection', // default
+    activatePath:    '/activate',            // default
+    resetPath:       '/reset',               // default
+    cookieHttpOnly:  true,                   // default
+    cookieMaxAge:    60 * 60 * 24 * 7,       // 7-day preview
+    cookiePath:      '/',                    // default
+  });
+
+if (redirectResponse) {
+  // honor the redirect
+  return redirectResponse;
+}
+
+// `collectionName` now holds the active collection (or `null` if none)
+```
+
+#### What it does, in plain English
+
+1. Reads a cookie
+   It looks for a cookie named cookieName (default `publisher-collection`) and hands you the value as `collectionName`.
+
+2. Handles two helper endpoints for you
+
+| Endpoint                           | Purpose          | Query params                                                                                   | Result                                    |
+|------------------------------------|------------------|------------------------------------------------------------------------------------------------|-------------------------------------------|
+| activatePath (default `/activate`) | Set the cookie   | `collection` (required) - name of the collection<br /> `redirectTo` (optional, `/` by default) | `302` redirect with a `Set-Cookie` header |
+| resetPath (default `/reset`)       | Clear the cookie | `redirectTo` (optional, `/` by default)                                                        | `302` redirect that expires the cookie    |
+
+If a visitor accesses `/activate?collection=blue&redirectTo=/preview`, the helper will issue a redirect and drop `publisher-collection=blue` into their cookie jar.
+   - If someone forgets `?collection=?`? Then `/activate` replies with HTTP `400`.
+
+When the visitor hits `/reset`, the cookie is deleted.
+
+3. Safety flags are baked in
+
+   - `HttpOnly` is on by default (configurable), to help avoid XSS issues.
+   - `Secure` is automatically added on HTTPS requests.
+   - `SameSite=Lax` is always set – reasonable default for previews.
+
+#### Option reference
+
+| Option           | Type              | Default                  | Notes                                          |
+|------------------|-------------------|--------------------------|------------------------------------------------|
+| `cookieName`     | string            | `'publisher-collection'` | Name of the cookie to read/write               |
+| `activatePath`   | string            | `'/activate'`            | Path that sets the cookie                      |
+| `resetPath`      | string            | `'/reset'`               | Path that clears the cookie                    |
+| `cookieHttpOnly` | boolean           | `true`                   | Turn off if the client-side needs to read it   |
+| `cookieMaxAge`   | number\|undefined | `undefined`              | Seconds until expiry; omit for session cookies |
+| `cookiePath`     | string            | `'/'`                    | Path attribute in the cookie                   |
+
+#### Example
+
+`fromCookie` can be dropped into a Fastly Compute app: 
+
+```js
+async function handleRequest(event) {
+  const request = event.request;
+
+  // --- Cookie handling starts here
+  const { collectionName, redirectResponse } = collectionSelector.fromCookie(request);
+  if (redirectResponse) {
+    // obey redirect first
+    return redirectResponse;
+  }
+  if (collectionName != null) {
+    publisherServer.setActiveCollectionName(collectionName);
+  }
+  // --- Cookie handling ends here
+
+  // Regular routing follows...
+  const response = await publisherServer.serveRequest(request);
+  if (response != null) {
+    return response;
+  }
+  return new Response('Not found', { status: 404 });
+}
+```
 
 ---
 
