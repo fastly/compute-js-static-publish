@@ -23,8 +23,8 @@ Usage:
   npx @fastly/compute-js-static-publish collections delete --collection-name=<name> [options]
 
 Description:
-  Deletes a collection index from the KV Store. The content files will remain but will no
-  longer be referenced.
+  Deletes a collection index from the KV Store. The content files will remain as they may still
+  be referenced by other collection indexes.
 
   Use the 'npx @fastly/compute-js-static-publish clean' command afterward to remove content
   files that are no longer referenced by any collection.  

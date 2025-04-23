@@ -29,7 +29,7 @@ Usage:
     [options]
 
 Description:
-  Updates the expiration time of an existing collection.
+  Sets or updates the expiration time of an existing collection.
 
 Required:
   --collection-name=<name>         The name of the collection to modify

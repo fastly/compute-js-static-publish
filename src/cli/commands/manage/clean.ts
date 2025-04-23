@@ -31,7 +31,7 @@ Usage:
 
 Description:
   Cleans up expired or unreferenced items in the Fastly KV Store.
-  This includes expired collection indexes and orphaned content assets.
+  This can include expired collection indexes and orphaned content assets.
 
 Options:
   --delete-expired-collections     If set, expired collection index files will be deleted.
