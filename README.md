@@ -5,12 +5,14 @@
 - [✨ Key Features](#-key-features)
 - [🏁 Quick Start](#-quick-start)
 - [⚙️ Configuring `static-publish.rc.js`](#️-configuring-static-publishrcjs)
-- [🧾 Default Server Config: `publish-content.config.js`](#-publish-and-server-config-publish-contentconfigjs)
+- [🧾 Config for Publishing and Server: `publish-content.config.js`](#-config-for-publishing-and-server-publish-contentconfigjs)
 - [📦 Collections (Publish, Preview, Promote)](#-collections-publish-preview-promote)
 - [🧹 Cleaning Up](#-cleaning-up)
 - [🔄 Content Compression](#-content-compression)
 - [🧩 Using PublisherServer in Custom Apps](#-using-publisherserver-in-custom-apps)
 - [📥 Using Published Assets in Your Code](#-using-published-assets-in-your-code)
+- [📚 CLI Reference](#-cli-reference)
+- [📕 Appendix](#-appendix)
 - [📚 Next Steps](#-next-steps)
 
 Serve static websites and web apps at the edge &mdash; no backends and no CDN invalidation delays.
@@ -55,7 +57,8 @@ Type the following &mdash; no Fastly account or service required yet!
 ```sh
 cd compute-js
 npm install
-npm run start
+npm run dev:publish
+npm run dev:start
 ```
 
 Fastly's [local development environment](https://www.fastly.com/documentation/guides/compute/testing/#running-a-local-testing-server) serves your static website at `http://127.0.0.1:7676`, powered by a simulated KV Store.
@@ -65,7 +68,7 @@ Fastly's [local development environment](https://www.fastly.com/documentation/gu
 Ready to go live? All you need is a [free Fastly account](https://www.fastly.com/signup/?tier=free)!
 
 ```sh
-npm run publish-service
+npm run fastly:deploy
 ```
 
 The command publishes your Compute app and creates the KV Store. (No content uploaded yet!)
@@ -73,7 +76,7 @@ The command publishes your Compute app and creates the KV Store. (No content upl
 ### 4. Publish Content
 
 ```sh
-npm run publish-content
+npm run fastly:publish
 ```
 
 Upload static files to the KV Store and applies the server config.  Your website is now up and live!
@@ -134,7 +137,7 @@ All fields are required.
 > [!NOTE]
 > Changes to this file require rebuilding the Compute app, since a copy of it is baked into the Wasm binary.
 
-## 🧾 Publish and Server Config: `publish-content.config.js`
+## 🧾 Config for Publishing and Server: `publish-content.config.js`
 
 This file is included as part of the scaffolding. Every time you publish content, the publish settings in this file are used for publishing the content, and the server settings are taken from this file and saved as the settings used by the server for that collection.
 
@@ -225,19 +228,21 @@ You can overwrite or republish any collection at any time. Old file hashes will 
 Collections can expire automatically:
 
 - Expired collections are ignored by the server and return 404s
+- The default collection never expires
 - Expiration limits can be modified (shortened, extended, reenstated) using `collections update-expiration` 
 - They are cleaned up by `clean --delete-expired-collections`
 
 ```sh
---expires-in=3d                  # relative (e.g. 1h, 2d, 1w)
+--expires-in=3d                 # relative (e.g. 1h, 2d, 1w)
 --expires-at=2025-05-01T12:00Z  # absolute (ISO 8601)
---expires-never
+--expires-never                 # the collection never expires
 ```
+
+*(Only one of **`--expires-in`**, **`--expires-at`**, or **`--expires-never`** may be specified)*
 
 ### Switching the active collection
 
-By default, the server app serves assets from the "default collection", named in `static-publish
-.rc.js` under `defaultCollectionName`. To switch the active collection, you add custom code to your Compute app that calls `publisherServer.setActiveCollectionName(name)`:
+By default, the server app serves assets from the "default collection", named in `static-publish.rc.js` under `defaultCollectionName`. To switch the active collection, you add custom code to your Compute app that calls `publisherServer.setActiveCollectionName(name)`:
 
 ```js
 publisherServer.setActiveCollectionName("preview-42");
@@ -286,7 +291,7 @@ collectionSelector.fromRequest(request, req => req.headers.get('x-collection') ?
 
 #### From a Cookie
 
-See [fromCookie](#from-cookie) for details on this feature.
+See [fromCookie](#fromcookie) for details on this feature.
 
 ```js
 const { collectionName, redirectResponse } = collectionSelector.fromCookie(request);
@@ -490,7 +495,7 @@ if (asset != null) {
 ```js
 const kvAssetVariant = await publisherServer.loadKvAssetVariant(asset, null); // pass 'gzip' or 'br' for compressed
 
-kvAssetVariant.kvStoreEntry;      // KV Store entry
+kvAssetVariant.kvStoreEntry;      // KV Store entry (type KVStoreEntry defined in 'fastly:kv-store')
 kvAssetVariant.size;              // Size of the variant
 kvAssetVariant.hash;              // SHA256 of the variant
 kvAssetVariant.contentEncoding;   // 'gzip', 'br', or null
@@ -571,37 +576,37 @@ npx @fastly/compute-js-static-publish publish-content \
   [--root-dir=./public] \
   [--collection-name=preview-42] \
   [--config=./publish-content.config.js] \
-  [--expires-in=7d | --expires-at=2025-05-01T12:00Z] \
-  [--local-only | --no-local] \
+  [--expires-in=7d | --expires-at=2025-05-01T12:00Z | --expires-never] \
+  [--local] \
   [--fastly-api-token=...]
 ```
 
-Publishes your static files and server config for a given collection.
+Publishes static files from your local root directory into a named collection, either in the Fastly KV Store (default) or to a local dev directory (`--local`). Files that already exist with the same hash are skipped automatically.
 
-#### Options:
+After this process is complete, the PublisherServer object in the Compute application will see the updated index of files and updated server settings from the `publish-content.config.js` file.
 
-**Configuration:**
+##### Options:
 
-- `--config`: Path to a config file to configure server behavior for this collection (default: `./publish-content.config.js`)
-
-**Content and Collection:**
-
-- `--root-dir`: Source directory to read files from (overrides value in `publish-content.config.js`)
 - `--collection-name`: Name of the collection to create/update (default: value in `static-publish.rc.js`)
+- `--config`: Path to a config file to configure server behavior for this collection (default: `./publish-content.config.js`)
+- `--root-dir`: Source directory to read files from (overrides value in `publish-content.config.js`)
+- `--kv-overwrite`: Cannot be used with `--local`. When using Fastly KV Store, always overwrites existing entries, even if unchanged.
+
+**Expiration:**
+
 - `--expires-in`: Time-to-live from now (e.g. `1h`, `2d`, `1w`)
-- `--expires-at`: Absolute expiration time (ISO format: `2025-05-01T12:00Z`) *(Only one of **`--expires-in`** or **`--expires-at`** may be specified)*
+- `--expires-at`: Absolute expiration time (ISO format: `2025-05-01T12:00Z`)
+- `--expires-never`: Collection never expires
 
-**Mode:**
+*At most one of **`--expires-in`**, **`--expires-at`**, or **`--expires-never`** may be specified*
 
-- `--local-only`: Do not upload files to Fastly KV Store; only simulate KV Store locally
-- `--no-local`: Do not prepare files for local simulated KV Store; upload to real KV Store only
+**Global Options:**
 
-**Auth:**
+- `--local`: Instead of working with the Fastly KV Store, operate on local files that will be used to simulate the KV Store with the local development environment.
 
-- `--fastly-api-token`: API token to use when publishing\
-  *(Overrides **`FASTLY_API_TOKEN`** environment variable and **`fastly profile token`**)*
-- Stores server config per collection
-- Supports expiration settings
+- `--fastly-api-token`: API token to use when publishing. If not set, the tool will check:
+   - **`FASTLY_API_TOKEN` environment variable**
+   - Logged-in Fastly CLI profile
 
 #### `clean`
 
@@ -611,19 +616,38 @@ npx @fastly/compute-js-static-publish clean \
   [--dry-run]
 ```
 
-Removes unreferenced content from the KV Store.
+Cleans up expired or unreferenced items in the Fastly KV Store.
+This can include expired collection indexes and orphaned content assets.
 
-#### Options:
+##### Options:
 
-- `--delete-expired-collections`: Also delete collection index files that have expired
-- `--dry-run`: Show what would be deleted without actually removing anything
+- `--delete-expired-collections`: If set, expired collection index files will be deleted.
+- `--dry-run`: Show what would be deleted without performing any deletions.
+
+**Global Options:**
+
+- `--local`: Instead of working with the Fastly KV Store, operate on local files that will be used to simulate the KV Store with the local development environment.
+
+- `--fastly-api-token`: API token to use when publishing. If not set, the tool will check:
+    - **`FASTLY_API_TOKEN` environment variable**
+    - Logged-in Fastly CLI profile
 
 #### `collections list`
 
 ```sh
 npx @fastly/compute-js-static-publish collections list
 ```
-Lists all known collection names and metadata.
+Lists all collections currently published in the KV Store.
+
+##### Options:
+
+**Global Options:**
+
+- `--local`: Instead of working with the Fastly KV Store, operate on local files that will be used to simulate the KV Store with the local development environment.
+
+- `--fastly-api-token`: API token to use when publishing. If not set, the tool will check:
+    - **`FASTLY_API_TOKEN` environment variable**
+    - Logged-in Fastly CLI profile
 
 #### `collections promote`
 
@@ -631,33 +655,58 @@ Lists all known collection names and metadata.
 npx @fastly/compute-js-static-publish collections promote \
   --collection-name=preview-42 \
   --to=live \
-  [--expires-in=7d | --expires-at=2025-06-01T00:00Z]
+  [--expires-in=7d | --expires-at=2025-06-01T00:00Z | --expires-never]
 ```
 Copies an existing collection (content + config) to a new collection name.
 
-#### Options:
+##### Options:
+
 - `--collection-name`: The name of the source collection to promote (required)
 - `--to`: The name of the new (target) collection to create or overwrite (required)
+
+**Expiration:**
+
 - `--expires-in`: Time-to-live from now (e.g. `1h`, `2d`, `1w`)
 - `--expires-at`: Absolute expiration time (ISO format)
+- `--expires-never`: Collection never expires
 
-*Exactly one of **`--expires-in`** or **`--expires-at`** may be provided.*
+*At most one of **`--expires-in`**, **`--expires-at`**, or **`--expires-never`** may be specified*. If not provided, then the existing expiration rule of the collection being promoted is used. 
+
+**Global Options:**
+
+- `--local`: Instead of working with the Fastly KV Store, operate on local files that will be used to simulate the KV Store with the local development environment.
+
+- `--fastly-api-token`: API token to use when publishing. If not set, the tool will check:
+    - **`FASTLY_API_TOKEN` environment variable**
+    - Logged-in Fastly CLI profile
 
 #### `collections update-expiration`
 
 ```sh
 npx @fastly/compute-js-static-publish collections update-expiration \
   --collection-name=preview-42 \
-  --expires-in=3d | --expires-at=2025-06-01T00:00Z
+  --expires-in=3d | --expires-at=2025-06-01T00:00Z | --expires-never
 ```
-Sets or updates the expiration time of a collection.
+Sets or updates the expiration time of an existing collection.
 
-#### Options:
+##### Options:
 - `--collection-name`: The name of the collection to update (required)
+
+**Expiration:**
+
 - `--expires-in`: Time-to-live from now (e.g. `1h`, `2d`, `1w`)
 - `--expires-at`: Absolute expiration time (ISO format)
+- `--expires-never`: Collection never expires
 
-*Exactly one of **`--expires-in`** or **`--expires-at`** must be provided.*
+*Exactly one of **`--expires-in`**, **`--expires-at`**, or **`--expires-never`** must be specified*
+
+**Global Options:**
+
+- `--local`: Instead of working with the Fastly KV Store, operate on local files that will be used to simulate the KV Store with the local development environment.
+
+- `--fastly-api-token`: API token to use when publishing. If not set, the tool will check:
+    - **`FASTLY_API_TOKEN` environment variable**
+    - Logged-in Fastly CLI profile
 
 #### `collections delete`
 
@@ -665,14 +714,26 @@ Sets or updates the expiration time of a collection.
 npx @fastly/compute-js-static-publish collections delete \
   --collection-name=preview-42
 ```
-Deletes a specific collection’s index and associated settings.
 
-#### Options:
+Deletes a collection index from the KV Store. The content files will remain as they may still be referenced by other collection indexes.
+
+Use the `npx @fastly/compute-js-static-publish clean` command afterward to remove content files that are no longer referenced by any collection.
+
+##### Options:
+
 - `--collection-name`: The name of the collection to delete (required)
+
+**Global Options:**
+
+- `--local`: Instead of working with the Fastly KV Store, operate on local files that will be used to simulate the KV Store with the local development environment.
+
+- `--fastly-api-token`: API token to use when publishing. If not set, the tool will check:
+    - **`FASTLY_API_TOKEN` environment variable**
+    - Logged-in Fastly CLI profile
 
 ---
 
-## Appendix
+## 📕 Appendix
 
 ### fromCookie
 
@@ -689,7 +750,7 @@ const { collectionName, redirectResponse } =
     activatePath:    '/activate',            // default
     resetPath:       '/reset',               // default
     cookieHttpOnly:  true,                   // default
-    cookieMaxAge:    60 * 60 * 24 * 7,       // 7-day preview
+    cookieMaxAge:    60 * 60 * 24 * 7,       // 7-days. default is `null`, never expires.
     cookiePath:      '/',                    // default
   });
 
@@ -704,19 +765,20 @@ if (redirectResponse) {
 #### What it does, in plain English
 
 1. Reads a cookie
+
    It looks for a cookie named cookieName (default `publisher-collection`) and hands you the value as `collectionName`.
 
 2. Handles two helper endpoints for you
 
-| Endpoint                           | Purpose          | Query params                                                                                   | Result                                    |
-|------------------------------------|------------------|------------------------------------------------------------------------------------------------|-------------------------------------------|
-| activatePath (default `/activate`) | Set the cookie   | `collection` (required) - name of the collection<br /> `redirectTo` (optional, `/` by default) | `302` redirect with a `Set-Cookie` header |
-| resetPath (default `/reset`)       | Clear the cookie | `redirectTo` (optional, `/` by default)                                                        | `302` redirect that expires the cookie    |
-
-If a visitor accesses `/activate?collection=blue&redirectTo=/preview`, the helper will issue a redirect and drop `publisher-collection=blue` into their cookie jar.
-   - If someone forgets `?collection=?`? Then `/activate` replies with HTTP `400`.
-
-When the visitor hits `/reset`, the cookie is deleted.
+   | Endpoint                           | Purpose          | Query params                                                                                   | Result                                    |
+   |------------------------------------|------------------|------------------------------------------------------------------------------------------------|-------------------------------------------|
+   | activatePath (default `/activate`) | Set the cookie   | `collection` (required) - name of the collection<br /> `redirectTo` (optional, `/` by default) | `302` redirect with a `Set-Cookie` header |
+   | resetPath (default `/reset`)       | Clear the cookie | `redirectTo` (optional, `/` by default)                                                        | `302` redirect that expires the cookie    |
+   
+   If a visitor accesses `/activate?collection=blue&redirectTo=/preview`, the helper will issue a redirect and drop `publisher-collection=blue` into their cookie jar.
+      - If someone forgets `?collection=?`? Then `/activate` replies with HTTP `400`.
+   
+   When the visitor hits `/reset`, the cookie is deleted.
 
 3. Safety flags are baked in
 
