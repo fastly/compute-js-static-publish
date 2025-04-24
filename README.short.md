@@ -17,7 +17,7 @@ This CLI tool helps you:
 Create a directory for your project, place your static files in `./public`, then type:
 
 ```sh
-npx @fastly/compute-js-static-publish --root-dir=./public --kv-store-name=site-content
+npx @fastly/compute-js-static-publish@latest --root-dir=./public --kv-store-name=site-content
 ```
 
 ### 🔧 Local Preview

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+### Fixed
+
+- Add `@latest` to examples of calling the app in scaffolding mode.
+
 ## [7.0.0] - 2025-04-24
 
 > [!NOTE]
