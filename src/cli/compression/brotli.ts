@@ -1,19 +1,17 @@
-import fs from 'fs';
-import zlib from 'zlib';
+/*
+ * Copyright Fastly, Inc.
+ * Licensed under the MIT license. See LICENSE file for details.
+ */
+
+import fs from 'node:fs';
+import zlib from 'node:zlib';
 
 export const key = 'br';
 
-export async function compressTo(src: string, dest: string, isText: boolean): Promise<boolean> {
+export async function compressTo(src: string, dest: string): Promise<void> {
 
   const buffer = fs.readFileSync(src);
   const resultBuffer = zlib.brotliCompressSync(buffer);
-
-  // Don't actually create the file if it would be bigger
-  if (resultBuffer.length < buffer.length) {
-    fs.writeFileSync(dest, resultBuffer);
-    return true;
-  } else {
-    return false;
-  }
+  fs.writeFileSync(dest, resultBuffer);
 
 }

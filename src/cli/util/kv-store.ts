@@ -1,4 +1,9 @@
-import { callFastlyApi, FastlyApiContext, FetchError } from "./fastly-api.js";
+/*
+ * Copyright Fastly, Inc.
+ * Licensed under the MIT license. See LICENSE file for details.
+ */
+
+import { callFastlyApi, type FastlyApiContext, FetchError } from './api-token.js';
 
 type KVStoreInfo = {
   id: string,
@@ -100,44 +105,85 @@ export async function getKVStoreInfos(fastlyApiContext: FastlyApiContext) {
   return kvStoreInfos;
 }
 
-export const _getKVStoreKeys = createArrayGetter<KVStoreEntryInfo>()((kvStoreId: string) => `/resources/stores/kv/${encodeURIComponent(kvStoreId)}/keys`);
+export const _getKVStoreKeys = createArrayGetter<KVStoreEntryInfo>()(
+  (kvStoreId: string, prefix?: string) => {
+    let endpoint = `/resources/stores/kv/${encodeURIComponent(kvStoreId)}/keys`;
+    if (prefix != null) {
+      endpoint += '?prefix=' + encodeURIComponent(prefix);
+    }
+    return endpoint;
+  }
+);
 
-export async function getKVStoreKeys(fastlyApiContext: FastlyApiContext, kvStoreName: string) {
+export async function getKVStoreKeys(
+  fastlyApiContext: FastlyApiContext,
+  kvStoreName: string,
+  prefix?: string,
+) {
 
   const kvStoreId = await getKVStoreIdForName(fastlyApiContext, kvStoreName);
   if (kvStoreId == null) {
     return null;
   }
 
-  return await _getKVStoreKeys(fastlyApiContext, `Listing Keys for KV Store [${kvStoreId}] ${kvStoreName}`, kvStoreId);
+  return await _getKVStoreKeys(
+    fastlyApiContext,
+    `Listing Keys for KV Store [${kvStoreId}] ${kvStoreName}${prefix != null ? ` (prefix '${prefix}')` : ''}`,
+    kvStoreId,
+    prefix,
+  );
 }
 
-export async function kvStoreEntryExists(fastlyApiContext: FastlyApiContext, kvStoreName: string, key: string) {
+export async function getKvStoreEntryInfo(fastlyApiContext: FastlyApiContext, kvStoreName: string, key: string) {
+
+  return getKvStoreEntry(fastlyApiContext, kvStoreName, key, true);
+
+}
+
+export async function getKvStoreEntry(
+  fastlyApiContext: FastlyApiContext,
+  kvStoreName: string,
+  key: string,
+  metadataOnly?: boolean,
+) {
 
   const kvStoreId = await getKVStoreIdForName(fastlyApiContext, kvStoreName);
   if (kvStoreId == null) {
-    return false;
+    return null;
   }
 
   const endpoint = `/resources/stores/kv/${encodeURIComponent(kvStoreId)}/keys/${encodeURIComponent(key)}`;
 
+  let response: Response;
   try {
 
-    await callFastlyApi(fastlyApiContext, endpoint, `Checking existence of [${key}]`, null, { method: 'HEAD' });
+    response = await callFastlyApi(fastlyApiContext, endpoint, `Checking existence of [${key}]`, null, { method: metadataOnly ? 'HEAD' : 'GET' });
 
   } catch(err) {
     if (err instanceof FetchError && err.status === 404) {
-      return false;
+      return null;
     }
     throw err;
   }
 
-  return true;
+  const metadata = response.headers.get('metadata');
+  const generation = response.headers.get('generation');
+  return {
+    metadata,
+    generation,
+    response,
+  };
 
 }
 
 const encoder = new TextEncoder();
-export async function kvStoreSubmitFile(fastlyApiContext: FastlyApiContext, kvStoreName: string, key: string, data: Uint8Array | string) {
+export async function kvStoreSubmitEntry(
+  fastlyApiContext: FastlyApiContext,
+  kvStoreName: string,
+  key: string,
+  data: ReadableStream<Uint8Array> | Uint8Array | string,
+  metadata: string | undefined,
+) {
 
   const kvStoreId = await getKVStoreIdForName(fastlyApiContext, kvStoreName);
   if (kvStoreId == null) {
@@ -151,13 +197,14 @@ export async function kvStoreSubmitFile(fastlyApiContext: FastlyApiContext, kvSt
     method: 'PUT',
     headers: {
       'content-type': 'application/octet-stream',
+      ...(metadata != null ? { metadata } : null)
     },
     body,
   });
 
 }
 
-export async function kvStoreDeleteFile(fastlyApiContext: FastlyApiContext, kvStoreName: string, key: string) {
+export async function kvStoreDeleteEntry(fastlyApiContext: FastlyApiContext, kvStoreName: string, key: string) {
 
   const kvStoreId = await getKVStoreIdForName(fastlyApiContext, kvStoreName);
   if (kvStoreId == null) {
