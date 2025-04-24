@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+## [7.0.1] - 2025-04-24
+
 ### Fixed
 
 - Add `@latest` to examples of calling the app in scaffolding mode.
@@ -322,7 +324,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated generated app's webpack and webpack-cli versions
 - Use atob() and removed dependency on Buffer
 
-[unreleased]: https://github.com/fastly/compute-js-static-publish/compare/v7.0.0...HEAD
+[unreleased]: https://github.com/fastly/compute-js-static-publish/compare/v7.0.1...HEAD
+[7.0.1]: https://github.com/fastly/compute-js-static-publish/compare/v7.0.0...v7.0.1
 [7.0.0]: https://github.com/fastly/compute-js-static-publish/compare/v6.3.0...v7.0.0
 [6.3.0]: https://github.com/fastly/compute-js-static-publish/compare/v6.2.0...v6.3.0
 [6.2.0]: https://github.com/fastly/compute-js-static-publish/compare/v6.1.1...v6.2.0
