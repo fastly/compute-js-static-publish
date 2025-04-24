@@ -48,7 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Static files metadata is no longer stored in the Wasm binary, 
 
-- This tool drops support for `moduleAssets`.
+- This tool drops `moduleAssets`.
 
 ## [6.3.0] - 2025-03-19
 
