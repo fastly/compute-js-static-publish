@@ -1,5 +1,12 @@
 # Static Publisher for JavaScript on Fastly Compute
 
+> [!NOTE]
+> These docs are for v7, a major rewrite that adds powerful new features such as named collections.
+> If you're looking for v6, please check out the [v6 branch](https://github.com/fastly/compute-js-static-publish/tree/v6).
+
+> [!WARNING]
+> Version 7 no longer supports module assets. If you require this feature, consider using [v6](https://github.com/fastly/compute-js-static-publish/tree/v6).
+
 ## 📖 Table of Contents
 
 - [✨ Key Features](#-key-features)
@@ -252,6 +259,8 @@ This only affects the current request (in Compute, requests do not share state).
 
 #### Example: Subdomain-based Routing
 
+In the following example, assume that the Compute application is hosted using a wildcard domain `*.example.com`. A request for `preview-pr-123.example.com` would activate the collection `'pr-123'`.
+
 ```js
 import { PublisherServer, collectionSelector } from '@fastly/compute-js-static-publish';
 import rc from '../static-publish.rc.js';
@@ -260,7 +269,7 @@ const publisherServer = PublisherServer.fromStaticPublishRc(rc);
 
 addEventListener("fetch", event => {
   const request = event.request;
-  const collectionName = collectionSelector.fromHostDomain(request, /^preview-(.*)\./);
+  const collectionName = collectionSelector.fromHostDomain(request, /^preview-([^\.]*)\./);
   if (collectionName != null) {
     publisherServer.setActiveCollectionName(collectionName);
   }
@@ -274,7 +283,7 @@ addEventListener("fetch", event => {
 The `collectionSelector` module provides helpers to extract a collection name from different parts of a request:
 
 ```js
-collectionSelector.fromHostDomain(request, /^preview-(.*)\./);
+collectionSelector.fromHostDomain(request, /^preview-([^\.]*)\./);
 ```
 
 #### From the Request URL
