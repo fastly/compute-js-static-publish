@@ -3,6 +3,8 @@
  * Licensed under the MIT license. See LICENSE file for details.
  */
 
+import fs from 'node:fs';
+
 import { type OptionDefinition } from 'command-line-args';
 
 import { type IndexMetadata } from '../../../../models/server/index.js';
@@ -18,7 +20,6 @@ import path from "node:path";
 import { readServiceId } from "../../../util/fastly-toml.js";
 import { isNodeError } from "../../../util/node.js";
 import { getLocalKvStoreEntry, localKvStoreSubmitEntry } from "../../../util/kv-store-local-server.js";
-import fs from "node:fs";
 
 function help() {
   console.log(`\

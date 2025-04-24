@@ -61,9 +61,9 @@ export async function action(actionArgs: string[]) {
   const commandAndArgs = getCommandAndArgs(actionArgs, modes);
 
   if (commandAndArgs.needHelp) {
-    if (commandAndArgs.command != null) {
-      console.error(`Unknown command: ${commandAndArgs.command}`);
-      console.error(`Specify one of: ${Object.keys(modes).join(', ')}`);
+    if (commandAndArgs.error != null) {
+      console.error(commandAndArgs.error);
+      console.error(`Specify one of the following commands: ${Object.keys(modes).join(', ')}`);
       console.error();
       process.exitCode = 1;
     }

@@ -43,10 +43,19 @@ export function loadApiToken(params: LoadApiParams): LoadApiTokenResult | null {
   // Try fastly cli
   if (apiToken == null) {
     try {
-      const { stdout, error } = spawnSync(cli, ['profile', 'token', '--quiet'], {
+      const { stdout, error, status } = spawnSync(cli, ['profile', 'token', '--quiet'], {
         encoding: 'utf-8',
       });
-      apiToken = error ? null : stdout.trim();
+      if (status != null && status !== 0) {
+        console.warn(`⚠️ Warning: 'fastly profile token' returned a non-zero status code.`);
+        apiToken = null;
+      } else if (error) {
+        console.warn(`⚠️ Warning: 'fastly profile token' returned an error:`);
+        console.warn(String(error));
+        apiToken = null;
+      } else {
+        apiToken = stdout.trim();
+      }
     } catch {
       apiToken = null;
     }

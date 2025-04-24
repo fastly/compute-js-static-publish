@@ -45,7 +45,7 @@ export type CommandAndArgs<T> = {
 
 export type CommandAndArgsHelp = {
   needHelp: true,
-  command: string | null,
+  error: string | null,
 }
 
 export type CommandAndArgsResult<T> = CommandAndArgs<T> | CommandAndArgsHelp;
@@ -57,7 +57,7 @@ export function getCommandAndArgs<T extends string>(
   if (isHelpArgs(argv)) {
     return {
       needHelp: true,
-      command: null,
+      error: null,
     };
   }
 
@@ -74,17 +74,22 @@ export function getCommandAndArgs<T extends string>(
         };
       }
     }
+    return {
+      needHelp: true,
+      error: `Unknown command: ${command}`,
+    };
   }
 
+  let error = null;
   try {
     commandLineArgs([], { argv: actionArgv });
   } catch(err) {
-    console.log(String(err));
+    error = String(err);
   }
 
   return {
     needHelp: true,
-    command,
+    error,
   };
 }
 

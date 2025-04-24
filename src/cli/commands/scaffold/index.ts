@@ -7,15 +7,16 @@
 // in a subfolder named compute-js.
 // This project can be served using fastly compute serve
 // or deployed to a Compute service using fastly compute publish.
+
 import * as child_process from 'node:child_process';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 
 import { type CommandLineOptions, type OptionDefinition } from 'command-line-args';
 
+import { parseCommandLine } from '../../util/args.js';
 import { dotRelative, rootRelative } from '../../util/files.js';
 import { findComputeJsStaticPublisherVersion, type PackageJson } from '../../util/package.js';
-import { parseCommandLine } from "../../util/args.js";
 
 function help() {
   console.log(`\

@@ -3,22 +3,26 @@
  * Licensed under the MIT license. See LICENSE file for details.
  */
 
+import fs from 'node:fs';
+import path from 'node:path';
+
 import { type OptionDefinition } from 'command-line-args';
 
 import { type IndexMetadata } from '../../../../models/server/index.js';
 import { calcExpirationTime } from '../../../../models/time/index.js';
+import { type FastlyApiContext, loadApiToken } from '../../../util/api-token.js';
 import { LoadConfigError, loadStaticPublisherRcFile } from '../../../util/config.js';
+import { parseCommandLine } from '../../../util/args.js';
+import { readServiceId } from '../../../util/fastly-toml.js';
 import {
   getKvStoreEntry,
   kvStoreSubmitEntry,
 } from '../../../util/kv-store.js';
-import { type FastlyApiContext, loadApiToken } from '../../../util/api-token.js';
-import { parseCommandLine } from '../../../util/args.js';
-import { readServiceId } from "../../../util/fastly-toml.js";
-import { isNodeError } from "../../../util/node.js";
-import path from "node:path";
-import fs from "node:fs";
-import { getLocalKvStoreEntry, localKvStoreSubmitEntry } from "../../../util/kv-store-local-server.js";
+import {
+  getLocalKvStoreEntry,
+  localKvStoreSubmitEntry,
+} from '../../../util/kv-store-local-server.js';
+import { isNodeError } from '../../../util/node.js';
 
 function help() {
   console.log(`\

@@ -10,18 +10,22 @@ import { type OptionDefinition } from 'command-line-args';
 import { type KVAssetEntryMap } from '../../../models/assets/kvstore-assets.js';
 import { type IndexMetadata } from '../../../models/server/index.js';
 import { isExpired } from '../../../models/time/index.js';
-import { LoadConfigError, loadStaticPublisherRcFile } from '../../util/config.js';
-import { getKvStoreEntry, getKVStoreKeys, kvStoreDeleteEntry } from '../../util/kv-store.js';
 import { type FastlyApiContext, loadApiToken } from '../../util/api-token.js';
 import { parseCommandLine } from '../../util/args.js';
+import { LoadConfigError, loadStaticPublisherRcFile } from '../../util/config.js';
 import { readServiceId } from '../../util/fastly-toml.js';
-import { doKvStoreItemsOperation } from "../../util/kv-store-items.js";
-import { isNodeError } from '../../util/node.js';
+import {
+  getKvStoreEntry,
+  getKVStoreKeys,
+  kvStoreDeleteEntry,
+} from '../../util/kv-store.js';
+import { doKvStoreItemsOperation } from '../../util/kv-store-items.js';
 import {
   getLocalKvStoreEntry,
   getLocalKVStoreKeys,
-  localKvStoreDeleteEntry
-} from "../../util/kv-store-local-server.js";
+  localKvStoreDeleteEntry,
+} from '../../util/kv-store-local-server.js';
+import { isNodeError } from '../../util/node.js';
 
 function help() {
   console.log(`\

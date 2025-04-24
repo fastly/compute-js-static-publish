@@ -21,13 +21,16 @@ import { mergeContentTypes, testFileContentType } from '../../util/content-types
 import { LoadConfigError, loadPublishContentConfigFile, loadStaticPublisherRcFile } from '../../util/config.js';
 import { applyDefaults } from '../../util/data.js';
 import { readServiceId } from '../../util/fastly-toml.js';
-import { calculateFileSizeAndHash, enumerateFiles, getFileSize, rootRelative } from '../../util/files.js';
+import { calculateFileSizeAndHash, enumerateFiles, rootRelative } from '../../util/files.js';
 import {
   applyKVStoreEntriesChunks,
   doKvStoreItemsOperation,
   type KVStoreItemDesc,
 } from '../../util/kv-store-items.js';
-import { writeKVStoreEntriesForLocal } from '../../util/kv-store-local-server.js';
+import {
+  localKvStoreSubmitEntry,
+  writeKVStoreEntriesForLocal,
+} from '../../util/kv-store-local-server.js';
 import { isNodeError } from '../../util/node.js';
 import { ensureVariantFileExists, type Variants } from '../../util/variants.js';
 
@@ -285,11 +288,6 @@ export async function action(actionArgs: string[]) {
   const collectionName = collectionNameValue ?? process.env.PUBLISHER_COLLECTION_NAME ?? defaultCollectionName;
   console.log(`✔️ Collection Name: ${collectionName}`);
 
-  if (expirationTime != null) {
-    console.log(`✔️ Publishing with expiration timestamp: ${new Date(expirationTime * 1000).toISOString()}`);
-  } else {
-    console.log(`✔️ Publishing with no expiration timestamp.`);
-  }
   if (expirationTime == null) {
     // includes null and undefined
     console.log(`✔️ Publishing with no expiration timestamp.`);
@@ -555,34 +553,56 @@ export async function action(actionArgs: string[]) {
   }
   console.log(`✅  Scan complete.`)
 
-  // TODO: fix this bug:
-  // Technically it's a bug to WRITE the index and settings json files to the
-  // staticPublisherKvStoreContent dir when target === 'fastly'.
-  // For these files we should not be creating the files using
-  // kvStoreItemDescriptions, but rather creating them directly.
+  console.log(`🍪 Chunking large files...`);
+  await applyKVStoreEntriesChunks(kvStoreItemDescriptions, KV_STORE_CHUNK_SIZE);
+  console.log(`✅  Large files have been chunked.`);
+
+  if (localMode) {
+    console.log(`📝 Writing local server KV Store entries.`);
+    writeKVStoreEntriesForLocal(storeFile, computeAppDir, kvStoreItemDescriptions);
+    console.log(`✅  Wrote KV Store entries for local server.`);
+  } else {
+    console.log(`📤 Uploading entries to KV Store.`);
+    // fastlyApiContext is non-null if useKvStore is true
+    await doKvStoreItemsOperation(
+      kvStoreItemDescriptions.filter(x => x.write),
+      async ({filePath, metadataJson}, key) => {
+        const fileBytes = fs.readFileSync(filePath);
+        await kvStoreSubmitEntry(fastlyApiContext!, kvStoreName, key, fileBytes, metadataJson != null ? JSON.stringify(metadataJson) : undefined);
+        console.log(` 🌐 Submitted asset "${rootRelative(filePath)}" to KV Store with key "${key}".`)
+      }
+    );
+    console.log(`✅  Uploaded entries to KV Store.`);
+  }
 
   // #### INDEX FILE
-  console.log(`🗂️ Creating Index...`);
-  const indexFileName = `index_${collectionName}.json`;
+  console.log(`🗂️ Saving Index...`);
+
   const indexFileKey = `${publishId}_index_${collectionName}`;
-
-  const indexFilePath = path.resolve(staticPublisherKvStoreContent, indexFileName);
-  fs.writeFileSync(indexFilePath, JSON.stringify(kvAssetsIndex));
-
-  const indexFileSize = getFileSize(indexFilePath);
-
   const indexMetadata: IndexMetadata = {
     publishedTime: Math.floor(Date.now() / 1000),
     expirationTime: expirationTime ?? undefined,
   };
 
-  kvStoreItemDescriptions.push({
-    write: true,
-    size: indexFileSize,
-    key: indexFileKey,
-    filePath: indexFilePath,
-    metadataJson: indexMetadata,
-  });
+  if (localMode) {
+    const indexFileName = `index_${collectionName}.json`;
+    const indexFilePath = path.resolve(staticPublisherKvStoreContent, indexFileName);
+    fs.writeFileSync(indexFilePath, JSON.stringify(kvAssetsIndex));
+    await localKvStoreSubmitEntry(
+      storeFile,
+      indexFileKey,
+      path.relative(computeAppDir, indexFilePath),
+      JSON.stringify(indexMetadata),
+    );
+  } else {
+    await kvStoreSubmitEntry(
+      fastlyApiContext!,
+      kvStoreName,
+      indexFileKey,
+      JSON.stringify(kvAssetsIndex),
+      JSON.stringify(indexMetadata),
+    );
+  }
   console.log(`✅  Index has been saved.`)
 
   // #### SERVER SETTINGS
@@ -652,42 +672,29 @@ export async function action(actionArgs: string[]) {
     autoIndex,
   };
 
-  const settingsFileName = `settings_${collectionName}.json`;
   const settingsFileKey = `${publishId}_settings_${collectionName}`;
 
-  const settingsFilePath = path.resolve(staticPublisherKvStoreContent, settingsFileName);
-  fs.writeFileSync(settingsFilePath, JSON.stringify(serverSettings));
-  const settingsFileSize = getFileSize(settingsFilePath);
-
-  kvStoreItemDescriptions.push({
-    write: true,
-    size: settingsFileSize,
-    key: settingsFileKey,
-    filePath: settingsFilePath,
-  });
-  console.log(`✅  Settings have been saved.`);
-
-  console.log(`🍪 Chunking large files...`);
-  await applyKVStoreEntriesChunks(kvStoreItemDescriptions, KV_STORE_CHUNK_SIZE);
-  console.log(`✅  Large files have been chunked.`);
-
   if (localMode) {
-    console.log(`📝 Writing local server KV Store entries.`);
-    writeKVStoreEntriesForLocal(storeFile, computeAppDir, kvStoreItemDescriptions);
-    console.log(`✅  Wrote KV Store entries for local server.`);
-  } else {
-    console.log(`📤 Uploading entries to KV Store.`);
-    // fastlyApiContext is non-null if useKvStore is true
-    await doKvStoreItemsOperation(
-      kvStoreItemDescriptions.filter(x => x.write),
-      async ({filePath, metadataJson}, key) => {
-        const fileBytes = fs.readFileSync(filePath);
-        await kvStoreSubmitEntry(fastlyApiContext!, kvStoreName, key, fileBytes, metadataJson != null ? JSON.stringify(metadataJson) : undefined);
-        console.log(` 🌐 Submitted asset "${rootRelative(filePath)}" to KV Store with key "${key}".`)
-      }
+    const settingsFileName = `settings_${collectionName}.json`;
+    const settingsFilePath = path.resolve(staticPublisherKvStoreContent, settingsFileName);
+    fs.writeFileSync(settingsFilePath, JSON.stringify(serverSettings));
+    await localKvStoreSubmitEntry(
+      storeFile,
+      settingsFileKey,
+      path.relative(computeAppDir, settingsFilePath),
+      undefined,
     );
-    console.log(`✅  Uploaded entries to KV Store.`);
+
+  } else {
+    await kvStoreSubmitEntry(
+      fastlyApiContext!,
+      kvStoreName,
+      settingsFileKey,
+      JSON.stringify(serverSettings),
+      undefined,
+    );
   }
+  console.log(`✅  Settings have been saved.`);
 
   console.log(`🎉 Completed.`);
 
