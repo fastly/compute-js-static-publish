@@ -36,7 +36,7 @@ export async function loadStaticPublisherRcFile(): Promise<StaticPublishRc> {
   const configFile = './static-publish.rc.js';
 
   try {
-    const filePath = path.resolve(configFile);
+    const filePath = path.posix.resolve(configFile);
     configRaw = (await import(filePath)).default;
   } catch {
     //
@@ -129,7 +129,7 @@ export async function loadPublishContentConfigFile(configFile: string): Promise<
   let configRaw;
 
   try {
-    const filePath = path.resolve(configFile);
+    const filePath = path.posix.resolve(configFile);
     configRaw = (await import(filePath)).default;
   } catch {
     //
