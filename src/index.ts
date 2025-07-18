@@ -1,8 +1,13 @@
-/// <reference types="@fastly/js-compute" />
+/*
+ * Copyright Fastly, Inc.
+ * Licensed under the MIT license. See LICENSE file for details.
+ */
 
-export * from './types/index.js';
-export * from './util/index.js';
-
-export { ContentAssets } from './server/assets/content-assets.js';
-export { ModuleAssets } from './server/assets/module-assets.js';
-export { PublisherServer } from './server/publisher-server.js';
+export { type StaticPublishRc } from './models/config/static-publish-rc.js';
+export { type PublishContentConfig } from './models/config/publish-content-config.js';
+export * as collectionSelector from './server/collection-selector/index.js';
+export {
+  CookieCollectionSelector,
+  type CookieCollectionSelectorOpts,
+} from './server/collection-selector/from-cookie.js';
+export { PublisherServer } from './server/publisher-server/index.js';

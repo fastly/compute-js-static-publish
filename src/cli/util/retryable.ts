@@ -1,3 +1,8 @@
+/*
+ * Copyright Fastly, Inc.
+ * Licensed under the MIT license. See LICENSE file for details.
+ */
+
 let _globalBackoffUntil = 0;
 
 const retryableSymbol = Symbol();

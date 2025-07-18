@@ -7,6 +7,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+## [7.0.1] - 2025-04-24
+
+### Fixed
+
+- Add `@latest` to examples of calling the app in scaffolding mode.
+
+## [7.0.0] - 2025-04-24
+
+> [!NOTE]
+> Breaking release. Every project will need a re-scaffold.
+
+### Added
+
+- Named Collections
+   - Support for named collections of assets that are managed together and can be individually previewed.
+   - Expiration trio: --expires-in, --expires-at, --expires-never.
+   - Collection selector utilities that can be run at the edge code to activate a collection.
+   - Default collection never expires.
+
+- git-style subcommands
+   - Actions separated into subcommands, such as `clean`, `publish-content`, and `collections`.
+   - Dry-run mode (--dry-run) for commands that mutates KV or disk.
+
+- KV Store
+   - Bytes of assets are stored in the Fastly KV Store.
+   - Items in the KV Store are keyed by the hash of the file, keeping storage efficient and deduplicated, even across collections.
+   - Metadata (file sizes, encodings, compression) for static assets is stored in KV Store Item metadata.
+   - Large-object chunking: files > 20 MB are split into segments behind the scenes and reassembled at read time.
+   - Upload process has been optimized - files are uploaded in parallel, and are only compressed and uploaded when necessary.
+   - Automatic retry with exponential back-off when the Fastly KV API rate-limits a burst of uploads.
+   - Fully supported in the local development environment during development.
+   - `--local` flag for all management commands. Passing this flag makes the command operate on the local KV Store instead of the Fastly KV Store.
+
+### Changed
+
+- Separate config files:
+   - `static-publisher.rc.js` now owns behavior that is common to the scaffolded Compute app
+   - publish-time settings are in `publish-content.config.js`.
+
+- Script names in the scaffold are now grouped by environment: `dev:publish`, `dev:start`, `fastly:publish`, `fastly:deploy`.
+
+- Asset inclusion test renamed to `kvStoreAssetInclusionTest` and now expects a boolean return value.
+
+### Removed / Deprecated
+ 
+- This tool drops `wasm-inline`, and no longer inlines bytes of assets into the Wasm binary. 
+
+- Static files metadata is no longer stored in the Wasm binary, 
+
+- This tool drops `moduleAssets`.
+
 ## [6.3.0] - 2025-03-19
 
 ### Added
@@ -273,7 +324,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated generated app's webpack and webpack-cli versions
 - Use atob() and removed dependency on Buffer
 
-[unreleased]: https://github.com/fastly/compute-js-static-publish/compare/v6.3.0...HEAD
+[unreleased]: https://github.com/fastly/compute-js-static-publish/compare/v7.0.1...HEAD
+[7.0.1]: https://github.com/fastly/compute-js-static-publish/compare/v7.0.0...v7.0.1
+[7.0.0]: https://github.com/fastly/compute-js-static-publish/compare/v6.3.0...v7.0.0
 [6.3.0]: https://github.com/fastly/compute-js-static-publish/compare/v6.2.0...v6.3.0
 [6.2.0]: https://github.com/fastly/compute-js-static-publish/compare/v6.1.1...v6.2.0
 [6.1.1]: https://github.com/fastly/compute-js-static-publish/compare/v6.1.0...v6.1.1
