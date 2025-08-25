@@ -15,7 +15,8 @@
     "prepack": "npm run build",
     "build": "npm run clean && npm run compile",
     "compile": "tsc",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "jest",
+    "test:watch": "jest --watch",
     "prepublishOnly": "cp README.short.md README.md"
   },
   "bin": {
@@ -50,8 +51,11 @@
     "@fastly/js-compute": "^3.33.2",
     "@types/command-line-args": "^5.2.0",
     "@types/glob-to-regexp": "^0.4.1",
+    "@types/jest": "^30.0.0",
     "@types/node": "^20.11.0",
+    "jest": "^30.0.5",
     "rimraf": "^4.3.0",
+    "ts-jest": "^29.4.1",
     "typescript": "^5.8.0"
   },
   "engines": {
