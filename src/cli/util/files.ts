@@ -52,6 +52,18 @@ function enumerateFilesWorker(results: string[], dir: string, opts: EnumerateFil
 
     if (entry.isDirectory()) {
       enumerateFilesWorker(results, fullpath, opts);
+    } else if (entry.isSymbolicLink()) {
+      try {
+        const stats = fs.statSync(fullpath);
+        if (stats.isDirectory()) {
+          enumerateFilesWorker(results, fullpath, opts);
+        } else if (stats.isFile()) {
+          results.push(fullpath);
+        }
+      } catch (err) {
+        // Skip broken symlinks
+        continue;
+      }
     } else {
       results.push(fullpath);
     }
