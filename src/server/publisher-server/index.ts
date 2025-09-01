@@ -4,7 +4,6 @@
  */
 
 /// <reference types="@fastly/js-compute" />
-import { KVStore, type KVStoreEntry } from 'fastly:kv-store';
 
 import {
   type StaticPublishRc,
@@ -16,19 +15,23 @@ import {
   type ContentCompressionTypes,
 } from '../../models/compression/index.js';
 import {
-  isAssetVariantMetadata,
   type AssetEntry,
   type AssetEntryMap,
   type AssetVariantMetadata,
+  decodeAssetVariantMetadata,
 } from '../../models/assets/index.js';
-import { type IndexMetadata } from '../../models/server/index.js';
+import { decodeIndexMetadata, } from '../../models/server/index.js';
 import { isExpired } from '../../models/time/index.js';
-import { getKVStoreEntry } from '../util/kv-store.js';
+import {
+  type StorageEntry,
+  type StorageProvider,
+  loadStorageProviderFromStaticPublishRc,
+} from '../storage/storage-provider.js';
 import { checkIfModifiedSince, getIfModifiedSinceHeader } from './serve-preconditions/if-modified-since.js';
 import { checkIfNoneMatch, getIfNoneMatchHeader } from './serve-preconditions/if-none-match.js';
 
-type KVAssetVariant = {
-  kvStoreEntry: KVStoreEntry,
+type AssetVariant = {
+  storageEntry: StorageEntry,
 } & AssetVariantMetadata;
 
 export function buildHeadersSubset(responseHeaders: Headers, keys: Readonly<string[]>) {
@@ -70,26 +73,27 @@ type AssetInit = {
 export class PublisherServer {
   public constructor(
     publishId: string,
-    kvStoreName: string,
+    storageProvider: StorageProvider,
     defaultCollectionName: string,
   ) {
     this.publishId = publishId;
-    this.kvStoreName = kvStoreName;
+    this.storageProvider = storageProvider;
     this.defaultCollectionName = defaultCollectionName;
     this.activeCollectionName = this.defaultCollectionName;
     this.collectionNameHeader = 'X-Publisher-Server-Collection';
   }
 
   static fromStaticPublishRc(config: StaticPublishRc) {
+    const storeProvider = loadStorageProviderFromStaticPublishRc(config);
     return new PublisherServer(
       config.publishId,
-      config.kvStoreName,
+      storeProvider,
       config.defaultCollectionName,
     );
   }
 
   publishId: string;
-  kvStoreName: string;
+  storageProvider: StorageProvider;
   defaultCollectionName: string;
   activeCollectionName: string;
   collectionNameHeader: string | null;
@@ -98,26 +102,25 @@ export class PublisherServer {
   settingsCached: PublisherServerConfigNormalized | null | undefined;
 
   // Cached index
-  kvAssetsIndex: AssetEntryMap | null | undefined;
+  assetEntryMapCache: AssetEntryMap | null | undefined;
 
   setActiveCollectionName(collectionName: string) {
     this.activeCollectionName = collectionName;
     this.settingsCached = undefined;
-    this.kvAssetsIndex = undefined;
+    this.assetEntryMapCache = undefined;
   }
 
   setCollectionNameHeader(collectionHeader: string | null) {
     this.collectionNameHeader = collectionHeader;
   }
 
-  // Server config is obtained from the KV Store, and cached for the duration of this object.
+  // Server config is obtained from storage, and cached for the duration of this object.
   async getServerConfig() {
     if (this.settingsCached !== undefined) {
       return this.settingsCached;
     }
     const settingsFileKey = `${this.publishId}_settings_${this.activeCollectionName}`;
-    const kvStore = new KVStore(this.kvStoreName);
-    const settingsFile = await getKVStoreEntry(kvStore, settingsFileKey);
+    const settingsFile = await this.storageProvider.getEntry(settingsFileKey);
     if (settingsFile == null) {
       console.error(`Settings File not found at ${settingsFileKey}.`);
       console.error(`You may need to publish your application.`);
@@ -148,40 +151,43 @@ export class PublisherServer {
       .filter(x => Boolean(x));
   }
 
-  async getKvAssetsIndex() {
-    if (this.kvAssetsIndex !== undefined) {
-      return this.kvAssetsIndex;
+  async getAssetEntryMap() {
+    if (this.assetEntryMapCache !== undefined) {
+      return this.assetEntryMapCache;
     }
     const indexFileKey = `${this.publishId}_index_${this.activeCollectionName}`;
-    const kvStore = new KVStore(this.kvStoreName);
-    const indexFile = await getKVStoreEntry(kvStore, indexFileKey);
+    const indexFile = await this.storageProvider.getEntry(indexFileKey);
     if (indexFile == null) {
       console.error(`Index File not found at ${indexFileKey}.`);
       console.error(`You may need to publish your application.`);
-      this.kvAssetsIndex = null;
+      this.assetEntryMapCache = null;
       return null;
     }
 
     let collectionIsExpired = false;
     if (this.activeCollectionName !== this.defaultCollectionName) {
+      let metadata;
       const metadataText = indexFile.metadataText()
       if (metadataText != null) {
         try {
-          const metadata = JSON.parse(metadataText) as IndexMetadata;
-          collectionIsExpired = metadata.expirationTime != null && isExpired(metadata.expirationTime);
+          metadata = JSON.parse(metadataText);
         } catch {
         }
+        metadata = decodeIndexMetadata(metadata);
+      }
+      if (metadata != null) {
+        collectionIsExpired = metadata.expirationTime != null && isExpired(metadata.expirationTime);
       }
     }
 
     if (collectionIsExpired) {
       console.error(`Requested collection expired at ${indexFileKey}.`);
-      this.kvAssetsIndex = null;
+      this.assetEntryMapCache = null;
       return null;
     }
 
-    this.kvAssetsIndex = (await indexFile.json()) as AssetEntryMap;
-    return this.kvAssetsIndex;
+    this.assetEntryMapCache = (await indexFile.json()) as AssetEntryMap;
+    return this.assetEntryMapCache;
   }
 
   async getMatchingAsset(assetKey: string, applyAuto: boolean = false): Promise<AssetEntry | null> {
@@ -190,14 +196,14 @@ export class PublisherServer {
     if (serverConfig == null) {
       return null;
     }
-    const kvAssetsIndex = await this.getKvAssetsIndex();
-    if (kvAssetsIndex == null) {
+    const assetEntryMap = await this.getAssetEntryMap();
+    if (assetEntryMap == null) {
       return null;
     }
 
     if(!assetKey.endsWith('/')) {
       // A path that does not end in a slash can match an asset directly
-      const asset = kvAssetsIndex[assetKey];
+      const asset = assetEntryMap[assetKey];
       if (asset != null) {
         return asset;
       }
@@ -207,7 +213,7 @@ export class PublisherServer {
         // looks for an asset that has the specified suffix (usually extension, such as .html)
         for (const extEntry of serverConfig.autoExt) {
           let assetKeyWithExt = assetKey + extEntry;
-          const asset = kvAssetsIndex[assetKeyWithExt];
+          const asset = assetEntryMap[assetKeyWithExt];
           if (asset != null) {
             return asset;
           }
@@ -228,7 +234,7 @@ export class PublisherServer {
         assetNameAsDir = assetNameAsDir + '/';
         for (const indexEntry of serverConfig.autoIndex) {
           let assetKeyIndex = assetNameAsDir + indexEntry;
-          const asset = kvAssetsIndex[assetKeyIndex];
+          const asset = assetEntryMap[assetKeyIndex];
           if (asset != null) {
             return asset;
           }
@@ -370,20 +376,18 @@ export class PublisherServer {
     return null;
   }
   
-  public async loadKvAssetVariant(entry: AssetEntry, variant: ContentCompressionTypes | null): Promise<KVAssetVariant | null> {
+  public async loadAssetVariant(entry: AssetEntry, variant: ContentCompressionTypes | null): Promise<AssetVariant | null> {
 
-    const kvStore = new KVStore(this.kvStoreName);
-    
     const baseHash = entry.key.slice(7);
     const baseKey = `${this.publishId}_files_sha256_${baseHash}`;
     const variantKey = variant != null ? `${baseKey}_${variant}` : baseKey;
 
-    const kvStoreEntry = await getKVStoreEntry(kvStore, variantKey);
-    if (kvStoreEntry == null) {
+    const storageEntry = await this.storageProvider.getEntry(variantKey);
+    if (storageEntry == null) {
       return null;
     }
-    const metadataText = kvStoreEntry.metadataText() ?? '';
-    if (metadataText === '') {
+    const metadataText = storageEntry.metadataText();
+    if (metadataText == null) {
       return null;
     }
     let metadata;
@@ -392,19 +396,17 @@ export class PublisherServer {
     } catch {
       return null;
     }
-    if (!isAssetVariantMetadata(metadata)) {
-      return null;
-    }
-    if (metadata.size == null) {
+    metadata = decodeAssetVariantMetadata(metadata);
+    if (metadata == null) {
       return null;
     }
     return {
-      kvStoreEntry,
+      storageEntry,
       ...metadata,
     };
   }
 
-  private async findKVAssetVariantForAcceptEncodingsGroups(entry: AssetEntry, acceptEncodingsGroups: ContentCompressionTypes[][] = []): Promise<KVAssetVariant> {
+  private async findAssetVariantForAcceptEncodingsGroups(entry: AssetEntry, acceptEncodingsGroups: ContentCompressionTypes[][] = []): Promise<AssetVariant> {
 
     if (!entry.key.startsWith('sha256:')) {
       throw new TypeError(`Key must start with 'sha256:': ${entry.key}`);
@@ -415,34 +417,34 @@ export class PublisherServer {
     for (const encodingGroup of acceptEncodingsGroups) {
 
       let smallestSize: number | undefined = undefined;
-      let smallestEntry: KVAssetVariant | undefined = undefined;
+      let smallestVariant: AssetVariant | undefined = undefined;
 
       for (const encoding of encodingGroup) {
         if (!entry.variants.includes(encoding)) {
           continue;
         }
 
-        const variantKvStoreEntry = await this.loadKvAssetVariant(entry, encoding);
-        if (variantKvStoreEntry == null) {
+        const assetVariant = await this.loadAssetVariant(entry, encoding);
+        if (assetVariant == null) {
           continue;
         }
-        if (smallestSize == null || variantKvStoreEntry.size < smallestSize) {
-          smallestSize = variantKvStoreEntry.size;
-          smallestEntry = variantKvStoreEntry;
+        if (smallestSize == null || assetVariant.size < smallestSize) {
+          smallestSize = assetVariant.size;
+          smallestVariant = assetVariant;
         }
       }
 
-      if (smallestEntry != null) {
-        return smallestEntry;
+      if (smallestVariant != null) {
+        return smallestVariant;
       }
     }
 
-    const baseKvStoreEntry = await this.loadKvAssetVariant(entry, null);
-    if (baseKvStoreEntry == null) {
+    const baseAssetVariant = await this.loadAssetVariant(entry, null);
+    if (baseAssetVariant == null) {
       throw new TypeError('Key not found: ' + entry.key);
     }
 
-    return baseKvStoreEntry;
+    return baseAssetVariant;
   }
 
   async serveAsset(request: Request, asset: AssetEntry, init?: AssetInit): Promise<Response> {
@@ -469,12 +471,12 @@ export class PublisherServer {
     }
 
     const acceptEncodings = await this.findAcceptEncodingsGroups(request);
-    const kvAssetVariant = await this.findKVAssetVariantForAcceptEncodingsGroups(asset, acceptEncodings);
-    if (kvAssetVariant.contentEncoding != null) {
-      headers.append('Content-Encoding', kvAssetVariant.contentEncoding);
+    const assetVariant = await this.findAssetVariantForAcceptEncodingsGroups(asset, acceptEncodings);
+    if (assetVariant.contentEncoding != null) {
+      headers.append('Content-Encoding', assetVariant.contentEncoding);
     }
 
-    headers.set('ETag', `"${kvAssetVariant.hash}"`);
+    headers.set('ETag', `"${assetVariant.hash}"`);
     if (asset.lastModifiedTime !== 0) {
       headers.set('Last-Modified', (new Date( asset.lastModifiedTime * 1000 )).toUTCString());
     }
@@ -484,9 +486,9 @@ export class PublisherServer {
       return preconditionResponse;
     }
 
-    const kvStoreEntry = kvAssetVariant.kvStoreEntry;
+    const storageEntry = assetVariant.storageEntry;
     return new Response(
-      kvStoreEntry.body,
+      storageEntry.body,
       {
         status: init?.status ?? 200,
         headers,
@@ -532,8 +534,8 @@ export class PublisherServer {
     // fallback HTML responses, like SPA and "not found" pages
     if (requestAcceptsTextHtml(request)) {
 
-      const kvAssetsIndex = await this.getKvAssetsIndex();
-      if (kvAssetsIndex == null) {
+      const assetEntryMap = await this.getAssetEntryMap();
+      if (assetEntryMap == null) {
         return null;
       }
 
@@ -541,7 +543,7 @@ export class PublisherServer {
       const { spaFile } = serverConfig;
 
       if (spaFile != null) {
-        const asset = kvAssetsIndex[spaFile];
+        const asset = assetEntryMap[spaFile];
         if (asset != null) {
           return this.serveAsset(request, asset, {
             cache: 'never',
@@ -551,7 +553,7 @@ export class PublisherServer {
 
       const { notFoundPageFile } = serverConfig;
       if (notFoundPageFile != null) {
-        const asset = kvAssetsIndex[notFoundPageFile];
+        const asset = assetEntryMap[notFoundPageFile];
         if (asset != null) {
           return this.serveAsset(request, asset, {
             status: 404,

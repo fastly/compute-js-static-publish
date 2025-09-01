@@ -25,7 +25,7 @@ Available Subcommands:
                                    to a new collection name
   update-expiration                Modify expiration time for an existing collection
 
-Global Options:
+KV Store Options:
   --local                          Instead of working with the Fastly KV Store, operate on
                                    local files that will be used to simulate the KV Store
                                    with the local development environment.
@@ -35,6 +35,7 @@ Global Options:
                                      1. FASTLY_API_TOKEN environment variable
                                      2. Logged-in Fastly CLI profile
 
+Global Options:
   -h, --help                       Show this help message and exit.
 
 Examples:

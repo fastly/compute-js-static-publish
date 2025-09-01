@@ -752,13 +752,13 @@ const config = {
   // excludeDirs: [ './node_modules' ],
   // excludeDotFiles: true,
   // includeWellKnown: true,
-  // kvStoreAssetInclusionTest: (assetKey) => true,
+  // assetInclusionTest: (assetKey) => true,
   // contentCompression: [ 'br', 'gzip' ], 
   // contentTypes: [
   //   { test: /.custom$/, contentType: 'application/x-custom', text: false },
   // ],
   
-  // Server settings are saved to the KV Store per collection
+  // Server settings are saved to storage per collection
   server: {
     publicDirPrefix: ${JSON.stringify(publicDirPrefix)},
     staticItems: ${JSON.stringify(staticItems)},

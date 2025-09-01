@@ -159,7 +159,7 @@ const config = {
   includeWellKnown: true,
 
   // Advanced filtering (optional):
-  kvStoreAssetInclusionTest: (key, contentType) => {
+  assetInclusionTest: (key, contentType) => {
     return true; // include everything by default
   },
 
@@ -194,7 +194,7 @@ You can override this file for a single `publish-content` command by specifying 
 - `excludeDirs` - Array of directory names or regex patterns to exclude (default: `['./node_modules']`).
 - `excludeDotFiles` - Exclude dotfiles and dot-named directories (default: true).
 - `includeWellKnown` - Always include `.well-known` even if dotfiles are excluded (default: true).
-- `kvStoreAssetInclusionTest` - Function to determine inclusion and variant behavior per file.
+- `assetInclusionTest` - Function to determine inclusion and variant behavior per file.
 - `contentCompression` - Array of compression formats to pre-generate (`['br', 'gzip']` by default).
 - `contentTypes` - Additional or override content type definitions.
 
@@ -483,7 +483,7 @@ async function handleRequest(request) {
 
 ## 📥 Using Published Assets in Your Code
 
-To access files you've published, use the `getMatchingAsset()` and `loadKvAssetVariant()` methods on `publisherServer`.
+To access files you've published, use the `getMatchingAsset()` and `loadAssetVariant()` methods on `publisherServer`.
 
 ### Access Metadata for a File:
 
@@ -502,16 +502,16 @@ if (asset != null) {
 ### Load the File from KV Store:
 
 ```js
-const kvAssetVariant = await publisherServer.loadKvAssetVariant(asset, null); // pass 'gzip' or 'br' for compressed
+const assetVariant = await publisherServer.loadAssetVariant(asset, null); // pass 'gzip' or 'br' for compressed
 
-kvAssetVariant.kvStoreEntry;      // KV Store entry (type KVStoreEntry defined in 'fastly:kv-store')
-kvAssetVariant.size;              // Size of the variant
-kvAssetVariant.hash;              // SHA256 of the variant
-kvAssetVariant.contentEncoding;   // 'gzip', 'br', or null
-kvAssetVariant.numChunks;         // Number of chunks (for large files)
+assetVariant.storageEntry;      // Storage entry (type StorageEntry defined in './src/storage/storage-provider.ts')
+assetVariant.size;              // Size of the variant
+assetVariant.hash;              // SHA256 of the variant
+assetVariant.contentEncoding;   // 'gzip', 'br', or null
+assetVariant.numChunks;         // Number of chunks (for large files)
 ```
 
-You can stream `kvAssetVariant.kvStoreEntry.body` directly to a `Response`, or read it using `.text()`, `.json()`, or `.arrayBuffer()` depending on its content type.
+You can stream `assetVariant.storageEntry.body` directly to a `Response`, or read it using `.text()`, `.json()`, or `.arrayBuffer()` depending on its content type.
 
 ---
 
@@ -609,7 +609,7 @@ After this process is complete, the PublisherServer object in the Compute applic
 
 *At most one of **`--expires-in`**, **`--expires-at`**, or **`--expires-never`** may be specified*
 
-**Global Options:**
+**KV Store Options:**
 
 - `--local`: Instead of working with the Fastly KV Store, operate on local files that will be used to simulate the KV Store with the local development environment.
 
@@ -633,7 +633,7 @@ This can include expired collection indexes and orphaned content assets.
 - `--delete-expired-collections`: If set, expired collection index files will be deleted.
 - `--dry-run`: Show what would be deleted without performing any deletions.
 
-**Global Options:**
+**KV Store Options:**
 
 - `--local`: Instead of working with the Fastly KV Store, operate on local files that will be used to simulate the KV Store with the local development environment.
 
@@ -650,7 +650,7 @@ Lists all collections currently published in the KV Store.
 
 ##### Options:
 
-**Global Options:**
+**KV Store Options:**
 
 - `--local`: Instead of working with the Fastly KV Store, operate on local files that will be used to simulate the KV Store with the local development environment.
 
@@ -681,7 +681,7 @@ Copies an existing collection (content + config) to a new collection name.
 
 *At most one of **`--expires-in`**, **`--expires-at`**, or **`--expires-never`** may be specified*. If not provided, then the existing expiration rule of the collection being promoted is used. 
 
-**Global Options:**
+**KV Store Options:**
 
 - `--local`: Instead of working with the Fastly KV Store, operate on local files that will be used to simulate the KV Store with the local development environment.
 
@@ -709,7 +709,7 @@ Sets or updates the expiration time of an existing collection.
 
 *Exactly one of **`--expires-in`**, **`--expires-at`**, or **`--expires-never`** must be specified*
 
-**Global Options:**
+**KV Store Options:**
 
 - `--local`: Instead of working with the Fastly KV Store, operate on local files that will be used to simulate the KV Store with the local development environment.
 
@@ -732,7 +732,7 @@ Use the `npx @fastly/compute-js-static-publish clean` command afterward to remov
 
 - `--collection-name`: The name of the collection to delete (required)
 
-**Global Options:**
+**KV Store Options:**
 
 - `--local`: Instead of working with the Fastly KV Store, operate on local files that will be used to simulate the KV Store with the local development environment.
 

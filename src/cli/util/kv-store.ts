@@ -18,7 +18,11 @@ type DataAndMeta<TEntry> = {
   meta: KVStoreInfoMeta,
 };
 
-type KVStoreEntryInfo = string;
+export type KvStoreEntryInfo = {
+  response: Response,
+  metadata: string | null,
+  generation: string | null,
+};
 
 type CachedValues = {
   kvStoreNameMap?: Record<string, string>,
@@ -105,7 +109,7 @@ export async function getKVStoreInfos(fastlyApiContext: FastlyApiContext) {
   return kvStoreInfos;
 }
 
-export const _getKVStoreKeys = createArrayGetter<KVStoreEntryInfo>()(
+export const _getKVStoreKeys = createArrayGetter<string>()(
   (kvStoreId: string, prefix?: string) => {
     let endpoint = `/resources/stores/kv/${encodeURIComponent(kvStoreId)}/keys`;
     if (prefix != null) {
@@ -134,7 +138,7 @@ export async function getKVStoreKeys(
   );
 }
 
-export async function getKvStoreEntryInfo(fastlyApiContext: FastlyApiContext, kvStoreName: string, key: string) {
+export async function getKvStoreEntryInfo(fastlyApiContext: FastlyApiContext, kvStoreName: string, key: string): Promise<KvStoreEntryInfo | null> {
 
   return getKvStoreEntry(fastlyApiContext, kvStoreName, key, true);
 
@@ -145,7 +149,7 @@ export async function getKvStoreEntry(
   kvStoreName: string,
   key: string,
   metadataOnly?: boolean,
-) {
+): Promise<KvStoreEntryInfo | null> {
 
   const kvStoreId = await getKVStoreIdForName(fastlyApiContext, kvStoreName);
   if (kvStoreId == null) {

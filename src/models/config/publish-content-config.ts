@@ -40,7 +40,7 @@ export interface ExcludeDirTest {
   test(name: string): boolean;
 }
 
-export type KVStoreAssetInclusionTest = (assetKey: string, contentType?: string) => boolean;
+export type AssetInclusionTest = (assetKey: string, contentType?: string) => boolean;
 
 export type PublishContentConfig = {
   // Set to a directory that acts as the root of all files that will be included in this publish.
@@ -61,7 +61,11 @@ export type PublishContentConfig = {
   includeWellKnown?: boolean,
 
   // A test to run on each asset key to determine whether and how to include the file.
-  kvStoreAssetInclusionTest?: KVStoreAssetInclusionTest | null,
+  assetInclusionTest?: AssetInclusionTest | null,
+
+  // A test to run on each asset key to determine whether and how to include the file.
+  // DEPRECATED: Use assetInclusionTest instead
+  kvStoreAssetInclusionTest?: AssetInclusionTest | null,
 
   // Pre-generate content in these formats as well and serve them in tandem with the
   // allowedEncodings setting in the server settings. Default value is [ 'br' | 'gzip' ].
@@ -79,7 +83,7 @@ export type PublishContentConfigNormalized = {
   excludeDirs: ExcludeDirTest[],
   excludeDotFiles: boolean,
   includeWellKnown: boolean,
-  kvStoreAssetInclusionTest: KVStoreAssetInclusionTest | null,
+  assetInclusionTest: AssetInclusionTest | null,
   contentCompression: ContentCompressionTypes[],
   contentTypes: ContentTypeDef[],
   server: PublisherServerConfigNormalized | null,

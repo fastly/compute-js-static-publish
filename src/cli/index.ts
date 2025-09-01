@@ -9,6 +9,14 @@ import fs from 'node:fs';
 import * as scaffoldCommand from './commands/scaffold/index.js';
 import * as manageCommands from './commands/manage/index.js';
 
+// Register storage builder providers
+import { registerStorageProviderBuilder } from './storage/storage-provider.js';
+import * as kvStoreProvider from './storage/kv-store-provider.js';
+import * as kvStoreLocalProvider from './storage/kv-store-local-provider.js';
+
+registerStorageProviderBuilder(kvStoreProvider.buildStoreProvider);
+registerStorageProviderBuilder(kvStoreLocalProvider.buildStoreProvider);
+
 if (!fs.existsSync('./static-publish.rc.js')) {
 
   console.log("🧑‍💻Fastly Compute JavaScript Static Publisher (Scaffolding mode)");

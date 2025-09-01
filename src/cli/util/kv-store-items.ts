@@ -4,69 +4,13 @@
  */
 
 import fs from 'node:fs';
+import { StorageProviderBatchEntry } from '../storage/storage-provider.js';
 import { directoryExists, getFileSize } from './files.js';
-import { attemptWithRetries } from './retryable.js';
-import { FetchError } from './api-token.js';
 
-export async function doKvStoreItemsOperation<TObject extends { key: string }>(
-  objects: TObject[],
-  fn: (obj: TObject, key: string, index: number) => Promise<void>,
-  maxConcurrent: number = 12,
-) {
+// split large files into 20MiB chunks
+export const KV_STORE_CHUNK_SIZE = 1_024 * 1_024 * 20;
 
-  let index = 0; // Shared among workers
-
-  async function worker() {
-    while (index < objects.length) {
-      const currentIndex = index;
-      index = index + 1;
-
-      const object = objects[currentIndex];
-      const { key } = object;
-
-      try {
-        await attemptWithRetries(
-          async() => {
-            await fn(object, key, currentIndex);
-          },
-          {
-            onAttempt(attempt) {
-              if (attempt > 0) {
-                console.log(`  Attempt ${attempt + 1} for: ${key}`);
-              }
-            },
-            onRetry(attempt, err, delay) {
-              let statusMessage = 'unknown';
-              if (err instanceof FetchError) {
-                statusMessage = `HTTP ${err.status}`;
-              } else if (err instanceof TypeError) {
-                statusMessage = 'transport';
-              }
-              console.log(`  ‼️ Attempt ${attempt + 1} for ${key} gave retryable error (${statusMessage}), delaying ${delay} ms`);
-            },
-          }
-        );
-      } catch (err) {
-        const e = err instanceof Error ? err : new Error(String(err));
-        console.error(`  ❌ Failed: ${key} → ${e.message}`);
-        console.error(e.stack);
-      }
-    }
-  }
-
-  const workers = Array.from({ length: maxConcurrent }, () => worker());
-  await Promise.all(workers);
-}
-
-export type KVStoreItemDesc = {
-  write: boolean,
-  size: number,
-  key: string,
-  filePath: string,
-  metadataJson?: Record<string, any>,
-};
-
-export function shouldRecreateChunks(chunksDir: string, numChunks: number, item: KVStoreItemDesc, chunkSize: number) {
+export function shouldRecreateChunks(chunksDir: string, numChunks: number, item: StorageProviderBatchEntry, chunkSize: number) {
   console.log(` 📄 '${item.key}' - ${item.size} bytes → ${numChunks} chunks`)
   if (!directoryExists(chunksDir)) {
     console.log(`  ・ Creating chunks for '${item.key}' - found no existing chunks`);
@@ -102,7 +46,7 @@ export function shouldRecreateChunks(chunksDir: string, numChunks: number, item:
   return false;
 }
 
-export async function applyKVStoreEntriesChunks(kvStoreItemDescriptions: KVStoreItemDesc[], chunkSize: number) {
+export async function applyKVStoreEntriesChunks(kvStoreItemDescriptions: StorageProviderBatchEntry[], chunkSize: number) {
 
   const items = kvStoreItemDescriptions.splice(0);
   // kvStoreItemDescriptions is now empty.
@@ -183,7 +127,7 @@ export async function applyKVStoreEntriesChunks(kvStoreItemDescriptions: KVStore
       if (kvItem.metadataJson == null) {
         kvItem.metadataJson = {};
       }
-      kvItem.metadataJson.chunkIndex = chunkIndex;
+      kvItem.metadataJson.chunkIndex = String(chunkIndex);
 
       if (chunkIndex !== 0) {
 
