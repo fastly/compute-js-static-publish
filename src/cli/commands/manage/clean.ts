@@ -7,7 +7,7 @@ import path from 'node:path';
 
 import { type OptionDefinition } from 'command-line-args';
 
-import { type KVAssetEntryMap } from '../../../models/assets/kvstore-assets.js';
+import { type AssetEntryMap } from '../../../models/assets/index.js';
 import { type IndexMetadata } from '../../../models/server/index.js';
 import { isExpired } from '../../../models/time/index.js';
 import { type FastlyApiContext, loadApiToken } from '../../util/api-token.js';
@@ -251,7 +251,7 @@ export async function action(actionArgs: string[]) {
       }
 
       liveCollections.add(collection);
-      const kvAssetsIndex = (await kvAssetsIndexResponse.response.json()) as KVAssetEntryMap;
+      const kvAssetsIndex = (await kvAssetsIndexResponse.response.json()) as AssetEntryMap;
       for (const [_assetKey, assetEntry] of Object.entries(kvAssetsIndex)) {
         if (assetEntry.key.startsWith('sha256:')) {
           assetsIdsInUse.add(`sha256_${assetEntry.key.slice('sha256:'.length)}`);
