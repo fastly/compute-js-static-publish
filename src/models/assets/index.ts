@@ -5,7 +5,7 @@
 
 import { type ContentCompressionTypes, isCompressionType } from '../compression/index.js';
 
-export type KVAssetEntry = {
+export type AssetEntry = {
   key: string,
   size: number,
   contentType: string,
@@ -13,16 +13,16 @@ export type KVAssetEntry = {
   variants: ContentCompressionTypes[],
 };
 
-export type KVAssetEntryMap = Record<string, KVAssetEntry>;
+export type AssetEntryMap = Record<string, AssetEntry>;
 
-export type KVAssetVariantMetadata = {
+export type AssetVariantMetadata = {
   contentEncoding?: ContentCompressionTypes,
   size: number,
   hash: string,
   numChunks?: number,
 };
 
-export function isKVAssetVariantMetadata(obj: unknown): obj is KVAssetVariantMetadata {
+export function isAssetVariantMetadata(obj: unknown): obj is AssetVariantMetadata {
   if (obj == null || typeof obj !== 'object') {
     return false;
   }

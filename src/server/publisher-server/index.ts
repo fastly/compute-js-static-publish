@@ -16,11 +16,11 @@ import {
   type ContentCompressionTypes,
 } from '../../models/compression/index.js';
 import {
-  isKVAssetVariantMetadata,
-  type KVAssetEntry,
-  type KVAssetEntryMap,
-  type KVAssetVariantMetadata,
-} from '../../models/assets/kvstore-assets.js';
+  isAssetVariantMetadata,
+  type AssetEntry,
+  type AssetEntryMap,
+  type AssetVariantMetadata,
+} from '../../models/assets/index.js';
 import { type IndexMetadata } from '../../models/server/index.js';
 import { isExpired } from '../../models/time/index.js';
 import { getKVStoreEntry } from '../util/kv-store.js';
@@ -29,7 +29,7 @@ import { checkIfNoneMatch, getIfNoneMatchHeader } from './serve-preconditions/if
 
 type KVAssetVariant = {
   kvStoreEntry: KVStoreEntry,
-} & KVAssetVariantMetadata;
+} & AssetVariantMetadata;
 
 export function buildHeadersSubset(responseHeaders: Headers, keys: Readonly<string[]>) {
   const resultHeaders = new Headers();
@@ -98,7 +98,7 @@ export class PublisherServer {
   settingsCached: PublisherServerConfigNormalized | null | undefined;
 
   // Cached index
-  kvAssetsIndex: KVAssetEntryMap | null | undefined;
+  kvAssetsIndex: AssetEntryMap | null | undefined;
 
   setActiveCollectionName(collectionName: string) {
     this.activeCollectionName = collectionName;
@@ -180,11 +180,11 @@ export class PublisherServer {
       return null;
     }
 
-    this.kvAssetsIndex = (await indexFile.json()) as KVAssetEntryMap;
+    this.kvAssetsIndex = (await indexFile.json()) as AssetEntryMap;
     return this.kvAssetsIndex;
   }
 
-  async getMatchingAsset(assetKey: string, applyAuto: boolean = false): Promise<KVAssetEntry | null> {
+  async getMatchingAsset(assetKey: string, applyAuto: boolean = false): Promise<AssetEntry | null> {
 
     const serverConfig = await this.getServerConfig();
     if (serverConfig == null) {
@@ -309,7 +309,7 @@ export class PublisherServer {
       });
   }
 
-  handlePreconditions(request: Request, asset: KVAssetEntry, responseHeaders: Headers): Response | null {
+  handlePreconditions(request: Request, asset: AssetEntry, responseHeaders: Headers): Response | null {
     // Handle preconditions according to https://httpwg.org/specs/rfc9110.html#rfc.section.13.2.2
 
     // A recipient cache or origin server MUST evaluate the request preconditions defined by this specification in the following order:
@@ -370,7 +370,7 @@ export class PublisherServer {
     return null;
   }
   
-  public async loadKvAssetVariant(entry: KVAssetEntry, variant: ContentCompressionTypes | null): Promise<KVAssetVariant | null> {
+  public async loadKvAssetVariant(entry: AssetEntry, variant: ContentCompressionTypes | null): Promise<KVAssetVariant | null> {
 
     const kvStore = new KVStore(this.kvStoreName);
     
@@ -392,7 +392,7 @@ export class PublisherServer {
     } catch {
       return null;
     }
-    if (!isKVAssetVariantMetadata(metadata)) {
+    if (!isAssetVariantMetadata(metadata)) {
       return null;
     }
     if (metadata.size == null) {
@@ -404,7 +404,7 @@ export class PublisherServer {
     };
   }
 
-  private async findKVAssetVariantForAcceptEncodingsGroups(entry: KVAssetEntry, acceptEncodingsGroups: ContentCompressionTypes[][] = []): Promise<KVAssetVariant> {
+  private async findKVAssetVariantForAcceptEncodingsGroups(entry: AssetEntry, acceptEncodingsGroups: ContentCompressionTypes[][] = []): Promise<KVAssetVariant> {
 
     if (!entry.key.startsWith('sha256:')) {
       throw new TypeError(`Key must start with 'sha256:': ${entry.key}`);
@@ -445,7 +445,7 @@ export class PublisherServer {
     return baseKvStoreEntry;
   }
 
-  async serveAsset(request: Request, asset: KVAssetEntry, init?: AssetInit): Promise<Response> {
+  async serveAsset(request: Request, asset: AssetEntry, init?: AssetInit): Promise<Response> {
 
     const headers = new Headers(init?.headers);
     headers.set('Content-Type', asset.contentType);

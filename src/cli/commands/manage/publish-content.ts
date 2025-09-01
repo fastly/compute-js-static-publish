@@ -8,7 +8,7 @@ import * as path from 'node:path';
 
 import { type OptionDefinition } from 'command-line-args';
 
-import { type KVAssetEntryMap, type KVAssetVariantMetadata, isKVAssetVariantMetadata } from '../../../models/assets/kvstore-assets.js';
+import { type AssetEntryMap, type AssetVariantMetadata, isAssetVariantMetadata } from '../../../models/assets/index.js';
 import { type ContentCompressionTypes } from '../../../models/compression/index.js';
 import { type PublisherServerConfigNormalized } from '../../../models/config/publisher-server-config.js';
 import { type ContentTypeDef } from '../../../models/config/publish-content-config.js';
@@ -322,10 +322,10 @@ export async function action(actionArgs: string[]) {
   const kvStoreItemDescriptions: KVStoreItemDesc[] = [];
 
   // Assets included in the publishing, keyed by asset key
-  const kvAssetsIndex: KVAssetEntryMap = {};
+  const kvAssetsIndex: AssetEntryMap = {};
 
   // All the metadata of the variants we know about during this publishing, keyed on the base version's hash.
-  type VariantMetadataEntry = KVAssetVariantMetadata & {
+  type VariantMetadataEntry = AssetVariantMetadata & {
     existsInKvStore: boolean,
   };
   type VariantMetadataMap = Map<Variants, VariantMetadataEntry>;
@@ -406,7 +406,7 @@ export async function action(actionArgs: string[]) {
 
       } else {
 
-        let kvStoreItemMetadata: KVAssetVariantMetadata | null = null;
+        let kvStoreItemMetadata: AssetVariantMetadata | null = null;
 
         if (!localMode && !overwriteKvStoreItems) {
           const items = [{
@@ -430,7 +430,7 @@ export async function action(actionArgs: string[]) {
                   // treat it as though it didn't exist.
                 }
               }
-              if (isKVAssetVariantMetadata(itemMetadata)) {
+              if (isAssetVariantMetadata(itemMetadata)) {
                 let exists = false;
                 if (itemMetadata.size <= KV_STORE_CHUNK_SIZE) {
                   // For an item equal to or smaller than the chunk size, if it exists
@@ -461,7 +461,7 @@ export async function action(actionArgs: string[]) {
           );
         }
 
-        if ((kvStoreItemMetadata as KVAssetVariantMetadata | null) != null) {
+        if ((kvStoreItemMetadata as AssetVariantMetadata | null) != null) {
 
           console.log(` ・ Asset found in KV Store with key "${variantKey}".`);
           // And we already know its hash and size.
