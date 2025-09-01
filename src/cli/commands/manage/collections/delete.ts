@@ -8,7 +8,7 @@ import path from 'node:path';
 import { type OptionDefinition } from 'command-line-args';
 
 import { type FastlyApiContext, loadApiToken } from '../../../util/api-token.js';
-import { parseCommandLine } from "../../../util/args.js";
+import { parseCommandLine } from '../../../util/args.js';
 import { LoadConfigError, loadStaticPublisherRcFile } from '../../../util/config.js';
 import { readServiceId } from '../../../util/fastly-toml.js';
 import { getKVStoreKeys, kvStoreDeleteEntry } from '../../../util/kv-store.js';

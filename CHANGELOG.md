@@ -234,7 +234,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   It's now possible to do something like this: 
   ```typescript
-  import { defaultContentTypes, testFileContentType } from "@fastly/compute-js-static-publish/resources/default-content-types";
+  import { defaultContentTypes, testFileContentType } from '@fastly/compute-js-static-publish/resources/default-content-types';
   const testResult = testFileContentType(defaultContentTypes, '/path/to/file.json');
   testResult.binary // false 
   testResult.type // application/json 

@@ -22,10 +22,10 @@ import {
   type KVAssetVariantMetadata,
 } from '../../models/assets/kvstore-assets.js';
 import { type IndexMetadata } from '../../models/server/index.js';
+import { isExpired } from '../../models/time/index.js';
 import { getKVStoreEntry } from '../util/kv-store.js';
 import { checkIfModifiedSince, getIfModifiedSinceHeader } from './serve-preconditions/if-modified-since.js';
 import { checkIfNoneMatch, getIfNoneMatchHeader } from './serve-preconditions/if-none-match.js';
-import { isExpired } from "../../models/time/index.js";
 
 type KVAssetVariant = {
   kvStoreEntry: KVStoreEntry,
