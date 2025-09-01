@@ -8,6 +8,15 @@ import path from 'node:path';
 import globToRegExp from 'glob-to-regexp';
 
 import {
+  type StaticPublishRc,
+  type StaticPublishPartialStorage,
+  isKvStoreConfigRc,
+  type StaticPublishRcBase,
+} from '../../models/config/static-publish-rc.js';
+import {
+  getKvStoreConfigFromRc,
+} from '../../models/config/kv-store-config.js';
+import {
   type PublishContentConfigNormalized,
   type ContentTypeDef,
 } from '../../models/config/publish-content-config.js';
@@ -18,7 +27,6 @@ import {
   isStringAndNotEmpty,
 } from './data.js';
 import { type PublisherServerConfigNormalized } from '../../models/config/publisher-server-config.js';
-import { type StaticPublishRc } from '../../models/config/static-publish-rc.js';
 
 export class LoadConfigError extends Error {
   errors: string[];
@@ -62,20 +70,17 @@ export async function loadStaticPublisherRcFile(): Promise<StaticPublishRc> {
 export const normalizeStaticPublisherRc = buildNormalizeFunctionForObject<StaticPublishRc>((config, errors) => {
 
   let {
-    kvStoreName,
     publishId,
     defaultCollectionName,
     staticPublisherWorkingDir,
   } = config;
 
-  if (!isSpecified(config, 'kvStoreName')) {
-    errors.push('kvStoreName must be specified.');
-  } else {
-    if (isStringAndNotEmpty(kvStoreName)) {
-      // ok
-    } else {
-      errors.push('kvStoreName must be a non-empty string.');
-    }
+  let storage: StaticPublishPartialStorage | null = null;
+  if (isKvStoreConfigRc(config)) {
+    storage = {
+      storageMode: 'kv-store',
+      kvStore: getKvStoreConfigFromRc(config),
+    };
   }
 
   if (!isSpecified(config, 'publishId')) {
@@ -116,12 +121,14 @@ export const normalizeStaticPublisherRc = buildNormalizeFunctionForObject<Static
     }
   }
 
-  return {
-    kvStoreName,
-    publishId,
-    defaultCollectionName,
-    staticPublisherWorkingDir,
-  };
+  return Object.assign({},
+    storage,
+    {
+      publishId,
+      defaultCollectionName,
+      staticPublisherWorkingDir,
+    },
+  );
 });
 
 export async function loadPublishContentConfigFile(configFile: string): Promise<PublishContentConfigNormalized> {
@@ -200,6 +207,7 @@ export const normalizePublishContentConfig = buildNormalizeFunctionForObject<Pub
     excludeDirs,
     excludeDotFiles,
     includeWellKnown,
+    assetInclusionTest,
     kvStoreAssetInclusionTest,
     contentCompression,
     contentTypes,
@@ -273,12 +281,22 @@ export const normalizePublishContentConfig = buildNormalizeFunctionForObject<Pub
     errors.push('excludeDirs, if specified, must be null, a string value, a RegExp, or an array of strings and RegExp values.');
   }
 
-  if (!isSpecified(config, 'kvStoreAssetInclusionTest')) {
-    kvStoreAssetInclusionTest = null;
-  } else if (kvStoreAssetInclusionTest === null || typeof kvStoreAssetInclusionTest === 'function') {
+  if (!isSpecified(config, 'assetInclusionTest')) {
+    if (!isSpecified(config, 'kvStoreAssetInclusionTest')) {
+      assetInclusionTest = null;
+    } else if (kvStoreAssetInclusionTest === null || typeof kvStoreAssetInclusionTest === 'function') {
+      // ok
+      assetInclusionTest = kvStoreAssetInclusionTest;
+    } else {
+      errors.push('assetInclusionTest, if specified, must be null or a function.');
+    }
+  } else if (assetInclusionTest === null || typeof assetInclusionTest === 'function') {
     // ok
+    if (isSpecified(config, 'kvStoreAssetInclusionTest')) {
+      errors.push('assetInclusionTest and kvStoreAssetInclusionTest must not both be specified.');
+    }
   } else {
-    errors.push('kvStoreAssetInclusionTest, if specified, must be null or a function.');
+    errors.push('assetInclusionTest, if specified, must be null or a function.');
   }
 
   if (!isSpecified(config, 'contentCompression')) {
@@ -335,7 +353,7 @@ export const normalizePublishContentConfig = buildNormalizeFunctionForObject<Pub
     excludeDirs,
     excludeDotFiles,
     includeWellKnown,
-    kvStoreAssetInclusionTest,
+    assetInclusionTest,
     contentCompression,
     contentTypes,
     server,

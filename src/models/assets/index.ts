@@ -3,6 +3,7 @@
  * Licensed under the MIT license. See LICENSE file for details.
  */
 
+import { getMetadataFieldValue } from '../metadata/index.js';
 import { type ContentCompressionTypes, isCompressionType } from '../compression/index.js';
 
 export type AssetEntry = {
@@ -22,29 +23,37 @@ export type AssetVariantMetadata = {
   numChunks?: number,
 };
 
-export function isAssetVariantMetadata(obj: unknown): obj is AssetVariantMetadata {
-  if (obj == null || typeof obj !== 'object') {
-    return false;
-  }
-  if ('contentEncoding' in obj) {
-    if (
-        typeof obj.contentEncoding !== 'string' ||
-        !isCompressionType(obj.contentEncoding)
-    ) {
-      return false;
-    }
-  }
-  if (!('size' in obj) || typeof obj.size !== 'number') {
-    return false;
-  }
-  if (!('hash' in obj) || typeof obj.hash !== 'string') {
-    return false;
-  }
-  if ('numChunks' in obj) {
-    if (typeof obj.numChunks !== 'number') {
-      return false;
-    }
+export function decodeAssetVariantMetadata(obj: Record<string, string> | undefined): AssetVariantMetadata | null {
+  if (obj == null) {
+    return null;
   }
 
-  return true;
+  const contentEncoding = getMetadataFieldValue(obj, 'contentEncoding');
+  if (contentEncoding != null && !isCompressionType(contentEncoding)) {
+    return null;
+  }
+
+  const size = parseFloat(getMetadataFieldValue(obj, 'size'));
+  if (isNaN(size)) {
+    return null;
+  }
+
+  const hash = getMetadataFieldValue(obj, 'hash');
+  if (hash == null) {
+    return null;
+  }
+
+  const numChunks = parseFloat(getMetadataFieldValue(obj, 'contentEncoding'));
+
+  const assetVariantMetadata: AssetVariantMetadata = {
+    size,
+    hash,
+    numChunks: !isNaN(numChunks) ? numChunks : undefined,
+  };
+
+  if (contentEncoding != null) {
+    assetVariantMetadata.contentEncoding = contentEncoding;
+  }
+
+  return assetVariantMetadata;
 }

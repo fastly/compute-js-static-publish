@@ -8,39 +8,27 @@ import * as path from 'node:path';
 
 import { type OptionDefinition } from 'command-line-args';
 
-import { type AssetEntryMap, type AssetVariantMetadata, isAssetVariantMetadata } from '../../../models/assets/index.js';
+import { type AssetEntryMap, type AssetVariantMetadata, } from '../../../models/assets/index.js';
 import { type ContentCompressionTypes } from '../../../models/compression/index.js';
 import { type PublisherServerConfigNormalized } from '../../../models/config/publisher-server-config.js';
 import { type ContentTypeDef } from '../../../models/config/publish-content-config.js';
-import { type IndexMetadata } from '../../../models/server/index.js';
+import { encodeIndexMetadata, type IndexMetadata } from '../../../models/server/index.js';
 import { calcExpirationTime } from '../../../models/time/index.js';
-import { type FastlyApiContext, loadApiToken } from '../../util/api-token.js';
-import { getKvStoreEntryInfo, kvStoreSubmitEntry } from '../../util/kv-store.js';
 import { parseCommandLine } from '../../util/args.js';
 import { mergeContentTypes, testFileContentType } from '../../util/content-types.js';
 import { LoadConfigError, loadPublishContentConfigFile, loadStaticPublisherRcFile } from '../../util/config.js';
 import { applyDefaults } from '../../util/data.js';
-import { readServiceId } from '../../util/fastly-toml.js';
 import { calculateFileSizeAndHash, enumerateFiles, rootRelative } from '../../util/files.js';
-import {
-  applyKVStoreEntriesChunks,
-  doKvStoreItemsOperation,
-  type KVStoreItemDesc,
-} from '../../util/kv-store-items.js';
-import {
-  localKvStoreSubmitEntry,
-  writeKVStoreEntriesForLocal,
-} from '../../util/kv-store-local-server.js';
-import { isNodeError } from '../../util/node.js';
 import { ensureVariantFileExists, type Variants } from '../../util/variants.js';
+import {
+  loadStorageProviderFromStaticPublishRc,
+  StorageProviderBatch,
+} from '../../storage/storage-provider.js';
 
-// KV Store key format:
+// Storage key format:
 // <publishId>_index_<preview_id>.json
 // <publishId>_settings_<preview_id>.json
 // <publishId>_files_sha256_<hash>_<variant>
-
-// split large files into 20MiB chunks
-const KV_STORE_CHUNK_SIZE = 1_024 * 1_024 * 20;
 
 function help() {
   console.log(`\
@@ -67,9 +55,7 @@ Optional:
   --root-dir=<dir>                 Directory to publish from. Overrides the config file setting.
                                    Default: rootDir from publish-content.config.js
 
-  --kv-overwrite                   Cannot be used with --local.
-                                   When using Fastly KV Store, always overwrite
-                                   existing entries, even if unchanged.
+  --overwrite-existing             Always overwrite existing entries in storage, even if unchanged.
 
 Expiration:
   --expires-in=<duration>          Expiration duration from now.
@@ -83,7 +69,7 @@ Expiration:
                                    ⚠ These three options are mutually exclusive.
                                    Specify only one.
 
-Global Options:
+KV Store Options:
   --local                          Instead of working with the Fastly KV Store, operate on
                                    local files that will be used to simulate the KV Store
                                    with the local development environment.
@@ -93,6 +79,9 @@ Global Options:
                                      1. FASTLY_API_TOKEN environment variable
                                      2. Logged-in Fastly CLI profile
 
+  --kv-overwrite                   Alias for --overwrite-existing.
+
+Global Options:
   -h, --help                       Show this help message and exit.
 
 Examples:
@@ -111,7 +100,7 @@ export async function action(actionArgs: string[]) {
     { name: 'config', type: String },
     { name: 'collection-name', type: String, },
     { name: 'root-dir', type: String, },
-    { name: 'kv-overwrite', type: Boolean },
+    { name: 'overwrite-existing', type: Boolean },
 
     { name: 'expires-in', type: String },
     { name: 'expires-at', type: String },
@@ -119,6 +108,7 @@ export async function action(actionArgs: string[]) {
 
     { name: 'local', type: Boolean },
     { name: 'fastly-api-token', type: String, },
+    { name: 'kv-overwrite', type: Boolean },
   ];
 
   const parsed = parseCommandLine(actionArgs, optionDefinitions);
@@ -138,58 +128,22 @@ export async function action(actionArgs: string[]) {
     config: configFilePathValue,
     ['collection-name']: collectionNameValue,
     ['root-dir']: rootDir,
-    ['kv-overwrite']: overwriteKvStoreItems,
+    ['overwrite-existing']: _overwriteExisting,
     ['expires-in']: expiresIn,
     ['expires-at']: expiresAt,
     ['expires-never']: expiresNever,
     local: localMode,
     ['fastly-api-token']: fastlyApiToken,
+    ['kv-overwrite']: _kvOverwrite,
   } = parsed.commandLineOptions;
+
+  const overwriteExisting = _overwriteExisting ?? _kvOverwrite;
 
   // compute-js-static-publisher cli is always run from the Compute application directory
   // in other words, the directory that contains `fastly.toml`.
   const computeAppDir = path.resolve();
 
-  // Check to see if we have a service ID listed in `fastly.toml`.
-  // If we do NOT, then we do not use the KV Store.
-  let serviceId: string | undefined;
-  try {
-    serviceId = readServiceId(path.resolve(computeAppDir, './fastly.toml'));
-  } catch(err: unknown) {
-    if (isNodeError(err) && err.code === 'ENOENT') {
-      console.warn(`❌ ERROR: can't find 'fastly.toml'.`);
-      process.exitCode = 1;
-      return;
-    }
-
-    console.warn(`❌ ERROR: can't read or parse 'fastly.toml'.`);
-    process.exitCode = 1;
-    return;
-  }
-
   console.log(`🚀 Publishing content...`);
-
-  // Verify targets
-  let fastlyApiContext: FastlyApiContext | undefined = undefined;
-  if (localMode) {
-    console.log(`  Working on local simulated KV Store...`);
-  } else {
-    if (serviceId === null) {
-      console.log(`❌️ 'service_id' not set in 'fastly.toml' - Deploy your Compute app to Fastly before publishing.`);
-      process.exitCode = 1;
-      return;
-    }
-    const apiTokenResult = loadApiToken({ commandLine: fastlyApiToken });
-    if (apiTokenResult == null) {
-      console.error("❌ Fastly API Token not provided.");
-      console.error("Set the FASTLY_API_TOKEN environment variable to an API token that has write access to the KV Store.");
-      process.exitCode = 1;
-      return;
-    }
-    fastlyApiContext = { apiToken: apiTokenResult.apiToken };
-    console.log(`✔️ Fastly API Token: ${fastlyApiContext.apiToken.slice(0, 4)}${'*'.repeat(fastlyApiContext.apiToken.length-4)} from '${apiTokenResult.source}'`);
-    console.log(`  Working on the Fastly KV Store...`);
-  }
 
   // #### load config
   let staticPublisherRc;
@@ -247,16 +201,26 @@ export async function action(actionArgs: string[]) {
   const publishId = staticPublisherRc.publishId;
   console.log(`  | Publish ID: ${publishId}`);
 
-  const kvStoreName = staticPublisherRc.kvStoreName;
-  console.log(`  | Using KV Store: ${kvStoreName}`);
-
   const defaultCollectionName = staticPublisherRc.defaultCollectionName;
   console.log(`  | Default Collection Name: ${defaultCollectionName}`);
 
   const staticPublisherWorkingDir = staticPublisherRc.staticPublisherWorkingDir;
   console.log(`  | Static publisher working directory: ${staticPublisherWorkingDir}`);
 
-  const storeFile = path.resolve(staticPublisherWorkingDir, `./kvstore.json`);
+  // Storage Provider
+  let storageProvider: any;
+  try {
+    storageProvider = loadStorageProviderFromStaticPublishRc(staticPublisherRc, {
+      computeAppDir,
+      localMode,
+      fastlyApiToken,
+    });
+  } catch (err: unknown) {
+    console.error(`❌ Could not instantiate store provider`);
+    console.error(String(err));
+    process.exitCode = 1;
+    return;
+  }
 
   // Load content types
   const contentTypes: ContentTypeDef[] = mergeContentTypes(publishContentConfig.contentTypes);
@@ -310,19 +274,19 @@ export async function action(actionArgs: string[]) {
     kvStore: 0,
   };
 
-  // Create "KV Store content" sub dir if it doesn't exist already.
-  // This will be used to hold a copy of files to prepare for upload to the KV Store
+  // Create "storage content" sub dir if it doesn't exist already.
+  // This will be used to hold a copy of files to prepare for upload to storage
   // and for serving using the local development server.
-  const staticPublisherKvStoreContent = `${staticPublisherWorkingDir}/kv-store-content`;
-  fs.mkdirSync(staticPublisherKvStoreContent, { recursive: true });
+  const storageContentDir = `${staticPublisherWorkingDir}/storage-content`;
+  fs.mkdirSync(storageContentDir, { recursive: true });
 
-  // A list of items in the KV Store at the end of the publishing.
+  // A list of items in storage at the end of the publishing.
   // Includes items that already exist as well.  'write' signifies
   // that the item is to be written
-  const kvStoreItemDescriptions: KVStoreItemDesc[] = [];
+  const batch = new StorageProviderBatch();
 
   // Assets included in the publishing, keyed by asset key
-  const kvAssetsIndex: AssetEntryMap = {};
+  const assetsIndex: AssetEntryMap = {};
 
   // All the metadata of the variants we know about during this publishing, keyed on the base version's hash.
   type VariantMetadataEntry = AssetVariantMetadata & {
@@ -357,9 +321,9 @@ export async function action(actionArgs: string[]) {
 
     // #### Are we going to include this file?
     let includeAsset;
-    if (publishContentConfig.kvStoreAssetInclusionTest != null) {
+    if (publishContentConfig.assetInclusionTest != null) {
 
-      includeAsset = publishContentConfig.kvStoreAssetInclusionTest(assetKey, contentType);
+      includeAsset = publishContentConfig.assetInclusionTest(assetKey, contentType);
 
     } else {
       // If no test is set, then default to inclusion
@@ -397,7 +361,7 @@ export async function action(actionArgs: string[]) {
         variantFilename = `${variantFilename}_${variant}`;
       }
 
-      const variantFilePath = path.resolve(staticPublisherKvStoreContent, variantFilename);
+      const variantFilePath = path.resolve(storageContentDir, variantFilename);
 
       let variantMetadata = variantMetadatas.get(variant);
       if (variantMetadata != null) {
@@ -406,83 +370,23 @@ export async function action(actionArgs: string[]) {
 
       } else {
 
-        let kvStoreItemMetadata: AssetVariantMetadata | null = null;
-
-        if (!localMode && !overwriteKvStoreItems) {
-          const items = [{
-            key: variantKey,
-          }];
-
-          await doKvStoreItemsOperation(
-            items,
-            async(_, variantKey) => {
-              // fastlyApiContext is non-null if useKvStore is true
-              const kvStoreEntryInfo = await getKvStoreEntryInfo(fastlyApiContext!, kvStoreName, variantKey);
-              if (!kvStoreEntryInfo) {
-                return;
-              }
-              let itemMetadata;
-              if (kvStoreEntryInfo.metadata != null) {
-                try {
-                  itemMetadata = JSON.parse(kvStoreEntryInfo.metadata);
-                } catch {
-                  // if the metadata does not parse successfully as JSON,
-                  // treat it as though it didn't exist.
-                }
-              }
-              if (isAssetVariantMetadata(itemMetadata)) {
-                let exists = false;
-                if (itemMetadata.size <= KV_STORE_CHUNK_SIZE) {
-                  // For an item equal to or smaller than the chunk size, if it exists
-                  // and its metadata asserts no chunk count, then we assume it exists.
-                  if (itemMetadata.numChunks === undefined) {
-                    exists = true;
-                  }
-                } else {
-                  // For chunked objects, if the first chunk exists, and its metadata asserts
-                  // the same number of chunks based on size, then we assume it exists (for now).
-                  // In the future we might actually check for the existence and sizes of
-                  // every chunk in the KV Store.
-                  const expectedNumChunks = Math.ceil(itemMetadata.size / KV_STORE_CHUNK_SIZE);
-                  if (itemMetadata.numChunks === expectedNumChunks) {
-                    exists = true;
-                  }
-                }
-                if (exists) {
-                  kvStoreItemMetadata = {
-                    contentEncoding: itemMetadata.contentEncoding,
-                    size: itemMetadata.size,
-                    hash: itemMetadata.hash,
-                    numChunks: itemMetadata.numChunks,
-                  };
-                }
-              }
-            }
-          );
+        if (!overwriteExisting) {
+          const assetVariantMetadata = await storageProvider.getExistingAssetVariant(variantKey);
+          if (assetVariantMetadata != null) {
+            console.log(` ・ Asset found in storage with key "${variantKey}".`);
+            // And we already know its hash and size.
+            variantMetadata = Object.assign(assetVariantMetadata, { existsInKvStore: true });
+          }
         }
 
-        if ((kvStoreItemMetadata as AssetVariantMetadata | null) != null) {
-
-          console.log(` ・ Asset found in KV Store with key "${variantKey}".`);
-          // And we already know its hash and size.
-
-          variantMetadata = {
-            contentEncoding: kvStoreItemMetadata!.contentEncoding,
-            size: kvStoreItemMetadata!.size,
-            hash: kvStoreItemMetadata!.hash,
-            numChunks: kvStoreItemMetadata!.numChunks,
-            existsInKvStore: true,
-          };
-
-        } else {
-
+        if (variantMetadata == null) {
           await ensureVariantFileExists(
             variantFilePath,
             variant,
             file,
           );
-          if (!localMode) {
-            console.log(` ・ Flagging asset for upload to KV Store with key "${variantKey}".`);
+          if (localMode) {
+            console.log(` ・ Prepping asset for storage with key "${variantKey}".`);
           }
 
           let contentEncoding, hash, size;
@@ -495,7 +399,7 @@ export async function action(actionArgs: string[]) {
             ({hash, size} = await calculateFileSizeAndHash(variantFilePath));
           }
 
-          const numChunks = Math.ceil(size / KV_STORE_CHUNK_SIZE);
+          const numChunks = storageProvider.calculateNumChunks(size);
 
           variantMetadata = {
             contentEncoding,
@@ -508,31 +412,24 @@ export async function action(actionArgs: string[]) {
 
         variantMetadatas.set(variant, variantMetadata);
 
-        kvStoreItemDescriptions.push({
+        const metadataJson: Record<string, string> = {
+          size: String(variantMetadata.size),
+          hash: variantMetadata.hash,
+        };
+        if (variantMetadata.contentEncoding != null) {
+          metadataJson.contentEncoding = variantMetadata.contentEncoding;
+        }
+        if (variantMetadata.numChunks != null) {
+          metadataJson.numChunks = String(variantMetadata.numChunks);
+        }
+
+        batch.add({
           write: !variantMetadata.existsInKvStore,
           size: variantMetadata.size,
           key: variantKey,
           filePath: variantFilePath,
-          metadataJson: {
-            contentEncoding: variantMetadata.contentEncoding,
-            size: variantMetadata.size,
-            hash: variantMetadata.hash,
-            numChunks: variantMetadata.numChunks,
-          },
+          metadataJson,
         });
-
-        if (localMode) {
-          // Although we already know the size and hash of the variant, the local server
-          // needs a copy of the file so we create it if it doesn't exist.
-          // This may happen for example if files were uploaded to the KV Store in a previous
-          // publishing, but local static content files have been removed since.
-          await ensureVariantFileExists(
-            variantFilePath,
-            variant,
-            file,
-          );
-          console.log(` ・ Prepping asset for local KV Store with key "${variantKey}".`);
-        }
       }
 
       // Only keep variants whose file size actually ends up smaller than
@@ -542,7 +439,7 @@ export async function action(actionArgs: string[]) {
       }
     }
 
-    kvAssetsIndex[assetKey] = {
+    assetsIndex[assetKey] = {
       key: `sha256:${baseHash}`,
       size: baseSize,
       contentType: contentTypeTestResult.contentType,
@@ -553,27 +450,7 @@ export async function action(actionArgs: string[]) {
   }
   console.log(`✅  Scan complete.`)
 
-  console.log(`🍪 Chunking large files...`);
-  await applyKVStoreEntriesChunks(kvStoreItemDescriptions, KV_STORE_CHUNK_SIZE);
-  console.log(`✅  Large files have been chunked.`);
-
-  if (localMode) {
-    console.log(`📝 Writing local server KV Store entries.`);
-    writeKVStoreEntriesForLocal(storeFile, computeAppDir, kvStoreItemDescriptions);
-    console.log(`✅  Wrote KV Store entries for local server.`);
-  } else {
-    console.log(`📤 Uploading entries to KV Store.`);
-    // fastlyApiContext is non-null if useKvStore is true
-    await doKvStoreItemsOperation(
-      kvStoreItemDescriptions.filter(x => x.write),
-      async ({filePath, metadataJson}, key) => {
-        const fileBytes = fs.readFileSync(filePath);
-        await kvStoreSubmitEntry(fastlyApiContext!, kvStoreName, key, fileBytes, metadataJson != null ? JSON.stringify(metadataJson) : undefined);
-        console.log(` 🌐 Submitted asset "${rootRelative(filePath)}" to KV Store with key "${key}".`)
-      }
-    );
-    console.log(`✅  Uploaded entries to KV Store.`);
-  }
+  await storageProvider.applyBatch(batch);
 
   // #### INDEX FILE
   console.log(`🗂️ Saving Index...`);
@@ -584,29 +461,18 @@ export async function action(actionArgs: string[]) {
     expirationTime: expirationTime ?? undefined,
   };
 
-  if (localMode) {
-    const indexFileName = `index_${collectionName}.json`;
-    const indexFilePath = path.resolve(staticPublisherKvStoreContent, indexFileName);
-    fs.writeFileSync(indexFilePath, JSON.stringify(kvAssetsIndex));
-    await localKvStoreSubmitEntry(
-      storeFile,
-      indexFileKey,
-      path.relative(computeAppDir, indexFilePath),
-      JSON.stringify(indexMetadata),
-    );
-  } else {
-    await kvStoreSubmitEntry(
-      fastlyApiContext!,
-      kvStoreName,
-      indexFileKey,
-      JSON.stringify(kvAssetsIndex),
-      JSON.stringify(indexMetadata),
-    );
-  }
+  const indexFileName = `index_${collectionName}.json`;
+  const indexFilePath = path.resolve(storageContentDir, indexFileName);
+  await storageProvider.submitStorageEntry(
+    indexFileKey,
+    indexFilePath,
+    JSON.stringify(assetsIndex),
+    encodeIndexMetadata(indexMetadata),
+  );
   console.log(`✅  Index has been saved.`)
 
   // #### SERVER SETTINGS
-  // These are saved to KV Store
+  // These are saved to storage
   console.log(`⚙️ Saving server settings...`);
 
   const server = applyDefaults<PublisherServerConfigNormalized>(publishContentConfig.server, {
@@ -630,7 +496,7 @@ export async function action(actionArgs: string[]) {
 
   if(spaFile != null) {
     console.log(` ✔️ Application SPA file '${spaFile}'.`);
-    const spaAsset = kvAssetsIndex[spaFile];
+    const spaAsset = assetsIndex[spaFile];
     if(spaAsset == null || spaAsset.contentType !== 'text/html') {
       if (verbose) {
         console.log(` ⚠️ Notice: '${spaFile}' does not exist or is not of type 'text/html'. Ignoring.`);
@@ -646,7 +512,7 @@ export async function action(actionArgs: string[]) {
   let notFoundPageFile = server.notFoundPageFile;
   if(notFoundPageFile != null) {
     console.log(` ✔️ Application 'not found (404)' file '${notFoundPageFile}'.`);
-    const notFoundPageAsset = kvAssetsIndex[notFoundPageFile];
+    const notFoundPageAsset = assetsIndex[notFoundPageFile];
     if(notFoundPageAsset == null || notFoundPageAsset.contentType !== 'text/html') {
       if (verbose) {
         console.log(` ⚠️ Notice: '${notFoundPageFile}' does not exist or is not of type 'text/html'. Ignoring.`);
@@ -673,27 +539,14 @@ export async function action(actionArgs: string[]) {
   };
 
   const settingsFileKey = `${publishId}_settings_${collectionName}`;
+  const settingsFileName = `settings_${collectionName}.json`;
+  const settingsFilePath = path.resolve(storageContentDir, settingsFileName);
+  await storageProvider.submitStorageEntry(
+    settingsFileKey,
+    settingsFilePath,
+    JSON.stringify(serverSettings),
+  );
 
-  if (localMode) {
-    const settingsFileName = `settings_${collectionName}.json`;
-    const settingsFilePath = path.resolve(staticPublisherKvStoreContent, settingsFileName);
-    fs.writeFileSync(settingsFilePath, JSON.stringify(serverSettings));
-    await localKvStoreSubmitEntry(
-      storeFile,
-      settingsFileKey,
-      path.relative(computeAppDir, settingsFilePath),
-      undefined,
-    );
-
-  } else {
-    await kvStoreSubmitEntry(
-      fastlyApiContext!,
-      kvStoreName,
-      settingsFileKey,
-      JSON.stringify(serverSettings),
-      undefined,
-    );
-  }
   console.log(`✅  Settings have been saved.`);
 
   console.log(`🎉 Completed.`);
