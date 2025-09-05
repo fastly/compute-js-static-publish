@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "build/cli",
+    "lib": ["ES2021"],
+    "types": ["node"],
+    "moduleResolution": "nodenext"
+  },
+  "include": [
+    "src/cli",
+    "src/shared",
+  ]
+}
