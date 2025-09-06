@@ -64,10 +64,48 @@ export function isKvStoreConfigRc(rc: unknown): rc is StaticPublishKvStore {
   return false;
 }
 
+// S3 Storage config
+export type StaticPublishPartialS3Storage = {
+  storageMode: 's3',
+  s3: {
+    region: string,
+    bucket: string,
+    endpoint?: string,
+  },
+};
+
+export type StaticPublishS3Storage =
+  StaticPublishPartialS3Storage & StaticPublishRcBase;
+
+export function isS3StorageConfigRc(rc: unknown): rc is StaticPublishS3Storage {
+  if (typeof rc !== 'object' || rc == null) {
+    return false;
+  }
+
+  if ('storageMode' in rc && rc.storageMode === 's3') {
+    if ('s3' in rc && typeof rc.s3 === 'object' && rc.s3 != null) {
+      if (
+        'region' in rc.s3 && typeof rc.s3.region === 'string' &&
+        'bucket' in rc.s3 && typeof rc.s3.bucket === 'string' && (
+          !('endpoint' in rc.s3) ||
+          rc.s3.endpoint === undefined ||
+          typeof rc.s3.endpoint === 'string'
+        )
+      ) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
 export type StaticPublishPartialStorage =
   | StaticPublishPartialKvStore
+  | StaticPublishPartialS3Storage
 ;
 
 export type StaticPublishRc =
   | StaticPublishKvStore
+  | StaticPublishS3Storage
 ;

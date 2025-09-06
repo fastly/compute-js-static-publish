@@ -8,6 +8,8 @@ import fs from 'node:fs';
 
 import * as scaffoldCommand from './commands/scaffold/index.js';
 import * as manageCommands from './commands/manage/index.js';
+import * as s3StorageProvider from './storage/s3-storage-provider.js';
+registerStorageProviderBuilder(s3StorageProvider.buildStoreProvider);
 
 // Register storage builder providers
 import { registerStorageProviderBuilder } from './storage/storage-provider.js';

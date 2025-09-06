@@ -11,11 +11,14 @@ import {
   type StaticPublishRc,
   type StaticPublishPartialStorage,
   isKvStoreConfigRc,
-  type StaticPublishRcBase,
+  isS3StorageConfigRc,
 } from '../../models/config/static-publish-rc.js';
 import {
   getKvStoreConfigFromRc,
 } from '../../models/config/kv-store-config.js';
+import {
+  getS3StorageConfigFromRc,
+} from '../../models/config/s3-storage-config.js';
 import {
   type PublishContentConfigNormalized,
   type ContentTypeDef,
@@ -80,6 +83,11 @@ export const normalizeStaticPublisherRc = buildNormalizeFunctionForObject<Static
     storage = {
       storageMode: 'kv-store',
       kvStore: getKvStoreConfigFromRc(config),
+    };
+  } else if (isS3StorageConfigRc(config)) {
+    storage = {
+      storageMode: 's3',
+      s3: getS3StorageConfigFromRc(config),
     };
   }
 

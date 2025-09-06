@@ -20,5 +20,7 @@ export { PublisherServer } from './publisher-server/index.js';
 
 import { registerStorageProviderBuilder } from './storage/storage-provider.js';
 import * as kvStoreProvider from './storage/kv-store-provider.js';
+import * as s3StorageProvider from './storage/s3-storage-provider.js';
 
 registerStorageProviderBuilder(kvStoreProvider.buildStoreProvider);
+registerStorageProviderBuilder(s3StorageProvider.buildStoreProvider);
