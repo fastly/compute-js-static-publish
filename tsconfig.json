@@ -1,21 +1,3 @@
 {
-  "compilerOptions": {
-    "rootDir": "./src",
-    "outDir": "./build/",
-    "target": "es2020",
-    "module": "node16",
-    "resolveJsonModule": true,
-    "strict": true,
-    "skipLibCheck": true,
-    "moduleResolution": "node16",
-    "declaration": true,
-    "declarationMap": true
-  },
-  "include": [
-    "src/**/*.ts",
-    "test/**/*.ts"
-  ],
-  "exclude": [
-    "node_modules",
-  ]
+  "extends": "./tsconfig.server.json"
 }
