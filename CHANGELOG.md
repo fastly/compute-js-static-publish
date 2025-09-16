@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+### Fixed
+
+- Fix script listed in readme instructions
+- Handle symlinks properly in file enumeration [#41](https://github.com/fastly/compute-js-static-publish/issues/41)
+
 ## [7.0.1] - 2025-04-24
 
 ### Fixed
