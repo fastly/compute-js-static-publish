@@ -16,10 +16,18 @@ export {
   type StorageEntry,
   registerStorageProviderBuilder,
 } from './storage/storage-provider.js';
+export {
+  setSecretStoreForAwsCredentials,
+  setSecretStoreKeyForAwsAccessKeyId,
+  setSecretStoreKeyForAwsSecretAccessKey,
+  setAwsCredentialsBuilder,
+} from './storage/s3-storage-provider.js';
 export { PublisherServer } from './publisher-server/index.js';
 
 // Register storage builder providers
 import { registerStorageProviderBuilder } from './storage/storage-provider.js';
 import * as kvStoreProvider from './storage/kv-store-provider.js';
+import * as s3StorageProvider from './storage/s3-storage-provider.js';
 
 registerStorageProviderBuilder(kvStoreProvider.buildStoreProvider);
+registerStorageProviderBuilder(s3StorageProvider.buildStoreProvider);

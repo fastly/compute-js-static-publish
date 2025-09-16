@@ -13,9 +13,11 @@ import * as manageCommands from './commands/manage/index.js';
 import { registerStorageProviderBuilder } from './storage/storage-provider.js';
 import * as kvStoreProvider from './storage/kv-store-provider.js';
 import * as kvStoreLocalProvider from './storage/kv-store-local-provider.js';
+import * as s3StorageProvider from './storage/s3-storage-provider.js';
 
 registerStorageProviderBuilder(kvStoreProvider.buildStoreProvider);
 registerStorageProviderBuilder(kvStoreLocalProvider.buildStoreProvider);
+registerStorageProviderBuilder(s3StorageProvider.buildStoreProvider);
 
 if (!fs.existsSync('./static-publish.rc.js')) {
 

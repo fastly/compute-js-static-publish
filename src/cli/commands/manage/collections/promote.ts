@@ -54,6 +54,19 @@ KV Store Options:
                                      1. FASTLY_API_TOKEN environment variable
                                      2. Logged-in Fastly CLI profile
 
+S3 Storage Options:
+  --aws-access-key-id=<key>        AWS Access Key ID and Secret Access Key used to
+  --aws-secret-access-key=<key>    interface with S3.
+                                   If not set, the tool will check:
+                                     1. AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY
+                                        environment variables
+                                     2. The aws credentials file, see below  
+
+  --aws-profile=<profile>          Profile within the aws credentials file.
+                                   If not set, the tool will check:
+                                     1. AWS_PROFILE environment variable
+                                     2. The default profile, if set
+
 Global Options:
   -h, --help                       Show this help message and exit.
 `);
@@ -73,6 +86,10 @@ export async function action(actionArgs: string[]) {
 
     { name: 'local', type: Boolean },
     { name: 'fastly-api-token', type: String, },
+
+    { name: 'aws-profile', type: String, },
+    { name: 'aws-access-key-id', type: String, },
+    { name: 'aws-secret-access-key', type: String, },
   ];
 
   const parsed = parseCommandLine(actionArgs, optionDefinitions);
@@ -96,6 +113,9 @@ export async function action(actionArgs: string[]) {
     ['expires-never']: expiresNever,
     local: localMode,
     ['fastly-api-token']: fastlyApiToken,
+    ['aws-profile']: awsProfile,
+    ['aws-access-key-id']: awsAccessKeyId,
+    ['aws-secret-access-key']: awsSecretAccessKey,
   } = parsed.commandLineOptions;
 
   // compute-js-static-publisher cli is always run from the Compute application directory
@@ -154,10 +174,13 @@ export async function action(actionArgs: string[]) {
   // Storage Provider
   let storageProvider;
   try {
-    storageProvider = loadStorageProviderFromStaticPublishRc(staticPublisherRc, {
+    storageProvider = await loadStorageProviderFromStaticPublishRc(staticPublisherRc, {
       computeAppDir,
       localMode,
       fastlyApiToken,
+      awsProfile,
+      awsAccessKeyId,
+      awsSecretAccessKey,
     });
   } catch (err: unknown) {
     console.error(`❌ Could not instantiate store provider`);

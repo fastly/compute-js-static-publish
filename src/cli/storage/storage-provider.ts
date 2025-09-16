@@ -60,19 +60,22 @@ export type StorageProviderBuilderContext = {
   computeAppDir: string,
   localMode?: boolean,
   fastlyApiToken?: string,
+  awsProfile?: string,
+  awsAccessKeyId?: string,
+  awsSecretAccessKey?: string,
 };
 export type StorageProviderBuilder =
-  (config: StaticPublishRc, context: StorageProviderBuilderContext) => (StorageProvider | null);
+  (config: StaticPublishRc, context: StorageProviderBuilderContext) => (Promise<StorageProvider | null> | StorageProvider | null);
 
 const _storageProviderBuilders: StorageProviderBuilder[] = [];
 export function registerStorageProviderBuilder(builder: StorageProviderBuilder) {
   _storageProviderBuilders.push(builder);
 }
 
-export function loadStorageProviderFromStaticPublishRc(config: StaticPublishRc, context: StorageProviderBuilderContext) {
+export async function loadStorageProviderFromStaticPublishRc(config: StaticPublishRc, context: StorageProviderBuilderContext) {
   let storeProvider;
   for (const builder of _storageProviderBuilders) {
-    storeProvider = builder(config, context);
+    storeProvider = await builder(config, context);
     if (storeProvider != null) {
       return storeProvider;
     }

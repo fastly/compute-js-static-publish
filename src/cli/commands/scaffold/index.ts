@@ -17,6 +17,7 @@ import { type CommandLineOptions, type OptionDefinition } from 'command-line-arg
 import { parseCommandLine } from '../../util/args.js';
 import { dotRelative, rootRelative } from '../../util/files.js';
 import { findComputeJsStaticPublisherVersion, type PackageJson } from '../../util/package.js';
+import { resolveS3Hostname } from '../../util/s3.js';
 
 function help() {
   console.log(`\
@@ -31,7 +32,16 @@ Description:
   management mode.
 
 Options:
-  --kv-store-name <name>                (required) KV Store name for content storage
+  --storage-mode <mode>                 (required) Storage mode for content storage. 
+                                        Can be "kv-store" or "s3".
+  If --storage-mode=kv-store, then:
+    --kv-store-name <name>              (required) Name of the KV Store.
+
+  If --storage-mode=s3, then:
+    --s3-region <region name>           (required) Region of the S3-compatible bucket.
+    --s3-bucket <name>                  (required) Name of the S3-compatible bucket.
+    --s3-endpoint <endpoint>            (optional) Custom endpoint of the S3-compatible bucket, if necessary.
+
   --root-dir <path>                     (required) Path to static content (e.g., ./public)
   -o, --output <dir>                    Output directory for Compute app (default: ./compute-js)
   --static-publisher-working-dir <dir>  Working directory for build artifacts (default: <output>/static-publisher)
@@ -73,7 +83,11 @@ export type InitAppOptions = {
   description: string | undefined,
   serviceId: string | undefined,
   publishId: string | undefined,
+  storageMode: string | undefined,
   kvStoreName: string | undefined,
+  s3Region: string | undefined,
+  s3Bucket: string | undefined,
+  s3Endpoint: string | undefined,
 };
 
 const defaultOptions: InitAppOptions = {
@@ -91,7 +105,11 @@ const defaultOptions: InitAppOptions = {
   description: 'Fastly Compute static site',
   serviceId: undefined,
   publishId: undefined,
+  storageMode: undefined,
   kvStoreName: undefined,
+  s3Region: undefined,
+  s3Bucket: undefined,
+  s3Endpoint: undefined,
 };
 
 function buildOptions(
@@ -316,6 +334,17 @@ function buildOptions(
   }
 
   {
+    let storageMode: string | undefined;
+    const storageModeValue = commandLineOptions['storage-mode'];
+    if (storageModeValue == null || typeof storageModeValue === 'string') {
+      storageMode = storageModeValue;
+    }
+    if (storageMode !== undefined) {
+      options.storageMode = storageMode;
+    }
+  }
+
+  {
     let kvStoreName: string | undefined;
     const kvStoreNameValue = commandLineOptions['kv-store-name'];
     if (kvStoreNameValue == null || typeof kvStoreNameValue === 'string') {
@@ -323,6 +352,39 @@ function buildOptions(
     }
     if (kvStoreName !== undefined) {
       options.kvStoreName = kvStoreName;
+    }
+  }
+
+  {
+    let s3Region: string | undefined;
+    const s3RegionValue = commandLineOptions['s3-region'];
+    if (s3RegionValue == null || typeof s3RegionValue === 'string') {
+      s3Region = s3RegionValue;
+    }
+    if (s3Region !== undefined) {
+      options.s3Region = s3Region;
+    }
+  }
+
+  {
+    let s3Bucket: string | undefined;
+    const s3BucketValue = commandLineOptions['s3-bucket'];
+    if (s3BucketValue == null || typeof s3BucketValue === 'string') {
+      s3Bucket = s3BucketValue;
+    }
+    if (s3Bucket !== undefined) {
+      options.s3Bucket = s3Bucket;
+    }
+  }
+
+  {
+    let s3Endpoint: string | undefined;
+    const s3EndpointValue = commandLineOptions['s3-endpoint'];
+    if (s3EndpointValue == null || typeof s3EndpointValue === 'string') {
+      s3Endpoint = s3EndpointValue;
+    }
+    if (s3Endpoint !== undefined) {
+      options.s3Endpoint = s3Endpoint;
     }
   }
 
@@ -345,9 +407,25 @@ export async function action(actionArgs: string[]) {
   const optionDefinitions: OptionDefinition[] = [
     { name: 'verbose', type: Boolean },
 
-    // Required. The name of a Fastly KV Store to hold the content assets.
-    // It is also added to the fastly.toml that is generated.
+    // Required. Storage mode for content storage. Can be "kv-store" or "s3".
+    { name: 'storage-mode', type: String, },
+
+    // If storage-mode=kv-store, then:
+
+    //   Required. The name of a Fastly KV Store to hold the content assets.
+    //   It is also added to the fastly.toml that is generated.
     { name: 'kv-store-name', type: String, },
+
+    // If storage-mode=s3, then:
+
+    //   Required. Region of the S3-compatible bucket.
+    { name: 's3-region', type: String, },
+
+    //   Required. Bucket of the S3-compatible bucket.
+    { name: 's3-bucket', type: String, },
+
+    //   Optional. Custom endpoint of the S3-compatible bucket, if necessary.
+    { name: 's3-endpoint', type: String, },
 
     // Output directory. "Required" (if not specified, then defaultValue is used).
     { name: 'output', alias: 'o', type: String, defaultValue: './compute-js', },
@@ -571,11 +649,61 @@ export async function action(actionArgs: string[]) {
   const name = options.name;
   const description = options.description;
   const fastlyServiceId = options.serviceId;
-  const kvStoreName = options.kvStoreName;
-  if (kvStoreName == null) {
-    console.error(`❌ required parameter --kv-store-name not provided.`);
+  const storageMode = options.storageMode;
+  if (!(storageMode === 'kv-store' || storageMode === 's3')) {
+    console.error(`❌ required parameter --storage-mode must be set to 'kv-store' or 's3'.`);
     process.exitCode = 1;
     return;
+  }
+
+  const kvStoreName = options.kvStoreName;
+  const s3Region = options.s3Region;
+  const s3Bucket = options.s3Bucket;
+  let s3EndpointUrl: URL | undefined;
+  let s3EndpointGenerated = false;
+
+  if (storageMode === 'kv-store') {
+    if (kvStoreName == null) {
+      console.error(`❌ required parameter --kv-store-name not provided.`);
+      process.exitCode = 1;
+      return;
+    }
+  } else if (storageMode === 's3') {
+    if (s3Region == null) {
+      console.error(`❌ required parameter --s3-region not provided.`);
+      process.exitCode = 1;
+      return;
+    }
+    if (s3Bucket == null) {
+      console.error(`❌ required parameter --s3-bucket not provided.`);
+      process.exitCode = 1;
+      return;
+    }
+    let s3Endpoint = options.s3Endpoint;
+    if (s3Endpoint == null || s3Endpoint === '') {
+      s3Endpoint = await resolveS3Hostname(s3Region, s3Bucket);
+      if (s3Endpoint) {
+        console.log('✅ S3 endpoint resolved:', s3Endpoint);
+      } else {
+        console.error(`❌ Unable to resolve S3 endpoint from region '${s3Region}' and bucket '${s3Bucket}.`);
+        process.exitCode = 1;
+        return;
+      }
+      s3EndpointUrl = new URL(`https://${s3Endpoint}/`);
+      s3EndpointGenerated = true;
+    } else {
+      if (!(/^[a-zA-Z][a-zA-Z\d+\-.]*:\/\//.test(s3Endpoint))) {
+        s3Endpoint = `https://${s3Endpoint}`;
+      }
+      // Check if s3Endpoint is a full URL or just a domain name
+      try {
+        s3EndpointUrl = new URL(s3Endpoint);
+      } catch {
+        console.error(`❌ Unable to parse '${s3Endpoint}' as a valid URL.`);
+        process.exitCode = 1;
+        return;
+      }
+    }
   }
   let publishId = options.publishId;
   if (publishId == null) {
@@ -592,7 +720,20 @@ export async function action(actionArgs: string[]) {
   console.log('author                         :', author);
   console.log('description                    :', description);
   console.log('Service ID                     :', fastlyServiceId ?? '(None)');
-  console.log('KV Store Name                  :', kvStoreName);
+
+  if (storageMode === 'kv-store') {
+    console.log('Storage Mode                   : Fastly KV Store');
+    console.log('KV Store Name                  :', kvStoreName);
+  } else if (storageMode === 's3') {
+    console.log('Storage Name                   : S3-compatible storage');
+    console.log('S3 Region                      :', s3Region);
+    console.log('S3 Bucket                      :', s3Bucket);
+    console.log('S3 Endpoint                    :', String(s3EndpointUrl));
+    if (s3EndpointGenerated) {
+      console.log('                                 (Generated)');
+    }
+  }
+
   console.log('Default Collection Name        :', defaultCollectionName);
   console.log('Publish ID                     :', publishId);
 
@@ -630,6 +771,17 @@ export async function action(actionArgs: string[]) {
 
   // package.json
   const computeJsStaticPublisherVersion = findComputeJsStaticPublisherVersion(packageJson);
+  const packageJsonScripts: Record<string, string> = {
+    'dev:start': 'fastly compute serve',
+    'fastly:deploy': 'fastly compute publish',
+    'build': 'js-compute-runtime ./src/index.js ./bin/main.wasm',
+  };
+  if (storageMode === 'kv-store') {
+    packageJsonScripts['dev:publish'] = 'npx @fastly/compute-js-static-publish publish-content --local';
+    packageJsonScripts['fastly:publish'] = 'npx @fastly/compute-js-static-publish publish-content';
+  } else if (storageMode === 's3') {
+    packageJsonScripts['publish'] = 'npx @fastly/compute-js-static-publish publish-content --local';
+  }
   resourceFiles['package.json'] = JSON.stringify({
     name,
     version: '0.1.0',
@@ -637,7 +789,7 @@ export async function action(actionArgs: string[]) {
     author,
     type: 'module',
     devDependencies: {
-      "@fastly/cli": "^11.2.0",
+      "@fastly/cli": "^12.0.0",
       '@fastly/compute-js-static-publish': computeJsStaticPublisherVersion,
     },
     dependencies: {
@@ -647,17 +799,47 @@ export async function action(actionArgs: string[]) {
       node: '>=20.11.0',
     },
     private: true,
-    scripts: {
-      'dev:publish': 'npx @fastly/compute-js-static-publish publish-content --local',
-      'dev:start': 'fastly compute serve',
-      'fastly:deploy': 'fastly compute publish',
-      'fastly:publish': 'npx @fastly/compute-js-static-publish publish-content',
-      'build': 'js-compute-runtime ./src/index.js ./bin/main.wasm'
-    },
+    scripts: packageJsonScripts,
   }, undefined, 2);
 
   // fastly.toml
-  const localServerKvStorePath = dotRelative(computeJsDir, path.resolve(staticPublisherWorkingDir, 'kvstore.json'));
+  let fastlyTomlLocalServer = '';
+  let fastlyTomlSetup = '';
+  if (storageMode === 'kv-store') {
+    const localServerKvStorePath = dotRelative(computeJsDir, path.resolve(staticPublisherWorkingDir, 'kvstore.json'));
+    fastlyTomlLocalServer = /* language=text */ `\
+[local_server.kv_stores]
+${kvStoreName} = { file = "${localServerKvStorePath}", format = "json" }
+`;
+    fastlyTomlSetup = /* language=text */ `\
+[setup.kv_stores.${kvStoreName}]
+`;
+
+    // kvstore.json
+    resourceFiles[localServerKvStorePath] = '{}';
+  } else if (storageMode === 's3') {
+    fastlyTomlLocalServer = /* language=text */ `\
+[local_server.secret_stores]
+[[local_server.secret_stores.AWS_CREDENTIALS]]
+key = "AWS_ACCESS_KEY_ID"
+env = "AWS_ACCESS_KEY_ID"
+[[local_server.secret_stores.AWS_CREDENTIALS]]
+key = "AWS_SECRET_ACCESS_KEY"
+env = "AWS_SECRET_ACCESS_KEY"
+
+[local_server.backends]
+[local_server.backends.aws]
+url = "${String(s3EndpointUrl)}"
+override_host = "${s3EndpointUrl!.hostname}"
+`;
+    fastlyTomlSetup = /* language=text */ `\
+[setup.backends.aws]
+address = "${s3EndpointUrl!.hostname}"
+description = "S3 API endpoint"
+port = 443
+`;
+  }
+
   resourceFiles['fastly.toml'] = /* language=text */ `\
 # This file describes a Fastly Compute package. To learn more visit:
 # https://developer.fastly.com/reference/fastly-toml/
@@ -671,16 +853,31 @@ ${fastlyServiceId != null ? `service_id = "${fastlyServiceId}"\n` : ''}
 [scripts]
 build = "npm run build"
 
-[local_server.kv_stores]
-${kvStoreName} = { file = "${localServerKvStorePath}", format = "json" }
-
-[setup.kv_stores.${kvStoreName}]
+${fastlyTomlLocalServer}
+${fastlyTomlSetup}
 `;
 
-  // kvstore.json
-  resourceFiles[localServerKvStorePath] = '{}';
-
   // static-publish.rc.js
+  let staticPublishStorage = '';
+  if (storageMode === 'kv-store') {
+    staticPublishStorage = `\
+  storageMode: "kv-store",
+  kvStore: {
+    kvStoreName: ${JSON.stringify(kvStoreName)},
+  },\
+`;
+  } else if (storageMode === 's3') {
+    staticPublishStorage = `\
+  storageMode: "s3",
+  s3: {
+    region: ${JSON.stringify(s3Region)},
+    bucket: ${JSON.stringify(s3Bucket)},\
+` + (!s3EndpointGenerated ? `
+    endpoint: ${JSON.stringify(String(s3EndpointUrl))},\
+` : '') + `
+  },\
+`;
+  }
   resourceFiles['static-publish.rc.js'] = `\
 /*
  * Generated by @fastly/compute-js-static-publish.
@@ -688,7 +885,7 @@ ${kvStoreName} = { file = "${localServerKvStorePath}", format = "json" }
 
 /** @type {import('@fastly/compute-js-static-publish').StaticPublishRc} */
 const rc = {
-  kvStoreName: ${JSON.stringify(kvStoreName)},
+${staticPublishStorage}
   publishId: ${JSON.stringify(publishId)},
   defaultCollectionName: ${JSON.stringify(defaultCollectionName)},
   staticPublisherWorkingDir: ${JSON.stringify(dotRelative(computeJsDir, staticPublisherWorkingDir))},
@@ -815,17 +1012,54 @@ async function handleRequest(event) {
   child_process.spawnSync('npm', [ '--prefix', COMPUTE_JS_DIR, 'install' ], { stdio: 'inherit' });
   console.log('');
 
-  console.log('');
-  console.log('To run your Compute application locally:');
-  console.log('');
-  console.log('  cd ' + COMPUTE_JS_DIR);
-  console.log('  npm run dev:publish');
-  console.log('  npm run dev:start');
-  console.log('');
-  console.log('To build and deploy to your Compute service:');
-  console.log('');
-  console.log('  cd ' + COMPUTE_JS_DIR);
-  console.log('  npm run fastly:deploy');
-  console.log('  npm run fastly:publish');
-  console.log('');
+  if (storageMode === 'kv-store') {
+    console.log(`
+To run your Compute application locally:
+
+  cd ${COMPUTE_JS_DIR}
+  npm run dev:publish
+  npm run dev:start  
+
+To build and deploy to your Compute service:
+
+  cd ${COMPUTE_JS_DIR}
+  npm run fastly:publish
+  npm run fastly:start  
+
+`);
+  } else if (storageMode === 's3') {
+    console.log(`
+To publish your content to your S3-compatible bucket
+
+  Ensure that your S3-compatible bucket already exists:
+    Region:    ${s3Region}
+    Bucket:    ${s3Bucket}
+    Endpoint:  ${String(s3EndpointUrl)}
+
+  Using an AWS profile set with "aws configure", type:
+    cd ${COMPUTE_JS_DIR}
+    AWS_PROFILE=xxxx npm run publish
+
+  Using AWS IAM credentials, type:
+    cd ${COMPUTE_JS_DIR}
+    AWS_ACCESS_KEY_ID=xxxx AWS_SECRET_ACCESS_KEY=xxxx npm run publish
+
+To run your Compute application locally
+
+  Run the following commands:
+    cd ${COMPUTE_JS_DIR}
+    AWS_ACCESS_KEY_ID=xxxx AWS_SECRET_ACCESS_KEY=xxxx npm run dev:start  
+
+To build and deploy to your Compute service:
+
+  Create a Secret Store in your account named AWS_CREDENTIALS, and set the following values:
+    AWS_ACCESS_KEY_ID: xxxx
+    AWS_SECRET_ACCESS_KEY: xxxx
+  
+  Run the following commands:
+    cd ${COMPUTE_JS_DIR}
+    npm run fastly:start  
+
+`);
+  }
 }
