@@ -397,7 +397,7 @@ This:
 If you do need to rebuild and redeploy the Compute app, simply run:
 
 ```sh
-npm run dev:deploy
+npm run fastly:deploy
 ```
 
 ## 🧹 Cleaning Up
