@@ -15,7 +15,7 @@ import { LoadConfigError, loadStaticPublisherRcFile } from '../../../util/config
 import { readServiceId } from '../../../util/fastly-toml.js';
 import { getKvStoreEntry, getKVStoreKeys } from '../../../util/kv-store.js';
 import { isNodeError } from '../../../util/node.js';
-import { getLocalKvStoreEntry, getLocalKVStoreKeys } from "../../../util/kv-store-local-server.js";
+import { getLocalKvStoreEntry, getLocalKVStoreKeys } from '../../../util/kv-store-local-server.js';
 
 function help() {
   console.log(`\

@@ -4,6 +4,7 @@
  */
 
 import fs from 'node:fs';
+import path from 'node:path';
 
 import { type OptionDefinition } from 'command-line-args';
 
@@ -16,10 +17,9 @@ import {
 } from '../../../util/kv-store.js';
 import { type FastlyApiContext, loadApiToken } from '../../../util/api-token.js';
 import { parseCommandLine } from '../../../util/args.js';
-import path from "node:path";
-import { readServiceId } from "../../../util/fastly-toml.js";
-import { isNodeError } from "../../../util/node.js";
-import { getLocalKvStoreEntry, localKvStoreSubmitEntry } from "../../../util/kv-store-local-server.js";
+import { readServiceId } from '../../../util/fastly-toml.js';
+import { isNodeError } from '../../../util/node.js';
+import { getLocalKvStoreEntry, localKvStoreSubmitEntry } from '../../../util/kv-store-local-server.js';
 
 function help() {
   console.log(`\
