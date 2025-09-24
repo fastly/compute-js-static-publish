@@ -1,16 +1,21 @@
 # Static Publisher for JavaScript on Fastly Compute
 
 > [!NOTE]
-> These docs are for v7, a major rewrite that adds powerful new features such as named collections.
+> v8 adds Beta support for S3-compatible storage, such as Fastly [Object Storage](https://www.fastly.com/products/storage). For more details, see the [S3-compatible storage](https://github.com/fastly/compute-js-static-publish/blob/main/README.md#s3-compatible-storage) section.  
+
+> [!NOTE]
+> These docs are for v7 or newer, a major rewrite that adds powerful new features such as named collections.
 > If you're looking for v6, please check out the [v6 branch](https://github.com/fastly/compute-js-static-publish/tree/v6).
 
 > [!WARNING]
-> Version 7 no longer supports module assets. If you require this feature, consider using [v6](https://github.com/fastly/compute-js-static-publish/tree/v6).
+> v7 and newer no longer support module assets. If you require this feature, consider using [v6](https://github.com/fastly/compute-js-static-publish/tree/v6).
 
 ## 📖 Table of Contents
 
 - [✨ Key Features](#-key-features)
 - [🏁 Quick Start](#-quick-start)
+  - [📦 Fastly KV Store](#-using-the-fastly-kv-store) 
+  - [🎁 S3 Compatible Storage](#-using-s3-compatible-storage-beta) (Beta)
 - [⚙️ Configuring `static-publish.rc.js`](#️-configuring-static-publishrcjs)
 - [🧾 Config for Publishing and Server: `publish-content.config.js`](#-config-for-publishing-and-server-publish-contentconfigjs)
 - [📦 Collections (Publish, Preview, Promote)](#-collections-publish-preview-promote)
@@ -24,13 +29,15 @@
 
 Serve static websites and web apps at the edge &mdash; no backends and no CDN invalidation delays.
 
-`@fastly/compute-js-static-publish` helps you deploy static files to [Fastly Compute](https://developer.fastly.com/learning/compute/) using Fastly's KV Store for fast, cacheable, and content-addressed delivery.
+`@fastly/compute-js-static-publish` helps you deploy and serve static files using [Fastly Compute](https://developer.fastly.com/learning/compute/) for fast, cacheable, and content-addressed delivery. The library can be configured to store your data in either of the following:
+* Fastly [Key Value Store](https://www.fastly.com/products/kv-store)
+* S3-compatible storage, such as Fastly [Object Storage](https://www.fastly.com/products/storage) (Beta) 
 
 ## ✨ Key Features
 
 - 📦 Easy to scaffold and deploy
-- 🚀 Content stored in Fastly KV Store using hashed keys
-- 🔁 Publish new content without deploying new Wasm binaries
+- 🚀 Content stored using hashed keys, in Fastly KV Store or S3-compatible storage (Beta) including Fastly Object Storage
+- 🔁 Publish new content without needing to deploy new Wasm binaries
 - 🗂 Organize releases into named collections which can be previewed (e.g. `live`, `staging`, `preview-123`)
 - 🧼 Cleanup tools to remove expired or orphaned files
 - ⚙️ Configurable per-collection server configurations (e.g. fallback files)
@@ -40,13 +47,16 @@ Serve static websites and web apps at the edge &mdash; no backends and no CDN in
 
 ## 🏁 Quick Start
 
-### 1. Scaffold a Compute App
+### 📦 Using the Fastly KV Store
+
+#### 1. Scaffold a Compute App
 
 Create a directory for your project, place your static files in `./public`, then type:
 
 ```sh
 npx @fastly/compute-js-static-publish@latest \
   --root-dir=./public \
+  --storage-mode=kv-store \
   --kv-store-name=site-content
 ```
 
@@ -57,20 +67,25 @@ You get a Compute app in `./compute-js` with:
 - `static-publish.rc.js` (app config)
 - `publish-content.config.js` (publish-time / runtime behavior)
 
-### 2. Preview Locally
-
-Type the following &mdash; no Fastly account or service required yet!
+Once the application is scaffolded, install dependencies:
 
 ```sh
 cd compute-js
 npm install
+```
+
+#### 2. Preview Locally
+
+Type the following &mdash; no Fastly account or service required yet!
+
+```sh
 npm run dev:publish
 npm run dev:start
 ```
 
 Fastly's [local development environment](https://www.fastly.com/documentation/guides/compute/testing/#running-a-local-testing-server) serves your static website at `http://127.0.0.1:7676`, powered by a simulated KV Store.
 
-### 3. Deploy Your App
+#### 3. Deploy Your App
 
 Ready to go live? All you need is a [free Fastly account](https://www.fastly.com/signup/?tier=free)!
 
@@ -80,13 +95,84 @@ npm run fastly:deploy
 
 The command publishes your Compute app and creates the KV Store. (No content uploaded yet!)
 
-### 4. Publish Content
+#### 4. Publish Content
 
 ```sh
 npm run fastly:publish
 ```
 
-Upload static files to the KV Store and applies the server config.  Your website is now up and live!
+This command uploads your static files to the KV Store and applies the server config.  Your website is now up and live!
+
+### 🎁 Using S3 Compatible Storage (Beta)
+
+#### 1. Scaffold a Compute App
+
+Create a directory for your project, place your static files in `./public`, then type:
+
+```sh
+npx @fastly/compute-js-static-publish@latest \
+  --root-dir=./public \
+  --storage-mode=s3 \
+  --s3-region=<s3 region> \
+  --s3-bucket=<bucket name>
+```
+
+> [!NOTE]
+> If the storage requires a custom endpoint, such as is the case with Fastly Object Storage, specify it using `--s3-endpoint=<endpoint>`. For example:
+>
+> ```sh
+> npx @fastly/compute-js-static-publish@latest \
+>   --root-dir=./public \
+>   --storage-mode=s3
+>   --s3-region=us-east
+>   --s3-bucket=my-static-content-bucket
+>   --s3-endpoint=https://us-east.object.fastlystorage.app
+> ```
+
+You get a Compute app in `./compute-js` with:
+
+- `fastly.toml` (service config)
+- `src/index.js` (entry point)
+- `static-publish.rc.js` (app config)
+- `publish-content.config.js` (publish-time / runtime behavior)
+
+Once the application is scaffolded, install dependencies:
+
+```sh
+cd compute-js
+npm install
+```
+
+#### 2. Publish your content to S3-compatible storage
+
+Before publishing your content, your S3-compatible bucket must already exist.
+
+> [!HINT]
+> If you're using Fastly Object Storage, [create your Fastly account](https://www.fastly.com/signup/?tier=free) if you haven't already, and then follow the [Object Storage quick start](https://www.fastly.com/documentation/guides/platform/object-storage/object-storage-quick-start/) to set up your bucket.
+
+Type the following:
+
+```sh
+npm run publish
+```
+
+#### 3. Preview Locally
+
+Type the following to preview your site locally:
+
+```sh
+npm run dev:start
+```
+
+Fastly's [local development environment](https://www.fastly.com/documentation/guides/compute/testing/#running-a-local-testing-server) serves your static website at `http://127.0.0.1:7676`. Your content is fetched from S3-compatible storage.
+
+#### 4. Deploy Your App
+
+Ready to go live? All you need is a [free Fastly account](https://www.fastly.com/signup/?tier=free)!
+
+```sh
+npm run fastly:deploy
+```
 
 ---
 
@@ -119,11 +205,29 @@ my-project/
 
 This file defines your compute-js-static-publish application's settings. A copy of this is also baked into the Wasm binary and loaded when running your Compute app locally or on the edge.
 
-### Example: `static-publish.rc.js`
+> [!NOTE]
+> Making changes to this file requires rebuilding the Compute app, since a copy of it is baked into the Wasm binary.
+
+### Using the Fastly KV Store
+
+#### Fields:
+
+All fields are required unless specified otherwise.
+
+- `storageMode` - Specifies the storage mode. Set to `'kv-store'`.
+- `kvStore.kvStoreName` - The name of the KV Store used for publishing.
+- `defaultCollectionName` - Collection to serve when none is specified.
+- `publishId` - Unique prefix for all keys in the KV Store. Override only for advanced setups (e.g., multiple apps sharing the same KV Store).
+- `staticPublisherWorkingDir` - Directory to hold working files during publish.
+
+#### Example: `static-publish.rc.js`
 
 ```js
 const rc = {
-  kvStoreName: 'site-content',
+  storageMode: 'kv-store',
+  kvStore: {
+    kvStoreName: 'site-content',
+  },
   defaultCollectionName: 'live',
   publishId: 'default',
   staticPublisherWorkingDir: './static-publisher',
@@ -132,17 +236,36 @@ const rc = {
 export default rc;
 ```
 
-### Fields:
+### Using S3-compatible storage
 
-All fields are required.
+#### Fields:
 
-- `kvStoreName` - The name of the KV Store used for publishing.
+All fields are required unless specified otherwise.
+
+- `storageMode` - Specifies the storage mode. Set to `'s3'`.
+- `s3.region` - The region of the S3-compatible bucket.
+- `s3.bucket` - The name of the S3-compatible bucket.
+- `s3.endpoint` - (optional) The custom endpoint for the S3-compatible bucket.
 - `defaultCollectionName` - Collection to serve when none is specified.
 - `publishId` - Unique prefix for all keys in the KV Store. Override only for advanced setups (e.g., multiple apps sharing the same KV Store).
 - `staticPublisherWorkingDir` - Directory to hold working files during publish.
 
-> [!NOTE]
-> Changes to this file require rebuilding the Compute app, since a copy of it is baked into the Wasm binary.
+#### Example: `static-publish.rc.js`
+
+```js
+const rc = {
+  storageMode: 's3',
+  s3: {
+    region: 'us-east-1',
+    bucket: 'my-site-content',
+  },
+  defaultCollectionName: 'live',
+  publishId: 'default',
+  staticPublisherWorkingDir: './static-publisher',
+};
+
+export default rc;
+```
 
 ## 🧾 Config for Publishing and Server: `publish-content.config.js`
 
@@ -159,7 +282,7 @@ const config = {
   includeWellKnown: true,
 
   // Advanced filtering (optional):
-  kvStoreAssetInclusionTest: (key, contentType) => {
+  assetInclusionTest: (key, contentType) => {
     return true; // include everything by default
   },
 
@@ -194,7 +317,7 @@ You can override this file for a single `publish-content` command by specifying 
 - `excludeDirs` - Array of directory names or regex patterns to exclude (default: `['./node_modules']`).
 - `excludeDotFiles` - Exclude dotfiles and dot-named directories (default: true).
 - `includeWellKnown` - Always include `.well-known` even if dotfiles are excluded (default: true).
-- `kvStoreAssetInclusionTest` - Function to determine inclusion and variant behavior per file.
+- `assetInclusionTest` - Function to determine inclusion and variant behavior per file.
 - `contentCompression` - Array of compression formats to pre-generate (`['br', 'gzip']` by default).
 - `contentTypes` - Additional or override content type definitions.
 
@@ -338,9 +461,11 @@ npx @fastly/compute-js-static-publish collections promote \
 
 ## 🛠 Development → Production Workflow
 
-### Local development
+### Using the KV Store
 
-During development, the local preview server (`npm run dev:start`) will run against assets loaded into the simulated KV Store provided by the local development environment.
+#### Local development
+
+During development, the local development server (`npm run dev:start`) runs against assets loaded into the simulated KV Store provided by the local development environment.
 
 Prior to starting the server, publish the content to the simulated KV Store:
 
@@ -353,23 +478,23 @@ This simulates publishing by writing to `kvstore.json` instead of uploading to t
 
 Note that for local development, you will have to stop and restart the local development server each time you publish updates to your content.
 
-To publish to an alternative collection name, use:
+To publish to an alternative collection name, use the following command and then restart the local development server:
 
 ```sh
 npm run dev:publish -- --collection-name=preview-123
 ```
 
-### Production 
+#### Production
 
 When you're ready for production:
 
 1. [Create a free Fastly account](https://www.fastly.com/signup/?tier=free) if you haven't already.
 2. Run `npm run fastly:deploy`
-   - This builds your Compute app into a Wasm binary
-   - Deploys it to a new or existing Fastly Compute service
-   - If creating a new service:
-      - you'll be prompted for backend info - **you can skip this**, as no backend is needed (all content is served from KV)
-      - KV Store will be created if necessary and automatically linked to your new service.
+    - This builds your Compute app into a Wasm binary
+    - Deploys it to a new or existing Fastly Compute service
+    - If creating a new service:
+        - you'll be prompted for backend info - **you can skip this**, as no backend is needed (all content is served from KV)
+        - KV Store will be created if necessary and automatically linked to your new service.
 
 Once deployed, publish content like so:
 
@@ -387,6 +512,72 @@ This:
 > Upload to a specific collection by specifying the collection name when publishing content:
 > ```sh
 > npm run fastly:publish -- --collection-name=preview-42
+> ```
+
+**No Wasm redeploy needed** unless you:
+
+- Modify `src/index.js` - such as when you update your custom routing logic (e.g. collection selection) or
+- Change `static-publish.rc.js`
+
+If you do need to rebuild and redeploy the Compute app, simply run:
+
+```sh
+npm run fastly:deploy
+```
+
+### Using S3-compatible storage
+
+#### Local development
+
+During development, the local development server (`npm run dev:start`) runs against assets published to S3-compatible storage.
+
+In this mode, the content in the S3-compatible storage can be updated independent of the Compute application running in the local development server.
+
+Before publishing your content, your S3-compatible bucket must already exist.
+
+> [!HINT]
+> If you're using Fastly Object Storage, [create your Fastly account](https://www.fastly.com/signup/?tier=free) if you haven't already, and then follow the [Object Storage quick start](https://www.fastly.com/documentation/guides/platform/object-storage/object-storage-quick-start/) to set up your bucket.
+
+Publish your content by typing:
+
+```sh
+npm run publish
+```
+
+Then start the local development server:
+
+```sh
+npm run dev:start
+```
+
+#### Production 
+
+When you're ready for production:
+
+1. [Create a free Fastly account](https://www.fastly.com/signup/?tier=free) if you haven't already.
+2. Run `npm run fastly:deploy`
+   - This builds your Compute app into a Wasm binary
+   - Deploys it to a new or existing Fastly Compute service
+   - If creating a new service:
+      - you'll be prompted for backend info - 
+        TODO: 
+
+Once deployed, publish content like so:
+
+```sh
+npm run publish
+```
+
+This:
+
+- Uses the default collection name
+- Uploads static files to the KV Store
+- Stores server configuration for the collection
+
+> [!TIP]
+> Upload to a specific collection by specifying the collection name when publishing content:
+> ```sh
+> npm run publish -- --collection-name=preview-42
 > ```
 
 **No Wasm redeploy needed** unless you:
@@ -483,7 +674,7 @@ async function handleRequest(request) {
 
 ## 📥 Using Published Assets in Your Code
 
-To access files you've published, use the `getMatchingAsset()` and `loadKvAssetVariant()` methods on `publisherServer`.
+To access files you've published, use the `getMatchingAsset()` and `loadAssetVariant()` methods on `publisherServer`.
 
 ### Access Metadata for a File:
 
@@ -502,16 +693,16 @@ if (asset != null) {
 ### Load the File from KV Store:
 
 ```js
-const kvAssetVariant = await publisherServer.loadKvAssetVariant(asset, null); // pass 'gzip' or 'br' for compressed
+const assetVariant = await publisherServer.loadAssetVariant(asset, null); // pass 'gzip' or 'br' for compressed
 
-kvAssetVariant.kvStoreEntry;      // KV Store entry (type KVStoreEntry defined in 'fastly:kv-store')
-kvAssetVariant.size;              // Size of the variant
-kvAssetVariant.hash;              // SHA256 of the variant
-kvAssetVariant.contentEncoding;   // 'gzip', 'br', or null
-kvAssetVariant.numChunks;         // Number of chunks (for large files)
+assetVariant.storageEntry;      // Storage entry (type StorageEntry defined in './src/storage/storage-provider.ts')
+assetVariant.size;              // Size of the variant
+assetVariant.hash;              // SHA256 of the variant
+assetVariant.contentEncoding;   // 'gzip', 'br', or null
+assetVariant.numChunks;         // Number of chunks (for large files)
 ```
 
-You can stream `kvAssetVariant.kvStoreEntry.body` directly to a `Response`, or read it using `.text()`, `.json()`, or `.arrayBuffer()` depending on its content type.
+You can stream `assetVariant.storageEntry.body` directly to a `Response`, or read it using `.text()`, `.json()`, or `.arrayBuffer()` depending on its content type.
 
 ---
 
@@ -534,10 +725,31 @@ You can stream `kvAssetVariant.kvStoreEntry.body` directly to a `Response`, or r
 
 Run outside an existing Compute app directory:
 
+#### Minimum required options
+
+```sh
+# Using KV store storage
+npx @fastly/compute-js-static-publish@latest \
+  --root-dir=./public \
+  --storage-mode=kv-store \
+  --kv-store-name=<site-content>
+
+# Using S3 storage
+npx @fastly/compute-js-static-publish@latest \
+  --root-dir=./public \
+  --storage-mode=s3 \
+  --s3-region=<s3 region> \
+  --s3-bucket=<bucket name> \
+  [--s3-endpoint=<endpoint>]
+```
+
+#### Full options list
+
 ```sh
 npx @fastly/compute-js-static-publish@latest \
   --root-dir=./public \
-  --kv-store-name=site-content \
+  { --storage-mode=kv-store --kv-store-name=<site-content> | \
+    --storage-mode=s3 --s3-region=<s3 region> --s3-bucket=<bucket name> [--s3-endpoint=<endpoint>] } \
   [--output=./compute-js] \
   [--static-publisher-working-dir=<output>/static-publisher] \
   [--publish-id=<prefix>] \
@@ -556,7 +768,16 @@ npx @fastly/compute-js-static-publish@latest \
 #### Options:
 
 **Used to generate the Compute app:**
-- `--kv-store-name`: Required. Name of KV Store to use.
+- `--storage-mode`: Required. Specifies the storage mode. Must be either `kv-store` or `s3`.
+
+   If `--storage-mode=kv-store`:
+   - `--kv-store-name`: Required. Name of KV Store to use.
+
+   If `--storage-mode=s3`:
+   - `--s3-region`: Required. Region of the S3-compatible bucket.
+   - `--s3-bucket`: Required. Name of the S3-compatible bucket.
+   - `--s3-endpoint`: Optional. Custom endpoint of the S3-compatible bucket, if necessary.
+
 - `--output`: Compute app destination (default: `./compute-js`)
 - `--static-publisher-working-dir`: Directory to hold working files (default: `<output>/static-publisher`).
 - `--name`: Application name to insert into `fastly.toml`
@@ -609,7 +830,7 @@ After this process is complete, the PublisherServer object in the Compute applic
 
 *At most one of **`--expires-in`**, **`--expires-at`**, or **`--expires-never`** may be specified*
 
-**Global Options:**
+**KV Store Options:**
 
 - `--local`: Instead of working with the Fastly KV Store, operate on local files that will be used to simulate the KV Store with the local development environment.
 
@@ -633,7 +854,7 @@ This can include expired collection indexes and orphaned content assets.
 - `--delete-expired-collections`: If set, expired collection index files will be deleted.
 - `--dry-run`: Show what would be deleted without performing any deletions.
 
-**Global Options:**
+**KV Store Options:**
 
 - `--local`: Instead of working with the Fastly KV Store, operate on local files that will be used to simulate the KV Store with the local development environment.
 
@@ -650,7 +871,7 @@ Lists all collections currently published in the KV Store.
 
 ##### Options:
 
-**Global Options:**
+**KV Store Options:**
 
 - `--local`: Instead of working with the Fastly KV Store, operate on local files that will be used to simulate the KV Store with the local development environment.
 
@@ -681,7 +902,7 @@ Copies an existing collection (content + config) to a new collection name.
 
 *At most one of **`--expires-in`**, **`--expires-at`**, or **`--expires-never`** may be specified*. If not provided, then the existing expiration rule of the collection being promoted is used. 
 
-**Global Options:**
+**KV Store Options:**
 
 - `--local`: Instead of working with the Fastly KV Store, operate on local files that will be used to simulate the KV Store with the local development environment.
 
@@ -709,7 +930,7 @@ Sets or updates the expiration time of an existing collection.
 
 *Exactly one of **`--expires-in`**, **`--expires-at`**, or **`--expires-never`** must be specified*
 
-**Global Options:**
+**KV Store Options:**
 
 - `--local`: Instead of working with the Fastly KV Store, operate on local files that will be used to simulate the KV Store with the local development environment.
 
@@ -732,7 +953,7 @@ Use the `npx @fastly/compute-js-static-publish clean` command afterward to remov
 
 - `--collection-name`: The name of the collection to delete (required)
 
-**Global Options:**
+**KV Store Options:**
 
 - `--local`: Instead of working with the Fastly KV Store, operate on local files that will be used to simulate the KV Store with the local development environment.
 

@@ -7,14 +7,9 @@ import path from 'node:path';
 
 import { type OptionDefinition } from 'command-line-args';
 
-import { type FastlyApiContext, loadApiToken } from '../../../util/api-token.js';
-import { parseCommandLine } from "../../../util/args.js";
+import { parseCommandLine } from '../../../util/args.js';
 import { LoadConfigError, loadStaticPublisherRcFile } from '../../../util/config.js';
-import { readServiceId } from '../../../util/fastly-toml.js';
-import { getKVStoreKeys, kvStoreDeleteEntry } from '../../../util/kv-store.js';
-import { doKvStoreItemsOperation } from '../../../util/kv-store-items.js';
-import { getLocalKVStoreKeys, localKvStoreDeleteEntry } from '../../../util/kv-store-local-server.js';
-import { isNodeError } from '../../../util/node.js';
+import { loadStorageProviderFromStaticPublishRc } from '../../../storage/storage-provider.js';
 
 function help() {
   console.log(`\
@@ -23,7 +18,7 @@ Usage:
   npx @fastly/compute-js-static-publish collections delete --collection-name=<name> [options]
 
 Description:
-  Deletes a collection index from the KV Store. The content files will remain as they may still
+  Deletes a collection index from storage. The content files will remain as they may still
   be referenced by other collection indexes.
 
   Use the 'npx @fastly/compute-js-static-publish clean' command afterward to remove content
@@ -32,7 +27,7 @@ Description:
 Required:
   --collection-name=<name>         The name of the collection to delete 
 
-Global Options:
+KV Store Options:
   --local                          Instead of working with the Fastly KV Store, operate on
                                    local files that will be used to simulate the KV Store
                                    with the local development environment.
@@ -42,6 +37,20 @@ Global Options:
                                      1. FASTLY_API_TOKEN environment variable
                                      2. Logged-in Fastly CLI profile
 
+S3 Storage Options:
+  --aws-access-key-id=<key>        AWS Access Key ID and Secret Access Key used to
+  --aws-secret-access-key=<key>    interface with S3.
+                                   If not set, the tool will check:
+                                     1. AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY
+                                        environment variables
+                                     2. The aws credentials file, see below  
+
+  --aws-profile=<profile>          Profile within the aws credentials file.
+                                   If not set, the tool will check:
+                                     1. AWS_PROFILE environment variable
+                                     2. The default profile, if set
+
+Global Options:
   -h, --help                       Show this help message and exit.
 `);
 }
@@ -55,6 +64,10 @@ export async function action(actionArgs: string[]) {
 
     { name: 'local', type: Boolean },
     { name: 'fastly-api-token', type: String, },
+
+    { name: 'aws-profile', type: String, },
+    { name: 'aws-access-key-id', type: String, },
+    { name: 'aws-secret-access-key', type: String, },
   ];
 
   const parsed = parseCommandLine(actionArgs, optionDefinitions);
@@ -74,6 +87,9 @@ export async function action(actionArgs: string[]) {
     ['collection-name']: collectionNameValue,
     ['fastly-api-token']: fastlyApiToken,
     local: localMode,
+    ['aws-profile']: awsProfile,
+    ['aws-access-key-id']: awsAccessKeyId,
+    ['aws-secret-access-key']: awsSecretAccessKey,
   } = parsed.commandLineOptions;
 
   // compute-js-static-publisher cli is always run from the Compute application directory
@@ -86,46 +102,7 @@ export async function action(actionArgs: string[]) {
     return;
   }
 
-  // Check to see if we have a service ID listed in `fastly.toml`.
-  // If we do NOT, then we do not use the KV Store.
-  let serviceId: string | undefined;
-  try {
-    serviceId = readServiceId(path.resolve(computeAppDir, './fastly.toml'));
-  } catch(err: unknown) {
-    if (isNodeError(err) && err.code === 'ENOENT') {
-      console.warn(`❌ ERROR: can't find 'fastly.toml'.`);
-      process.exitCode = 1;
-      return;
-    }
-
-    console.warn(`❌ ERROR: can't read or parse 'fastly.toml'.`);
-    process.exitCode = 1;
-    return;
-  }
-
-  console.log(`🧹 Cleaning KV Store entries...`);
-
-  // Verify targets
-  let fastlyApiContext: FastlyApiContext | undefined = undefined;
-  if (localMode) {
-    console.log(`  Working on local simulated KV Store...`);
-  } else {
-    if (serviceId === null) {
-      console.log(`❌️ 'service_id' not set in 'fastly.toml' - Deploy your Compute app to Fastly before publishing.`);
-      process.exitCode = 1;
-      return;
-    }
-    const apiTokenResult = loadApiToken({ commandLine: fastlyApiToken });
-    if (apiTokenResult == null) {
-      console.error("❌ Fastly API Token not provided.");
-      console.error("Set the FASTLY_API_TOKEN environment variable to an API token that has write access to the KV Store.");
-      process.exitCode = 1;
-      return;
-    }
-    fastlyApiContext = { apiToken: apiTokenResult.apiToken };
-    console.log(`✔️ Fastly API Token: ${fastlyApiContext.apiToken.slice(0, 4)}${'*'.repeat(fastlyApiContext.apiToken.length-4)} from '${apiTokenResult.source}'`);
-    console.log(`  Working on the Fastly KV Store...`);
-  }
+  console.log(`🧹 Deleting storage collection...`);
 
   // #### load config
   let staticPublisherRc;
@@ -146,16 +123,29 @@ export async function action(actionArgs: string[]) {
   const publishId = staticPublisherRc.publishId;
   console.log(`  | Publish ID: ${publishId}`);
 
-  const kvStoreName = staticPublisherRc.kvStoreName;
-  console.log(`  | Using KV Store: ${kvStoreName}`);
-
   const defaultCollectionName = staticPublisherRc.defaultCollectionName;
   console.log(`  | Default Collection Name: ${defaultCollectionName}`);
 
   const staticPublisherWorkingDir = staticPublisherRc.staticPublisherWorkingDir;
   console.log(`  | Static publisher working directory: ${staticPublisherWorkingDir}`);
 
-  const storeFile = path.resolve(staticPublisherWorkingDir, `./kvstore.json`);
+  // Storage Provider
+  let storageProvider;
+  try {
+    storageProvider = await loadStorageProviderFromStaticPublishRc(staticPublisherRc, {
+      computeAppDir,
+      localMode,
+      fastlyApiToken,
+      awsProfile,
+      awsAccessKeyId,
+      awsSecretAccessKey,
+    });
+  } catch (err: unknown) {
+    console.error(`❌ Could not instantiate store provider`);
+    console.error(String(err));
+    process.exitCode = 1;
+    return;
+  }
 
   const collectionName = collectionNameValue;
   if (collectionName === defaultCollectionName) {
@@ -166,26 +156,14 @@ export async function action(actionArgs: string[]) {
 
   console.log(`✔️ Collection to delete: ${collectionName}`);
 
-  // ### KVStore Keys to delete
-  const kvKeysToDelete = new Set<string>();
+  // ### Asset Keys to delete
+  const assetKeysToDelete = new Set<string>();
 
   // ### List all indexes ###
   const indexesPrefix = publishId + '_index_';
-  let indexKeys: string[] | null;
-  if (localMode) {
-    indexKeys = await getLocalKVStoreKeys(
-      storeFile,
-      indexesPrefix,
-    );
-  } else {
-    indexKeys = await getKVStoreKeys(
-      fastlyApiContext!,
-      kvStoreName,
-      indexesPrefix,
-    );
-  }
+  const indexKeys = await storageProvider.getStorageKeys(indexesPrefix);
   if (indexKeys == null) {
-    throw new Error(`Can't query indexes in KV Store`);
+    throw new Error(`Can't query indexes in storage`);
   }
 
   // ### Found collections ###
@@ -197,24 +175,20 @@ export async function action(actionArgs: string[]) {
     for (const collection of foundCollections) {
       if (collection.name === collectionName) {
         console.log(`Flagging collection '${collection.name}' for deletion: ${collection.key}`);
-        kvKeysToDelete.add(collection.key);
+        assetKeysToDelete.add(collection.key);
       }
     }
   }
 
   // ### Delete items that have been flagged
-  const items = [...kvKeysToDelete].map(key => ({key}));
-  await doKvStoreItemsOperation(
+  const items = [...assetKeysToDelete].map(key => ({key}));
+  await storageProvider.doConcurrentParallel(
     items,
     async(_, key) => {
-      console.log(`Deleting key from KV Store: ${key}`);
-      if (localMode) {
-        await localKvStoreDeleteEntry(storeFile, key);
-      } else {
-        await kvStoreDeleteEntry(fastlyApiContext!, kvStoreName, key);
-      }
+      console.log(`Deleting key from storage: ${key}`);
+      await storageProvider.deleteStorageEntry(key);
     }
-  );
+  )
 
   console.log("✅  Completed.")
 }

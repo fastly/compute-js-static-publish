@@ -4,22 +4,15 @@
  */
 
 import fs from 'node:fs';
+import path from 'node:path';
 
 import { type OptionDefinition } from 'command-line-args';
 
-import { type IndexMetadata } from '../../../../models/server/index.js';
+import { decodeIndexMetadata, encodeIndexMetadata } from '../../../../models/server/index.js';
 import { calcExpirationTime } from '../../../../models/time/index.js';
 import { LoadConfigError, loadStaticPublisherRcFile } from '../../../util/config.js';
-import {
-  getKvStoreEntry,
-  kvStoreSubmitEntry,
-} from '../../../util/kv-store.js';
-import { type FastlyApiContext, loadApiToken } from '../../../util/api-token.js';
 import { parseCommandLine } from '../../../util/args.js';
-import path from "node:path";
-import { readServiceId } from "../../../util/fastly-toml.js";
-import { isNodeError } from "../../../util/node.js";
-import { getLocalKvStoreEntry, localKvStoreSubmitEntry } from "../../../util/kv-store-local-server.js";
+import { loadStorageProviderFromStaticPublishRc } from '../../../storage/storage-provider.js';
 
 function help() {
   console.log(`\
@@ -51,7 +44,7 @@ Expiration:
                                    existing expiration rule of the collection being
                                    promoted is used.
 
-Global Options:
+KV Store Options:
   --local                          Instead of working with the Fastly KV Store, operate on
                                    local files that will be used to simulate the KV Store
                                    with the local development environment.
@@ -61,6 +54,20 @@ Global Options:
                                      1. FASTLY_API_TOKEN environment variable
                                      2. Logged-in Fastly CLI profile
 
+S3 Storage Options:
+  --aws-access-key-id=<key>        AWS Access Key ID and Secret Access Key used to
+  --aws-secret-access-key=<key>    interface with S3.
+                                   If not set, the tool will check:
+                                     1. AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY
+                                        environment variables
+                                     2. The aws credentials file, see below  
+
+  --aws-profile=<profile>          Profile within the aws credentials file.
+                                   If not set, the tool will check:
+                                     1. AWS_PROFILE environment variable
+                                     2. The default profile, if set
+
+Global Options:
   -h, --help                       Show this help message and exit.
 `);
 }
@@ -79,6 +86,10 @@ export async function action(actionArgs: string[]) {
 
     { name: 'local', type: Boolean },
     { name: 'fastly-api-token', type: String, },
+
+    { name: 'aws-profile', type: String, },
+    { name: 'aws-access-key-id', type: String, },
+    { name: 'aws-secret-access-key', type: String, },
   ];
 
   const parsed = parseCommandLine(actionArgs, optionDefinitions);
@@ -102,6 +113,9 @@ export async function action(actionArgs: string[]) {
     ['expires-never']: expiresNever,
     local: localMode,
     ['fastly-api-token']: fastlyApiToken,
+    ['aws-profile']: awsProfile,
+    ['aws-access-key-id']: awsAccessKeyId,
+    ['aws-secret-access-key']: awsSecretAccessKey,
   } = parsed.commandLineOptions;
 
   // compute-js-static-publisher cli is always run from the Compute application directory
@@ -130,46 +144,7 @@ export async function action(actionArgs: string[]) {
     return;
   }
 
-  // Check to see if we have a service ID listed in `fastly.toml`.
-  // If we do NOT, then we do not use the KV Store.
-  let serviceId: string | undefined;
-  try {
-    serviceId = readServiceId(path.resolve(computeAppDir, './fastly.toml'));
-  } catch(err: unknown) {
-    if (isNodeError(err) && err.code === 'ENOENT') {
-      console.warn(`❌ ERROR: can't find 'fastly.toml'.`);
-      process.exitCode = 1;
-      return;
-    }
-
-    console.warn(`❌ ERROR: can't read or parse 'fastly.toml'.`);
-    process.exitCode = 1;
-    return;
-  }
-
   console.log(`📃 Promoting collection...`);
-
-  // Verify targets
-  let fastlyApiContext: FastlyApiContext | undefined = undefined;
-  if (localMode) {
-    console.log(`  Working on local simulated KV Store...`);
-  } else {
-    if (serviceId === null) {
-      console.log(`❌️ 'service_id' not set in 'fastly.toml' - Deploy your Compute app to Fastly before publishing.`);
-      process.exitCode = 1;
-      return;
-    }
-    const apiTokenResult = loadApiToken({ commandLine: fastlyApiToken });
-    if (apiTokenResult == null) {
-      console.error("❌ Fastly API Token not provided.");
-      console.error("Set the FASTLY_API_TOKEN environment variable to an API token that has write access to the KV Store.");
-      process.exitCode = 1;
-      return;
-    }
-    fastlyApiContext = { apiToken: apiTokenResult.apiToken };
-    console.log(`✔️ Fastly API Token: ${fastlyApiContext.apiToken.slice(0, 4)}${'*'.repeat(fastlyApiContext.apiToken.length-4)} from '${apiTokenResult.source}'`);
-    console.log(`  Working on the Fastly KV Store...`);
-  }
 
   // #### load config
   let staticPublisherRc;
@@ -190,16 +165,29 @@ export async function action(actionArgs: string[]) {
   const publishId = staticPublisherRc.publishId;
   console.log(`  | Publish ID: ${publishId}`);
 
-  const kvStoreName = staticPublisherRc.kvStoreName;
-  console.log(`  | Using KV Store: ${kvStoreName}`);
-
   const defaultCollectionName = staticPublisherRc.defaultCollectionName;
   console.log(`  | Default Collection Name: ${defaultCollectionName}`);
 
   const staticPublisherWorkingDir = staticPublisherRc.staticPublisherWorkingDir;
   console.log(`  | Static publisher working directory: ${staticPublisherWorkingDir}`);
 
-  const storeFile = path.resolve(staticPublisherWorkingDir, `./kvstore.json`);
+  // Storage Provider
+  let storageProvider;
+  try {
+    storageProvider = await loadStorageProviderFromStaticPublishRc(staticPublisherRc, {
+      computeAppDir,
+      localMode,
+      fastlyApiToken,
+      awsProfile,
+      awsAccessKeyId,
+      awsSecretAccessKey,
+    });
+  } catch (err: unknown) {
+    console.error(`❌ Could not instantiate store provider`);
+    console.error(String(err));
+    process.exitCode = 1;
+    return;
+  }
 
   const sourceCollectionName = collectionNameValue;
   console.log(`✔️ Collection to copy: ${sourceCollectionName}`);
@@ -224,32 +212,18 @@ export async function action(actionArgs: string[]) {
   const sourceCollectionSettingsKey = `${publishId}_settings_${collectionNameValue}`;
   const targetCollectionSettingsKey = `${publishId}_settings_${targetCollectionName}`;
 
-  let indexEntryInfo, settingsEntryInfo;
-  if (localMode) {
-    [ indexEntryInfo, settingsEntryInfo ] = await Promise.all([
-      getLocalKvStoreEntry(storeFile, sourceCollectionIndexKey),
-      getLocalKvStoreEntry(storeFile, sourceCollectionSettingsKey),
-    ]);
-  } else {
-    [ indexEntryInfo, settingsEntryInfo ] = await Promise.all([
-      getKvStoreEntry(fastlyApiContext!, kvStoreName, sourceCollectionIndexKey),
-      getKvStoreEntry(fastlyApiContext!, kvStoreName, sourceCollectionSettingsKey),
-    ]);
-  }
+  const [ indexEntryInfo, settingsEntryInfo ] = await Promise.all([
+    storageProvider.getStorageEntry(sourceCollectionIndexKey),
+    storageProvider.getStorageEntry(sourceCollectionSettingsKey),
+  ]);
   if (!indexEntryInfo) {
-    throw new Error(`Error querying index for '${collectionNameValue}' in KV Store`);
+    throw new Error(`Error querying index for '${collectionNameValue}' in storage`);
   }
   if (!settingsEntryInfo) {
-    throw new Error(`Error querying settings for '${collectionNameValue}' in KV Store`);
+    throw new Error(`Error querying settings for '${collectionNameValue}' in storage`);
   }
 
-  let indexMetadata: IndexMetadata = {};
-  if (indexEntryInfo.metadata != null) {
-    try {
-      indexMetadata = JSON.parse(indexEntryInfo.metadata) as IndexMetadata;
-    } catch {
-    }
-  }
+  let indexMetadata = decodeIndexMetadata(indexEntryInfo.metadata) ?? {};
   if (indexMetadata.publishedTime == null) {
     indexMetadata.publishedTime = Math.floor(Date.now() / 1000);
   }
@@ -261,41 +235,27 @@ export async function action(actionArgs: string[]) {
     }
   }
 
-  console.log(`Uploading to KV Store: '${targetCollectionName}'`);
+  console.log(`Uploading to storage: '${targetCollectionName}'`);
 
-  if (localMode) {
+  const storageContentDir = `${staticPublisherWorkingDir}/storage-content`;
+  fs.mkdirSync(storageContentDir, { recursive: true });
 
-    const staticPublisherKvStoreContent = `${staticPublisherWorkingDir}/kv-store-content`;
-    fs.mkdirSync(staticPublisherKvStoreContent, { recursive: true });
+  const indexFileName = `index_${collectionNameValue}.json`;
+  const indexFilePath = path.resolve(storageContentDir, indexFileName);
+  await storageProvider.submitStorageEntry(
+    targetCollectionIndexKey,
+    indexFilePath,
+    indexEntryInfo.data,
+    encodeIndexMetadata(indexMetadata),
+  );
 
-    const indexFileName = `index_${collectionNameValue}.json`;
-    const indexFilePath = path.resolve(staticPublisherKvStoreContent, indexFileName);
-    const indexBody = await indexEntryInfo.response.arrayBuffer();
-    fs.writeFileSync(indexFilePath, Buffer.from(indexBody));
-    await localKvStoreSubmitEntry(
-      storeFile,
-      targetCollectionIndexKey,
-      path.relative(computeAppDir, indexFilePath),
-      JSON.stringify(indexMetadata),
-    );
-
-    const settingsFileName = `settings_${collectionNameValue}.json`;
-    const settingsFilePath = path.resolve(staticPublisherKvStoreContent, settingsFileName);
-    const settingsBody = await settingsEntryInfo.response.arrayBuffer();
-    fs.writeFileSync(settingsFilePath, Buffer.from(settingsBody));
-    await localKvStoreSubmitEntry(
-      storeFile,
-      targetCollectionSettingsKey,
-      path.relative(computeAppDir, settingsFilePath),
-      undefined,
-    );
-
-  } else {
-    await Promise.all([
-      kvStoreSubmitEntry(fastlyApiContext!, kvStoreName, targetCollectionIndexKey, indexEntryInfo.response.body!, JSON.stringify(indexMetadata)),
-      kvStoreSubmitEntry(fastlyApiContext!, kvStoreName, targetCollectionSettingsKey, settingsEntryInfo.response.body!, undefined),
-    ]);
-  }
+  const settingsFileName = `settings_${collectionNameValue}.json`;
+  const settingsFilePath = path.resolve(storageContentDir, settingsFileName);
+  await storageProvider.submitStorageEntry(
+    targetCollectionSettingsKey,
+    settingsFilePath,
+    settingsEntryInfo.data,
+  );
 
   console.log("✅  Completed.");
 }

@@ -14,6 +14,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fix script listed in readme instructions
 - Handle symlinks properly in file enumeration [#41](https://github.com/fastly/compute-js-static-publish/issues/41)
 
+### Breaking
+
+- Rename symbols
+   - `KVAssetEntry` renamed to `AssetEntry`
+   - `KVAssetEntryMap` renamed to `AssetEntryMap`
+
+### Added
+
+- S3-compatible storage
+   - Add support for S3-compatible storage, such as Fastly Object Storage
+   - Store items using same keys as KV Store
+   - Use S3 object metadata for storing asset metadata
+   - Storage factored out to StorageProvider, and S3 is implemented using this architecture
+   - Configure using  
+
+- `static-publish.rc.js`
+   - Add `s3` mode configuration
+
+### Changed
+
+- `publish-content.config.js`
+   - `kvStoreAssetInclusionTest` renamed to `assetInclusionTest`. Previous name deprecated.
+
 ## [7.0.1] - 2025-04-24
 
 ### Fixed

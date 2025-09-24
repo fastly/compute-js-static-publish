@@ -27,7 +27,7 @@ Available Commands:
   collections promote              Copy a collection to another name
   collections update-expiration    Modify expiration time for an existing collection
 
-Global Options:
+KV Store Options:
   --local                          Instead of working with the Fastly KV Store, operate on
                                    local files that will be used to simulate the KV Store
                                    with the local development environment.
@@ -37,6 +37,20 @@ Global Options:
                                      1. FASTLY_API_TOKEN environment variable
                                      2. Logged-in Fastly CLI profile
 
+S3 Storage Options:
+  --aws-access-key-id=<key>        AWS Access Key ID and Secret Access Key used to
+  --aws-secret-access-key=<key>    interface with S3.
+                                   If not set, the tool will check:
+                                     1. AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY
+                                        environment variables
+                                     2. The aws credentials file, see below  
+
+  --aws-profile=<profile>          Profile within the aws credentials file.
+                                   If not set, the tool will check:
+                                     1. AWS_PROFILE environment variable
+                                     2. The default profile, if set
+
+Global Options:
   -h, --help                       Show this help message and exit.
 
 Automatic Project Initialization:
