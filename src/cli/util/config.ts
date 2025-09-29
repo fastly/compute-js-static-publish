@@ -4,6 +4,7 @@
  */
 
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 import globToRegExp from 'glob-to-regexp';
 
@@ -46,16 +47,20 @@ export async function loadStaticPublisherRcFile(): Promise<StaticPublishRc> {
 
   const configFile = './static-publish.rc.js';
 
+  const configFilePath = path.resolve(configFile);
   try {
-    const filePath = path.resolve(configFile);
-    configRaw = (await import(filePath)).default;
-  } catch {
-    //
+    configRaw = (await import(pathToFileURL(configFilePath).href)).default;
+  } catch (ex) {
+    throw new LoadConfigError(configFile, [
+      `Unable to load ${configFilePath}`,
+      String(ex),
+    ]);
   }
 
   if (configRaw == null) {
     throw new LoadConfigError(configFile, [
-      'Unable to load ' + configFile,
+      `Unable to load ${configFilePath}`,
+      `default export does not exist or is null.`
     ]);
   }
 
@@ -143,16 +148,20 @@ export async function loadPublishContentConfigFile(configFile: string): Promise<
 
   let configRaw;
 
+  const configFilePath = path.resolve(configFile);
   try {
-    const filePath = path.resolve(configFile);
-    configRaw = (await import(filePath)).default;
-  } catch {
-    //
+    configRaw = (await import(pathToFileURL(configFilePath).href)).default;
+  } catch (ex) {
+    throw new LoadConfigError(configFile, [
+      `Unable to load ${configFilePath}`,
+      String(ex),
+    ]);
   }
 
   if (configRaw == null) {
     throw new LoadConfigError(configFile, [
-      'Unable to load ' + configFile,
+      `Unable to load ${configFilePath}`,
+      `default export does not exist or is null.`
     ]);
   }
 
