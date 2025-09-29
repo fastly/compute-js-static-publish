@@ -14,6 +14,7 @@ export async function ensureVariantFileExists(
   variantFilePath: string,
   variant: Variants,
   file: string,
+  verbose: boolean,
 ) {
 
   // Compress/prepare the asset if it doesn't already exist
@@ -23,13 +24,17 @@ export async function ensureVariantFileExists(
     if (variant === 'original') {
 
       fs.cpSync(file, variantFilePath);
-      console.log(` 📄→📄 Copied file '${rootRelative(file)}' to '${rootRelative(variantFilePath)}'.`);
+      if (verbose) {
+        console.log(` 📄→📄 Copied file '${rootRelative(file)}' to '${rootRelative(variantFilePath)}'.`);
+      }
 
     } else {
 
       const compressTo = algs[variant];
       await compressTo(file, variantFilePath);
-      console.log(` 📄→🗄️ Compressed file '${rootRelative(file)}' to '${rootRelative(variantFilePath)}' [${variant}].`);
+      if (verbose) {
+        console.log(` 📄→🗄️ Compressed file '${rootRelative(file)}' to '${rootRelative(variantFilePath)}' [${variant}].`);
+      }
 
     }
 

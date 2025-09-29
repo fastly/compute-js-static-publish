@@ -393,28 +393,31 @@ export async function action(actionArgs: string[]) {
       let variantMetadata = variantMetadatas.get(variant);
       if (variantMetadata != null) {
 
-        console.log(` 🏃‍♂️ Asset "${variantKey}" is identical to an item we already know about, reusing existing copy.`);
+        if (verbose) {
+          console.log(` 🏃‍♂️ Asset "${variantKey}" is identical to an item we already know about, reusing existing copy.`);
+        }
 
       } else {
 
         if (!overwriteExisting) {
           const assetVariantMetadata = await storageProvider.getExistingAssetVariant(variantKey);
           if (assetVariantMetadata != null) {
-            console.log(` ・ Asset found in storage with key "${variantKey}".`);
+            if (verbose) {
+              console.log(` ・ Asset found in storage with key "${variantKey}".`);
+            }
             // And we already know its hash and size.
             variantMetadata = Object.assign(assetVariantMetadata, { existsInKvStore: true });
           }
         }
 
         if (variantMetadata == null) {
+          console.log(` ↦ Prepping new asset for storage: "${variantKey}"`);
           await ensureVariantFileExists(
             variantFilePath,
             variant,
             file,
+            verbose,
           );
-          if (localMode) {
-            console.log(` ・ Prepping asset for storage with key "${variantKey}".`);
-          }
 
           let contentEncoding, hash, size;
           if (variant === 'original') {
