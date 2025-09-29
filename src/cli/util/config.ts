@@ -40,12 +40,16 @@ export async function loadStaticPublisherRcFile(): Promise<StaticPublishRc> {
   try {
     configRaw = (await import(pathToFileURL(configFilePath).href)).default;
   } catch (ex) {
-    console.log('Unable to load ' + configFilePath, String(ex));
+    throw new LoadConfigError(configFile, [
+      `Unable to load ${configFilePath}`,
+      String(ex),
+    ]);
   }
 
   if (configRaw == null) {
     throw new LoadConfigError(configFile, [
-      'Unable to load ' + configFile,
+      `Unable to load ${configFilePath}`,
+      `default export does not exist or is null.`
     ]);
   }
 
@@ -133,12 +137,16 @@ export async function loadPublishContentConfigFile(configFile: string): Promise<
   try {
     configRaw = (await import(pathToFileURL(configFilePath).href)).default;
   } catch (ex) {
-    console.log('Unable to load ' + configFilePath, String(ex));
+    throw new LoadConfigError(configFile, [
+      `Unable to load ${configFilePath}`,
+      String(ex),
+    ]);
   }
 
   if (configRaw == null) {
     throw new LoadConfigError(configFile, [
-      'Unable to load ' + configFile,
+      `Unable to load ${configFilePath}`,
+      `default export does not exist or is null.`
     ]);
   }
 
