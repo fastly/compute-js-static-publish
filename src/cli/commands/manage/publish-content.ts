@@ -23,6 +23,7 @@ import { ensureVariantFileExists, type Variants } from '../../util/variants.js';
 import {
   loadStorageProviderFromStaticPublishRc,
   StorageProviderBatch,
+  type StorageProviderBatchEntry,
 } from '../../storage/storage-provider.js';
 
 // Storage key format:
@@ -319,7 +320,7 @@ export async function action(actionArgs: string[]) {
   const baseHashToVariantMetadatasMap = new Map<string, VariantMetadataMap>();
 
   // #### Iterate files
-  for (const file of files) {
+  const filePromises = files.map(async (file) => {
     // #### asset key
     const assetKey = file.slice(publicDirRoot.length)
       // in Windows, assetKey will otherwise end up as \path\file.html
@@ -354,7 +355,7 @@ export async function action(actionArgs: string[]) {
     }
 
     if (!includeAsset) {
-      continue;
+      return;
     }
 
     // #### Base file size, hash, last modified time
@@ -376,6 +377,9 @@ export async function action(actionArgs: string[]) {
       'original',
       ...contentCompression,
     ] as const;
+
+    const batchItems: StorageProviderBatchEntry[] = [];
+
     for (const variant of variants) {
       let variantKey = `${publishId}_files_sha256_${baseHash}`;
       let variantFilename = `${baseHash}`;
@@ -446,7 +450,7 @@ export async function action(actionArgs: string[]) {
           metadataJson.numChunks = String(variantMetadata.numChunks);
         }
 
-        batch.add({
+        batchItems.push({
           write: !variantMetadata.existsInKvStore,
           size: variantMetadata.size,
           key: variantKey,
@@ -462,14 +466,29 @@ export async function action(actionArgs: string[]) {
       }
     }
 
-    assetsIndex[assetKey] = {
-      key: `sha256:${baseHash}`,
-      size: baseSize,
-      contentType: contentTypeTestResult.contentType,
-      lastModifiedTime,
-      variants: variantsToKeep,
+    return {
+      assetKey,
+      asset: {
+        key: `sha256:${baseHash}`,
+        size: baseSize,
+        contentType: contentTypeTestResult.contentType,
+        lastModifiedTime,
+        variants: variantsToKeep,
+      },
+      batchItems,
     };
+  });
 
+  const fileResults = await Promise.all(filePromises);
+
+  for (const result of fileResults) {
+    if (result == null) {
+      continue;
+    }
+    assetsIndex[result.assetKey] = result.asset;
+    for (const batchItem of result.batchItems) {
+      batch.add(batchItem);
+    }
   }
   console.log(`✅  Scan complete.`)
 
