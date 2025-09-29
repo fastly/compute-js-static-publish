@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+### Fixed
+
+- Use pathToFileURL so that import() works under ESM across platforms [#38](https://github.com/fastly/compute-js-static-publish/issues/38)
+
 ## [7.0.2] - 2025-09-16
 
 ### Fixed
