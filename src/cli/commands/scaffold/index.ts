@@ -780,7 +780,7 @@ export async function action(actionArgs: string[]) {
     packageJsonScripts['dev:publish'] = 'npx @fastly/compute-js-static-publish publish-content --local';
     packageJsonScripts['fastly:publish'] = 'npx @fastly/compute-js-static-publish publish-content';
   } else if (storageMode === 's3') {
-    packageJsonScripts['publish'] = 'npx @fastly/compute-js-static-publish publish-content --local';
+    packageJsonScripts['s3:publish'] = 'npx @fastly/compute-js-static-publish publish-content';
   }
   resourceFiles['package.json'] = JSON.stringify({
     name,
@@ -1038,11 +1038,11 @@ To publish your content to your S3-compatible bucket
 
   Using an AWS profile set with "aws configure", type:
     cd ${COMPUTE_JS_DIR}
-    AWS_PROFILE=xxxx npm run publish
+    AWS_PROFILE=xxxx npm run s3:publish
 
   Using AWS IAM credentials, type:
     cd ${COMPUTE_JS_DIR}
-    AWS_ACCESS_KEY_ID=xxxx AWS_SECRET_ACCESS_KEY=xxxx npm run publish
+    AWS_ACCESS_KEY_ID=xxxx AWS_SECRET_ACCESS_KEY=xxxx npm run s3:publish
 
 To run your Compute application locally
 

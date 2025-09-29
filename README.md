@@ -153,7 +153,7 @@ Before publishing your content, your S3-compatible bucket must already exist.
 Type the following:
 
 ```sh
-npm run publish
+npm run s3:publish
 ```
 
 #### 3. Preview Locally
@@ -541,7 +541,7 @@ Before publishing your content, your S3-compatible bucket must already exist.
 Publish your content by typing:
 
 ```sh
-npm run publish
+npm run s3:publish
 ```
 
 Then start the local development server:
@@ -565,7 +565,7 @@ When you're ready for production:
 Once deployed, publish content like so:
 
 ```sh
-npm run publish
+npm run s3:publish
 ```
 
 This:
@@ -577,7 +577,7 @@ This:
 > [!TIP]
 > Upload to a specific collection by specifying the collection name when publishing content:
 > ```sh
-> npm run publish -- --collection-name=preview-42
+> npm run s3:publish -- --collection-name=preview-42
 > ```
 
 **No Wasm redeploy needed** unless you:
