@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+## [7.0.3] - 2025-09-29
+
 ### Fixed
 
 - Use pathToFileURL so that import() works under ESM across platforms [#38](https://github.com/fastly/compute-js-static-publish/issues/38)
@@ -335,7 +337,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated generated app's webpack and webpack-cli versions
 - Use atob() and removed dependency on Buffer
 
-[unreleased]: https://github.com/fastly/compute-js-static-publish/compare/v7.0.2...HEAD
+[unreleased]: https://github.com/fastly/compute-js-static-publish/compare/v7.0.3...HEAD
+[7.0.3]: https://github.com/fastly/compute-js-static-publish/compare/v7.0.2...v7.0.3
 [7.0.2]: https://github.com/fastly/compute-js-static-publish/compare/v7.0.1...v7.0.2
 [7.0.1]: https://github.com/fastly/compute-js-static-publish/compare/v7.0.0...v7.0.1
 [7.0.0]: https://github.com/fastly/compute-js-static-publish/compare/v6.3.0...v7.0.0
