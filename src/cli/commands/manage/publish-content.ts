@@ -490,7 +490,7 @@ export async function action(actionArgs: string[]) {
       batch.add(batchItem);
     }
   }
-  console.log(`✅  Scan complete.`)
+  console.log(`✅  Scan complete.`);
 
   await storageProvider.applyBatch(batch);
 
@@ -511,7 +511,7 @@ export async function action(actionArgs: string[]) {
     JSON.stringify(assetsIndex),
     encodeIndexMetadata(indexMetadata),
   );
-  console.log(`✅  Index has been saved.`)
+  console.log(`✅  Index has been saved.`);
 
   // #### SERVER SETTINGS
   // These are saved to storage
