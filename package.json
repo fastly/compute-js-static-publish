@@ -1,7 +1,7 @@
 {
   "name": "@fastly/compute-js-static-publish",
   "type": "module",
-  "version": "8.0.0-beta.1",
+  "version": "8.0.0-beta.2",
   "description": "Static Publisher for Fastly Compute JavaScript",
   "main": "build/index.js",
   "exports": {
