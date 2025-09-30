@@ -43,7 +43,10 @@ export const buildStoreProvider: StorageProviderBuilder = (config: StaticPublish
   return new S3StorageProvider(
     s3StorageConfig.region,
     s3StorageConfig.bucket,
-    s3StorageConfig.endpoint,
+    {
+      s3Endpoint: s3StorageConfig.endpoint,
+      s3FastlyBackendName: s3StorageConfig.fastlyBackendName,
+    },
   );
 };
 
@@ -93,20 +96,27 @@ export function setAwsCredentialsBuilder(awsCredentialsBuilder: AwsCredentialsBu
   _awsCredentialsBuilder = awsCredentialsBuilder;
 }
 
+export type S3StorageProviderParams = {
+  s3Endpoint?: string,
+  s3FastlyBackendName?: string,
+};
+
 export class S3StorageProvider implements StorageProvider {
   constructor(
     s3Region: string,
     s3Bucket: string,
-    s3Endpoint?: string,
+    params?: S3StorageProviderParams,
   ) {
     this.s3Region = s3Region;
     this.s3Bucket = s3Bucket;
-    this.s3Endpoint = s3Endpoint;
+    this.s3Endpoint = params?.s3Endpoint;
+    this.s3FastlyBackendName = params?.s3FastlyBackendName;
   }
 
   private readonly s3Region: string;
   private readonly s3Bucket: string;
   private readonly s3Endpoint?: string;
+  private readonly s3FastlyBackendName?: string;
 
   private s3Client?: S3Client;
   async getS3Client() {
@@ -114,6 +124,7 @@ export class S3StorageProvider implements StorageProvider {
       return this.s3Client;
     }
     const awsCredentials = await _awsCredentialsBuilder();
+    const s3FastlyBackendName = this.s3FastlyBackendName ?? "aws";
     this.s3Client = new S3Client({
       region: this.s3Region,
       endpoint: this.s3Endpoint,
@@ -124,7 +135,7 @@ export class S3StorageProvider implements StorageProvider {
       },
       maxAttempts: 1,
       requestHandler: new FetchHttpHandler({
-        requestInit() { return { backend: "aws" } }
+        requestInit() { return { backend: s3FastlyBackendName } }
       }),
     });
     return this.s3Client;
