@@ -71,6 +71,7 @@ export type StaticPublishPartialS3Storage = {
     region: string,
     bucket: string,
     endpoint?: string,
+    fastlyBackendName?: string,
   },
 };
 
@@ -90,6 +91,10 @@ export function isS3StorageConfigRc(rc: unknown): rc is StaticPublishS3Storage {
           !('endpoint' in rc.s3) ||
           rc.s3.endpoint === undefined ||
           typeof rc.s3.endpoint === 'string'
+        ) && (
+          !('fastlyBackendName' in rc.s3) ||
+          rc.s3.fastlyBackendName === undefined ||
+          typeof rc.s3.fastlyBackendName === 'string'
         )
       ) {
         return true;
