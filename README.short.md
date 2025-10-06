@@ -59,3 +59,11 @@ npm run fastly:publish       # upload your static files
 
 📘 Full documentation available on GitHub:  
 [https://github.com/fastly/compute-js-static-publish](https://github.com/fastly/compute-js-static-publish)
+
+### Security issues
+
+Please see our [SECURITY.md](SECURITY.md) for guidance on reporting security-related issues.
+
+## License
+
+[MIT](./LICENSE).

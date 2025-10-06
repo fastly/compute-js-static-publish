@@ -1,5 +1,7 @@
 # Static Publisher for JavaScript on Fastly Compute
 
+> NOTE: `@fastly/compute-js-static-publish` is provided as a Fastly Labs product. Visit the [Fastly Labs](https://www.fastlylabs.com/) site for terms of use.
+
 > [!NOTE]
 > These docs are for v7, a major rewrite that adds powerful new features such as named collections.
 > If you're looking for v6, please check out the [v6 branch](https://github.com/fastly/compute-js-static-publish/tree/v6).
@@ -841,3 +843,17 @@ async function handleRequest(event) {
 - View CLI command help: `npx @fastly/compute-js-static-publish --help`
 - Use in CI to automate branch previews
 - Visit [https://developer.fastly.com](https://developer.fastly.com) for Compute platform docs
+
+## Issues
+
+If you encounter any non-security-related bug or unexpected behavior, please [file an issue][bug] using the bug report template.
+
+[bug]: https://github.com/fastly/compute-js-static-publish/issues/new?labels=bug
+
+### Security issues
+
+Please see our [SECURITY.md](SECURITY.md) for guidance on reporting security-related issues.
+
+## License
+
+[MIT](./LICENSE).
