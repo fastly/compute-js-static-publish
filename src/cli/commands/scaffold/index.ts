@@ -32,8 +32,9 @@ Description:
   management mode.
 
 Options:
-  --storage-mode <mode>                 (required) Storage mode for content storage. 
+  --storage-mode <mode>                 Storage mode for content storage. 
                                         Can be "kv-store" or "s3".
+                                        (default: kv-store)
   If --storage-mode=kv-store, then:
     --kv-store-name <name>              (required) Name of the KV Store.
 
@@ -407,8 +408,8 @@ export async function action(actionArgs: string[]) {
   const optionDefinitions: OptionDefinition[] = [
     { name: 'verbose', type: Boolean },
 
-    // Required. Storage mode for content storage. Can be "kv-store" or "s3".
-    { name: 'storage-mode', type: String, },
+    // Storage mode for content storage. Can be "kv-store" or "s3".
+    { name: 'storage-mode', type: String, defaultValue: 'kv-store', },
 
     // If storage-mode=kv-store, then:
 
@@ -651,7 +652,7 @@ export async function action(actionArgs: string[]) {
   const fastlyServiceId = options.serviceId;
   const storageMode = options.storageMode;
   if (!(storageMode === 'kv-store' || storageMode === 's3')) {
-    console.error(`❌ required parameter --storage-mode must be set to 'kv-store' or 's3'.`);
+    console.error(`❌ parameter --storage-mode must be set to 'kv-store' or 's3'.`);
     process.exitCode = 1;
     return;
   }
