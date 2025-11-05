@@ -3,6 +3,7 @@
  * Licensed under the MIT license. See LICENSE file for details.
  */
 
+import { CacheOverride } from 'fastly:cache-override';
 import { SecretStore } from 'fastly:secret-store';
 import { FetchHttpHandler } from '@smithy/fetch-http-handler';
 import {
@@ -118,13 +119,14 @@ export class S3StorageProvider implements StorageProvider {
   private readonly s3Endpoint?: string;
   private readonly s3FastlyBackendName?: string;
 
+  private surrogateKeys?: string[];
+
   private s3Client?: S3Client;
   async getS3Client() {
     if (this.s3Client != null) {
       return this.s3Client;
     }
     const awsCredentials = await _awsCredentialsBuilder();
-    const s3FastlyBackendName = this.s3FastlyBackendName ?? "aws";
     this.s3Client = new S3Client({
       region: this.s3Region,
       endpoint: this.s3Endpoint,
@@ -135,13 +137,21 @@ export class S3StorageProvider implements StorageProvider {
       },
       maxAttempts: 1,
       requestHandler: new FetchHttpHandler({
-        requestInit() { return { backend: s3FastlyBackendName } }
+        requestInit: () => {
+          return {
+            backend: this.s3FastlyBackendName ?? "aws",
+            cacheOverride: new CacheOverride({
+              ttl: 3600,
+              surrogateKey: (this.surrogateKeys ?? []).join(' ') || undefined,
+            }),
+          };
+        },
       }),
     });
     return this.s3Client;
   }
 
-  async getEntry(key: string): Promise<StorageEntry | null> {
+  async getEntry(key: string, tags?: string[]): Promise<StorageEntry | null> {
 
     const input = {
       Bucket: this.s3Bucket, // required
@@ -151,7 +161,12 @@ export class S3StorageProvider implements StorageProvider {
     let response: GetObjectCommandOutput;
     try {
       const s3Client = await this.getS3Client();
-      response = await s3Client.send(command);
+      this.surrogateKeys = tags;
+      try {
+        response = await s3Client.send(command);
+      } finally {
+        this.surrogateKeys = undefined;
+      }
     } catch(err) {
       if (err instanceof S3ServiceException && (err.name === "NotFound" || err.name === "NoSuchKey")) {
         console.log("Object does not exist");
