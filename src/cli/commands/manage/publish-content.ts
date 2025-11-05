@@ -595,6 +595,8 @@ export async function action(actionArgs: string[]) {
 
   console.log(`✅  Settings have been saved.`);
 
+  await storageProvider.purgeSurrogateKey(`${publishId}-${collectionName}`);
+
   console.log(`🎉 Completed.`);
 
 }
