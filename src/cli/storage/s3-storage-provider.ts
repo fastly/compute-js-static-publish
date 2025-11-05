@@ -4,6 +4,7 @@
  */
 
 import fs from 'node:fs';
+import path from 'node:path';
 import {
   DeleteObjectCommand,
   DeleteObjectCommandInput,
@@ -51,6 +52,16 @@ import {
 import {
   rootRelative,
 } from '../util/files.js';
+import {
+  type FastlyApiContext,
+  loadApiToken,
+} from '../util/api-token.js';
+import {
+  readServiceId,
+} from '../util/fastly-toml.js';
+import {
+  purgeSurrogateKey,
+} from '../util/purge.js';
 
 type CommandOutput<C> = C extends Command<any, any, any, infer O, any> ? O : never;
 
@@ -83,7 +94,27 @@ export const buildStoreProvider: StorageProviderBuilder = async (
     throw new Error("❌ S3 Credentials not provided.\nProvide an AWS access key ID and secret access key that has write access to the S3 Storage.\nRefer to the README file and --help for additional information.");
   }
   console.log(`✔️ S3 Credentials: ${awsCredentialsResult.awsAccessKeyId.slice(0, 4)}${'*'.repeat(awsCredentialsResult.awsAccessKeyId.length-4)} from '${awsCredentialsResult.source}'`);
+
+  const fastlyTomlPath = path.resolve(context.computeAppDir, 'fastly.toml');
+  const serviceId = readServiceId(fastlyTomlPath);
+
+  let apiToken = undefined;
+  if (serviceId == null) {
+    console.log(`- Service ID not found in fastly.toml, application may not have been deployed yet. Will skip purge step after publish.`);
+  } else {
+    console.log(`✔️ Service ID from fastly.toml: ${serviceId}`);
+
+    const apiTokenResult = loadApiToken({commandLine: context.fastlyApiToken});
+    if (apiTokenResult == null) {
+      throw new Error("❌ Fastly API Token not provided.\nSet the FASTLY_API_TOKEN environment variable to an API token that has write access to the KV Store.");
+    }
+    console.log(`✔️ Fastly API Token: ${apiTokenResult.apiToken.slice(0, 4)}${'*'.repeat(apiTokenResult.apiToken.length - 4)} from '${apiTokenResult.source}'`);
+    apiToken = apiTokenResult.apiToken;
+  }
+
   return new S3StorageProvider(
+    serviceId,
+    apiToken,
     region,
     awsCredentialsResult.awsAccessKeyId,
     awsCredentialsResult.awsSecretAccessKey,
@@ -95,12 +126,16 @@ export const buildStoreProvider: StorageProviderBuilder = async (
 
 export class S3StorageProvider implements StorageProvider {
   constructor(
+    fastlyServiceId: string | undefined,
+    fastlyApiToken: string | undefined,
     s3Region: string,
     accessKeyId: string,
     secretAccessKey: string,
     s3Bucket: string,
     s3Endpoint?: string,
   ) {
+    this.fastlyServiceId = fastlyServiceId;
+    this.fastlyApiContext = fastlyApiToken != null ? { apiToken: fastlyApiToken } : undefined;
     this.s3Region = s3Region;
     this.accessKeyId = accessKeyId;
     this.secretAccessKey = secretAccessKey;
@@ -108,6 +143,8 @@ export class S3StorageProvider implements StorageProvider {
     this.s3Endpoint = s3Endpoint;
   }
 
+  private readonly fastlyServiceId?: string;
+  private readonly fastlyApiContext?: FastlyApiContext;
   private readonly s3Region: string;
   private readonly accessKeyId: string;
   private readonly secretAccessKey: string;
@@ -327,5 +364,31 @@ export class S3StorageProvider implements StorageProvider {
   }
 
   async purgeSurrogateKey(surrogateKey: string): Promise<void> {
+
+    if (this.fastlyServiceId == null) {
+      console.log('Fastly Service ID not set, skipping purge...');
+      return;
+    }
+
+    if (this.fastlyApiContext?.apiToken == null) {
+      console.log('Fastly API token not set, skipping purge...');
+      return;
+    }
+
+    console.log(`Purging surrogate key [${surrogateKey}] on service [${this.fastlyServiceId}]...`);
+
+    const result = await purgeSurrogateKey(
+      this.fastlyApiContext,
+      this.fastlyServiceId,
+      surrogateKey,
+      true,
+    );
+
+    if (result) {
+      console.log('Purged');
+    } else {
+      console.log('Failed purging');
+    }
+
   }
 }
