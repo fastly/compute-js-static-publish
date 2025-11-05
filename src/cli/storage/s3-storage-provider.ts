@@ -326,4 +326,6 @@ export class S3StorageProvider implements StorageProvider {
     return assetVariantMetadata;
   }
 
+  async purgeSurrogateKey(surrogateKey: string): Promise<void> {
+  }
 }

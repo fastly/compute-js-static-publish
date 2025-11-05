@@ -36,6 +36,8 @@ export interface StorageProvider {
   calculateNumChunks(size: number): number;
 
   getExistingAssetVariant(variantKey: string): Promise<AssetVariantMetadata | null>;
+
+  purgeSurrogateKey(surrogateKey: string): Promise<void>;
 }
 
 export type StorageProviderBatchEntry = {
