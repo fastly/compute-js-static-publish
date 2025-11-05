@@ -45,8 +45,8 @@ Options:
   --root-dir <path>                     (required) Path to static content (e.g., ./public)
   -o, --output <dir>                    Output directory for Compute app (default: ./compute-js)
   --static-publisher-working-dir <dir>  Working directory for build artifacts (default: <output>/static-publisher)
-  --publish-id <id>                     Advanced. Prefix for KV keys (default: "default")
                                         (default: ./compute-js/static-publisher)
+  --publish-id <id>                     Advanced. Prefix for KV keys (default: "default")
 
 Compute Service Metadata:
   --name <name>                         App name (for fastly.toml)
