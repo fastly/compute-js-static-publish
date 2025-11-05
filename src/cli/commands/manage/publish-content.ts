@@ -82,7 +82,7 @@ KV Store Options:
 
   --kv-overwrite                   Alias for --overwrite-existing.
 
-S3 Storage Options:
+S3 Storage Options (BETA):
   --aws-access-key-id=<key>        AWS Access Key ID and Secret Access Key used to
   --aws-secret-access-key=<key>    interface with S3.
                                    If not set, the tool will check:

@@ -59,7 +59,7 @@ export const buildStoreProvider: StorageProviderBuilder = async (
   context: StorageProviderBuilderContext,
 ) => {
   if (isS3StorageConfigRc(config)) {
-    console.log(`  Working on S3 (or compatible) storage...`);
+    console.log(`  Working on S3 (or compatible) storage (BETA)...`);
   } else {
     return null;
   }
@@ -69,7 +69,7 @@ export const buildStoreProvider: StorageProviderBuilder = async (
     bucket,
     endpoint,
   } = getS3StorageConfigFromRc(config);
-  console.log(`  | Using S3 storage`);
+  console.log(`  | Using S3 storage (BETA)`);
   console.log(`     Region  : ${region}`);
   console.log(`     Bucket  : ${bucket}`);
   console.log(`     Endpoint: ${endpoint ?? 'default'}`);

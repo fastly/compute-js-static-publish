@@ -37,7 +37,7 @@ KV Store Options:
                                      1. FASTLY_API_TOKEN environment variable
                                      2. Logged-in Fastly CLI profile
 
-S3 Storage Options:
+S3 Storage Options (BETA):
   --aws-access-key-id=<key>        AWS Access Key ID and Secret Access Key used to
   --aws-secret-access-key=<key>    interface with S3.
                                    If not set, the tool will check:

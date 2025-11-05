@@ -235,7 +235,7 @@ const rc = {
 export default rc;
 ```
 
-### Using S3-compatible storage
+### Using S3-compatible storage (BETA)
 
 #### Fields:
 
@@ -524,7 +524,7 @@ If you do need to rebuild and redeploy the Compute app, simply run:
 npm run fastly:deploy
 ```
 
-### Using S3-compatible storage
+### Using S3-compatible storage (BETA)
 
 #### Local development
 
@@ -732,7 +732,7 @@ npx @fastly/compute-js-static-publish@latest \
   --root-dir=./public \
   --kv-store-name=<site-content>
 
-# Using S3 storage
+# Using S3 storage (BETA)
 npx @fastly/compute-js-static-publish@latest \
   --root-dir=./public \
   --storage-mode=s3 \

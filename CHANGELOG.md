@@ -26,7 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- S3-compatible storage
+- S3-compatible storage (BETA)
    - Add support for S3-compatible storage, such as Fastly Object Storage
    - Store items using same keys as KV Store
    - Use S3 object metadata for storing asset metadata

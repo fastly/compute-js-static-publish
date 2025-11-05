@@ -33,7 +33,7 @@ Description:
 
 Options:
   --storage-mode <mode>                 Storage mode for content storage. 
-                                        Can be "kv-store" or "s3".
+                                        Can be "kv-store" or "s3" (BETA).
                                         (default: kv-store)
   If --storage-mode=kv-store, then:
     --kv-store-name <name>              (required) Name of the KV Store.
@@ -726,7 +726,7 @@ export async function action(actionArgs: string[]) {
     console.log('Storage Mode                   : Fastly KV Store');
     console.log('KV Store Name                  :', kvStoreName);
   } else if (storageMode === 's3') {
-    console.log('Storage Name                   : S3-compatible storage');
+    console.log('Storage Name                   : S3-compatible storage (BETA)');
     console.log('S3 Region                      :', s3Region);
     console.log('S3 Bucket                      :', s3Bucket);
     console.log('S3 Endpoint                    :', String(s3EndpointUrl));

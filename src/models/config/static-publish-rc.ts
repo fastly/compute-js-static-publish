@@ -64,7 +64,7 @@ export function isKvStoreConfigRc(rc: unknown): rc is StaticPublishKvStore {
   return false;
 }
 
-// S3 Storage config
+// S3 Storage config (BETA)
 export type StaticPublishPartialS3Storage = {
   storageMode: 's3',
   s3: {
