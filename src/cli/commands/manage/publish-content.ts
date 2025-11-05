@@ -22,6 +22,7 @@ import { calculateFileSizeAndHash, enumerateFiles, rootRelative } from '../../ut
 import { ensureVariantFileExists, type Variants } from '../../util/variants.js';
 import {
   loadStorageProviderFromStaticPublishRc,
+  StorageProvider,
   StorageProviderBatch,
   type StorageProviderBatchEntry,
 } from '../../storage/storage-provider.js';
@@ -229,7 +230,7 @@ export async function action(actionArgs: string[]) {
   console.log(`  | Static publisher working directory: ${staticPublisherWorkingDir}`);
 
   // Storage Provider
-  let storageProvider: any;
+  let storageProvider: StorageProvider;
   try {
     storageProvider = await loadStorageProviderFromStaticPublishRc(staticPublisherRc, {
       computeAppDir,
