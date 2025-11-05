@@ -809,10 +809,15 @@ export async function action(actionArgs: string[]) {
   if (storageMode === 'kv-store') {
     const localServerKvStorePath = dotRelative(computeJsDir, path.resolve(staticPublisherWorkingDir, 'kvstore.json'));
     fastlyTomlLocalServer = /* language=text */ `\
+[local_server]
+
 [local_server.kv_stores]
 ${kvStoreName} = { file = "${localServerKvStorePath}", format = "json" }
 `;
     fastlyTomlSetup = /* language=text */ `\
+[setup]
+
+[setup.kv_stores]
 [setup.kv_stores.${kvStoreName}]
 `;
 
@@ -820,6 +825,8 @@ ${kvStoreName} = { file = "${localServerKvStorePath}", format = "json" }
     resourceFiles[localServerKvStorePath] = '{}';
   } else if (storageMode === 's3') {
     fastlyTomlLocalServer = /* language=text */ `\
+[local_server]
+
 [local_server.secret_stores]
 [[local_server.secret_stores.AWS_CREDENTIALS]]
 key = "AWS_ACCESS_KEY_ID"
@@ -834,10 +841,21 @@ url = "${String(s3EndpointUrl)}"
 override_host = "${s3EndpointUrl!.hostname}"
 `;
     fastlyTomlSetup = /* language=text */ `\
+[setup]
+
+[setup.backends]
 [setup.backends.aws]
 address = "${s3EndpointUrl!.hostname}"
 description = "S3 API endpoint"
 port = 443
+[setup.secret_stores]
+[setup.secret_stores.AWS_CREDENTIALS]
+description = "Credentials for S3 storage"
+[setup.secret_stores.AWS_CREDENTIALS.items]
+[setup.secret_stores.AWS_CREDENTIALS.items.AWS_ACCESS_KEY_ID]
+description = "AWS Access Key ID"
+[setup.secret_stores.AWS_CREDENTIALS.items.AWS_SECRET_ACCESS_KEY]
+description = "AWS Secret Access Key"
 `;
   }
 
