@@ -7,17 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
-### Fixed
-
-- Use pathToFileURL so that import() works under ESM across platforms [#38](https://github.com/fastly/compute-js-static-publish/issues/38)
-
-## [7.0.2] - 2025-09-16
-
-### Fixed
-
-- Fix script listed in readme instructions
-- Handle symlinks properly in file enumeration [#41](https://github.com/fastly/compute-js-static-publish/issues/41)
-
 ### Breaking
 
 - Rename symbols
@@ -31,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
    - Store items using same keys as KV Store
    - Use S3 object metadata for storing asset metadata
    - Storage factored out to StorageProvider, and S3 is implemented using this architecture
-   - Configure using  
+   - Add AWS-related configurations to fastly.toml in local_server and setup sections
 
 - `static-publish.rc.js`
    - Add `s3` mode configuration
@@ -40,6 +29,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `publish-content.config.js`
    - `kvStoreAssetInclusionTest` renamed to `assetInclusionTest`. Previous name deprecated.
+
+## [7.0.3] - 2025-09-29
+
+### Fixed
+
+- Use pathToFileURL so that import() works under ESM across platforms [#38](https://github.com/fastly/compute-js-static-publish/issues/38)
+
+## [7.0.2] - 2025-09-16
+
+### Fixed
+
+- Fix script listed in readme instructions
+- Handle symlinks properly in file enumeration [#41](https://github.com/fastly/compute-js-static-publish/issues/41)
 
 ## [7.0.1] - 2025-04-24
 
