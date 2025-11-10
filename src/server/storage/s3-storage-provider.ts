@@ -5,13 +5,17 @@
 
 import { CacheOverride } from 'fastly:cache-override';
 import { SecretStore } from 'fastly:secret-store';
+import { Command } from '@smithy/types';
 import { FetchHttpHandler } from '@smithy/fetch-http-handler';
 import {
   GetObjectCommand,
   GetObjectCommandInput,
   GetObjectCommandOutput,
   S3Client,
-  S3ServiceException
+  S3ClientResolvedConfig,
+  S3ServiceException,
+  ServiceInputTypes,
+  ServiceOutputTypes,
 } from '@aws-sdk/client-s3';
 
 import {
@@ -107,6 +111,9 @@ export type S3StorageProviderParams = {
   s3FastlyBackendName?: string,
 };
 
+type S3ClientCommand<InputType extends ServiceInputTypes, OutputType extends ServiceOutputTypes> =
+  Command<ServiceInputTypes, InputType, ServiceOutputTypes, OutputType, S3ClientResolvedConfig>;
+
 export class S3StorageProvider implements StorageProvider {
   constructor(
     s3Region: string,
@@ -124,15 +131,12 @@ export class S3StorageProvider implements StorageProvider {
   private readonly s3Endpoint?: string;
   private readonly s3FastlyBackendName?: string;
 
-  private surrogateKeys?: string[];
-
-  private s3Client?: S3Client;
-  async getS3Client() {
-    if (this.s3Client != null) {
-      return this.s3Client;
-    }
+  async sendS3Command<InputType extends ServiceInputTypes, OutputType extends ServiceOutputTypes>(
+    command: S3ClientCommand<InputType, OutputType>,
+    requestInit?: RequestInit,
+  ): Promise<OutputType> {
     const awsCredentials = await _awsCredentialsBuilder();
-    this.s3Client = new S3Client({
+    const s3Client = new S3Client({
       region: this.s3Region,
       endpoint: this.s3Endpoint,
       forcePathStyle: this.s3Endpoint != null,
@@ -140,24 +144,17 @@ export class S3StorageProvider implements StorageProvider {
         accessKeyId: awsCredentials.accessKeyId,
         secretAccessKey: awsCredentials.secretAccessKey,
       },
-      maxAttempts: 1,
+      maxAttempts: 5,
       requestHandler: new FetchHttpHandler({
-        requestInit: () => {
-          return {
-            backend: this.s3FastlyBackendName ?? "aws",
-            cacheOverride: new CacheOverride({
-              ttl: 3600,
-              surrogateKey: (this.surrogateKeys ?? []).join(' ') || undefined,
-            }),
-          };
+        requestInit() {
+          return requestInit ?? {};
         },
       }),
     });
-    return this.s3Client;
+    return s3Client.send(command);
   }
 
   async getEntry(key: string, tags?: string[]): Promise<StorageEntry | null> {
-
     const input = {
       Bucket: this.s3Bucket, // required
       Key: key,              // required
@@ -165,13 +162,13 @@ export class S3StorageProvider implements StorageProvider {
     const command = new GetObjectCommand(input);
     let response: GetObjectCommandOutput;
     try {
-      const s3Client = await this.getS3Client();
-      this.surrogateKeys = tags;
-      try {
-        response = await s3Client.send(command);
-      } finally {
-        this.surrogateKeys = undefined;
-      }
+      response = await this.sendS3Command(command, {
+        backend: this.s3FastlyBackendName ?? "aws",
+        cacheOverride: new CacheOverride({
+          ttl: 3600,
+          surrogateKey: (tags ?? []).join(' ') || undefined,
+        }),
+      });
     } catch(err) {
       if (err instanceof S3ServiceException && (err.name === "NotFound" || err.name === "NoSuchKey")) {
         console.log("Object does not exist");
