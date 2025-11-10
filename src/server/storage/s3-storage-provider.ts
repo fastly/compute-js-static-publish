@@ -67,7 +67,11 @@ export function setSecretStoreKeyForAwsSecretAccessKey(secretStoreKey: string) {
   _secretStoreKeyForAwsSecretAccessKey = secretStoreKey;
 }
 
+let _awsCredentialsFromSecretStore: AwsCredentials | undefined = undefined;
 export async function buildAwsCredentialsFromSecretStore() {
+  if (_awsCredentialsFromSecretStore != null) {
+    return _awsCredentialsFromSecretStore;
+  }
   let secretStore;
   try {
     secretStore = new SecretStore(_secretStoreForAwsCredentials);
@@ -86,10 +90,11 @@ export async function buildAwsCredentialsFromSecretStore() {
   }
   const secretAccessKey = secretAccessKeyEntry.plaintext();
 
-  return {
+  _awsCredentialsFromSecretStore = {
     accessKeyId,
     secretAccessKey,
   };
+  return _awsCredentialsFromSecretStore;
 }
 
 let _awsCredentialsBuilder: AwsCredentialsBuilder = buildAwsCredentialsFromSecretStore;
