@@ -22,6 +22,7 @@ import { calculateFileSizeAndHash, enumerateFiles, rootRelative } from '../../ut
 import { ensureVariantFileExists, type Variants } from '../../util/variants.js';
 import {
   loadStorageProviderFromStaticPublishRc,
+  StorageProvider,
   StorageProviderBatch,
   type StorageProviderBatchEntry,
 } from '../../storage/storage-provider.js';
@@ -56,6 +57,11 @@ Optional:
   --root-dir=<dir>                 Directory to publish from. Overrides the config file setting.
                                    Default: rootDir from publish-content.config.js
 
+  --fastly-api-token=<token>       Fastly API token for KV Store or cache access.
+                                   If not set, the tool will check:
+                                     1. FASTLY_API_TOKEN environment variable
+                                     2. Logged-in Fastly CLI profile
+
   --overwrite-existing             Always overwrite existing entries in storage, even if unchanged.
 
 Expiration:
@@ -75,14 +81,9 @@ KV Store Options:
                                    local files that will be used to simulate the KV Store
                                    with the local development environment.
 
-  --fastly-api-token=<token>       Fastly API token for KV Store access.
-                                   If not set, the tool will check:
-                                     1. FASTLY_API_TOKEN environment variable
-                                     2. Logged-in Fastly CLI profile
-
   --kv-overwrite                   Alias for --overwrite-existing.
 
-S3 Storage Options:
+S3 Storage Options (BETA):
   --aws-access-key-id=<key>        AWS Access Key ID and Secret Access Key used to
   --aws-secret-access-key=<key>    interface with S3.
                                    If not set, the tool will check:
@@ -229,7 +230,7 @@ export async function action(actionArgs: string[]) {
   console.log(`  | Static publisher working directory: ${staticPublisherWorkingDir}`);
 
   // Storage Provider
-  let storageProvider: any;
+  let storageProvider: StorageProvider;
   try {
     storageProvider = await loadStorageProviderFromStaticPublishRc(staticPublisherRc, {
       computeAppDir,
@@ -593,6 +594,8 @@ export async function action(actionArgs: string[]) {
   );
 
   console.log(`✅  Settings have been saved.`);
+
+  await storageProvider.purgeSurrogateKey(`${publishId}-${collectionName}`);
 
   console.log(`🎉 Completed.`);
 

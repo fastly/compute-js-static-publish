@@ -8,7 +8,7 @@ import {
 } from '../../models/config/static-publish-rc.js';
 
 export interface StorageProvider {
-  getEntry(key: string): Promise<StorageEntry | null>;
+  getEntry(key: string, tags?: string[]): Promise<StorageEntry | null>;
 }
 
 export type StorageProviderBuilder = (config: StaticPublishRc) => (StorageProvider | null);

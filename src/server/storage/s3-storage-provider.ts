@@ -3,14 +3,19 @@
  * Licensed under the MIT license. See LICENSE file for details.
  */
 
+import { CacheOverride } from 'fastly:cache-override';
 import { SecretStore } from 'fastly:secret-store';
+import { Command } from '@smithy/types';
 import { FetchHttpHandler } from '@smithy/fetch-http-handler';
 import {
   GetObjectCommand,
   GetObjectCommandInput,
   GetObjectCommandOutput,
   S3Client,
-  S3ServiceException
+  S3ClientResolvedConfig,
+  S3ServiceException,
+  ServiceInputTypes,
+  ServiceOutputTypes,
 } from '@aws-sdk/client-s3';
 
 import {
@@ -66,7 +71,11 @@ export function setSecretStoreKeyForAwsSecretAccessKey(secretStoreKey: string) {
   _secretStoreKeyForAwsSecretAccessKey = secretStoreKey;
 }
 
+let _awsCredentialsFromSecretStore: AwsCredentials | undefined = undefined;
 export async function buildAwsCredentialsFromSecretStore() {
+  if (_awsCredentialsFromSecretStore != null) {
+    return _awsCredentialsFromSecretStore;
+  }
   let secretStore;
   try {
     secretStore = new SecretStore(_secretStoreForAwsCredentials);
@@ -85,10 +94,11 @@ export async function buildAwsCredentialsFromSecretStore() {
   }
   const secretAccessKey = secretAccessKeyEntry.plaintext();
 
-  return {
+  _awsCredentialsFromSecretStore = {
     accessKeyId,
     secretAccessKey,
   };
+  return _awsCredentialsFromSecretStore;
 }
 
 let _awsCredentialsBuilder: AwsCredentialsBuilder = buildAwsCredentialsFromSecretStore;
@@ -100,6 +110,9 @@ export type S3StorageProviderParams = {
   s3Endpoint?: string,
   s3FastlyBackendName?: string,
 };
+
+type S3ClientCommand<InputType extends ServiceInputTypes, OutputType extends ServiceOutputTypes> =
+  Command<ServiceInputTypes, InputType, ServiceOutputTypes, OutputType, S3ClientResolvedConfig>;
 
 export class S3StorageProvider implements StorageProvider {
   constructor(
@@ -118,14 +131,12 @@ export class S3StorageProvider implements StorageProvider {
   private readonly s3Endpoint?: string;
   private readonly s3FastlyBackendName?: string;
 
-  private s3Client?: S3Client;
-  async getS3Client() {
-    if (this.s3Client != null) {
-      return this.s3Client;
-    }
+  async sendS3Command<InputType extends ServiceInputTypes, OutputType extends ServiceOutputTypes>(
+    command: S3ClientCommand<InputType, OutputType>,
+    requestInit?: RequestInit,
+  ): Promise<OutputType> {
     const awsCredentials = await _awsCredentialsBuilder();
-    const s3FastlyBackendName = this.s3FastlyBackendName ?? "aws";
-    this.s3Client = new S3Client({
+    const s3Client = new S3Client({
       region: this.s3Region,
       endpoint: this.s3Endpoint,
       forcePathStyle: this.s3Endpoint != null,
@@ -133,16 +144,17 @@ export class S3StorageProvider implements StorageProvider {
         accessKeyId: awsCredentials.accessKeyId,
         secretAccessKey: awsCredentials.secretAccessKey,
       },
-      maxAttempts: 1,
+      maxAttempts: 5,
       requestHandler: new FetchHttpHandler({
-        requestInit() { return { backend: s3FastlyBackendName } }
+        requestInit() {
+          return requestInit ?? {};
+        },
       }),
     });
-    return this.s3Client;
+    return s3Client.send(command);
   }
 
-  async getEntry(key: string): Promise<StorageEntry | null> {
-
+  async getEntry(key: string, tags?: string[]): Promise<StorageEntry | null> {
     const input = {
       Bucket: this.s3Bucket, // required
       Key: key,              // required
@@ -150,8 +162,13 @@ export class S3StorageProvider implements StorageProvider {
     const command = new GetObjectCommand(input);
     let response: GetObjectCommandOutput;
     try {
-      const s3Client = await this.getS3Client();
-      response = await s3Client.send(command);
+      response = await this.sendS3Command(command, {
+        backend: this.s3FastlyBackendName ?? "aws",
+        cacheOverride: new CacheOverride({
+          ttl: 3600,
+          surrogateKey: (tags ?? []).join(' ') || undefined,
+        }),
+      });
     } catch(err) {
       if (err instanceof S3ServiceException && (err.name === "NotFound" || err.name === "NoSuchKey")) {
         console.log("Object does not exist");

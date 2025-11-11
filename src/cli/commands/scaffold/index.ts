@@ -32,8 +32,9 @@ Description:
   management mode.
 
 Options:
-  --storage-mode <mode>                 (required) Storage mode for content storage. 
-                                        Can be "kv-store" or "s3".
+  --storage-mode <mode>                 Storage mode for content storage. 
+                                        Can be "kv-store" or "s3" (BETA).
+                                        (default: kv-store)
   If --storage-mode=kv-store, then:
     --kv-store-name <name>              (required) Name of the KV Store.
 
@@ -45,8 +46,8 @@ Options:
   --root-dir <path>                     (required) Path to static content (e.g., ./public)
   -o, --output <dir>                    Output directory for Compute app (default: ./compute-js)
   --static-publisher-working-dir <dir>  Working directory for build artifacts (default: <output>/static-publisher)
-  --publish-id <id>                     Advanced. Prefix for KV keys (default: "default")
                                         (default: ./compute-js/static-publisher)
+  --publish-id <id>                     Advanced. Prefix for KV keys (default: "default")
 
 Compute Service Metadata:
   --name <name>                         App name (for fastly.toml)
@@ -407,8 +408,8 @@ export async function action(actionArgs: string[]) {
   const optionDefinitions: OptionDefinition[] = [
     { name: 'verbose', type: Boolean },
 
-    // Required. Storage mode for content storage. Can be "kv-store" or "s3".
-    { name: 'storage-mode', type: String, },
+    // Storage mode for content storage. Can be "kv-store" or "s3".
+    { name: 'storage-mode', type: String, defaultValue: 'kv-store', },
 
     // If storage-mode=kv-store, then:
 
@@ -651,7 +652,7 @@ export async function action(actionArgs: string[]) {
   const fastlyServiceId = options.serviceId;
   const storageMode = options.storageMode;
   if (!(storageMode === 'kv-store' || storageMode === 's3')) {
-    console.error(`❌ required parameter --storage-mode must be set to 'kv-store' or 's3'.`);
+    console.error(`❌ parameter --storage-mode must be set to 'kv-store' or 's3'.`);
     process.exitCode = 1;
     return;
   }
@@ -725,7 +726,7 @@ export async function action(actionArgs: string[]) {
     console.log('Storage Mode                   : Fastly KV Store');
     console.log('KV Store Name                  :', kvStoreName);
   } else if (storageMode === 's3') {
-    console.log('Storage Name                   : S3-compatible storage');
+    console.log('Storage Name                   : S3-compatible storage (BETA)');
     console.log('S3 Region                      :', s3Region);
     console.log('S3 Bucket                      :', s3Bucket);
     console.log('S3 Endpoint                    :', String(s3EndpointUrl));
@@ -808,10 +809,15 @@ export async function action(actionArgs: string[]) {
   if (storageMode === 'kv-store') {
     const localServerKvStorePath = dotRelative(computeJsDir, path.resolve(staticPublisherWorkingDir, 'kvstore.json'));
     fastlyTomlLocalServer = /* language=text */ `\
+[local_server]
+
 [local_server.kv_stores]
 ${kvStoreName} = { file = "${localServerKvStorePath}", format = "json" }
 `;
     fastlyTomlSetup = /* language=text */ `\
+[setup]
+
+[setup.kv_stores]
 [setup.kv_stores.${kvStoreName}]
 `;
 
@@ -819,6 +825,8 @@ ${kvStoreName} = { file = "${localServerKvStorePath}", format = "json" }
     resourceFiles[localServerKvStorePath] = '{}';
   } else if (storageMode === 's3') {
     fastlyTomlLocalServer = /* language=text */ `\
+[local_server]
+
 [local_server.secret_stores]
 [[local_server.secret_stores.AWS_CREDENTIALS]]
 key = "AWS_ACCESS_KEY_ID"
@@ -833,10 +841,21 @@ url = "${String(s3EndpointUrl)}"
 override_host = "${s3EndpointUrl!.hostname}"
 `;
     fastlyTomlSetup = /* language=text */ `\
+[setup]
+
+[setup.backends]
 [setup.backends.aws]
 address = "${s3EndpointUrl!.hostname}"
 description = "S3 API endpoint"
 port = 443
+[setup.secret_stores]
+[setup.secret_stores.AWS_CREDENTIALS]
+description = "Credentials for S3 storage"
+[setup.secret_stores.AWS_CREDENTIALS.items]
+[setup.secret_stores.AWS_CREDENTIALS.items.AWS_ACCESS_KEY_ID]
+description = "AWS Access Key ID"
+[setup.secret_stores.AWS_CREDENTIALS.items.AWS_SECRET_ACCESS_KEY]
+description = "AWS Secret Access Key"
 `;
   }
 

@@ -56,7 +56,6 @@ Create a directory for your project, place your static files in `./public`, then
 ```sh
 npx @fastly/compute-js-static-publish@latest \
   --root-dir=./public \
-  --storage-mode=kv-store \
   --kv-store-name=site-content
 ```
 
@@ -236,7 +235,7 @@ const rc = {
 export default rc;
 ```
 
-### Using S3-compatible storage
+### Using S3-compatible storage (BETA)
 
 #### Fields:
 
@@ -525,7 +524,7 @@ If you do need to rebuild and redeploy the Compute app, simply run:
 npm run fastly:deploy
 ```
 
-### Using S3-compatible storage
+### Using S3-compatible storage (BETA)
 
 #### Local development
 
@@ -731,10 +730,9 @@ Run outside an existing Compute app directory:
 # Using KV store storage
 npx @fastly/compute-js-static-publish@latest \
   --root-dir=./public \
-  --storage-mode=kv-store \
   --kv-store-name=<site-content>
 
-# Using S3 storage
+# Using S3 storage (BETA)
 npx @fastly/compute-js-static-publish@latest \
   --root-dir=./public \
   --storage-mode=s3 \
@@ -748,7 +746,7 @@ npx @fastly/compute-js-static-publish@latest \
 ```sh
 npx @fastly/compute-js-static-publish@latest \
   --root-dir=./public \
-  { --storage-mode=kv-store --kv-store-name=<site-content> | \
+  { [--storage-mode=kv-store] --kv-store-name=<site-content> | \
     --storage-mode=s3 --s3-region=<s3 region> --s3-bucket=<bucket name> [--s3-endpoint=<endpoint>] } \
   [--output=./compute-js] \
   [--static-publisher-working-dir=<output>/static-publisher] \
@@ -768,7 +766,7 @@ npx @fastly/compute-js-static-publish@latest \
 #### Options:
 
 **Used to generate the Compute app:**
-- `--storage-mode`: Required. Specifies the storage mode. Must be either `kv-store` or `s3`.
+- `--storage-mode`: Specifies the storage mode. Must be either `kv-store` or `s3` (default: `kv-store`).
 
    If `--storage-mode=kv-store`:
    - `--kv-store-name`: Required. Name of KV Store to use.
