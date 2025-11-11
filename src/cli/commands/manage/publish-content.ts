@@ -57,6 +57,11 @@ Optional:
   --root-dir=<dir>                 Directory to publish from. Overrides the config file setting.
                                    Default: rootDir from publish-content.config.js
 
+  --fastly-api-token=<token>       Fastly API token for KV Store or cache access.
+                                   If not set, the tool will check:
+                                     1. FASTLY_API_TOKEN environment variable
+                                     2. Logged-in Fastly CLI profile
+
   --overwrite-existing             Always overwrite existing entries in storage, even if unchanged.
 
 Expiration:
@@ -75,11 +80,6 @@ KV Store Options:
   --local                          Instead of working with the Fastly KV Store, operate on
                                    local files that will be used to simulate the KV Store
                                    with the local development environment.
-
-  --fastly-api-token=<token>       Fastly API token for KV Store access.
-                                   If not set, the tool will check:
-                                     1. FASTLY_API_TOKEN environment variable
-                                     2. Logged-in Fastly CLI profile
 
   --kv-overwrite                   Alias for --overwrite-existing.
 
