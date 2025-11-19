@@ -86,7 +86,6 @@ export const buildStoreProvider: StorageProviderBuilder = async (
   console.log(`     Endpoint: ${endpoint ?? 'default'}`);
 
   const awsCredentialsResult = await loadAwsCredentials({
-    awsProfile: context.awsProfile,
     awsAccessKeyId: context.awsAccessKeyId,
     awsSecretAccessKey: context.awsSecretAccessKey,
   });

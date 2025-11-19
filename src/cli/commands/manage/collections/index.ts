@@ -43,11 +43,6 @@ S3 Storage Options (BETA):
                                         environment variables
                                      2. The aws credentials file, see below  
 
-  --aws-profile=<profile>          Profile within the aws credentials file.
-                                   If not set, the tool will check:
-                                     1. AWS_PROFILE environment variable
-                                     2. The default profile, if set
-
 Global Options:
   -h, --help                       Show this help message and exit.
 

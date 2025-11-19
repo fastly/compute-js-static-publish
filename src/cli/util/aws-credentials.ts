@@ -3,8 +3,6 @@
  * Licensed under the MIT license. See LICENSE file for details.
  */
 
-import { fromIni } from '@aws-sdk/credential-providers';
-
 export type LoadAwsCredentialsResult = {
   awsAccessKeyId: string,
   awsSecretAccessKey: string,
@@ -12,7 +10,6 @@ export type LoadAwsCredentialsResult = {
 };
 
 export type LoadAwsCredentialsParams = {
-  awsProfile?: any,
   awsAccessKeyId?: any,
   awsSecretAccessKey?: any,
 };
@@ -45,37 +42,6 @@ export async function loadAwsCredentials(params: LoadAwsCredentialsParams): Prom
       awsAccessKeyId = id;
       awsSecretAccessKey = key;
       source = 'env';
-    }
-  }
-
-  if (awsAccessKeyId == null && awsSecretAccessKey == null) {
-    let awsProfile: string | undefined = undefined;
-    if (
-      typeof params.awsProfile === 'string'
-    ) {
-      awsProfile = params.awsProfile.trim() || undefined;
-    }
-    if (awsProfile == null) {
-      const profile = process.env.AWS_PROFILE || undefined;
-      if (profile != null) {
-        awsProfile = profile;
-      }
-    }
-
-    let provider;
-    try {
-      provider = await fromIni({profile: awsProfile ?? undefined})();
-    } catch {
-      provider = null;
-    }
-    if (provider != null) {
-      const id = provider.accessKeyId || null;
-      const key = provider.secretAccessKey || null;
-      if (id != null && key != null) {
-        awsAccessKeyId = id;
-        awsSecretAccessKey = key;
-        source = `credentials (profile ${awsProfile ?? 'default'})`;
-      }
     }
   }
 

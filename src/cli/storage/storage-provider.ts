@@ -62,7 +62,6 @@ export type StorageProviderBuilderContext = {
   computeAppDir: string,
   localMode?: boolean,
   fastlyApiToken?: string,
-  awsProfile?: string,
   awsAccessKeyId?: string,
   awsSecretAccessKey?: string,
 };
