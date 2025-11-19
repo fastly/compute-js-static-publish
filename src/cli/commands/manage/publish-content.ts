@@ -60,7 +60,7 @@ Optional:
   --fastly-api-token=<token>       Fastly API token for KV Store or cache access.
                                    If not set, the tool will check:
                                      1. FASTLY_API_TOKEN environment variable
-                                     2. Logged-in Fastly CLI profile
+                                     2. The default profile in the Fastly CLI
 
   --overwrite-existing             Always overwrite existing entries in storage, even if unchanged.
 
