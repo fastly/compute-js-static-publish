@@ -20,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
    - Store items using same keys as KV Store
    - Use S3 object metadata for storing asset metadata
    - Storage factored out to StorageProvider, and S3 is implemented using this architecture
-   - Add AWS-related configurations to fastly.toml in local_server and setup sections
+   - Add credentials to fastly.toml in local_server and setup sections
 
 - `static-publish.rc.js`
    - Add `s3` mode configuration

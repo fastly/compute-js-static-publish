@@ -834,7 +834,7 @@ After this process is complete, the PublisherServer object in the Compute applic
 
 - `--fastly-api-token`: API token to use when publishing. If not set, the tool will check:
    - **`FASTLY_API_TOKEN` environment variable**
-   - Logged-in Fastly CLI profile
+   - The default profile in the Fastly CLI
 
 #### `clean`
 
@@ -858,7 +858,7 @@ This can include expired collection indexes and orphaned content assets.
 
 - `--fastly-api-token`: API token to use when publishing. If not set, the tool will check:
     - **`FASTLY_API_TOKEN` environment variable**
-    - Logged-in Fastly CLI profile
+    - The default profile in the Fastly CLI
 
 #### `collections list`
 
@@ -875,7 +875,7 @@ Lists all collections currently published in the KV Store.
 
 - `--fastly-api-token`: API token to use when publishing. If not set, the tool will check:
     - **`FASTLY_API_TOKEN` environment variable**
-    - Logged-in Fastly CLI profile
+    - The default profile in the Fastly CLI
 
 #### `collections promote`
 
@@ -906,7 +906,7 @@ Copies an existing collection (content + config) to a new collection name.
 
 - `--fastly-api-token`: API token to use when publishing. If not set, the tool will check:
     - **`FASTLY_API_TOKEN` environment variable**
-    - Logged-in Fastly CLI profile
+    - The default profile in the Fastly CLI
 
 #### `collections update-expiration`
 
@@ -934,7 +934,7 @@ Sets or updates the expiration time of an existing collection.
 
 - `--fastly-api-token`: API token to use when publishing. If not set, the tool will check:
     - **`FASTLY_API_TOKEN` environment variable**
-    - Logged-in Fastly CLI profile
+    - The default profile in the Fastly CLI
 
 #### `collections delete`
 
@@ -957,7 +957,7 @@ Use the `npx @fastly/compute-js-static-publish clean` command afterward to remov
 
 - `--fastly-api-token`: API token to use when publishing. If not set, the tool will check:
     - **`FASTLY_API_TOKEN` environment variable**
-    - Logged-in Fastly CLI profile
+    - The default profile in the Fastly CLI
 
 ---
 

@@ -17,7 +17,7 @@ import { type CommandLineOptions, type OptionDefinition } from 'command-line-arg
 import { parseCommandLine } from '../../util/args.js';
 import { dotRelative, rootRelative } from '../../util/files.js';
 import { findComputeJsStaticPublisherVersion, type PackageJson } from '../../util/package.js';
-import { resolveS3Hostname } from '../../util/s3.js';
+import { findHostnameForAwsS3RegionAndBucket } from '../../util/s3.js';
 
 function help() {
   console.log(`\
@@ -682,7 +682,11 @@ export async function action(actionArgs: string[]) {
     }
     let s3Endpoint = options.s3Endpoint;
     if (s3Endpoint == null || s3Endpoint === '') {
-      s3Endpoint = await resolveS3Hostname(s3Region, s3Bucket);
+      // If endpoint is not presented, we assume it's from AWS,
+      // and ask the SDK what the hostname would be.
+      // This is required because we need to add the hostname as a
+      // backend in the Compute service.
+      s3Endpoint = await findHostnameForAwsS3RegionAndBucket(s3Region, s3Bucket);
       if (s3Endpoint) {
         console.log('✅ S3 endpoint resolved:', s3Endpoint);
       } else {
@@ -726,7 +730,7 @@ export async function action(actionArgs: string[]) {
     console.log('Storage Mode                   : Fastly KV Store');
     console.log('KV Store Name                  :', kvStoreName);
   } else if (storageMode === 's3') {
-    console.log('Storage Name                   : S3-compatible storage (BETA)');
+    console.log('Storage Name                   : S3 (or compatible) storage (BETA)');
     console.log('S3 Region                      :', s3Region);
     console.log('S3 Bucket                      :', s3Bucket);
     console.log('S3 Endpoint                    :', String(s3EndpointUrl));
@@ -790,7 +794,7 @@ export async function action(actionArgs: string[]) {
     author,
     type: 'module',
     devDependencies: {
-      "@fastly/cli": "^12.0.0",
+      "@fastly/cli": "^13.1.0",
       '@fastly/compute-js-static-publish': computeJsStaticPublisherVersion,
     },
     dependencies: {
@@ -828,15 +832,15 @@ ${kvStoreName} = { file = "${localServerKvStorePath}", format = "json" }
 [local_server]
 
 [local_server.secret_stores]
-[[local_server.secret_stores.AWS_CREDENTIALS]]
-key = "AWS_ACCESS_KEY_ID"
-env = "AWS_ACCESS_KEY_ID"
-[[local_server.secret_stores.AWS_CREDENTIALS]]
-key = "AWS_SECRET_ACCESS_KEY"
-env = "AWS_SECRET_ACCESS_KEY"
+[[local_server.secret_stores.S3_CREDENTIALS]]
+key = "S3_ACCESS_KEY_ID"
+env = "S3_ACCESS_KEY_ID"
+[[local_server.secret_stores.S3_CREDENTIALS]]
+key = "S3_SECRET_ACCESS_KEY"
+env = "S3_SECRET_ACCESS_KEY"
 
 [local_server.backends]
-[local_server.backends.aws]
+[local_server.backends.s3_storage]
 url = "${String(s3EndpointUrl)}"
 override_host = "${s3EndpointUrl!.hostname}"
 `;
@@ -844,18 +848,18 @@ override_host = "${s3EndpointUrl!.hostname}"
 [setup]
 
 [setup.backends]
-[setup.backends.aws]
+[setup.backends.s3_storage]
 address = "${s3EndpointUrl!.hostname}"
 description = "S3 API endpoint"
 port = 443
 [setup.secret_stores]
-[setup.secret_stores.AWS_CREDENTIALS]
+[setup.secret_stores.S3_CREDENTIALS]
 description = "Credentials for S3 storage"
-[setup.secret_stores.AWS_CREDENTIALS.items]
-[setup.secret_stores.AWS_CREDENTIALS.items.AWS_ACCESS_KEY_ID]
-description = "AWS Access Key ID"
-[setup.secret_stores.AWS_CREDENTIALS.items.AWS_SECRET_ACCESS_KEY]
-description = "AWS Secret Access Key"
+[setup.secret_stores.S3_CREDENTIALS.items]
+[setup.secret_stores.S3_CREDENTIALS.items.S3_ACCESS_KEY_ID]
+description = "Access Key ID"
+[setup.secret_stores.S3_CREDENTIALS.items.S3_SECRET_ACCESS_KEY]
+description = "Secret Access Key"
 `;
   }
 
@@ -1055,25 +1059,21 @@ To publish your content to your S3-compatible bucket
     Bucket:    ${s3Bucket}
     Endpoint:  ${String(s3EndpointUrl)}
 
-  Using an AWS profile set with "aws configure", type:
+  Using an access key ID and secret access key for S3, type:
     cd ${COMPUTE_JS_DIR}
-    AWS_PROFILE=xxxx npm run s3:publish
-
-  Using AWS IAM credentials, type:
-    cd ${COMPUTE_JS_DIR}
-    AWS_ACCESS_KEY_ID=xxxx AWS_SECRET_ACCESS_KEY=xxxx npm run s3:publish
+    S3_ACCESS_KEY_ID=xxxx S3_SECRET_ACCESS_KEY=xxxx npm run s3:publish
 
 To run your Compute application locally
 
   Run the following commands:
     cd ${COMPUTE_JS_DIR}
-    AWS_ACCESS_KEY_ID=xxxx AWS_SECRET_ACCESS_KEY=xxxx npm run dev:start  
+    S3_ACCESS_KEY_ID=xxxx S3_SECRET_ACCESS_KEY=xxxx npm run dev:start  
 
 To build and deploy to your Compute service:
 
-  Create a Secret Store in your account named AWS_CREDENTIALS, and set the following values:
-    AWS_ACCESS_KEY_ID: xxxx
-    AWS_SECRET_ACCESS_KEY: xxxx
+  Create a Secret Store in your account named S3_CREDENTIALS, and set the following values:
+    S3_ACCESS_KEY_ID: xxxx
+    S3_SECRET_ACCESS_KEY: xxxx
   
   Run the following commands:
     cd ${COMPUTE_JS_DIR}
