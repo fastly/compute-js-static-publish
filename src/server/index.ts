@@ -17,10 +17,10 @@ export {
   registerStorageProviderBuilder,
 } from './storage/storage-provider.js';
 export {
-  setSecretStoreForAwsCredentials,
-  setSecretStoreKeyForAwsAccessKeyId,
-  setSecretStoreKeyForAwsSecretAccessKey,
-  setAwsCredentialsBuilder,
+  setSecretStoreForS3Credentials,
+  setSecretStoreKeyForS3AccessKeyId,
+  setSecretStoreKeyForS3SecretAccessKey,
+  setS3CredentialsBuilder,
 } from './storage/s3-storage-provider.js';
 export { PublisherServer } from './publisher-server/index.js';
 

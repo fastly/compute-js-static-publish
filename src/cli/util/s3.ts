@@ -13,7 +13,7 @@ const DUMMY_KEY = 'dummy.dat'; // placeholder, never sent over the network
  * - Uses client-s3's own endpoint resolution logic (so it's always accurate).
  * - No network calls; intercepts at the build step.
  */
-export async function resolveS3Hostname(region: string, bucket: string): Promise<string> {
+export async function findHostnameForAwsS3RegionAndBucket(region: string, bucket: string): Promise<string> {
   const client = new S3Client({ region });
   let hostname = '';
 

@@ -33,12 +33,12 @@ import {
   StorageProviderBuilder,
 } from './storage-provider.js';
 
-export type AwsCredentials = {
+export type S3Credentials = {
   accessKeyId: string,
   secretAccessKey: string,
 };
 
-export type AwsCredentialsBuilder = () => (AwsCredentials | Promise<AwsCredentials>);
+export type S3CredentialsBuilder = () => (S3Credentials | Promise<S3Credentials>);
 
 export const buildStoreProvider: StorageProviderBuilder = (config: StaticPublishRc) => {
   if (!isS3StorageConfigRc(config)) {
@@ -55,55 +55,55 @@ export const buildStoreProvider: StorageProviderBuilder = (config: StaticPublish
   );
 };
 
-let _secretStoreForAwsCredentials = 'AWS_CREDENTIALS';
-let _secretStoreKeyForAwsAccessKeyId = 'AWS_ACCESS_KEY_ID';
-let _secretStoreKeyForAwsSecretAccessKey = 'AWS_SECRET_ACCESS_KEY';
+let _secretStoreForS3Credentials = 'S3_CREDENTIALS';
+let _secretStoreKeyForS3AccessKeyId = 'S3_ACCESS_KEY_ID';
+let _secretStoreKeyForS3SecretAccessKey = 'S3_SECRET_ACCESS_KEY';
 
-export function setSecretStoreForAwsCredentials(secretStoreName: string) {
-  _secretStoreForAwsCredentials = secretStoreName;
+export function setSecretStoreForS3Credentials(secretStoreName: string) {
+  _secretStoreForS3Credentials = secretStoreName;
 }
 
-export function setSecretStoreKeyForAwsAccessKeyId(secretStoreKey: string) {
-  _secretStoreKeyForAwsAccessKeyId = secretStoreKey;
+export function setSecretStoreKeyForS3AccessKeyId(secretStoreKey: string) {
+  _secretStoreKeyForS3AccessKeyId = secretStoreKey;
 }
 
-export function setSecretStoreKeyForAwsSecretAccessKey(secretStoreKey: string) {
-  _secretStoreKeyForAwsSecretAccessKey = secretStoreKey;
+export function setSecretStoreKeyForS3SecretAccessKey(secretStoreKey: string) {
+  _secretStoreKeyForS3SecretAccessKey = secretStoreKey;
 }
 
-let _awsCredentialsFromSecretStore: AwsCredentials | undefined = undefined;
-export async function buildAwsCredentialsFromSecretStore() {
-  if (_awsCredentialsFromSecretStore != null) {
-    return _awsCredentialsFromSecretStore;
+let _s3CredentialsFromSecretStore: S3Credentials | undefined = undefined;
+export async function buildS3CredentialsFromSecretStore() {
+  if (_s3CredentialsFromSecretStore != null) {
+    return _s3CredentialsFromSecretStore;
   }
   let secretStore;
   try {
-    secretStore = new SecretStore(_secretStoreForAwsCredentials);
+    secretStore = new SecretStore(_secretStoreForS3Credentials);
   } catch {
-    throw new Error(`Could not open secret store for AWS credentials: ${_secretStoreForAwsCredentials}`);
+    throw new Error(`Could not open secret store for S3 credentials: ${_secretStoreForS3Credentials}`);
   }
-  const accessKeyIdEntry = await secretStore.get(_secretStoreKeyForAwsAccessKeyId);
+  const accessKeyIdEntry = await secretStore.get(_secretStoreKeyForS3AccessKeyId);
   if (accessKeyIdEntry == null) {
-    throw new Error(`Could not retrieve value '${_secretStoreKeyForAwsAccessKeyId}' in secret store '${_secretStoreForAwsCredentials}'`);
+    throw new Error(`Could not retrieve value '${_secretStoreKeyForS3AccessKeyId}' in secret store '${_secretStoreForS3Credentials}'`);
   }
   const accessKeyId = accessKeyIdEntry.plaintext();
 
-  const secretAccessKeyEntry = await secretStore.get(_secretStoreKeyForAwsSecretAccessKey);
+  const secretAccessKeyEntry = await secretStore.get(_secretStoreKeyForS3SecretAccessKey);
   if (secretAccessKeyEntry == null) {
-    throw new Error(`Could not retrieve value '${_secretStoreKeyForAwsSecretAccessKey}' in secret store '${_secretStoreForAwsCredentials}'`);
+    throw new Error(`Could not retrieve value '${_secretStoreKeyForS3SecretAccessKey}' in secret store '${_secretStoreForS3Credentials}'`);
   }
   const secretAccessKey = secretAccessKeyEntry.plaintext();
 
-  _awsCredentialsFromSecretStore = {
+  _s3CredentialsFromSecretStore = {
     accessKeyId,
     secretAccessKey,
   };
-  return _awsCredentialsFromSecretStore;
+  return _s3CredentialsFromSecretStore;
 }
 
-let _awsCredentialsBuilder: AwsCredentialsBuilder = buildAwsCredentialsFromSecretStore;
-export function setAwsCredentialsBuilder(awsCredentialsBuilder: AwsCredentialsBuilder) {
-  _awsCredentialsBuilder = awsCredentialsBuilder;
+let _s3CredentialsBuilder: S3CredentialsBuilder = buildS3CredentialsFromSecretStore;
+export function setS3CredentialsBuilder(s3CredentialsBuilder: S3CredentialsBuilder) {
+  _s3CredentialsBuilder = s3CredentialsBuilder;
 }
 
 export type S3StorageProviderParams = {
@@ -135,14 +135,14 @@ export class S3StorageProvider implements StorageProvider {
     command: S3ClientCommand<InputType, OutputType>,
     requestInit?: RequestInit,
   ): Promise<OutputType> {
-    const awsCredentials = await _awsCredentialsBuilder();
+    const s3Credentials = await _s3CredentialsBuilder();
     const s3Client = new S3Client({
       region: this.s3Region,
       endpoint: this.s3Endpoint,
       forcePathStyle: this.s3Endpoint != null,
       credentials: {
-        accessKeyId: awsCredentials.accessKeyId,
-        secretAccessKey: awsCredentials.secretAccessKey,
+        accessKeyId: s3Credentials.accessKeyId,
+        secretAccessKey: s3Credentials.secretAccessKey,
       },
       maxAttempts: 5,
       requestHandler: new FetchHttpHandler({
@@ -163,7 +163,7 @@ export class S3StorageProvider implements StorageProvider {
     let response: GetObjectCommandOutput;
     try {
       response = await this.sendS3Command(command, {
-        backend: this.s3FastlyBackendName ?? "aws",
+        backend: this.s3FastlyBackendName ?? "s3_storage",
         cacheOverride: new CacheOverride({
           ttl: 3600,
           surrogateKey: (tags ?? []).join(' ') || undefined,

@@ -36,12 +36,10 @@ KV Store Options:
                                      2. The default profile in the Fastly CLI
 
 S3 Storage Options (BETA):
-  --aws-access-key-id=<key>        AWS Access Key ID and Secret Access Key used to
-  --aws-secret-access-key=<key>    interface with S3.
-                                   If not set, the tool will check:
-                                     1. AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY
-                                        environment variables
-                                     2. The aws credentials file, see below  
+  --s3-access-key-id=<id>          Access Key ID and Secret Access Key used to
+  --s3-secret-access-key=<key>     interface with S3 or compatible storage.
+                                   If not set, the tool will check the S3_ACCESS_KEY_ID
+                                   and S3_SECRET_ACCESS_KEY environment variables.
 
 Global Options:
   -h, --help                       Show this help message and exit.

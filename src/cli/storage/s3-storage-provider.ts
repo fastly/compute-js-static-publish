@@ -43,8 +43,8 @@ import {
   type StorageProviderBatch,
 } from './storage-provider.js';
 import {
-  loadAwsCredentials,
-} from '../util/aws-credentials.js';
+  loadS3Credentials,
+} from '../util/s3-credentials.js';
 import {
   concurrentParallel,
   makeRetryable,
@@ -85,14 +85,14 @@ export const buildStoreProvider: StorageProviderBuilder = async (
   console.log(`     Bucket  : ${bucket}`);
   console.log(`     Endpoint: ${endpoint ?? 'default'}`);
 
-  const awsCredentialsResult = await loadAwsCredentials({
-    awsAccessKeyId: context.awsAccessKeyId,
-    awsSecretAccessKey: context.awsSecretAccessKey,
+  const s3CredentialsResult = await loadS3Credentials({
+    s3AccessKeyId: context.s3AccessKeyId,
+    s3SecretAccessKey: context.s3SecretAccessKey,
   });
-  if (awsCredentialsResult == null) {
-    throw new Error("❌ S3 Credentials not provided.\nProvide an AWS access key ID and secret access key that has write access to the S3 Storage.\nRefer to the README file and --help for additional information.");
+  if (s3CredentialsResult == null) {
+    throw new Error("❌ S3 Credentials not provided.\nProvide an access key ID and secret access key that have write access to the S3 or compatible storage.\nRefer to the README file and --help for additional information.");
   }
-  console.log(`✔️ S3 Credentials: ${awsCredentialsResult.awsAccessKeyId.slice(0, 4)}${'*'.repeat(awsCredentialsResult.awsAccessKeyId.length-4)} from '${awsCredentialsResult.source}'`);
+  console.log(`✔️ S3 Credentials: ${s3CredentialsResult.s3AccessKeyId.slice(0, 4)}${'*'.repeat(s3CredentialsResult.s3AccessKeyId.length-4)} from '${s3CredentialsResult.source}'`);
 
   const fastlyTomlPath = path.resolve(context.computeAppDir, 'fastly.toml');
   const serviceId = readServiceId(fastlyTomlPath);
@@ -115,8 +115,8 @@ export const buildStoreProvider: StorageProviderBuilder = async (
     serviceId,
     apiToken,
     region,
-    awsCredentialsResult.awsAccessKeyId,
-    awsCredentialsResult.awsSecretAccessKey,
+    s3CredentialsResult.s3AccessKeyId,
+    s3CredentialsResult.s3SecretAccessKey,
     bucket,
     endpoint,
   );

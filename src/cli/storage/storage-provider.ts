@@ -62,8 +62,8 @@ export type StorageProviderBuilderContext = {
   computeAppDir: string,
   localMode?: boolean,
   fastlyApiToken?: string,
-  awsAccessKeyId?: string,
-  awsSecretAccessKey?: string,
+  s3AccessKeyId?: string,
+  s3SecretAccessKey?: string,
 };
 export type StorageProviderBuilder =
   (config: StaticPublishRc, context: StorageProviderBuilderContext) => (Promise<StorageProvider | null> | StorageProvider | null);

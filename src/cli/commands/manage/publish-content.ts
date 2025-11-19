@@ -84,12 +84,10 @@ KV Store Options:
   --kv-overwrite                   Alias for --overwrite-existing.
 
 S3 Storage Options (BETA):
-  --aws-access-key-id=<key>        AWS Access Key ID and Secret Access Key used to
-  --aws-secret-access-key=<key>    interface with S3.
-                                   If not set, the tool will check:
-                                     1. AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY
-                                        environment variables
-                                     2. The aws credentials file, see below  
+  --s3-access-key-id=<id>          Access Key ID and Secret Access Key used to
+  --s3-secret-access-key=<key>     interface with S3 or compatible storage.
+                                   If not set, the tool will check the S3_ACCESS_KEY_ID
+                                   and S3_SECRET_ACCESS_KEY environment variables.
 
 Global Options:
   -h, --help                       Show this help message and exit.
@@ -120,8 +118,8 @@ export async function action(actionArgs: string[]) {
     { name: 'fastly-api-token', type: String, },
     { name: 'kv-overwrite', type: Boolean },
 
-    { name: 'aws-access-key-id', type: String, },
-    { name: 'aws-secret-access-key', type: String, },
+    { name: 's3-access-key-id', type: String, },
+    { name: 's3-secret-access-key', type: String, },
   ];
 
   const parsed = parseCommandLine(actionArgs, optionDefinitions);
@@ -148,8 +146,8 @@ export async function action(actionArgs: string[]) {
     local: localMode,
     ['fastly-api-token']: fastlyApiToken,
     ['kv-overwrite']: _kvOverwrite,
-    ['aws-access-key-id']: awsAccessKeyId,
-    ['aws-secret-access-key']: awsSecretAccessKey,
+    ['s3-access-key-id']: s3AccessKeyId,
+    ['s3-secret-access-key']: s3SecretAccessKey,
   } = parsed.commandLineOptions;
 
   const overwriteExisting = _overwriteExisting ?? _kvOverwrite;
@@ -229,8 +227,8 @@ export async function action(actionArgs: string[]) {
       computeAppDir,
       localMode,
       fastlyApiToken,
-      awsAccessKeyId,
-      awsSecretAccessKey,
+      s3AccessKeyId,
+      s3SecretAccessKey,
     });
   } catch (err: unknown) {
     console.error(`❌ Could not instantiate store provider`);
