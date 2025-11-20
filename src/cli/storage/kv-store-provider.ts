@@ -267,6 +267,9 @@ export class KvStoreProvider implements StorageProvider {
     return kvStoreItemMetadata;
 
   }
+
+  async purgeSurrogateKey(_surrogateKey: string): Promise<void> {
+  }
 }
 
 export function kvStoreEntryToStorageEntry(

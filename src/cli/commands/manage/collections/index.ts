@@ -33,20 +33,13 @@ KV Store Options:
   --fastly-api-token=<token>       Fastly API token for KV Store access.
                                    If not set, the tool will check:
                                      1. FASTLY_API_TOKEN environment variable
-                                     2. Logged-in Fastly CLI profile
+                                     2. The default profile in the Fastly CLI
 
-S3 Storage Options:
-  --aws-access-key-id=<key>        AWS Access Key ID and Secret Access Key used to
-  --aws-secret-access-key=<key>    interface with S3.
-                                   If not set, the tool will check:
-                                     1. AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY
-                                        environment variables
-                                     2. The aws credentials file, see below  
-
-  --aws-profile=<profile>          Profile within the aws credentials file.
-                                   If not set, the tool will check:
-                                     1. AWS_PROFILE environment variable
-                                     2. The default profile, if set
+S3 Storage Options (BETA):
+  --s3-access-key-id=<id>          Access Key ID and Secret Access Key used to
+  --s3-secret-access-key=<key>     interface with S3 or compatible storage.
+                                   If not set, the tool will check the S3_ACCESS_KEY_ID
+                                   and S3_SECRET_ACCESS_KEY environment variables.
 
 Global Options:
   -h, --help                       Show this help message and exit.

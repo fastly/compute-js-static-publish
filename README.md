@@ -56,7 +56,6 @@ Create a directory for your project, place your static files in `./public`, then
 ```sh
 npx @fastly/compute-js-static-publish@latest \
   --root-dir=./public \
-  --storage-mode=kv-store \
   --kv-store-name=site-content
 ```
 
@@ -236,7 +235,7 @@ const rc = {
 export default rc;
 ```
 
-### Using S3-compatible storage
+### Using S3-compatible storage (BETA)
 
 #### Fields:
 
@@ -525,7 +524,7 @@ If you do need to rebuild and redeploy the Compute app, simply run:
 npm run fastly:deploy
 ```
 
-### Using S3-compatible storage
+### Using S3-compatible storage (BETA)
 
 #### Local development
 
@@ -731,10 +730,9 @@ Run outside an existing Compute app directory:
 # Using KV store storage
 npx @fastly/compute-js-static-publish@latest \
   --root-dir=./public \
-  --storage-mode=kv-store \
   --kv-store-name=<site-content>
 
-# Using S3 storage
+# Using S3 storage (BETA)
 npx @fastly/compute-js-static-publish@latest \
   --root-dir=./public \
   --storage-mode=s3 \
@@ -748,7 +746,7 @@ npx @fastly/compute-js-static-publish@latest \
 ```sh
 npx @fastly/compute-js-static-publish@latest \
   --root-dir=./public \
-  { --storage-mode=kv-store --kv-store-name=<site-content> | \
+  { [--storage-mode=kv-store] --kv-store-name=<site-content> | \
     --storage-mode=s3 --s3-region=<s3 region> --s3-bucket=<bucket name> [--s3-endpoint=<endpoint>] } \
   [--output=./compute-js] \
   [--static-publisher-working-dir=<output>/static-publisher] \
@@ -768,7 +766,7 @@ npx @fastly/compute-js-static-publish@latest \
 #### Options:
 
 **Used to generate the Compute app:**
-- `--storage-mode`: Required. Specifies the storage mode. Must be either `kv-store` or `s3`.
+- `--storage-mode`: Specifies the storage mode. Must be either `kv-store` or `s3` (default: `kv-store`).
 
    If `--storage-mode=kv-store`:
    - `--kv-store-name`: Required. Name of KV Store to use.
@@ -836,7 +834,7 @@ After this process is complete, the PublisherServer object in the Compute applic
 
 - `--fastly-api-token`: API token to use when publishing. If not set, the tool will check:
    - **`FASTLY_API_TOKEN` environment variable**
-   - Logged-in Fastly CLI profile
+   - The default profile in the Fastly CLI
 
 #### `clean`
 
@@ -860,7 +858,7 @@ This can include expired collection indexes and orphaned content assets.
 
 - `--fastly-api-token`: API token to use when publishing. If not set, the tool will check:
     - **`FASTLY_API_TOKEN` environment variable**
-    - Logged-in Fastly CLI profile
+    - The default profile in the Fastly CLI
 
 #### `collections list`
 
@@ -877,7 +875,7 @@ Lists all collections currently published in the KV Store.
 
 - `--fastly-api-token`: API token to use when publishing. If not set, the tool will check:
     - **`FASTLY_API_TOKEN` environment variable**
-    - Logged-in Fastly CLI profile
+    - The default profile in the Fastly CLI
 
 #### `collections promote`
 
@@ -908,7 +906,7 @@ Copies an existing collection (content + config) to a new collection name.
 
 - `--fastly-api-token`: API token to use when publishing. If not set, the tool will check:
     - **`FASTLY_API_TOKEN` environment variable**
-    - Logged-in Fastly CLI profile
+    - The default profile in the Fastly CLI
 
 #### `collections update-expiration`
 
@@ -936,7 +934,7 @@ Sets or updates the expiration time of an existing collection.
 
 - `--fastly-api-token`: API token to use when publishing. If not set, the tool will check:
     - **`FASTLY_API_TOKEN` environment variable**
-    - Logged-in Fastly CLI profile
+    - The default profile in the Fastly CLI
 
 #### `collections delete`
 
@@ -959,7 +957,7 @@ Use the `npx @fastly/compute-js-static-publish clean` command afterward to remov
 
 - `--fastly-api-token`: API token to use when publishing. If not set, the tool will check:
     - **`FASTLY_API_TOKEN` environment variable**
-    - Logged-in Fastly CLI profile
+    - The default profile in the Fastly CLI
 
 ---
 

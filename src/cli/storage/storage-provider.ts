@@ -36,6 +36,8 @@ export interface StorageProvider {
   calculateNumChunks(size: number): number;
 
   getExistingAssetVariant(variantKey: string): Promise<AssetVariantMetadata | null>;
+
+  purgeSurrogateKey(surrogateKey: string): Promise<void>;
 }
 
 export type StorageProviderBatchEntry = {
@@ -60,9 +62,8 @@ export type StorageProviderBuilderContext = {
   computeAppDir: string,
   localMode?: boolean,
   fastlyApiToken?: string,
-  awsProfile?: string,
-  awsAccessKeyId?: string,
-  awsSecretAccessKey?: string,
+  s3AccessKeyId?: string,
+  s3SecretAccessKey?: string,
 };
 export type StorageProviderBuilder =
   (config: StaticPublishRc, context: StorageProviderBuilderContext) => (Promise<StorageProvider | null> | StorageProvider | null);

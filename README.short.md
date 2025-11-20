@@ -18,7 +18,7 @@ This CLI tool helps you:
 Create a directory for your project, place your static files in `./public`, then type:
 
 ```sh
-npx @fastly/compute-js-static-publish@latest --root-dir=./public --storage-mode=kv-store --kv-store-name=site-content
+npx @fastly/compute-js-static-publish@latest --root-dir=./public --kv-store-name=site-content
 ```
 
 **New in v8:** S3-compatible storage (such as Fastly Object Storage) is also supported (Beta). To use this mode, type:

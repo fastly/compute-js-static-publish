@@ -186,4 +186,7 @@ export class KvStoreLocalProvider implements StorageProvider {
     // to save time by checking for an existing item. This is not applicable for local.
     return null;
   }
+
+  async purgeSurrogateKey(_surrogateKey: string): Promise<void> {
+  }
 }

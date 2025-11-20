@@ -120,7 +120,7 @@ export class PublisherServer {
       return this.settingsCached;
     }
     const settingsFileKey = `${this.publishId}_settings_${this.activeCollectionName}`;
-    const settingsFile = await this.storageProvider.getEntry(settingsFileKey);
+    const settingsFile = await this.storageProvider.getEntry(settingsFileKey, [`${this.publishId}-${this.activeCollectionName}`, 'settings']);
     if (settingsFile == null) {
       console.error(`Settings File not found at ${settingsFileKey}.`);
       console.error(`You may need to publish your application.`);
@@ -156,7 +156,7 @@ export class PublisherServer {
       return this.assetEntryMapCache;
     }
     const indexFileKey = `${this.publishId}_index_${this.activeCollectionName}`;
-    const indexFile = await this.storageProvider.getEntry(indexFileKey);
+    const indexFile = await this.storageProvider.getEntry(indexFileKey, [`${this.publishId}-${this.activeCollectionName}`, 'index']);
     if (indexFile == null) {
       console.error(`Index File not found at ${indexFileKey}.`);
       console.error(`You may need to publish your application.`);
