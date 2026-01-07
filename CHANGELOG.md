@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+### Added
+
+- Publish to GitHub packages as well
+- Use NPM trusted publishing for publishing to npmjs.com
+
 ## [7.0.3] - 2025-09-29
 
 ### Fixed
