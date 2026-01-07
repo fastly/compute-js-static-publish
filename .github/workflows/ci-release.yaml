@@ -43,11 +43,22 @@ jobs:
           echo "DIST_TAG=$PRERELEASE" >> $GITHUB_ENV
 
       - name: Install npm dependencies
-        run: npm install
+        run: npm ci
 
       - name: Publish to npmjs.org
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           echo "Publishing to npmjs.org using dist-tag: $DIST_TAG"
+          npm publish --access=public --tag "$DIST_TAG"
+
+      - name: Set up auth for GitHub packages
+        run: |
+          npm config set "//npm.pkg.github.com/:_authToken" "\${NODE_AUTH_TOKEN}"
+      - name: Publish to pkg.github.com
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npm config set "@fastly:registry" "https://npm.pkg.github.com/"
+          echo "Publishing to pkg.github.com using dist-tag: $DIST_TAG"
           npm publish --access=public --tag "$DIST_TAG"
