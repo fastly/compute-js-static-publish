@@ -7,6 +7,11 @@ on:
       - 'v*.*.*'
       - 'v*.*.*-*'
 
+permissions:
+  id-token: write  # Required for OIDC
+  contents: read
+  packages: write
+
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -46,8 +51,6 @@ jobs:
         run: npm ci
 
       - name: Publish to npmjs.org
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           echo "Publishing to npmjs.org using dist-tag: $DIST_TAG"
           npm publish --access=public --tag "$DIST_TAG"
