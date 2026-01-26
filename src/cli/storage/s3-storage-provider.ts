@@ -12,12 +12,13 @@ import {
   GetObjectCommandInput,
   HeadObjectCommand,
   HeadObjectCommandInput,
-  ListObjectsV2Command,
   ListObjectsV2CommandInput,
   PutObjectCommand,
   PutObjectCommandInput,
   S3Client,
   S3ServiceException,
+  S3PaginationConfiguration,
+  paginateListObjectsV2,
 } from '@aws-sdk/client-s3';
 import {
   type Command,
@@ -184,23 +185,32 @@ export class S3StorageProvider implements StorageProvider {
 
   async getStorageKeys(prefix?: string): Promise<string[] | null> {
 
+    const paginationConfig = {
+      client: this.getS3Client(),
+    } satisfies S3PaginationConfiguration;
     const input = {
       Bucket: this.s3Bucket,
-      MaxKeys: 4096,
       Prefix: prefix,
-      ContinuationToken: undefined, // pagination
     } satisfies ListObjectsV2CommandInput;
-    const command = new ListObjectsV2Command(input);
-    const response = await this.sendS3ClientCommand(command);
 
-    if (response.Contents == null) {
-      return null;
+    const paginator = paginateListObjectsV2(
+      paginationConfig,
+      input,
+    );
+
+    const objectKeys: string[] = [];
+    for await (const { Contents } of paginator) {
+      if (Contents == null) {
+        continue;
+      }
+      for (const obj of Contents) {
+        if (obj.Key != null) {
+          objectKeys.push(obj.Key);
+        }
+      }
     }
 
-    return response.Contents
-      .map(c => c.Key)
-      .filter(c => c != null);
-
+    return objectKeys.length > 0 ? objectKeys : null;
   }
 
   async getStorageEntry(key: string): Promise<StorageEntry | null> {
