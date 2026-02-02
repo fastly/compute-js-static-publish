@@ -36,6 +36,7 @@ const defaultContentTypes: ContentTypeDef[] = [
   { test: /\.pdf$/, contentType: 'application/pdf', text: false },
   { test: /\.tar$/, contentType: 'application/x-tar', text: false, precompressAsset: true, },
   { test: /\.zip$/, contentType: 'application/zip', text: false },
+  { test: /\.wasm$/, contentType: 'application/wasm', text: false },
   { test: /\.eot$/, contentType: 'application/vnd.ms-fontobject', text: false },
   { test: /\.otf$/, contentType: 'font/otf', text: false },
   { test: /\.ttf$/, contentType: 'font/ttf', text: false },
