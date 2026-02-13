@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+## [7.0.6] - 2026-02-13
+
 ### Updated
 
 - Release to npmjs using updated CI workflow
@@ -354,7 +356,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated generated app's webpack and webpack-cli versions
 - Use atob() and removed dependency on Buffer
 
-[unreleased]: https://github.com/fastly/compute-js-static-publish/compare/v7.0.5...HEAD
+[unreleased]: https://github.com/fastly/compute-js-static-publish/compare/v7.0.6...HEAD
+[7.0.6]: https://github.com/fastly/compute-js-static-publish/compare/v7.0.5...v7.0.6
 [7.0.5]: https://github.com/fastly/compute-js-static-publish/compare/v7.0.4...v7.0.5
 [7.0.4]: https://github.com/fastly/compute-js-static-publish/compare/v7.0.3...v7.0.4
 [7.0.3]: https://github.com/fastly/compute-js-static-publish/compare/v7.0.2...v7.0.3
