@@ -484,6 +484,8 @@ export class PublisherServer {
       return preconditionResponse;
     }
 
+    headers.set('Content-Length', String(kvAssetVariant.size));
+
     const kvStoreEntry = kvAssetVariant.kvStoreEntry;
     return new Response(
       kvStoreEntry.body,
