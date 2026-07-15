@@ -4,6 +4,7 @@
  */
 
 import { callFastlyApi, type FastlyApiContext, FetchError } from './api-token.js';
+import { makeRetryable } from './retryable.js';
 
 type KVStoreInfo = {
   id: string,
@@ -221,4 +222,33 @@ export async function kvStoreDeleteEntry(fastlyApiContext: FastlyApiContext, kvS
     method: 'DELETE',
   });
 
+}
+
+export async function kvStoreSubmitBatch(
+  fastlyApiContext: FastlyApiContext,
+  kvStoreName: string,
+  ndjsonLines: string[],
+) {
+
+  const kvStoreId = await getKVStoreIdForName(fastlyApiContext, kvStoreName);
+  if (kvStoreId == null) {
+    throw new Error(`KV Store '${kvStoreName}' not found.`);
+  }
+
+  const response = await callFastlyApi(
+    fastlyApiContext,
+    `/resources/stores/kv/${encodeURIComponent(kvStoreId)}/batch`,
+    `Submitting batch of ${ndjsonLines.length} item(s) to KV Store`,
+    null,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/x-ndjson' },
+      body: ndjsonLines.join('\n'),
+    },
+  );
+
+  if (response.status === 207) {
+    const detail = await response.text().catch(() => '');
+    throw makeRetryable(new FetchError(`Batch upload partially failed (207): ${detail.slice(0, 300)}`, 207));
+  }
 }

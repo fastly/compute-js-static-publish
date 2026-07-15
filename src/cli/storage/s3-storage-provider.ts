@@ -42,7 +42,9 @@ import {
   type StorageProviderBuilder,
   type StorageProviderBuilderContext,
   type StorageProviderBatch,
+  type ApplyBatchOptions,
 } from './storage-provider.js';
+import { entriesToUpload } from '../util/kv-store-items.js';
 import {
   loadS3Credentials,
 } from '../util/s3-credentials.js';
@@ -295,11 +297,20 @@ export class S3StorageProvider implements StorageProvider {
 
   }
 
-  async applyBatch(batch: StorageProviderBatch): Promise<void> {
+  async applyBatch(batch: StorageProviderBatch, options: ApplyBatchOptions = {}): Promise<void> {
+
+    const { overwriteExisting = false, existingKeyPrefix } = options;
+
+    let toWrite = batch.storageProviderBatchEntries;
+    if (!overwriteExisting && existingKeyPrefix != null) {
+      const existing = new Set(await this.getStorageKeys(existingKeyPrefix) ?? []);
+      toWrite = entriesToUpload(toWrite, existing);
+    }
+
     console.log(`📤 Uploading entries to S3 storage.`);
     // fastlyApiContext is non-null if useKvStore is true
     await this.doConcurrentParallel(
-      batch.storageProviderBatchEntries.filter(x => x.write),
+      toWrite,
       async ({filePath, metadataJson}, key) => {
         // const fileStream = fs.createReadStream(filePath);
         const fileData = fs.readFileSync(filePath);
