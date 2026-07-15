@@ -43,7 +43,7 @@ export function decodeAssetVariantMetadata(obj: Record<string, string> | undefin
     return null;
   }
 
-  const numChunks = parseFloat(getMetadataFieldValue(obj, 'contentEncoding'));
+  const numChunks = parseInt(getMetadataFieldValue(obj, 'numChunks'), 10);
 
   const assetVariantMetadata: AssetVariantMetadata = {
     size,

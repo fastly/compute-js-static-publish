@@ -20,6 +20,7 @@ import { LoadConfigError, loadPublishContentConfigFile, loadStaticPublisherRcFil
 import { applyDefaults } from '../../util/data.js';
 import { calculateFileSizeAndHash, enumerateFiles, rootRelative } from '../../util/files.js';
 import { ensureVariantFileExists, type Variants } from '../../util/variants.js';
+import { concurrentMap } from '../../util/retryable.js';
 import {
   loadStorageProviderFromStaticPublishRc,
   StorageProvider,
@@ -311,7 +312,7 @@ export async function action(actionArgs: string[]) {
   const baseHashToVariantMetadatasMap = new Map<string, VariantMetadataMap>();
 
   // #### Iterate files
-  const filePromises = files.map(async (file) => {
+  const fileResults = await concurrentMap(files, async (file) => {
     // #### asset key
     const assetKey = file.slice(publicDirRoot.length)
       // in Windows, assetKey will otherwise end up as \path\file.html
@@ -472,8 +473,6 @@ export async function action(actionArgs: string[]) {
       batchItems,
     };
   });
-
-  const fileResults = await Promise.all(filePromises);
 
   for (const result of fileResults) {
     if (result == null) {

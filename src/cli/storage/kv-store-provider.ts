@@ -174,7 +174,9 @@ export class KvStoreProvider implements StorageProvider {
           metadataJson != null ? JSON.stringify(metadataJson) : undefined,
         );
         console.log(` 🌐 Submitted asset "${rootRelative(filePath)}" to KV Store with key "${key}".`)
-      }
+      },
+      12,
+      true,
     );
     console.log(`✅  Uploaded entries to KV Store.`);
   }
@@ -183,6 +185,7 @@ export class KvStoreProvider implements StorageProvider {
     objects: TObject[],
     fn: (obj: TObject, key: string, index: number) => Promise<void>,
     maxConcurrent: number = 12,
+    throwOnError: boolean = false,
   ): Promise<void> {
 
     await concurrentParallel(
@@ -197,6 +200,7 @@ export class KvStoreProvider implements StorageProvider {
         return null;
       },
       maxConcurrent,
+      throwOnError,
     );
 
   }

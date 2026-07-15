@@ -310,7 +310,9 @@ export class S3StorageProvider implements StorageProvider {
           metadataJson,
         );
         console.log(` 🌐 Submitted asset "${rootRelative(filePath)}" to S3 storage with key "${key}".`)
-      }
+      },
+      12,
+      true,
     );
     console.log(`✅  Uploaded entries to S3 storage.`);
 
@@ -320,6 +322,7 @@ export class S3StorageProvider implements StorageProvider {
     objects: TObject[],
     fn: (obj: TObject, key: string, index: number) => Promise<void>,
     maxConcurrent: number = 12,
+    throwOnError: boolean = false,
   ): Promise<void> {
 
     await concurrentParallel(
@@ -334,6 +337,7 @@ export class S3StorageProvider implements StorageProvider {
         return null;
       },
       maxConcurrent,
+      throwOnError,
     );
 
   }
