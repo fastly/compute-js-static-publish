@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+- Update to CLI v16
+
 ## [7.0.7] - 2026-07-16
 
 - Update to CLI v15
