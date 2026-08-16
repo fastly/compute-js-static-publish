@@ -534,6 +534,7 @@ export async function action(actionArgs: string[]) {
     } else if (!fs.existsSync(spaFilename)) {
       console.log(`⚠️ Warning: Ignoring specified SPA file '${SPA}' does not exist.`);
       console.log(`  * ${rootRelative(spaFilename)} does not exist.`);
+      spaFilename = undefined;
     }
   }
 
@@ -550,6 +551,7 @@ export async function action(actionArgs: string[]) {
     } else if (!fs.existsSync(notFoundPageFilename)) {
       console.log(`⚠️ Warning: Ignoring specified Not Found file '${NOT_FOUND_PAGE}' as it does not exist.`);
       console.log(`  * ${rootRelative(notFoundPageFilename)} does not exist.`);
+      notFoundPageFilename = undefined;
     }
   }
 
