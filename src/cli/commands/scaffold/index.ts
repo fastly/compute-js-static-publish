@@ -233,7 +233,7 @@ function buildOptions(
   }
 
   {
-    let autoExt: string[] = [];
+    let autoExt: string[] | undefined;
     const autoExtValue = commandLineOptions['auto-ext'];
 
     const asArray = Array.isArray(autoExtValue) ? autoExtValue : [ autoExtValue ];
