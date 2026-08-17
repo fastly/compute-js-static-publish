@@ -3,6 +3,8 @@
  * Licensed under the MIT license. See LICENSE file for details.
  */
 
+import { availableParallelism } from 'node:os';
+
 let _globalBackoffUntil = 0;
 
 const retryableSymbol = Symbol();
@@ -71,9 +73,11 @@ export async function concurrentParallel<TObject extends { key: string }>(
   fn: (obj: TObject, key: string, index: number) => Promise<void>,
   buildStatusMessage: (err: unknown) => (string | null),
   maxConcurrent: number = 12,
+  throwOnError: boolean = false,
 ) {
 
   let index = 0; // Shared among workers
+  const failures: string[] = [];
 
   async function worker() {
     while (index < objects.length) {
@@ -104,10 +108,40 @@ export async function concurrentParallel<TObject extends { key: string }>(
         const e = err instanceof Error ? err : new Error(String(err));
         console.error(`  ❌ Failed: ${key} → ${e.message}`);
         console.error(e.stack);
+        failures.push(key);
       }
     }
   }
 
   const workers = Array.from({ length: maxConcurrent }, () => worker());
   await Promise.all(workers);
+
+  if (throwOnError && failures.length > 0) {
+    const shown = failures.slice(0, 10).join(', ');
+    const more = failures.length > 10 ? `, and ${failures.length - 10} more` : '';
+    throw new Error(`${failures.length} of ${objects.length} operation(s) failed: ${shown}${more}`);
+  }
+}
+
+export async function concurrentMap<TItem, TResult>(
+  items: TItem[],
+  fn: (item: TItem, index: number) => Promise<TResult>,
+  maxConcurrent: number = availableParallelism(),
+): Promise<TResult[]> {
+
+  const results: TResult[] = new Array(items.length);
+  let index = 0;
+
+  async function worker() {
+    while (index < items.length) {
+      const currentIndex = index;
+      index = index + 1;
+      results[currentIndex] = await fn(items[currentIndex], currentIndex);
+    }
+  }
+
+  const workers = Array.from({ length: Math.min(maxConcurrent, items.length) }, () => worker());
+  await Promise.all(workers);
+
+  return results;
 }

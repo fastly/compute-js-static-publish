@@ -27,7 +27,7 @@ export interface StorageProvider {
     metadata?: Record<string, string>,
   ): Promise<void>;
   deleteStorageEntry(key: string): Promise<void>;
-  applyBatch(batch: StorageProviderBatch): Promise<void>;
+  applyBatch(batch: StorageProviderBatch, options?: ApplyBatchOptions): Promise<void>;
   doConcurrentParallel<TObject extends { key: string }>(
     objects: TObject[],
     fn: (obj: TObject, key: string, index: number) => Promise<void>,
@@ -41,11 +41,15 @@ export interface StorageProvider {
 }
 
 export type StorageProviderBatchEntry = {
-  write: boolean,
   size: number,
   key: string,
   filePath: string,
   metadataJson?: Record<string, string>,
+};
+
+export type ApplyBatchOptions = {
+  overwriteExisting?: boolean,
+  existingKeyPrefix?: string,
 };
 
 export class StorageProviderBatch {

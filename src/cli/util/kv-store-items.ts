@@ -147,3 +147,72 @@ export async function applyKVStoreEntriesChunks(kvStoreItemDescriptions: Storage
   }
 
 }
+
+export const KV_BATCH_MAX_ITEMS = 256;
+export const KV_BATCH_MAX_BYTES = 8 * 1_024 * 1_024;
+
+export type NdjsonBatch = {
+  key: string,
+  entries: StorageProviderBatchEntry[],
+};
+
+export function packNdjsonBatches(
+  entries: StorageProviderBatchEntry[],
+  maxItems: number = KV_BATCH_MAX_ITEMS,
+  maxBytes: number = KV_BATCH_MAX_BYTES,
+): { batches: NdjsonBatch[], oversized: StorageProviderBatchEntry[] } {
+
+  const lineBytesFor = (entry: StorageProviderBatchEntry): number => {
+    const envelope = JSON.stringify({
+      key: entry.key,
+      value: '',
+      ...(entry.metadataJson != null ? { metadata: JSON.stringify(entry.metadataJson) } : {}),
+    });
+    return envelope.length + Math.ceil(entry.size / 3) * 4;
+  };
+
+  const oversized: StorageProviderBatchEntry[] = [];
+  const groups: StorageProviderBatchEntry[][] = [];
+  let current: StorageProviderBatchEntry[] = [];
+  let currentBytes = 0;
+
+  for (const entry of entries) {
+    const lineBytes = lineBytesFor(entry);
+    if (lineBytes > maxBytes) {
+      oversized.push(entry);
+      continue;
+    }
+    if (current.length > 0 && (current.length >= maxItems || currentBytes + lineBytes > maxBytes)) {
+      groups.push(current);
+      current = [];
+      currentBytes = 0;
+    }
+    current.push(entry);
+    currentBytes += lineBytes;
+  }
+  if (current.length > 0) {
+    groups.push(current);
+  }
+
+  const batches = groups.map((groupEntries, i) => ({
+    key: `batch-${i}`,
+    entries: groupEntries,
+  }));
+  return { batches, oversized };
+}
+
+export function ndjsonLineForBatchEntry(entry: StorageProviderBatchEntry): string {
+  const value = fs.readFileSync(entry.filePath).toString('base64');
+  return JSON.stringify({
+    key: entry.key,
+    value,
+    ...(entry.metadataJson != null ? { metadata: JSON.stringify(entry.metadataJson) } : {}),
+  });
+}
+
+export function entriesToUpload(
+  entries: StorageProviderBatchEntry[],
+  existingKeys: Set<string>,
+): StorageProviderBatchEntry[] {
+  return entries.filter((entry) => !existingKeys.has(entry.key));
+}

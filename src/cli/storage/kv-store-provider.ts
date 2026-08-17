@@ -29,10 +29,14 @@ import {
   getKVStoreKeys,
   kvStoreDeleteEntry,
   kvStoreSubmitEntry,
+  kvStoreSubmitBatch,
   getKvStoreEntryInfo,
 } from '../util/kv-store.js';
 import {
   applyKVStoreEntriesChunks,
+  packNdjsonBatches,
+  ndjsonLineForBatchEntry,
+  entriesToUpload,
   KV_STORE_CHUNK_SIZE,
 } from '../util/kv-store-items.js';
 import {
@@ -44,6 +48,8 @@ import {
   type StorageProviderBuilder,
   type StorageProviderBuilderContext,
   type StorageProviderBatch,
+  type StorageProviderBatchEntry,
+  type ApplyBatchOptions,
 } from './storage-provider.js';
 
 export const buildStoreProvider: StorageProviderBuilder = (
@@ -151,7 +157,9 @@ export class KvStoreProvider implements StorageProvider {
 
   }
 
-  async applyBatch(batch: StorageProviderBatch): Promise<void> {
+  async applyBatch(batch: StorageProviderBatch, options: ApplyBatchOptions = {}): Promise<void> {
+
+    const { overwriteExisting = false, existingKeyPrefix } = options;
 
     console.log(`🍪 Chunking large files...`);
     await applyKVStoreEntriesChunks(
@@ -160,10 +168,24 @@ export class KvStoreProvider implements StorageProvider {
     );
     console.log(`✅  Large files have been chunked.`);
 
-    console.log(`📤 Uploading entries to KV Store.`);
-    // fastlyApiContext is non-null if useKvStore is true
+    let toWrite = batch.storageProviderBatchEntries;
+    if (!overwriteExisting && existingKeyPrefix != null) {
+      const existing = new Set(await this.getStorageKeys(existingKeyPrefix) ?? []);
+      toWrite = entriesToUpload(toWrite, existing);
+      console.log(`  | ${existing.size} key(s) already present in the KV Store.`);
+    }
+
+    console.log(`📤 Uploading ${toWrite.length} entries to KV Store.`);
+    await this.uploadEntries(toWrite);
+    console.log(`✅  Uploaded entries to KV Store.`);
+  }
+
+  async uploadEntries(entries: StorageProviderBatchEntry[]): Promise<void> {
+
+    const { batches, oversized } = packNdjsonBatches(entries);
+
     await this.doConcurrentParallel(
-      batch.storageProviderBatchEntries.filter(x => x.write),
+      oversized,
       async ({filePath, metadataJson}, key) => {
         const fileBytes = fs.readFileSync(filePath);
         await kvStoreSubmitEntry(
@@ -173,16 +195,29 @@ export class KvStoreProvider implements StorageProvider {
           fileBytes,
           metadataJson != null ? JSON.stringify(metadataJson) : undefined,
         );
-        console.log(` 🌐 Submitted asset "${rootRelative(filePath)}" to KV Store with key "${key}".`)
-      }
+        console.log(` 🌐 Submitted large asset "${rootRelative(filePath)}" to KV Store with key "${key}".`)
+      },
+      12,
+      true,
     );
-    console.log(`✅  Uploaded entries to KV Store.`);
+
+    await this.doConcurrentParallel(
+      batches,
+      async ({entries: batchEntries}, key) => {
+        const lines = batchEntries.map(ndjsonLineForBatchEntry);
+        await kvStoreSubmitBatch(this.fastlyApiContext, this.kvStoreName, lines);
+        console.log(` 🌐 Submitted ${batchEntries.length} entries to KV Store ("${key}").`)
+      },
+      12,
+      true,
+    );
   }
 
   async doConcurrentParallel<TObject extends { key: string }>(
     objects: TObject[],
     fn: (obj: TObject, key: string, index: number) => Promise<void>,
     maxConcurrent: number = 12,
+    throwOnError: boolean = false,
   ): Promise<void> {
 
     await concurrentParallel(
@@ -197,6 +232,7 @@ export class KvStoreProvider implements StorageProvider {
         return null;
       },
       maxConcurrent,
+      throwOnError,
     );
 
   }
