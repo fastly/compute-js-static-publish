@@ -796,7 +796,7 @@ export async function action(actionArgs: string[]) {
     author,
     type: 'module',
     devDependencies: {
-      "@fastly/cli": "^15.2.0",
+      "@fastly/cli": "^16.0.0",
       '@fastly/compute-js-static-publish': computeJsStaticPublisherVersion,
     },
     dependencies: {
