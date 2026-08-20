@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add content types for `.avif` and `.jxl` images
 
+### Updated
+
+- Update to CLI v16
+
 ### Fixed
 
 - `.tif`/`.tiff` files were served as `image/png`, now `image/tiff`
