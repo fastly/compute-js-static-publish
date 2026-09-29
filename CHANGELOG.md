@@ -27,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add content types for `.avif` and `.jxl` images
 
+- Add `application/wasm` to default content types
+
 ### Changed
 
 - `publish-content.config.js`
