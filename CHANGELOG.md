@@ -25,10 +25,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `static-publish.rc.js`
    - Add `s3` mode configuration
 
+- Add content types for `.avif` and `.jxl` images
+
+- Add `application/wasm` to default content types
+
 ### Changed
 
 - `publish-content.config.js`
    - `kvStoreAssetInclusionTest` renamed to `assetInclusionTest`. Previous name deprecated.
+
+### Fixed
+
+- The content type for `.tif`/`.tiff` files is now `image/tiff`. It was `image/png`.
 
 ## [7.0.3] - 2025-09-29
 
