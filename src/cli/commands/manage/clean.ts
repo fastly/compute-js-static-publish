@@ -197,7 +197,11 @@ export async function action(actionArgs: string[]) {
           assetsIdsInUse.add(`sha256_${assetEntry.key.slice('sha256:'.length)}`);
         }
       }
-    }
+    },
+    undefined,
+    // If an index cannot be read, stop. If we continue, we mark the files
+    // and settings of that collection as not in use, and delete them.
+    true,
   )
   console.log('');
 
@@ -258,7 +262,9 @@ export async function action(actionArgs: string[]) {
         console.log(`Deleting key from storage: ${key}`);
         await storageProvider.deleteStorageEntry(key);
       }
-    }
+    },
+    undefined,
+    true,
   );
 
   console.log('✅  Completed.')

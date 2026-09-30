@@ -38,6 +38,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The content type for `.tif`/`.tiff` files is now `image/tiff`. It was `image/png`.
 
+- `clean` stops with an error if it cannot read a collection index. Before, it continued and deleted the files of that collection.
+
+- `clean` and `collections delete` exit with an error if a delete operation fails. Before, they showed "Completed".
+
 ## [7.0.3] - 2025-09-29
 
 ### Fixed
