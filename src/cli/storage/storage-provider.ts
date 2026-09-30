@@ -32,6 +32,7 @@ export interface StorageProvider {
     objects: TObject[],
     fn: (obj: TObject, key: string, index: number) => Promise<void>,
     maxConcurrent?: number,
+    throwOnError?: boolean,
   ): Promise<void>;
   calculateNumChunks(size: number): number;
 

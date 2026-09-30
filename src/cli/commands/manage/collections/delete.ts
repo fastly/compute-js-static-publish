@@ -177,7 +177,9 @@ export async function action(actionArgs: string[]) {
     async(_, key) => {
       console.log(`Deleting key from storage: ${key}`);
       await storageProvider.deleteStorageEntry(key);
-    }
+    },
+    undefined,
+    true,
   )
 
   console.log("✅  Completed.")
