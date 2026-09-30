@@ -33,6 +33,7 @@ import {
   type StorageProviderBuilder,
   type StorageProviderBuilderContext,
   type StorageProviderBatch,
+  type ApplyBatchOptions,
 } from './storage-provider.js';
 import {
   kvStoreEntryToStorageEntry,
@@ -143,7 +144,7 @@ export class KvStoreLocalProvider implements StorageProvider {
 
   }
 
-  async applyBatch(batch: StorageProviderBatch): Promise<void> {
+  async applyBatch(batch: StorageProviderBatch, _options: ApplyBatchOptions = {}): Promise<void> {
 
     console.log(`🍪 Chunking large files...`);
     await applyKVStoreEntriesChunks(

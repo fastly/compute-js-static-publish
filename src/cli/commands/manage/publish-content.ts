@@ -20,6 +20,7 @@ import { LoadConfigError, loadPublishContentConfigFile, loadStaticPublisherRcFil
 import { applyDefaults } from '../../util/data.js';
 import { calculateFileSizeAndHash, enumerateFiles, rootRelative } from '../../util/files.js';
 import { ensureVariantFileExists, type Variants } from '../../util/variants.js';
+import { concurrentMap } from '../../util/retryable.js';
 import {
   loadStorageProviderFromStaticPublishRc,
   StorageProvider,
@@ -304,14 +305,12 @@ export async function action(actionArgs: string[]) {
   const assetsIndex: AssetEntryMap = {};
 
   // All the metadata of the variants we know about during this publishing, keyed on the base version's hash.
-  type VariantMetadataEntry = AssetVariantMetadata & {
-    existsInKvStore: boolean,
-  };
+  type VariantMetadataEntry = AssetVariantMetadata;
   type VariantMetadataMap = Map<Variants, VariantMetadataEntry>;
   const baseHashToVariantMetadatasMap = new Map<string, VariantMetadataMap>();
 
   // #### Iterate files
-  const filePromises = files.map(async (file) => {
+  const fileResults = await concurrentMap(files, async (file) => {
     // #### asset key
     const assetKey = file.slice(publicDirRoot.length)
       // in Windows, assetKey will otherwise end up as \path\file.html
@@ -390,46 +389,31 @@ export async function action(actionArgs: string[]) {
 
       } else {
 
-        if (!overwriteExisting) {
-          const assetVariantMetadata = await storageProvider.getExistingAssetVariant(variantKey);
-          if (assetVariantMetadata != null) {
-            if (verbose) {
-              console.log(` ・ Asset found in storage with key "${variantKey}".`);
-            }
-            // And we already know its hash and size.
-            variantMetadata = Object.assign(assetVariantMetadata, { existsInKvStore: true });
-          }
+        await ensureVariantFileExists(
+          variantFilePath,
+          variant,
+          file,
+          verbose,
+        );
+
+        let contentEncoding, hash, size;
+        if (variant === 'original') {
+          contentEncoding = undefined;
+          hash = baseHash;
+          size = baseSize;
+        } else {
+          contentEncoding = variant;
+          ({hash, size} = await calculateFileSizeAndHash(variantFilePath));
         }
 
-        if (variantMetadata == null) {
-          console.log(` ↦ Prepping new asset for storage: "${variantKey}"`);
-          await ensureVariantFileExists(
-            variantFilePath,
-            variant,
-            file,
-            verbose,
-          );
+        const numChunks = storageProvider.calculateNumChunks(size);
 
-          let contentEncoding, hash, size;
-          if (variant === 'original') {
-            contentEncoding = undefined;
-            hash = baseHash;
-            size = baseSize;
-          } else {
-            contentEncoding = variant;
-            ({hash, size} = await calculateFileSizeAndHash(variantFilePath));
-          }
-
-          const numChunks = storageProvider.calculateNumChunks(size);
-
-          variantMetadata = {
-            contentEncoding,
-            size,
-            hash,
-            numChunks: numChunks > 1 ? numChunks : undefined,
-            existsInKvStore: false,
-          };
-        }
+        variantMetadata = {
+          contentEncoding,
+          size,
+          hash,
+          numChunks: numChunks > 1 ? numChunks : undefined,
+        };
 
         variantMetadatas.set(variant, variantMetadata);
 
@@ -445,7 +429,6 @@ export async function action(actionArgs: string[]) {
         }
 
         batchItems.push({
-          write: !variantMetadata.existsInKvStore,
           size: variantMetadata.size,
           key: variantKey,
           filePath: variantFilePath,
@@ -473,8 +456,6 @@ export async function action(actionArgs: string[]) {
     };
   });
 
-  const fileResults = await Promise.all(filePromises);
-
   for (const result of fileResults) {
     if (result == null) {
       continue;
@@ -486,7 +467,10 @@ export async function action(actionArgs: string[]) {
   }
   console.log(`✅  Scan complete.`);
 
-  await storageProvider.applyBatch(batch);
+  await storageProvider.applyBatch(batch, {
+    overwriteExisting,
+    existingKeyPrefix: `${publishId}_files_`,
+  });
 
   // #### INDEX FILE
   console.log(`🗂️ Saving Index...`);
