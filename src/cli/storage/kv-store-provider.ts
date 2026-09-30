@@ -5,10 +5,6 @@
 
 import fs from 'node:fs';
 import {
-  type AssetVariantMetadata,
-  decodeAssetVariantMetadata,
-} from '../../models/assets/index.js';
-import {
   type StaticPublishRc,
   isKvStoreConfigRc,
 } from '../../models/config/static-publish-rc.js';
@@ -30,7 +26,6 @@ import {
   kvStoreDeleteEntry,
   kvStoreSubmitEntry,
   kvStoreSubmitBatch,
-  getKvStoreEntryInfo,
 } from '../util/kv-store.js';
 import {
   applyKVStoreEntriesChunks,
@@ -159,7 +154,7 @@ export class KvStoreProvider implements StorageProvider {
 
   async applyBatch(batch: StorageProviderBatch, options: ApplyBatchOptions = {}): Promise<void> {
 
-    const { overwriteExisting = false, existingKeyPrefix } = options;
+    const { existingKeys } = options;
 
     console.log(`🍪 Chunking large files...`);
     await applyKVStoreEntriesChunks(
@@ -169,10 +164,9 @@ export class KvStoreProvider implements StorageProvider {
     console.log(`✅  Large files have been chunked.`);
 
     let toWrite = batch.storageProviderBatchEntries;
-    if (!overwriteExisting && existingKeyPrefix != null) {
-      const existing = new Set(await this.getStorageKeys(existingKeyPrefix) ?? []);
-      toWrite = entriesToUpload(toWrite, existing);
-      console.log(`  | ${existing.size} key(s) already present in the KV Store.`);
+    if (existingKeys != null) {
+      toWrite = entriesToUpload(toWrite, existingKeys);
+      console.log(`  | ${batch.storageProviderBatchEntries.length - toWrite.length} chunk(s) already present in the KV Store.`);
     }
 
     console.log(`📤 Uploading ${toWrite.length} entries to KV Store.`);
@@ -239,69 +233,6 @@ export class KvStoreProvider implements StorageProvider {
 
   calculateNumChunks(size: number): number {
     return Math.ceil(size / KV_STORE_CHUNK_SIZE);
-  }
-
-  async getExistingAssetVariant(variantKey: string): Promise<AssetVariantMetadata | null> {
-
-    let kvStoreItemMetadata: AssetVariantMetadata | null = null;
-
-    const items = [{
-      key: variantKey,
-    }];
-
-    await this.doConcurrentParallel(
-      items,
-      async (_, variantKey) => {
-        // fastlyApiContext is non-null if useKvStore is true
-        const kvStoreEntryInfo = await getKvStoreEntryInfo(
-          this.fastlyApiContext,
-          this.kvStoreName,
-          variantKey,
-        );
-        if (!kvStoreEntryInfo) {
-          return;
-        }
-        let itemMetadata;
-        if (kvStoreEntryInfo.metadata != null) {
-          try {
-            itemMetadata = JSON.parse(kvStoreEntryInfo.metadata);
-          } catch {
-            // if the metadata does not parse successfully as JSON,
-            // treat it as though it didn't exist.
-          }
-          itemMetadata = decodeAssetVariantMetadata(itemMetadata);
-        }
-        if (itemMetadata != null) {
-          let exists = false;
-          if (itemMetadata.size <= KV_STORE_CHUNK_SIZE) {
-            // For an item equal to or smaller than the chunk size, if it exists
-            // and its metadata asserts no chunk count, then we assume it exists.
-            if (itemMetadata.numChunks === undefined) {
-              exists = true;
-            }
-          } else {
-            // For chunked objects, if the first chunk exists, and its metadata asserts
-            // the same number of chunks based on size, then we assume it exists (for now).
-            // In the future we might actually check for the existence and sizes of
-            // every chunk in the KV Store.
-            const expectedNumChunks = Math.ceil(itemMetadata.size / KV_STORE_CHUNK_SIZE);
-            if (itemMetadata.numChunks === expectedNumChunks) {
-              exists = true;
-            }
-          }
-          if (exists) {
-            kvStoreItemMetadata = {
-              contentEncoding: itemMetadata.contentEncoding,
-              size: itemMetadata.size,
-              hash: itemMetadata.hash,
-              numChunks: itemMetadata.numChunks,
-            };
-          }
-        }
-      }
-    );
-    return kvStoreItemMetadata;
-
   }
 
   async purgeSurrogateKey(_surrogateKey: string): Promise<void> {

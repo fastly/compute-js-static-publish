@@ -112,9 +112,12 @@ export async function getKVStoreInfos(fastlyApiContext: FastlyApiContext) {
 
 export const _getKVStoreKeys = createArrayGetter<string>()(
   (kvStoreId: string, prefix?: string) => {
-    let endpoint = `/resources/stores/kv/${encodeURIComponent(kvStoreId)}/keys`;
+    // Read from the primary data source. An eventual read can show a key
+    // that was deleted a short time ago. Then publish-content does not upload
+    // an item that the new index needs.
+    let endpoint = `/resources/stores/kv/${encodeURIComponent(kvStoreId)}/keys?consistency=strong`;
     if (prefix != null) {
-      endpoint += '?prefix=' + encodeURIComponent(prefix);
+      endpoint += '&prefix=' + encodeURIComponent(prefix);
     }
     return endpoint;
   }

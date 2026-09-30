@@ -34,6 +34,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `publish-content.config.js`
    - `kvStoreAssetInclusionTest` renamed to `assetInclusionTest`. Previous name deprecated.
 
+- `publish-content`
+   - Lists the files in storage one time before the scan. It does not compress, hash, or upload a file that is already in storage.
+   - Uploads a compressed variant only if it is smaller than the original.
+
 ### Fixed
 
 - The content type for `.tif`/`.tiff` files is now `image/tiff`. It was `image/png`.

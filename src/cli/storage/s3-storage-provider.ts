@@ -26,10 +26,6 @@ import {
 } from '@aws-sdk/types';
 
 import {
-  type AssetVariantMetadata,
-  decodeAssetVariantMetadata,
-} from '../../models/assets/index.js';
-import {
   type StaticPublishRc,
   isS3StorageConfigRc,
 } from '../../models/config/static-publish-rc.js';
@@ -299,12 +295,11 @@ export class S3StorageProvider implements StorageProvider {
 
   async applyBatch(batch: StorageProviderBatch, options: ApplyBatchOptions = {}): Promise<void> {
 
-    const { overwriteExisting = false, existingKeyPrefix } = options;
+    const { existingKeys } = options;
 
     let toWrite = batch.storageProviderBatchEntries;
-    if (!overwriteExisting && existingKeyPrefix != null) {
-      const existing = new Set(await this.getStorageKeys(existingKeyPrefix) ?? []);
-      toWrite = entriesToUpload(toWrite, existing);
+    if (existingKeys != null) {
+      toWrite = entriesToUpload(toWrite, existingKeys);
     }
 
     console.log(`📤 Uploading entries to S3 storage.`);
@@ -355,36 +350,6 @@ export class S3StorageProvider implements StorageProvider {
 
   calculateNumChunks(_size: number): number {
     return 1;
-  }
-
-  async getExistingAssetVariant(variantKey: string): Promise<AssetVariantMetadata | null> {
-
-    let assetVariantMetadata: AssetVariantMetadata | null = null;
-
-    await this.doConcurrentParallel(
-      [{key: variantKey}],
-      async (_, variantKey) => {
-        const entryInfo = await this.getStorageEntryInfo(
-          variantKey,
-        );
-        if (entryInfo == null) {
-          return;
-        }
-        const metadata = decodeAssetVariantMetadata(entryInfo.metadata);
-        if (metadata != null) {
-          if (metadata.numChunks !== undefined) {
-            return;
-          }
-          assetVariantMetadata = {
-            contentEncoding: metadata.contentEncoding,
-            size: metadata.size,
-            hash: metadata.hash,
-          };
-        }
-      }
-    );
-
-    return assetVariantMetadata;
   }
 
   async purgeSurrogateKey(surrogateKey: string): Promise<void> {
