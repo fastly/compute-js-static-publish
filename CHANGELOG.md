@@ -37,16 +37,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `publish-content`
    - Lists the files in storage one time before the scan. It does not compress, hash, or upload a file that is already in storage.
    - Uploads a compressed variant only if it is smaller than the original.
+   - Uploads KV Store entries in batches (the KV Store batch API). Entries that are larger than 8 MiB use one request each.
    - If some entries of a KV Store batch fail, retries only these entries. The log shows the keys that failed.
    - If a file cannot be processed, the error message shows the file path. The scan uses at most 16 files at a time.
+   - Lists KV Store keys with strong consistency.
+
+### Updated
+
+- Update to CLI v16
+- Release with the same CI workflow as `main`: npm trusted publishing, and publish to GitHub packages as well
 
 ### Fixed
+
+- KV Store: assets that are larger than 20 MiB were served truncated to the first 20 MiB. The CLI also uploaded these assets again at each publish.
+
+- `publish-content` stops with an error if an upload fails. Before, it showed the error and then saved the index. The index then referred to files that were not in storage.
+
+- Scaffolding: the default value of `--auto-ext` was lost.
+
+- Scaffolding: the generated `publish-content.config.js` set `spaFile` or `notFoundPageFile` to a file that does not exist.
 
 - The content type for `.tif`/`.tiff` files is now `image/tiff`. It was `image/png`.
 
 - `clean` stops with an error if it cannot read a collection index. Before, it continued and deleted the files of that collection.
 
 - `clean` and `collections delete` exit with an error if a delete operation fails. Before, they showed "Completed".
+
+## [7.0.7] - 2026-07-16
+
+- Update to CLI v15
+
+## [7.0.6] - 2026-02-13
+
+### Updated
+
+- Release to npmjs using updated CI workflow
+
+## [7.0.5] - 2026-02-03
+
+### Added
+
+- Add application/wasm to default content types
+
+## [7.0.4] - 2026-01-07
+
+### Added
+
+- Publish to GitHub packages as well
+- Use NPM trusted publishing for publishing to npmjs.com
 
 ## [7.0.3] - 2025-09-29
 
