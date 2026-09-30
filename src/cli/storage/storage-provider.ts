@@ -65,6 +65,8 @@ export type StorageProviderBuilderContext = {
   fastlyApiToken?: string,
   s3AccessKeyId?: string,
   s3SecretAccessKey?: string,
+  // The number of objects that the S3 provider uploads at the same time.
+  s3UploadConcurrency?: number,
 };
 export type StorageProviderBuilder =
   (config: StaticPublishRc, context: StorageProviderBuilderContext) => (Promise<StorageProvider | null> | StorageProvider | null);

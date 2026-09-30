@@ -4,6 +4,8 @@
  */
 
 import fs from 'node:fs';
+import http from 'node:http';
+import https from 'node:https';
 import path from 'node:path';
 import {
   DeleteObjectCommand,
@@ -64,6 +66,11 @@ import {
 
 type CommandOutput<C> = C extends Command<any, any, any, infer O, any> ? O : never;
 
+// The number of objects to upload at the same time. S3 accepts many parallel
+// requests, and each request mostly waits for the network. In a test with small
+// objects, 64 was approximately 4 times faster than 12.
+export const DEFAULT_S3_UPLOAD_CONCURRENCY = 64;
+
 export const buildStoreProvider: StorageProviderBuilder = async (
   config: StaticPublishRc,
   context: StorageProviderBuilderContext,
@@ -118,6 +125,7 @@ export const buildStoreProvider: StorageProviderBuilder = async (
     s3CredentialsResult.s3SecretAccessKey,
     bucket,
     endpoint,
+    context.s3UploadConcurrency ?? DEFAULT_S3_UPLOAD_CONCURRENCY,
   );
 };
 
@@ -131,7 +139,9 @@ export class S3StorageProvider implements StorageProvider {
     secretAccessKey: string,
     s3Bucket: string,
     s3Endpoint?: string,
+    uploadConcurrency: number = DEFAULT_S3_UPLOAD_CONCURRENCY,
   ) {
+    this.uploadConcurrency = uploadConcurrency;
     this.fastlyServiceId = fastlyServiceId;
     this.fastlyApiContext = fastlyApiToken != null ? { apiToken: fastlyApiToken } : undefined;
     this.s3Region = s3Region;
@@ -148,13 +158,21 @@ export class S3StorageProvider implements StorageProvider {
   private readonly secretAccessKey: string;
   private readonly s3Bucket: string;
   private readonly s3Endpoint?: string;
+  private readonly uploadConcurrency: number;
 
   private s3Client?: S3Client;
   getS3Client() {
     if (this.s3Client != null) {
       return this.s3Client;
     }
+    // The SDK default is 50 sockets. Use at least one socket for each
+    // concurrent upload, so that uploads do not wait for a socket.
+    const maxSockets = Math.max(50, this.uploadConcurrency);
     this.s3Client = new S3Client({
+      requestHandler: {
+        httpAgent: new http.Agent({ keepAlive: true, maxSockets }),
+        httpsAgent: new https.Agent({ keepAlive: true, maxSockets }),
+      },
       region: this.s3Region,
       endpoint: this.s3Endpoint,
       forcePathStyle: this.s3Endpoint != null,
@@ -302,7 +320,7 @@ export class S3StorageProvider implements StorageProvider {
       toWrite = entriesToUpload(toWrite, existingKeys);
     }
 
-    console.log(`📤 Uploading entries to S3 storage.`);
+    console.log(`📤 Uploading ${toWrite.length} entries to S3 storage (${this.uploadConcurrency} at a time).`);
     // fastlyApiContext is non-null if useKvStore is true
     await this.doConcurrentParallel(
       toWrite,
@@ -317,7 +335,7 @@ export class S3StorageProvider implements StorageProvider {
         );
         console.log(` 🌐 Submitted asset "${rootRelative(filePath)}" to S3 storage with key "${key}".`)
       },
-      12,
+      this.uploadConcurrency,
       true,
     );
     console.log(`✅  Uploaded entries to S3 storage.`);
