@@ -4,9 +4,6 @@
  */
 
 import {
-  type AssetVariantMetadata,
-} from '../../models/assets/index.js';
-import {
   type StaticPublishRc,
 } from '../../models/config/static-publish-rc.js';
 
@@ -36,8 +33,6 @@ export interface StorageProvider {
   ): Promise<void>;
   calculateNumChunks(size: number): number;
 
-  getExistingAssetVariant(variantKey: string): Promise<AssetVariantMetadata | null>;
-
   purgeSurrogateKey(surrogateKey: string): Promise<void>;
 }
 
@@ -49,8 +44,9 @@ export type StorageProviderBatchEntry = {
 };
 
 export type ApplyBatchOptions = {
-  overwriteExisting?: boolean,
-  existingKeyPrefix?: string,
+  // Keys that are already in storage. applyBatch() does not write entries
+  // with these keys. It checks after it splits large files into chunks.
+  existingKeys?: Set<string>,
 };
 
 export class StorageProviderBatch {
