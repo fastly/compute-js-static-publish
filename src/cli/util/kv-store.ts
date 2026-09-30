@@ -227,11 +227,20 @@ export async function kvStoreDeleteEntry(fastlyApiContext: FastlyApiContext, kvS
 
 }
 
+export type KvStoreBatchError = {
+  key: string,
+  code?: string,
+  reason?: string,
+};
+
+// Returns the items that the KV Store reports as failed. The caller can
+// submit only these items again. Throws if the response does not identify
+// the failed items.
 export async function kvStoreSubmitBatch(
   fastlyApiContext: FastlyApiContext,
   kvStoreName: string,
   ndjsonLines: string[],
-) {
+): Promise<KvStoreBatchError[]> {
 
   const kvStoreId = await getKVStoreIdForName(fastlyApiContext, kvStoreName);
   if (kvStoreId == null) {
@@ -250,8 +259,25 @@ export async function kvStoreSubmitBatch(
     },
   );
 
+  // A 207 response has the body
+  //   {"title":"some inserts failed","errors":[{"key":"...","code":"...","reason":"..."}]}
+  // A 200 response has the body {"title":"success","errors":[]}.
+  // Read the body in all cases, so that the connection can be used again.
+  const detail = await response.text().catch(() => '');
+  let errors: unknown;
+  try {
+    errors = JSON.parse(detail)?.errors;
+  } catch {
+    errors = undefined;
+  }
+
+  if (Array.isArray(errors) && errors.every(e => typeof e?.key === 'string')) {
+    return errors.map(e => ({ key: e.key, code: e.code, reason: e.reason }));
+  }
+
   if (response.status === 207) {
-    const detail = await response.text().catch(() => '');
     throw makeRetryable(new FetchError(`Batch upload partially failed (207): ${detail.slice(0, 300)}`, 207));
   }
+
+  return [];
 }
