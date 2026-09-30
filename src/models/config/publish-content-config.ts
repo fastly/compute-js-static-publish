@@ -71,6 +71,10 @@ export type PublishContentConfig = {
   // allowedEncodings setting in the server settings. Default value is [ 'br' | 'gzip' ].
   contentCompression?: ('br' | 'gzip')[],
 
+  // Brotli quality for the 'br' variants, an integer from 0 to 11. Lower values
+  // compress much faster and give slightly larger files. Default value is 11.
+  brotliQuality?: number,
+
   // Additional / override content types.
   contentTypes?: ContentTypeDef[],
 
@@ -85,6 +89,7 @@ export type PublishContentConfigNormalized = {
   includeWellKnown: boolean,
   assetInclusionTest: AssetInclusionTest | null,
   contentCompression: ContentCompressionTypes[],
+  brotliQuality: number | undefined,
   contentTypes: ContentTypeDef[],
   server: PublisherServerConfigNormalized | null,
 };

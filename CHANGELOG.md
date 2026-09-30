@@ -25,6 +25,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `static-publish.rc.js`
    - Add `s3` mode configuration
 
+- `publish-content.config.js`
+   - Add `brotliQuality` (0 to 11, default 11). A lower value compresses much faster, and gives slightly larger files.
+
 - Add content types for `.avif` and `.jxl` images
 
 - Add `application/wasm` to default content types
@@ -41,6 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
    - If some entries of a KV Store batch fail, retries only these entries. The log shows the keys that failed.
    - If a file cannot be processed, the error message shows the file path. The scan uses at most 16 files at a time.
    - Lists KV Store keys with strong consistency.
+   - Compresses files in parallel on the Node.js thread pool. Before, it compressed one file at a time. The CLI sets `UV_THREADPOOL_SIZE` to the number of CPU cores (4 to 16), if it is not set.
 
 ### Updated
 

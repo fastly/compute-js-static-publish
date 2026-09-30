@@ -290,6 +290,9 @@ const config = {
   // Override which compressed variants to create for each asset during publish (optional):
   contentCompression: ['br', 'gzip'],
 
+  // Brotli quality, 0 to 11 (optional, default 11):
+  brotliQuality: 11,
+
   // Content type definitions/overrides (optional):
   contentTypes: [
     { test: /\.custom$/, contentType: 'application/x-custom', text: false },
@@ -320,6 +323,7 @@ You can override this file for a single `publish-content` command by specifying 
 - `includeWellKnown` - Always include `.well-known` even if dotfiles are excluded (default: true).
 - `assetInclusionTest` - Function to determine inclusion and variant behavior per file.
 - `contentCompression` - Array of compression formats to pre-generate (`['br', 'gzip']` by default).
+- `brotliQuality` - Brotli quality for the `br` variants, an integer from 0 to 11 (default: 11). Quality 11 gives the smallest files but is the slowest. Quality 10 is approximately 3 times faster, and its files are approximately 2% larger. If you change this value, variants that are already in storage are not compressed again.
 - `contentTypes` - Additional or override content type definitions.
 
 - `server` - Server runtime config that contains the following fields:  
@@ -633,7 +637,7 @@ This project supports pre-compressing and serving assets in Brotli and Gzip form
 
 - **During publishing**, the `contentCompression` field in the `publish` section of `publish-content.config.js` defines which compressed variants (e.g., `br`, `gzip`) should be generated and uploaded to storage.
 
-Assets are stored in multiple formats (uncompressed + compressed) if configured. A compressed variant is uploaded and used only if it is smaller than the original. (For very small files, the compressed variant is often larger.) If a variant is already in storage, it is not compressed or uploaded again. The following file types are compressed by default:
+Assets are stored in multiple formats (uncompressed + compressed) if configured. A compressed variant is uploaded and used only if it is smaller than the original. (For very small files, the compressed variant is often larger.) If a variant is already in storage, it is not compressed or uploaded again. Files are compressed in parallel on the Node.js thread pool. By default, the CLI sets `UV_THREADPOOL_SIZE` to the number of CPU cores (minimum 4, maximum 16). To use a different value, set `UV_THREADPOOL_SIZE` yourself. To make compression faster, you can also set a lower `brotliQuality`. The following file types are compressed by default:
 
 - Text-based: `.html`, `.js`, `.css`, `.svg`, `.json`, `.txt`, `.xml`, `.map`
 - Certain binary formats: `.bmp`, `.tar`

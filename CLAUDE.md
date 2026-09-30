@@ -68,6 +68,8 @@ All collections share the files, because the key is the hash of the content. `cl
    - For a chunked original, all keys `_1`, `_2`, … must be in the list.
    - Skip a compressed variant only if the original fits in one chunk. The chunk count of a compressed variant is not known before compression.
 3. Upload a compressed variant only if it is smaller than the original. Thus, if a compressed variant is in storage, the index keeps it. Variants that are not smaller are compressed again at each publish. Most of these are very small files.
+   - Compression uses async zlib, so it runs in parallel on the libuv thread pool. `src/cli/index.ts` sets `UV_THREADPOOL_SIZE` (4 to 16, from the CPU count) if it is not set. Do not use the `*Sync` zlib functions: they block the event loop, so files are compressed one at a time.
+   - `brotliQuality` in `publish-content.config.js` sets the brotli quality (default 11, the slowest). If it is not set, the output is the same as the zlib default.
 4. `applyBatch(batch, { existingKeys })`:
    - The KV provider splits files that are larger than 20 MiB into chunks (S3 does not use chunks). It removes the chunks that are in storage. Then it uploads NDJSON batches of at most 256 items / 8 MiB. Larger entries use one PUT each.
    - The S3 provider uploads one `PutObject` for each entry.

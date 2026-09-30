@@ -975,7 +975,8 @@ const config = {
   // excludeDotFiles: true,
   // includeWellKnown: true,
   // assetInclusionTest: (assetKey) => true,
-  // contentCompression: [ 'br', 'gzip' ], 
+  // contentCompression: [ 'br', 'gzip' ],
+  // brotliQuality: 11,
   // contentTypes: [
   //   { test: /.custom$/, contentType: 'application/x-custom', text: false },
   // ],
