@@ -126,17 +126,29 @@ export async function concurrentParallel<TObject extends { key: string }>(
 export async function concurrentMap<TItem, TResult>(
   items: TItem[],
   fn: (item: TItem, index: number) => Promise<TResult>,
-  maxConcurrent: number = availableParallelism(),
+  // Each call can keep files open, so do not use too many at a time.
+  maxConcurrent: number = Math.min(availableParallelism(), 16),
 ): Promise<TResult[]> {
 
   const results: TResult[] = new Array(items.length);
   let index = 0;
+  let failed = false;
 
   async function worker() {
-    while (index < items.length) {
+    // If one item fails, do not start more items.
+    while (!failed && index < items.length) {
       const currentIndex = index;
       index = index + 1;
-      results[currentIndex] = await fn(items[currentIndex], currentIndex);
+      try {
+        results[currentIndex] = await fn(items[currentIndex], currentIndex);
+      } catch (err) {
+        failed = true;
+        const message = err instanceof Error ? err.message : String(err);
+        throw Object.assign(
+          new Error(`Failed to process '${String(items[currentIndex])}': ${message}`),
+          { cause: err },
+        );
+      }
     }
   }
 

@@ -36,6 +36,7 @@ import {
 } from '../util/kv-store-items.js';
 import {
   concurrentParallel,
+  makeRetryable,
 } from '../util/retryable.js';
 import {
   type StorageEntry,
@@ -197,10 +198,19 @@ export class KvStoreProvider implements StorageProvider {
 
     await this.doConcurrentParallel(
       batches,
-      async ({entries: batchEntries}, key) => {
-        const lines = batchEntries.map(ndjsonLineForBatchEntry);
-        await kvStoreSubmitBatch(this.fastlyApiContext, this.kvStoreName, lines);
-        console.log(` 🌐 Submitted ${batchEntries.length} entries to KV Store ("${key}").`)
+      async (batch, key) => {
+        const lines = batch.entries.map(ndjsonLineForBatchEntry);
+        const failures = await kvStoreSubmitBatch(this.fastlyApiContext, this.kvStoreName, lines);
+        if (failures.length > 0) {
+          // Keep only the entries that failed. The retry submits only these entries.
+          const failedKeys = new Set(failures.map(f => f.key));
+          const submittedCount = batch.entries.length;
+          batch.entries = batch.entries.filter(entry => failedKeys.has(entry.key));
+          const shown = failures.slice(0, 5).map(f => `${f.key} (${f.code ?? 'unknown'}: ${f.reason ?? 'unknown'})`).join(', ');
+          const more = failures.length > 5 ? `, and ${failures.length - 5} more` : '';
+          throw makeRetryable(new Error(`${failures.length} of ${submittedCount} entries failed: ${shown}${more}`));
+        }
+        console.log(` 🌐 Submitted ${batch.entries.length} entries to KV Store ("${key}").`)
       },
       12,
       true,
@@ -222,6 +232,8 @@ export class KvStoreProvider implements StorageProvider {
           return `HTTP ${err.status}`;
         } else if (err instanceof TypeError) {
           return 'transport';
+        } else if (err instanceof Error) {
+          return err.message;
         }
         return null;
       },

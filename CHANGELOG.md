@@ -37,6 +37,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `publish-content`
    - Lists the files in storage one time before the scan. It does not compress, hash, or upload a file that is already in storage.
    - Uploads a compressed variant only if it is smaller than the original.
+   - If some entries of a KV Store batch fail, retries only these entries. The log shows the keys that failed.
+   - If a file cannot be processed, the error message shows the file path. The scan uses at most 16 files at a time.
 
 ### Fixed
 
