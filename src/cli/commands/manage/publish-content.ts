@@ -65,6 +65,10 @@ Optional:
 
   --overwrite-existing             Always overwrite existing entries in storage, even if unchanged.
 
+  --brotli-quality=<0-11>          Brotli quality for the 'br' variants. Overrides
+                                   brotliQuality in the config file.
+                                   Default: brotliQuality from publish-content.config.js, or 11
+
 Expiration:
   --expires-in=<duration>          Expiration duration from now.
                                    Examples: 3d, 12h, 15m, 1w
@@ -110,6 +114,7 @@ export async function action(actionArgs: string[]) {
     { name: 'collection-name', type: String, },
     { name: 'root-dir', type: String, },
     { name: 'overwrite-existing', type: Boolean },
+    { name: 'brotli-quality', type: String },
 
     { name: 'expires-in', type: String },
     { name: 'expires-at', type: String },
@@ -141,6 +146,7 @@ export async function action(actionArgs: string[]) {
     ['collection-name']: collectionNameValue,
     ['root-dir']: rootDir,
     ['overwrite-existing']: _overwriteExisting,
+    ['brotli-quality']: brotliQualityValue,
     ['expires-in']: expiresIn,
     ['expires-at']: expiresAt,
     ['expires-never']: expiresNever,
@@ -191,6 +197,18 @@ export async function action(actionArgs: string[]) {
     return;
   }
 
+  // --brotli-quality overrides brotliQuality in the config file.
+  let brotliQualitySource = 'config';
+  if (brotliQualityValue !== undefined) {
+    if (typeof brotliQualityValue !== 'string' || !/^\d+$/.test(brotliQualityValue) || Number(brotliQualityValue) > 11) {
+      console.error(`❌ --brotli-quality must be an integer from 0 to 11.`);
+      process.exitCode = 1;
+      return;
+    }
+    publishContentConfig.brotliQuality = Number(brotliQualityValue);
+    brotliQualitySource = '--brotli-quality';
+  }
+
   const publicDirRoot = path.resolve(rootDir != null ? rootDir : publishContentConfig.rootDir);
   if ((computeAppDir + '/').startsWith(publicDirRoot + '/')) {
     if (verbose) {
@@ -212,7 +230,7 @@ export async function action(actionArgs: string[]) {
 
   console.log(`✔️ Public directory '${rootRelative(publicDirRoot)}'.`);
   if (publishContentConfig.brotliQuality != null) {
-    console.log(`✔️ Brotli quality: ${publishContentConfig.brotliQuality}`);
+    console.log(`✔️ Brotli quality: ${publishContentConfig.brotliQuality} (from ${brotliQualitySource})`);
   }
 
   const publishId = staticPublisherRc.publishId;

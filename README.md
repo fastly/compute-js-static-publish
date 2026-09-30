@@ -812,6 +812,7 @@ npx @fastly/compute-js-static-publish publish-content \
   [--config=./publish-content.config.js] \
   [--expires-in=7d | --expires-at=2025-05-01T12:00Z | --expires-never] \
   [--overwrite-existing] \
+  [--brotli-quality=<0-11>] \
   [--local] \
   [--fastly-api-token=...] \
   [--s3-access-key-id=... --s3-secret-access-key=...]
@@ -829,6 +830,7 @@ After this process is complete, the PublisherServer object in the Compute applic
 - `--config`: Path to a config file to configure server behavior for this collection (default: `./publish-content.config.js`)
 - `--root-dir`: Source directory to read files from (overrides value in `publish-content.config.js`)
 - `--overwrite-existing`: Always upload all files, even if they are already in storage. `--kv-overwrite` is an alias.
+- `--brotli-quality`: Brotli quality for the `br` variants, an integer from 0 to 11. Overrides `brotliQuality` in `publish-content.config.js`. This is useful in CI, where the config file is generated at each run.
 
 **Expiration:**
 

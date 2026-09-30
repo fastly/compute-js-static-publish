@@ -28,6 +28,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `publish-content.config.js`
    - Add `brotliQuality` (0 to 11, default 11). A lower value compresses much faster, and gives slightly larger files.
 
+- `publish-content`
+   - Add `--brotli-quality=<0-11>`. It overrides `brotliQuality` in `publish-content.config.js`.
+
 - Add content types for `.avif` and `.jxl` images
 
 - Add `application/wasm` to default content types
