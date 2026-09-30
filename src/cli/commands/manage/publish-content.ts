@@ -8,7 +8,7 @@ import * as path from 'node:path';
 
 import { type OptionDefinition } from 'command-line-args';
 
-import { type AssetEntryMap, type AssetVariantMetadata, } from '../../../models/assets/index.js';
+import { type AssetEntryMap, } from '../../../models/assets/index.js';
 import { type ContentCompressionTypes } from '../../../models/compression/index.js';
 import { type PublisherServerConfigNormalized } from '../../../models/config/publisher-server-config.js';
 import { type ContentTypeDef } from '../../../models/config/publish-content-config.js';
@@ -20,6 +20,7 @@ import { LoadConfigError, loadPublishContentConfigFile, loadStaticPublisherRcFil
 import { applyDefaults } from '../../util/data.js';
 import { calculateFileSizeAndHash, enumerateFiles, rootRelative } from '../../util/files.js';
 import { ensureVariantFileExists, type Variants } from '../../util/variants.js';
+import { concurrentMap } from '../../util/retryable.js';
 import {
   loadStorageProviderFromStaticPublishRc,
   StorageProvider,
@@ -295,23 +296,43 @@ export async function action(actionArgs: string[]) {
   const storageContentDir = `${staticPublisherWorkingDir}/storage-content`;
   fs.mkdirSync(storageContentDir, { recursive: true });
 
-  // A list of items in storage at the end of the publishing.
-  // Includes items that already exist as well.  'write' signifies
-  // that the item is to be written
+  // The items to write to storage.
   const batch = new StorageProviderBatch();
 
   // Assets included in the publishing, keyed by asset key
   const assetsIndex: AssetEntryMap = {};
 
-  // All the metadata of the variants we know about during this publishing, keyed on the base version's hash.
-  type VariantMetadataEntry = AssetVariantMetadata & {
-    existsInKvStore: boolean,
-  };
-  type VariantMetadataMap = Map<Variants, VariantMetadataEntry>;
-  const baseHashToVariantMetadatasMap = new Map<string, VariantMetadataMap>();
+  // For each variant that we know about during this publishing, true if the
+  // index keeps the variant. Keyed on the base version's hash.
+  type VariantKeepMap = Map<Variants, boolean>;
+  const baseHashToVariantKeepMap = new Map<string, VariantKeepMap>();
+
+  // #### Keys that are already in storage
+  // The key of a file is the hash of its content. If the key exists, storage
+  // already has the same content. Thus we do not compress, hash, or upload it again.
+  // In local mode, a key can refer to a working file that was deleted, so we do not list.
+  let existingKeys: Set<string> | undefined;
+  if (!overwriteExisting && !localMode) {
+    console.log(`🔎 Listing files that are already in storage...`);
+    existingKeys = new Set(await storageProvider.getStorageKeys(`${publishId}_files_`) ?? []);
+    console.log(`✅  Found ${existingKeys.size} key(s).`);
+  }
+  let existingVariantCount = 0;
+
+  function isVariantInStorage(variantKey: string, numChunks: number) {
+    if (existingKeys == null || !existingKeys.has(variantKey)) {
+      return false;
+    }
+    for (let chunkIndex = 1; chunkIndex < numChunks; chunkIndex++) {
+      if (!existingKeys.has(`${variantKey}_${chunkIndex}`)) {
+        return false;
+      }
+    }
+    return true;
+  }
 
   // #### Iterate files
-  const filePromises = files.map(async (file) => {
+  const fileResults = await concurrentMap(files, async (file) => {
     // #### asset key
     const assetKey = file.slice(publicDirRoot.length)
       // in Windows, assetKey will otherwise end up as \path\file.html
@@ -355,12 +376,16 @@ export async function action(actionArgs: string[]) {
     const stats = fs.statSync(file);
     const lastModifiedTime = Math.floor((stats.mtime).getTime() / 1000);
 
-    // #### Metadata per variant
-    let variantMetadatas = baseHashToVariantMetadatasMap.get(baseHash);
-    if (variantMetadatas == null) {
-      variantMetadatas = new Map<Variants, VariantMetadataEntry>();
-      baseHashToVariantMetadatasMap.set(baseHash, variantMetadatas);
+    // #### Keep flag per variant
+    let variantKeeps = baseHashToVariantKeepMap.get(baseHash);
+    if (variantKeeps == null) {
+      variantKeeps = new Map<Variants, boolean>();
+      baseHashToVariantKeepMap.set(baseHash, variantKeeps);
     }
+
+    // We know the number of chunks of the original before we read it. For a
+    // compressed variant, we know it only if the original fits in one chunk.
+    const baseNumChunks = storageProvider.calculateNumChunks(baseSize);
 
     const variantsToKeep: ContentCompressionTypes[] = [];
 
@@ -381,81 +406,77 @@ export async function action(actionArgs: string[]) {
 
       const variantFilePath = path.resolve(storageContentDir, variantFilename);
 
-      let variantMetadata = variantMetadatas.get(variant);
-      if (variantMetadata != null) {
+      let keep = variantKeeps.get(variant);
+      if (keep != null) {
 
         if (verbose) {
           console.log(` 🏃‍♂️ Asset "${variantKey}" is identical to an item we already know about, reusing existing copy.`);
         }
 
+      } else if (
+        (variant === 'original' || baseNumChunks === 1) &&
+        isVariantInStorage(variantKey, variant === 'original' ? baseNumChunks : 1)
+      ) {
+
+        if (verbose) {
+          console.log(` ・ Asset found in storage with key "${variantKey}".`);
+        }
+        existingVariantCount++;
+        // We upload a compressed variant only if it is smaller than the
+        // original. Thus if it is in storage, the index keeps it.
+        keep = true;
+        variantKeeps.set(variant, keep);
+
       } else {
 
-        if (!overwriteExisting) {
-          const assetVariantMetadata = await storageProvider.getExistingAssetVariant(variantKey);
-          if (assetVariantMetadata != null) {
-            if (verbose) {
-              console.log(` ・ Asset found in storage with key "${variantKey}".`);
-            }
-            // And we already know its hash and size.
-            variantMetadata = Object.assign(assetVariantMetadata, { existsInKvStore: true });
-          }
+        await ensureVariantFileExists(
+          variantFilePath,
+          variant,
+          file,
+          verbose,
+        );
+
+        let contentEncoding, hash, size;
+        if (variant === 'original') {
+          contentEncoding = undefined;
+          hash = baseHash;
+          size = baseSize;
+        } else {
+          contentEncoding = variant;
+          ({hash, size} = await calculateFileSizeAndHash(variantFilePath));
         }
 
-        if (variantMetadata == null) {
-          console.log(` ↦ Prepping new asset for storage: "${variantKey}"`);
-          await ensureVariantFileExists(
-            variantFilePath,
-            variant,
-            file,
-            verbose,
-          );
+        // Only keep variants whose file size actually ends up smaller than
+        // what we started with. Do not upload the other variants.
+        keep = variant === 'original' || size < baseSize;
+        variantKeeps.set(variant, keep);
 
-          let contentEncoding, hash, size;
-          if (variant === 'original') {
-            contentEncoding = undefined;
-            hash = baseHash;
-            size = baseSize;
-          } else {
-            contentEncoding = variant;
-            ({hash, size} = await calculateFileSizeAndHash(variantFilePath));
-          }
-
+        if (keep) {
           const numChunks = storageProvider.calculateNumChunks(size);
 
-          variantMetadata = {
-            contentEncoding,
-            size,
+          const metadataJson: Record<string, string> = {
+            size: String(size),
             hash,
-            numChunks: numChunks > 1 ? numChunks : undefined,
-            existsInKvStore: false,
           };
-        }
+          if (contentEncoding != null) {
+            metadataJson.contentEncoding = contentEncoding;
+          }
+          if (numChunks > 1) {
+            metadataJson.numChunks = String(numChunks);
+          }
 
-        variantMetadatas.set(variant, variantMetadata);
-
-        const metadataJson: Record<string, string> = {
-          size: String(variantMetadata.size),
-          hash: variantMetadata.hash,
-        };
-        if (variantMetadata.contentEncoding != null) {
-          metadataJson.contentEncoding = variantMetadata.contentEncoding;
+          batchItems.push({
+            size,
+            key: variantKey,
+            filePath: variantFilePath,
+            metadataJson,
+          });
+        } else if (verbose) {
+          console.log(` ・ Variant "${variantKey}" is not smaller than the original, not uploading.`);
         }
-        if (variantMetadata.numChunks != null) {
-          metadataJson.numChunks = String(variantMetadata.numChunks);
-        }
-
-        batchItems.push({
-          write: !variantMetadata.existsInKvStore,
-          size: variantMetadata.size,
-          key: variantKey,
-          filePath: variantFilePath,
-          metadataJson,
-        });
       }
 
-      // Only keep variants whose file size actually ends up smaller than
-      // what we started with.
-      if (variant !== 'original' && variantMetadata.size < baseSize) {
+      if (variant !== 'original' && keep) {
         variantsToKeep.push(variant);
       }
     }
@@ -473,8 +494,6 @@ export async function action(actionArgs: string[]) {
     };
   });
 
-  const fileResults = await Promise.all(filePromises);
-
   for (const result of fileResults) {
     if (result == null) {
       continue;
@@ -485,8 +504,11 @@ export async function action(actionArgs: string[]) {
     }
   }
   console.log(`✅  Scan complete.`);
+  if (existingKeys != null) {
+    console.log(`  | ${existingVariantCount} variant(s) already in storage, ${batch.storageProviderBatchEntries.length} to upload.`);
+  }
 
-  await storageProvider.applyBatch(batch);
+  await storageProvider.applyBatch(batch, { existingKeys });
 
   // #### INDEX FILE
   console.log(`🗂️ Saving Index...`);

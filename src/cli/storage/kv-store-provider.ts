@@ -5,10 +5,6 @@
 
 import fs from 'node:fs';
 import {
-  type AssetVariantMetadata,
-  decodeAssetVariantMetadata,
-} from '../../models/assets/index.js';
-import {
   type StaticPublishRc,
   isKvStoreConfigRc,
 } from '../../models/config/static-publish-rc.js';
@@ -29,14 +25,18 @@ import {
   getKVStoreKeys,
   kvStoreDeleteEntry,
   kvStoreSubmitEntry,
-  getKvStoreEntryInfo,
+  kvStoreSubmitBatch,
 } from '../util/kv-store.js';
 import {
   applyKVStoreEntriesChunks,
+  packNdjsonBatches,
+  ndjsonLineForBatchEntry,
+  entriesToUpload,
   KV_STORE_CHUNK_SIZE,
 } from '../util/kv-store-items.js';
 import {
   concurrentParallel,
+  makeRetryable,
 } from '../util/retryable.js';
 import {
   type StorageEntry,
@@ -44,6 +44,8 @@ import {
   type StorageProviderBuilder,
   type StorageProviderBuilderContext,
   type StorageProviderBatch,
+  type StorageProviderBatchEntry,
+  type ApplyBatchOptions,
 } from './storage-provider.js';
 
 export const buildStoreProvider: StorageProviderBuilder = (
@@ -151,7 +153,9 @@ export class KvStoreProvider implements StorageProvider {
 
   }
 
-  async applyBatch(batch: StorageProviderBatch): Promise<void> {
+  async applyBatch(batch: StorageProviderBatch, options: ApplyBatchOptions = {}): Promise<void> {
+
+    const { existingKeys } = options;
 
     console.log(`🍪 Chunking large files...`);
     await applyKVStoreEntriesChunks(
@@ -160,10 +164,23 @@ export class KvStoreProvider implements StorageProvider {
     );
     console.log(`✅  Large files have been chunked.`);
 
-    console.log(`📤 Uploading entries to KV Store.`);
-    // fastlyApiContext is non-null if useKvStore is true
+    let toWrite = batch.storageProviderBatchEntries;
+    if (existingKeys != null) {
+      toWrite = entriesToUpload(toWrite, existingKeys);
+      console.log(`  | ${batch.storageProviderBatchEntries.length - toWrite.length} chunk(s) already present in the KV Store.`);
+    }
+
+    console.log(`📤 Uploading ${toWrite.length} entries to KV Store.`);
+    await this.uploadEntries(toWrite);
+    console.log(`✅  Uploaded entries to KV Store.`);
+  }
+
+  async uploadEntries(entries: StorageProviderBatchEntry[]): Promise<void> {
+
+    const { batches, oversized } = packNdjsonBatches(entries);
+
     await this.doConcurrentParallel(
-      batch.storageProviderBatchEntries.filter(x => x.write),
+      oversized,
       async ({filePath, metadataJson}, key) => {
         const fileBytes = fs.readFileSync(filePath);
         await kvStoreSubmitEntry(
@@ -173,16 +190,38 @@ export class KvStoreProvider implements StorageProvider {
           fileBytes,
           metadataJson != null ? JSON.stringify(metadataJson) : undefined,
         );
-        console.log(` 🌐 Submitted asset "${rootRelative(filePath)}" to KV Store with key "${key}".`)
-      }
+        console.log(` 🌐 Submitted large asset "${rootRelative(filePath)}" to KV Store with key "${key}".`)
+      },
+      12,
+      true,
     );
-    console.log(`✅  Uploaded entries to KV Store.`);
+
+    await this.doConcurrentParallel(
+      batches,
+      async (batch, key) => {
+        const lines = batch.entries.map(ndjsonLineForBatchEntry);
+        const failures = await kvStoreSubmitBatch(this.fastlyApiContext, this.kvStoreName, lines);
+        if (failures.length > 0) {
+          // Keep only the entries that failed. The retry submits only these entries.
+          const failedKeys = new Set(failures.map(f => f.key));
+          const submittedCount = batch.entries.length;
+          batch.entries = batch.entries.filter(entry => failedKeys.has(entry.key));
+          const shown = failures.slice(0, 5).map(f => `${f.key} (${f.code ?? 'unknown'}: ${f.reason ?? 'unknown'})`).join(', ');
+          const more = failures.length > 5 ? `, and ${failures.length - 5} more` : '';
+          throw makeRetryable(new Error(`${failures.length} of ${submittedCount} entries failed: ${shown}${more}`));
+        }
+        console.log(` 🌐 Submitted ${batch.entries.length} entries to KV Store ("${key}").`)
+      },
+      12,
+      true,
+    );
   }
 
   async doConcurrentParallel<TObject extends { key: string }>(
     objects: TObject[],
     fn: (obj: TObject, key: string, index: number) => Promise<void>,
     maxConcurrent: number = 12,
+    throwOnError: boolean = false,
   ): Promise<void> {
 
     await concurrentParallel(
@@ -193,79 +232,19 @@ export class KvStoreProvider implements StorageProvider {
           return `HTTP ${err.status}`;
         } else if (err instanceof TypeError) {
           return 'transport';
+        } else if (err instanceof Error) {
+          return err.message;
         }
         return null;
       },
       maxConcurrent,
+      throwOnError,
     );
 
   }
 
   calculateNumChunks(size: number): number {
     return Math.ceil(size / KV_STORE_CHUNK_SIZE);
-  }
-
-  async getExistingAssetVariant(variantKey: string): Promise<AssetVariantMetadata | null> {
-
-    let kvStoreItemMetadata: AssetVariantMetadata | null = null;
-
-    const items = [{
-      key: variantKey,
-    }];
-
-    await this.doConcurrentParallel(
-      items,
-      async (_, variantKey) => {
-        // fastlyApiContext is non-null if useKvStore is true
-        const kvStoreEntryInfo = await getKvStoreEntryInfo(
-          this.fastlyApiContext,
-          this.kvStoreName,
-          variantKey,
-        );
-        if (!kvStoreEntryInfo) {
-          return;
-        }
-        let itemMetadata;
-        if (kvStoreEntryInfo.metadata != null) {
-          try {
-            itemMetadata = JSON.parse(kvStoreEntryInfo.metadata);
-          } catch {
-            // if the metadata does not parse successfully as JSON,
-            // treat it as though it didn't exist.
-          }
-          itemMetadata = decodeAssetVariantMetadata(itemMetadata);
-        }
-        if (itemMetadata != null) {
-          let exists = false;
-          if (itemMetadata.size <= KV_STORE_CHUNK_SIZE) {
-            // For an item equal to or smaller than the chunk size, if it exists
-            // and its metadata asserts no chunk count, then we assume it exists.
-            if (itemMetadata.numChunks === undefined) {
-              exists = true;
-            }
-          } else {
-            // For chunked objects, if the first chunk exists, and its metadata asserts
-            // the same number of chunks based on size, then we assume it exists (for now).
-            // In the future we might actually check for the existence and sizes of
-            // every chunk in the KV Store.
-            const expectedNumChunks = Math.ceil(itemMetadata.size / KV_STORE_CHUNK_SIZE);
-            if (itemMetadata.numChunks === expectedNumChunks) {
-              exists = true;
-            }
-          }
-          if (exists) {
-            kvStoreItemMetadata = {
-              contentEncoding: itemMetadata.contentEncoding,
-              size: itemMetadata.size,
-              hash: itemMetadata.hash,
-              numChunks: itemMetadata.numChunks,
-            };
-          }
-        }
-      }
-    );
-    return kvStoreItemMetadata;
-
   }
 
   async purgeSurrogateKey(_surrogateKey: string): Promise<void> {

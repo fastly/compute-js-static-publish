@@ -4,9 +4,6 @@
  */
 
 import {
-  type AssetVariantMetadata,
-} from '../../models/assets/index.js';
-import {
   type StaticPublishRc,
 } from '../../models/config/static-publish-rc.js';
 
@@ -27,25 +24,29 @@ export interface StorageProvider {
     metadata?: Record<string, string>,
   ): Promise<void>;
   deleteStorageEntry(key: string): Promise<void>;
-  applyBatch(batch: StorageProviderBatch): Promise<void>;
+  applyBatch(batch: StorageProviderBatch, options?: ApplyBatchOptions): Promise<void>;
   doConcurrentParallel<TObject extends { key: string }>(
     objects: TObject[],
     fn: (obj: TObject, key: string, index: number) => Promise<void>,
     maxConcurrent?: number,
+    throwOnError?: boolean,
   ): Promise<void>;
   calculateNumChunks(size: number): number;
-
-  getExistingAssetVariant(variantKey: string): Promise<AssetVariantMetadata | null>;
 
   purgeSurrogateKey(surrogateKey: string): Promise<void>;
 }
 
 export type StorageProviderBatchEntry = {
-  write: boolean,
   size: number,
   key: string,
   filePath: string,
   metadataJson?: Record<string, string>,
+};
+
+export type ApplyBatchOptions = {
+  // Keys that are already in storage. applyBatch() does not write entries
+  // with these keys. It checks after it splits large files into chunks.
+  existingKeys?: Set<string>,
 };
 
 export class StorageProviderBatch {

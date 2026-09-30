@@ -1,7 +1,9 @@
 # Static Publisher for JavaScript on Fastly Compute
 
+> NOTE: `@fastly/compute-js-static-publish` is provided as a Fastly Labs product. Visit the [Fastly Labs](https://www.fastlylabs.com/) site for terms of use.
+
 > [!NOTE]
-> v8 adds Beta support for S3-compatible storage, such as Fastly [Object Storage](https://www.fastly.com/products/storage). For more details, see the [S3-compatible storage](https://github.com/fastly/compute-js-static-publish/blob/main/README.md#s3-compatible-storage) section.  
+> v8 adds Beta support for S3-compatible storage, such as Fastly [Object Storage](https://www.fastly.com/products/storage). For more details, see the [S3-compatible storage](#-using-s3-compatible-storage-beta) section.  
 
 > [!NOTE]
 > These docs are for v7 or newer, a major rewrite that adds powerful new features such as named collections.
@@ -122,9 +124,9 @@ npx @fastly/compute-js-static-publish@latest \
 > ```sh
 > npx @fastly/compute-js-static-publish@latest \
 >   --root-dir=./public \
->   --storage-mode=s3
->   --s3-region=us-east
->   --s3-bucket=my-static-content-bucket
+>   --storage-mode=s3 \
+>   --s3-region=us-east \
+>   --s3-bucket=my-static-content-bucket \
 >   --s3-endpoint=https://us-east.object.fastlystorage.app
 > ```
 
@@ -146,7 +148,7 @@ npm install
 
 Before publishing your content, your S3-compatible bucket must already exist.
 
-> [!HINT]
+> [!TIP]
 > If you're using Fastly Object Storage, [create your Fastly account](https://www.fastly.com/signup/?tier=free) if you haven't already, and then follow the [Object Storage quick start](https://www.fastly.com/documentation/guides/platform/object-storage/object-storage-quick-start/) to set up your bucket.
 
 Type the following:
@@ -534,7 +536,7 @@ In this mode, the content in the S3-compatible storage can be updated independen
 
 Before publishing your content, your S3-compatible bucket must already exist.
 
-> [!HINT]
+> [!TIP]
 > If you're using Fastly Object Storage, [create your Fastly account](https://www.fastly.com/signup/?tier=free) if you haven't already, and then follow the [Object Storage quick start](https://www.fastly.com/documentation/guides/platform/object-storage/object-storage-quick-start/) to set up your bucket.
 
 Publish your content by typing:
@@ -629,9 +631,9 @@ npx @fastly/compute-js-static-publish clean --dry-run
 
 This project supports pre-compressing and serving assets in Brotli and Gzip formats. Compression is controlled at two different stages:
 
-- **During publishing**, the `contentCompression` field in the `publish` section of `publish-content.config.js` defines which compressed variants (e.g., `br`, `gzip`) should be generated and uploaded to the KV Store.
+- **During publishing**, the `contentCompression` field in the `publish` section of `publish-content.config.js` defines which compressed variants (e.g., `br`, `gzip`) should be generated and uploaded to storage.
 
-Assets are stored in multiple formats (uncompressed + compressed) if configured. The following file types are compressed by default:
+Assets are stored in multiple formats (uncompressed + compressed) if configured. A compressed variant is uploaded and used only if it is smaller than the original. (For very small files, the compressed variant is often larger.) If a variant is already in storage, it is not compressed or uploaded again. The following file types are compressed by default:
 
 - Text-based: `.html`, `.js`, `.css`, `.svg`, `.json`, `.txt`, `.xml`, `.map`
 - Certain binary formats: `.bmp`, `.tar`
@@ -713,8 +715,8 @@ You can stream `assetVariant.storageEntry.body` directly to a `Response`, or rea
 - `npx @fastly/compute-js-static-publish@latest [options]` - Scaffold a new Compute app
 
 #### Inside a Compute App Directory
-- `publish-content` - Publish static files to the KV Store under a named collection
-- `clean` - Delete expired and unreferenced KV entries
+- `publish-content` - Publish static files to storage (KV Store or S3-compatible storage) under a named collection
+- `clean` - Delete expired and unreferenced entries in storage
 - `collections list` - List all published collections
 - `collections delete` - Delete a specific collection index
 - `collections promote` - Copy a collection to another name
@@ -805,11 +807,15 @@ npx @fastly/compute-js-static-publish publish-content \
   [--collection-name=preview-42] \
   [--config=./publish-content.config.js] \
   [--expires-in=7d | --expires-at=2025-05-01T12:00Z | --expires-never] \
+  [--overwrite-existing] \
   [--local] \
-  [--fastly-api-token=...]
+  [--fastly-api-token=...] \
+  [--s3-access-key-id=... --s3-secret-access-key=...]
 ```
 
-Publishes static files from your local root directory into a named collection, either in the Fastly KV Store (default) or to a local dev directory (`--local`). Files that already exist with the same hash are skipped automatically.
+Publishes static files from your local root directory into a named collection, in the storage that `static-publish.rc.js` specifies: the Fastly KV Store, S3-compatible storage (BETA), or a local dev directory (`--local`, KV Store mode only).
+
+Before it scans your files, the command lists the files that are already in storage. Files that already exist with the same hash are not compressed or uploaded again. With the KV Store, the command uploads the remaining files in batches.
 
 After this process is complete, the PublisherServer object in the Compute application will see the updated index of files and updated server settings from the `publish-content.config.js` file.
 
@@ -818,7 +824,7 @@ After this process is complete, the PublisherServer object in the Compute applic
 - `--collection-name`: Name of the collection to create/update (default: value in `static-publish.rc.js`)
 - `--config`: Path to a config file to configure server behavior for this collection (default: `./publish-content.config.js`)
 - `--root-dir`: Source directory to read files from (overrides value in `publish-content.config.js`)
-- `--kv-overwrite`: Cannot be used with `--local`. When using Fastly KV Store, always overwrites existing entries, even if unchanged.
+- `--overwrite-existing`: Always upload all files, even if they are already in storage. `--kv-overwrite` is an alias.
 
 **Expiration:**
 
@@ -836,6 +842,10 @@ After this process is complete, the PublisherServer object in the Compute applic
    - **`FASTLY_API_TOKEN` environment variable**
    - The default profile in the Fastly CLI
 
+**S3 Storage Options (BETA):**
+
+- `--s3-access-key-id`, `--s3-secret-access-key`: Access key ID and secret access key for S3-compatible storage. If not set, the tool will check the `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` environment variables.
+
 #### `clean`
 
 ```sh
@@ -844,7 +854,7 @@ npx @fastly/compute-js-static-publish clean \
   [--dry-run]
 ```
 
-Cleans up expired or unreferenced items in the Fastly KV Store.
+Cleans up expired or unreferenced items in storage (KV Store or S3-compatible storage).
 This can include expired collection indexes and orphaned content assets.
 
 ##### Options:
@@ -860,12 +870,16 @@ This can include expired collection indexes and orphaned content assets.
     - **`FASTLY_API_TOKEN` environment variable**
     - The default profile in the Fastly CLI
 
+**S3 Storage Options (BETA):**
+
+- `--s3-access-key-id`, `--s3-secret-access-key`: Access key ID and secret access key for S3-compatible storage. If not set, the tool will check the `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` environment variables.
+
 #### `collections list`
 
 ```sh
 npx @fastly/compute-js-static-publish collections list
 ```
-Lists all collections currently published in the KV Store.
+Lists all collections currently published in storage.
 
 ##### Options:
 
@@ -876,6 +890,10 @@ Lists all collections currently published in the KV Store.
 - `--fastly-api-token`: API token to use when publishing. If not set, the tool will check:
     - **`FASTLY_API_TOKEN` environment variable**
     - The default profile in the Fastly CLI
+
+**S3 Storage Options (BETA):**
+
+- `--s3-access-key-id`, `--s3-secret-access-key`: Access key ID and secret access key for S3-compatible storage. If not set, the tool will check the `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` environment variables.
 
 #### `collections promote`
 
@@ -908,6 +926,10 @@ Copies an existing collection (content + config) to a new collection name.
     - **`FASTLY_API_TOKEN` environment variable**
     - The default profile in the Fastly CLI
 
+**S3 Storage Options (BETA):**
+
+- `--s3-access-key-id`, `--s3-secret-access-key`: Access key ID and secret access key for S3-compatible storage. If not set, the tool will check the `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` environment variables.
+
 #### `collections update-expiration`
 
 ```sh
@@ -936,6 +958,10 @@ Sets or updates the expiration time of an existing collection.
     - **`FASTLY_API_TOKEN` environment variable**
     - The default profile in the Fastly CLI
 
+**S3 Storage Options (BETA):**
+
+- `--s3-access-key-id`, `--s3-secret-access-key`: Access key ID and secret access key for S3-compatible storage. If not set, the tool will check the `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` environment variables.
+
 #### `collections delete`
 
 ```sh
@@ -943,7 +969,7 @@ npx @fastly/compute-js-static-publish collections delete \
   --collection-name=preview-42
 ```
 
-Deletes a collection index from the KV Store. The content files will remain as they may still be referenced by other collection indexes.
+Deletes a collection index from storage. The content files will remain as they may still be referenced by other collection indexes.
 
 Use the `npx @fastly/compute-js-static-publish clean` command afterward to remove content files that are no longer referenced by any collection.
 
@@ -958,6 +984,10 @@ Use the `npx @fastly/compute-js-static-publish clean` command afterward to remov
 - `--fastly-api-token`: API token to use when publishing. If not set, the tool will check:
     - **`FASTLY_API_TOKEN` environment variable**
     - The default profile in the Fastly CLI
+
+**S3 Storage Options (BETA):**
+
+- `--s3-access-key-id`, `--s3-secret-access-key`: Access key ID and secret access key for S3-compatible storage. If not set, the tool will check the `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` environment variables.
 
 ---
 
@@ -1060,3 +1090,17 @@ async function handleRequest(event) {
 - View CLI command help: `npx @fastly/compute-js-static-publish --help`
 - Use in CI to automate branch previews
 - Visit [https://developer.fastly.com](https://developer.fastly.com) for Compute platform docs
+
+## Issues
+
+If you encounter any non-security-related bug or unexpected behavior, please [file an issue][bug] using the bug report template.
+
+[bug]: https://github.com/fastly/compute-js-static-publish/issues/new?labels=bug
+
+### Security issues
+
+Please see our [SECURITY.md](SECURITY.md) for guidance on reporting security-related issues.
+
+## License
+
+[MIT](./LICENSE).

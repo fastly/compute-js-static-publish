@@ -6,9 +6,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {
-  type AssetVariantMetadata,
-} from '../../models/assets/index.js';
-import {
   type StaticPublishRc,
   isKvStoreConfigRc,
 } from '../../models/config/static-publish-rc.js';
@@ -33,6 +30,7 @@ import {
   type StorageProviderBuilder,
   type StorageProviderBuilderContext,
   type StorageProviderBatch,
+  type ApplyBatchOptions,
 } from './storage-provider.js';
 import {
   kvStoreEntryToStorageEntry,
@@ -143,7 +141,7 @@ export class KvStoreLocalProvider implements StorageProvider {
 
   }
 
-  async applyBatch(batch: StorageProviderBatch): Promise<void> {
+  async applyBatch(batch: StorageProviderBatch, _options: ApplyBatchOptions = {}): Promise<void> {
 
     console.log(`🍪 Chunking large files...`);
     await applyKVStoreEntriesChunks(
@@ -166,6 +164,7 @@ export class KvStoreLocalProvider implements StorageProvider {
     objects: TObject[],
     fn: (obj: TObject, key: string, index: number) => Promise<void>,
     maxConcurrent?: number,
+    throwOnError: boolean = false,
   ): Promise<void> {
 
     await concurrentParallel(
@@ -173,18 +172,13 @@ export class KvStoreLocalProvider implements StorageProvider {
       fn,
       () => null,
       maxConcurrent,
+      throwOnError,
     );
 
   }
 
   calculateNumChunks(size: number): number {
     return Math.ceil(size / KV_STORE_CHUNK_SIZE);
-  }
-
-  async getExistingAssetVariant(_variantKey: string): Promise<AssetVariantMetadata | null> {
-    // The purpose of this function is to use a HEAD request against storage
-    // to save time by checking for an existing item. This is not applicable for local.
-    return null;
   }
 
   async purgeSurrogateKey(_surrogateKey: string): Promise<void> {

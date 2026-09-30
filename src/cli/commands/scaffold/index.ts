@@ -252,7 +252,7 @@ function buildOptions(
   }
 
   {
-    let autoExt: string[] = [];
+    let autoExt: string[] | undefined;
     const autoExtValue = commandLineOptions['auto-ext'];
 
     const asArray = Array.isArray(autoExtValue) ? autoExtValue : [ autoExtValue ];
@@ -613,6 +613,7 @@ export async function action(actionArgs: string[]) {
     } else if (!fs.existsSync(spaFilename)) {
       console.log(`⚠️ Warning: Ignoring specified SPA file '${SPA}' does not exist.`);
       console.log(`  * ${rootRelative(spaFilename)} does not exist.`);
+      spaFilename = undefined;
     }
   }
 
@@ -629,6 +630,7 @@ export async function action(actionArgs: string[]) {
     } else if (!fs.existsSync(notFoundPageFilename)) {
       console.log(`⚠️ Warning: Ignoring specified Not Found file '${NOT_FOUND_PAGE}' as it does not exist.`);
       console.log(`  * ${rootRelative(notFoundPageFilename)} does not exist.`);
+      notFoundPageFilename = undefined;
     }
   }
 
@@ -794,7 +796,7 @@ export async function action(actionArgs: string[]) {
     author,
     type: 'module',
     devDependencies: {
-      "@fastly/cli": "^13.1.0",
+      "@fastly/cli": "^16.0.0",
       '@fastly/compute-js-static-publish': computeJsStaticPublisherVersion,
     },
     dependencies: {

@@ -12,22 +12,19 @@ import {
   GetObjectCommandInput,
   HeadObjectCommand,
   HeadObjectCommandInput,
-  ListObjectsV2Command,
   ListObjectsV2CommandInput,
   PutObjectCommand,
   PutObjectCommandInput,
   S3Client,
   S3ServiceException,
+  S3PaginationConfiguration,
+  paginateListObjectsV2,
 } from '@aws-sdk/client-s3';
 import {
   type Command,
   type HttpHandlerOptions,
 } from '@aws-sdk/types';
 
-import {
-  type AssetVariantMetadata,
-  decodeAssetVariantMetadata,
-} from '../../models/assets/index.js';
 import {
   type StaticPublishRc,
   isS3StorageConfigRc,
@@ -41,7 +38,9 @@ import {
   type StorageProviderBuilder,
   type StorageProviderBuilderContext,
   type StorageProviderBatch,
+  type ApplyBatchOptions,
 } from './storage-provider.js';
+import { entriesToUpload } from '../util/kv-store-items.js';
 import {
   loadS3Credentials,
 } from '../util/s3-credentials.js';
@@ -184,23 +183,32 @@ export class S3StorageProvider implements StorageProvider {
 
   async getStorageKeys(prefix?: string): Promise<string[] | null> {
 
+    const paginationConfig = {
+      client: this.getS3Client(),
+    } satisfies S3PaginationConfiguration;
     const input = {
       Bucket: this.s3Bucket,
-      MaxKeys: 4096,
       Prefix: prefix,
-      ContinuationToken: undefined, // pagination
     } satisfies ListObjectsV2CommandInput;
-    const command = new ListObjectsV2Command(input);
-    const response = await this.sendS3ClientCommand(command);
 
-    if (response.Contents == null) {
-      return null;
+    const paginator = paginateListObjectsV2(
+      paginationConfig,
+      input,
+    );
+
+    const objectKeys: string[] = [];
+    for await (const { Contents } of paginator) {
+      if (Contents == null) {
+        continue;
+      }
+      for (const obj of Contents) {
+        if (obj.Key != null) {
+          objectKeys.push(obj.Key);
+        }
+      }
     }
 
-    return response.Contents
-      .map(c => c.Key)
-      .filter(c => c != null);
-
+    return objectKeys.length > 0 ? objectKeys : null;
   }
 
   async getStorageEntry(key: string): Promise<StorageEntry | null> {
@@ -285,11 +293,19 @@ export class S3StorageProvider implements StorageProvider {
 
   }
 
-  async applyBatch(batch: StorageProviderBatch): Promise<void> {
+  async applyBatch(batch: StorageProviderBatch, options: ApplyBatchOptions = {}): Promise<void> {
+
+    const { existingKeys } = options;
+
+    let toWrite = batch.storageProviderBatchEntries;
+    if (existingKeys != null) {
+      toWrite = entriesToUpload(toWrite, existingKeys);
+    }
+
     console.log(`📤 Uploading entries to S3 storage.`);
     // fastlyApiContext is non-null if useKvStore is true
     await this.doConcurrentParallel(
-      batch.storageProviderBatchEntries.filter(x => x.write),
+      toWrite,
       async ({filePath, metadataJson}, key) => {
         // const fileStream = fs.createReadStream(filePath);
         const fileData = fs.readFileSync(filePath);
@@ -300,7 +316,9 @@ export class S3StorageProvider implements StorageProvider {
           metadataJson,
         );
         console.log(` 🌐 Submitted asset "${rootRelative(filePath)}" to S3 storage with key "${key}".`)
-      }
+      },
+      12,
+      true,
     );
     console.log(`✅  Uploaded entries to S3 storage.`);
 
@@ -310,6 +328,7 @@ export class S3StorageProvider implements StorageProvider {
     objects: TObject[],
     fn: (obj: TObject, key: string, index: number) => Promise<void>,
     maxConcurrent: number = 12,
+    throwOnError: boolean = false,
   ): Promise<void> {
 
     await concurrentParallel(
@@ -324,42 +343,13 @@ export class S3StorageProvider implements StorageProvider {
         return null;
       },
       maxConcurrent,
+      throwOnError,
     );
 
   }
 
   calculateNumChunks(_size: number): number {
     return 1;
-  }
-
-  async getExistingAssetVariant(variantKey: string): Promise<AssetVariantMetadata | null> {
-
-    let assetVariantMetadata: AssetVariantMetadata | null = null;
-
-    await this.doConcurrentParallel(
-      [{key: variantKey}],
-      async (_, variantKey) => {
-        const entryInfo = await this.getStorageEntryInfo(
-          variantKey,
-        );
-        if (entryInfo == null) {
-          return;
-        }
-        const metadata = decodeAssetVariantMetadata(entryInfo.metadata);
-        if (metadata != null) {
-          if (metadata.numChunks !== undefined) {
-            return;
-          }
-          assetVariantMetadata = {
-            contentEncoding: metadata.contentEncoding,
-            size: metadata.size,
-            hash: metadata.hash,
-          };
-        }
-      }
-    );
-
-    return assetVariantMetadata;
   }
 
   async purgeSurrogateKey(surrogateKey: string): Promise<void> {
