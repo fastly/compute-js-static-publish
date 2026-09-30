@@ -227,6 +227,7 @@ export const normalizePublishContentConfig = buildNormalizeFunctionForObject<Pub
     assetInclusionTest,
     kvStoreAssetInclusionTest,
     contentCompression,
+    brotliQuality,
     contentTypes,
     server,
   } = config;
@@ -329,6 +330,12 @@ export const normalizePublishContentConfig = buildNormalizeFunctionForObject<Pub
     }
   }
 
+  if (!isSpecified(config, 'brotliQuality') || brotliQuality === null) {
+    brotliQuality = undefined;
+  } else if (!Number.isInteger(brotliQuality) || brotliQuality < 0 || brotliQuality > 11) {
+    errors.push('brotliQuality, if specified, must be an integer from 0 to 11.');
+  }
+
   if (!isSpecified(config, 'contentTypes')) {
     contentTypes = [];
   } else {
@@ -372,6 +379,7 @@ export const normalizePublishContentConfig = buildNormalizeFunctionForObject<Pub
     includeWellKnown,
     assetInclusionTest,
     contentCompression,
+    brotliQuality,
     contentTypes,
     server,
   };

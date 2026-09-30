@@ -211,6 +211,9 @@ export async function action(actionArgs: string[]) {
   }
 
   console.log(`✔️ Public directory '${rootRelative(publicDirRoot)}'.`);
+  if (publishContentConfig.brotliQuality != null) {
+    console.log(`✔️ Brotli quality: ${publishContentConfig.brotliQuality}`);
+  }
 
   const publishId = staticPublisherRc.publishId;
   console.log(`  | Publish ID: ${publishId}`);
@@ -434,6 +437,7 @@ export async function action(actionArgs: string[]) {
           variant,
           file,
           verbose,
+          { brotliQuality: publishContentConfig.brotliQuality },
         );
 
         let contentEncoding, hash, size;
