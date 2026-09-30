@@ -72,7 +72,7 @@ All collections share the files, because the key is the hash of the content. `cl
    - `brotliQuality` in `publish-content.config.js` sets the brotli quality (default 11, the slowest). If it is not set, the output is the same as the zlib default.
 4. `applyBatch(batch, { existingKeys })`:
    - The KV provider splits files that are larger than 20 MiB into chunks (S3 does not use chunks). It removes the chunks that are in storage. Then it uploads NDJSON batches of at most 256 items / 8 MiB. Larger entries use one PUT each.
-   - The S3 provider uploads one `PutObject` for each entry.
+   - The S3 provider uploads one `PutObject` for each entry, 64 at a time by default (`--s3-upload-concurrency`). The S3 client gets an HTTP agent with enough sockets for this; the SDK default is 50.
 5. The CLI writes the index and the settings only after all uploads are successful.
 
 KV batch endpoint behavior (measured, not documented):

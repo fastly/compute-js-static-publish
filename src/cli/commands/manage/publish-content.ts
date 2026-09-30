@@ -94,6 +94,9 @@ S3 Storage Options (BETA):
                                    If not set, the tool will check the S3_ACCESS_KEY_ID
                                    and S3_SECRET_ACCESS_KEY environment variables.
 
+  --s3-upload-concurrency=<1-256>  Number of objects to upload at the same time.
+                                   Default: 64
+
 Global Options:
   -h, --help                       Show this help message and exit.
 
@@ -126,6 +129,7 @@ export async function action(actionArgs: string[]) {
 
     { name: 's3-access-key-id', type: String, },
     { name: 's3-secret-access-key', type: String, },
+    { name: 's3-upload-concurrency', type: String, },
   ];
 
   const parsed = parseCommandLine(actionArgs, optionDefinitions);
@@ -155,7 +159,19 @@ export async function action(actionArgs: string[]) {
     ['kv-overwrite']: _kvOverwrite,
     ['s3-access-key-id']: s3AccessKeyId,
     ['s3-secret-access-key']: s3SecretAccessKey,
+    ['s3-upload-concurrency']: s3UploadConcurrencyValue,
   } = parsed.commandLineOptions;
+
+  let s3UploadConcurrency: number | undefined;
+  if (s3UploadConcurrencyValue !== undefined) {
+    if (typeof s3UploadConcurrencyValue !== 'string' || !/^\d+$/.test(s3UploadConcurrencyValue) ||
+      Number(s3UploadConcurrencyValue) < 1 || Number(s3UploadConcurrencyValue) > 256) {
+      console.error(`❌ --s3-upload-concurrency must be an integer from 1 to 256.`);
+      process.exitCode = 1;
+      return;
+    }
+    s3UploadConcurrency = Number(s3UploadConcurrencyValue);
+  }
 
   const overwriteExisting = _overwriteExisting ?? _kvOverwrite;
 
@@ -251,6 +267,7 @@ export async function action(actionArgs: string[]) {
       fastlyApiToken,
       s3AccessKeyId,
       s3SecretAccessKey,
+      s3UploadConcurrency,
     });
   } catch (err: unknown) {
     console.error(`❌ Could not instantiate store provider`);

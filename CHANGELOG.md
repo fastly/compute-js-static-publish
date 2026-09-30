@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `publish-content`
    - Add `--brotli-quality=<0-11>`. It overrides `brotliQuality` in `publish-content.config.js`.
+   - Add `--s3-upload-concurrency=<1-256>`: the number of objects to upload to S3-compatible storage at the same time. The default is now 64. It was 12.
 
 - Add content types for `.avif` and `.jxl` images
 
