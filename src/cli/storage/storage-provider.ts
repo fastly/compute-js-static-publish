@@ -71,6 +71,22 @@ export type StorageProviderBuilderContext = {
 export type StorageProviderBuilder =
   (config: StaticPublishRc, context: StorageProviderBuilderContext) => (Promise<StorageProvider | null> | StorageProvider | null);
 
+// Lists the keys that start with `prefix` followed by a lowercase hex digit.
+// Use it for a prefix that a hex hash follows, such as `<publishId>_files_sha256_`.
+// A listing gets its keys one page at a time, and each page needs the previous
+// page. Thus this function runs one listing for each of the 16 hex digits at the
+// same time. The total time is approximately the time of the largest part.
+// Returns null only if all the listings return null.
+export async function getStorageKeysByHexPrefix(storageProvider: StorageProvider, prefix: string): Promise<string[] | null> {
+  const parts = await Promise.all(
+    '0123456789abcdef'.split('').map((digit) => storageProvider.getStorageKeys(prefix + digit)),
+  );
+  if (parts.every((part) => part == null)) {
+    return null;
+  }
+  return parts.flatMap((part) => part ?? []);
+}
+
 const _storageProviderBuilders: StorageProviderBuilder[] = [];
 export function registerStorageProviderBuilder(builder: StorageProviderBuilder) {
   _storageProviderBuilders.push(builder);
