@@ -63,7 +63,7 @@ All collections share the files, because the key is the hash of the content. `cl
 
 ### `publish-content` flow
 
-1. If `--overwrite-existing` and `--local` are not set, list the `<publishId>_files_` keys one time. The KV Store list uses `consistency=strong`.
+1. If `--overwrite-existing` and `--local` are not set, list the `<publishId>_files_sha256_` keys one time. The KV Store list uses `consistency=strong`. `getStorageKeysByHexPrefix()` runs 16 listings at the same time, one for each hex digit after the prefix, because a listing gets its pages one after another (about 0.36 s for each 1,000 keys on S3 in a test).
 2. Scan the files with `concurrentMap()`, at most 16 at a time. For each variant: if its key is in the list, skip the variant. Do not compress, hash, or upload it.
    - For a chunked original, all keys `_1`, `_2`, … must be in the list.
    - Skip a compressed variant only if the original fits in one chunk. The chunk count of a compressed variant is not known before compression.
