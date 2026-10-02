@@ -48,6 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
    - If some entries of a KV Store batch fail, retries only these entries. The log shows the keys that failed.
    - If a file cannot be processed, the error message shows the file path. The scan uses at most 16 files at a time.
    - Lists KV Store keys with strong consistency.
+   - Lists the files in storage in 16 parts at the same time. In a test with 20,000 S3 objects, the list took 1.2 s in place of 7.2 s. The time saved increases with the number of objects in storage.
    - Compresses files in parallel on the Node.js thread pool. Before, it compressed one file at a time. The CLI sets `UV_THREADPOOL_SIZE` to the number of CPU cores (4 to 16), if it is not set.
 
 ### Updated

@@ -22,6 +22,7 @@ import { calculateFileSizeAndHash, enumerateFiles, rootRelative } from '../../ut
 import { ensureVariantFileExists, type Variants } from '../../util/variants.js';
 import { concurrentMap } from '../../util/retryable.js';
 import {
+  getStorageKeysByHexPrefix,
   loadStorageProviderFromStaticPublishRc,
   StorageProvider,
   StorageProviderBatch,
@@ -349,11 +350,14 @@ export async function action(actionArgs: string[]) {
   // The key of a file is the hash of its content. If the key exists, storage
   // already has the same content. Thus we do not compress, hash, or upload it again.
   // In local mode, a key can refer to a working file that was deleted, so we do not list.
+  // All the keys that the scan looks for start with `<publishId>_files_sha256_` and a hex
+  // hash, so we list them in 16 parts at the same time.
   let existingKeys: Set<string> | undefined;
   if (!overwriteExisting && !localMode) {
     console.log(`🔎 Listing files that are already in storage...`);
-    existingKeys = new Set(await storageProvider.getStorageKeys(`${publishId}_files_`) ?? []);
-    console.log(`✅  Found ${existingKeys.size} key(s).`);
+    const listStart = Date.now();
+    existingKeys = new Set(await getStorageKeysByHexPrefix(storageProvider, `${publishId}_files_sha256_`) ?? []);
+    console.log(`✅  Found ${existingKeys.size} key(s) in ${((Date.now() - listStart) / 1000).toFixed(1)} s.`);
   }
   let existingVariantCount = 0;
 
