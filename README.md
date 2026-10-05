@@ -698,8 +698,9 @@ Server-Timing: settings;dur=12.3, index;dur=40.1, index-body;dur=31.0, index-par
 | `index-body` | Reading the body of the index |
 | `index-parse` | Parsing the index |
 | `asset` | Reading the file, until the response headers arrive. Can appear more than one time, one time for each variant that is tried. |
+| `cache` | Looking up the response cache, if it is on (see [Caching Responses with the Core Cache](#️-caching-responses-with-the-core-cache)). `desc` is `hit` (with the age of the cached response, for example `hit age=42s`), `miss`, or `bypass`. |
 
-An entry is missing if `PublisherServer` did not read that item for this request, for example because the item is cached in memory.
+An entry is missing if `PublisherServer` did not read that item for this request, for example because the item is cached in memory, or because the response came from the response cache.
 
 `serveRequest()` starts the measurements for each request. If you call `getMatchingAsset()` and `serveAsset()` directly, call `beginRequest()` first:
 
@@ -712,6 +713,43 @@ if (asset != null) {
 ```
 
 Any client can send the request header. Choose a name that is not easy to guess if you do not want to show these timings to the public.
+
+### 🗄️ Caching Responses with the Core Cache
+
+To serve a file, `PublisherServer` reads the collection's settings, the collection's index, and the file. Fastly can cache these reads, but `PublisherServer` must still parse the index for each request, and the index of a large site is large. To skip this work, `PublisherServer` can cache whole responses with the Fastly [Core Cache](https://www.fastly.com/documentation/guides/concepts/cache/) API:
+
+```js
+publisherServer.setResponseCache({ maxAge: 3600 });
+```
+
+`maxAge` is in seconds. This is off by default.
+
+- A response is cached by the publish ID, the collection, the path, and the client's `Accept-Encoding`. A cache hit does not read the settings, the index, or the file.
+- A path that does not match a file is cached, too, so a missing path does not read the index again.
+- If several requests miss the same response at the same time, one request produces it, and the others wait for it.
+- Only `200` and `404` responses are cached. Conditional requests (`304`) and `HEAD` requests are answered from the cached response.
+- Each cached response has the surrogate key `<publishId>-<collectionName>`. After you publish, `publish-content` purges this key (see [`--fastly-service-id`](#publish-content)), so the next request gets the new content.
+
+`serveRequest()` uses the response cache automatically. If you call `getMatchingAsset()` and `serveAsset()` directly, wrap them in `serveCached()`. When a response is not cached yet, `serveCached()` calls your function to produce it, with a `GET` request that has no conditional headers:
+
+```js
+publisherServer.beginRequest(request);
+const response = await publisherServer.serveCached(request, pathname, async (fillRequest) => {
+  const asset = await publisherServer.getMatchingAsset(pathname);
+  if (asset == null) {
+    return null; // not found; this result is cached, too
+  }
+  return publisherServer.serveAsset(fillRequest, asset);
+});
+```
+
+The second argument identifies the response in the collection. If anything other than the path and `Accept-Encoding` changes your response, include it in this value.
+
+Notes:
+
+- The response is streamed into the cache. The client, and other requests that wait for the same response, read it from the cache as it is written. Thus a large file is not held in memory.
+- With `--local`, `publish-content` cannot purge the local cache. Restart `fastly compute serve` to see newly published content, or leave the response cache off in local development.
+- On staging, a purge must include the `Fastly-Purge-Environment: staging` header to clear the staging cache. Without it, a purge clears only the production cache. Use `publish-content --purge-environment=production,staging` to purge both.
 
 ## 📥 Using Published Assets in Your Code
 
@@ -852,6 +890,7 @@ npx @fastly/compute-js-static-publish publish-content \
   [--local] \
   [--fastly-api-token=...] \
   [--fastly-service-id=...] \
+  [--purge-environment=production,staging] \
   [--s3-access-key-id=... --s3-secret-access-key=...]
 ```
 
@@ -868,6 +907,12 @@ After this process is complete, the PublisherServer object in the Compute applic
 - `--root-dir`: Source directory to read files from (overrides value in `publish-content.config.js`)
 - `--overwrite-existing`: Always upload all files, even if they are already in storage. `--kv-overwrite` is an alias.
 - `--brotli-quality`: Brotli quality for the `br` variants, an integer from 0 to 11. Overrides `brotliQuality` in `publish-content.config.js`. This is useful in CI, where the config file is generated at each run.
+- `--fastly-service-id`: The Fastly Service ID to purge after publishing. The command purges the surrogate key `<publishId>-<collectionName>`, so that the service stops serving cached copies of the collection's settings, index, files, and responses (see [response cache](#️-caching-responses-with-the-core-cache)). If not set, the tool will check:
+   - `service_id` in `fastly.toml`
+   - **`FASTLY_SERVICE_ID` environment variable**
+
+  If none is found, the command skips the purge. The purge also needs an API token (see `--fastly-api-token`). With `--local`, there is no purge. If the purge fails, the command shows a warning and completes, because the content is already published.
+- `--purge-environment`: The environments to purge: `production` (the default), `staging`, or both, as a comma-separated list (`--purge-environment=production,staging`). You can also repeat the option. Purge `staging` if you test the collection on a [staged service version](https://www.fastly.com/documentation/guides/getting-started/services/working-with-staging/), because a purge without it does not clear the staging cache.
 
 **Expiration:**
 
@@ -887,11 +932,6 @@ After this process is complete, the PublisherServer object in the Compute applic
 
 - `--s3-access-key-id`, `--s3-secret-access-key`: Access key ID and secret access key for S3-compatible storage. If not set, the tool will check the `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` environment variables.
 - `--s3-upload-concurrency`: Number of objects to upload at the same time, from 1 to 256 (default: 64). Each upload keeps its file in memory, so a site with many large files can need a lower value.
-- `--fastly-service-id`: The Fastly Service ID to purge after publishing. The command purges the surrogate key `<publishId>-<collectionName>`, so that the service stops serving cached copies of the collection's settings, index, and files. If not set, the tool will check:
-   - `service_id` in `fastly.toml`
-   - **`FASTLY_SERVICE_ID` environment variable**
-
-  If none is found, the command skips the purge. The purge also needs an API token (see `--fastly-api-token`).
 
 #### `clean`
 
