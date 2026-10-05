@@ -564,7 +564,8 @@ export class PublisherServer {
     }
 
     const insertOptions = {
-      maxAge: this.responseCache.maxAge,
+      // The Core Cache takes maxAge in milliseconds. ResponseCacheOptions.maxAge is in seconds.
+      maxAge: this.responseCache.maxAge * 1000,
       surrogateKeys: [`${this.publishId}-${this.activeCollectionName}`],
     };
 
