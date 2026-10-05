@@ -29,6 +29,7 @@ import {
 } from '../storage/storage-provider.js';
 import { checkIfModifiedSince, getIfModifiedSinceHeader } from './serve-preconditions/if-modified-since.js';
 import { checkIfNoneMatch, getIfNoneMatchHeader } from './serve-preconditions/if-none-match.js';
+import { ServerTiming } from '../util/server-timing.js';
 
 type AssetVariant = {
   storageEntry: StorageEntry,
@@ -81,6 +82,8 @@ export class PublisherServer {
     this.defaultCollectionName = defaultCollectionName;
     this.activeCollectionName = this.defaultCollectionName;
     this.collectionNameHeader = 'X-Publisher-Server-Collection';
+    this.serverTimingRequestHeader = null;
+    this.serverTiming = null;
   }
 
   static fromStaticPublishRc(config: StaticPublishRc) {
@@ -98,6 +101,12 @@ export class PublisherServer {
   activeCollectionName: string;
   collectionNameHeader: string | null;
 
+  // When set, a request that has this header gets a Server-Timing response header.
+  serverTimingRequestHeader: string | null;
+
+  // Timing for the current request, or null if timing is off for it.
+  serverTiming: ServerTiming | null;
+
   // Cached settings
   settingsCached: PublisherServerConfigNormalized | null | undefined;
 
@@ -114,20 +123,38 @@ export class PublisherServer {
     this.collectionNameHeader = collectionHeader;
   }
 
+  // Set the request header that turns on the Server-Timing response header.
+  // null (the default) turns timing off.
+  setServerTimingRequestHeader(requestHeader: string | null) {
+    this.serverTimingRequestHeader = requestHeader;
+  }
+
+  // Start handling a new request. serveRequest() calls this. If you call
+  // getMatchingAsset() and serveAsset() directly, call this first.
+  beginRequest(request: Request) {
+    const header = this.serverTimingRequestHeader;
+    this.serverTiming = header != null && request.headers.has(header) ? new ServerTiming() : null;
+  }
+
+  private timed<T>(name: string, fn: () => Promise<T>): Promise<T> {
+    return this.serverTiming != null ? this.serverTiming.measure(name, fn) : fn();
+  }
+
   // Server config is obtained from storage, and cached for the duration of this object.
   async getServerConfig() {
     if (this.settingsCached !== undefined) {
       return this.settingsCached;
     }
     const settingsFileKey = `${this.publishId}_settings_${this.activeCollectionName}`;
-    const settingsFile = await this.storageProvider.getEntry(settingsFileKey, [`${this.publishId}-${this.activeCollectionName}`, 'settings']);
-    if (settingsFile == null) {
-      console.error(`Settings File not found at ${settingsFileKey}.`);
-      console.error(`You may need to publish your application.`);
-      this.settingsCached = null;
-    } else {
-      this.settingsCached = (await settingsFile.json()) as PublisherServerConfigNormalized;
-    }
+    this.settingsCached = await this.timed('settings', async () => {
+      const settingsFile = await this.storageProvider.getEntry(settingsFileKey, [`${this.publishId}-${this.activeCollectionName}`, 'settings']);
+      if (settingsFile == null) {
+        console.error(`Settings File not found at ${settingsFileKey}.`);
+        console.error(`You may need to publish your application.`);
+        return null;
+      }
+      return (await settingsFile.json()) as PublisherServerConfigNormalized;
+    });
     return this.settingsCached;
   }
 
@@ -156,7 +183,9 @@ export class PublisherServer {
       return this.assetEntryMapCache;
     }
     const indexFileKey = `${this.publishId}_index_${this.activeCollectionName}`;
-    const indexFile = await this.storageProvider.getEntry(indexFileKey, [`${this.publishId}-${this.activeCollectionName}`, 'index']);
+    const indexFile = await this.timed('index', () =>
+      this.storageProvider.getEntry(indexFileKey, [`${this.publishId}-${this.activeCollectionName}`, 'index']),
+    );
     if (indexFile == null) {
       console.error(`Index File not found at ${indexFileKey}.`);
       console.error(`You may need to publish your application.`);
@@ -186,7 +215,9 @@ export class PublisherServer {
       return null;
     }
 
-    this.assetEntryMapCache = (await indexFile.json()) as AssetEntryMap;
+    // Read and parse in two steps, so that Server-Timing can report each one.
+    const indexText = await this.timed('index-body', () => indexFile.text());
+    this.assetEntryMapCache = await this.timed('index-parse', async () => JSON.parse(indexText) as AssetEntryMap);
     return this.assetEntryMapCache;
   }
 
@@ -382,7 +413,7 @@ export class PublisherServer {
     const baseKey = `${this.publishId}_files_sha256_${baseHash}`;
     const variantKey = variant != null ? `${baseKey}_${variant}` : baseKey;
 
-    const storageEntry = await this.storageProvider.getEntry(variantKey);
+    const storageEntry = await this.timed('asset', () => this.storageProvider.getEntry(variantKey));
     if (storageEntry == null) {
       return null;
     }
@@ -481,6 +512,10 @@ export class PublisherServer {
       headers.set('Last-Modified', (new Date( asset.lastModifiedTime * 1000 )).toUTCString());
     }
 
+    if (this.serverTiming != null) {
+      headers.append('Server-Timing', this.serverTiming.toHeaderValue());
+    }
+
     const preconditionResponse = this.handlePreconditions(request, asset, headers);
     if (preconditionResponse != null) {
       return preconditionResponse;
@@ -497,6 +532,8 @@ export class PublisherServer {
   }
 
   async serveRequest(request: Request): Promise<Response | null> {
+
+    this.beginRequest(request);
 
     // Only handle GET and HEAD
     if (request.method !== 'GET' && request.method !== 'HEAD') {
