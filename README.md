@@ -749,7 +749,7 @@ Notes:
 
 - The response is streamed into the cache. The client, and other requests that wait for the same response, read it from the cache as it is written. Thus a large file is not held in memory.
 - With `--local`, `publish-content` cannot purge the local cache. Restart `fastly compute serve` to see newly published content, or leave the response cache off in local development.
-- On staging, a purge must include the `Fastly-Purge-Environment: staging` header to clear the staging cache. Without it, a purge clears only the production cache.
+- On staging, a purge must include the `Fastly-Purge-Environment: staging` header to clear the staging cache. Without it, a purge clears only the production cache. Use `publish-content --purge-environment=production,staging` to purge both.
 
 ## 📥 Using Published Assets in Your Code
 
@@ -890,6 +890,7 @@ npx @fastly/compute-js-static-publish publish-content \
   [--local] \
   [--fastly-api-token=...] \
   [--fastly-service-id=...] \
+  [--purge-environment=production,staging] \
   [--s3-access-key-id=... --s3-secret-access-key=...]
 ```
 
@@ -910,7 +911,8 @@ After this process is complete, the PublisherServer object in the Compute applic
    - `service_id` in `fastly.toml`
    - **`FASTLY_SERVICE_ID` environment variable**
 
-  If none is found, the command skips the purge. The purge also needs an API token (see `--fastly-api-token`). With `--local`, there is no purge.
+  If none is found, the command skips the purge. The purge also needs an API token (see `--fastly-api-token`). With `--local`, there is no purge. If the purge fails, the command shows a warning and completes, because the content is already published.
+- `--purge-environment`: The environments to purge: `production` (the default), `staging`, or both, as a comma-separated list (`--purge-environment=production,staging`). You can also repeat the option. Purge `staging` if you test the collection on a [staged service version](https://www.fastly.com/documentation/guides/getting-started/services/working-with-staging/), because a purge without it does not clear the staging cache.
 
 **Expiration:**
 

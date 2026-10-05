@@ -8,9 +8,35 @@ import path from 'node:path';
 import { callFastlyApi, type FastlyApiContext, FetchError, loadApiToken } from './api-token.js';
 import { loadServiceId } from './service-id.js';
 
+export const purgeEnvironments = [ 'production', 'staging' ] as const;
+export type PurgeEnvironment = typeof purgeEnvironments[number];
+
+// Parses the values of --purge-environment. The option can be repeated, and
+// each value can be a comma-separated list. The default is production.
+export function parsePurgeEnvironments(values: unknown): PurgeEnvironment[] {
+  const list = Array.isArray(values) ? values : values == null ? [] : [ values ];
+  const result: PurgeEnvironment[] = [];
+  for (const value of list) {
+    for (const item of String(value).split(',')) {
+      const name = item.trim();
+      if (name === '') {
+        continue;
+      }
+      if (!(purgeEnvironments as Readonly<string[]>).includes(name)) {
+        throw new Error(`❌ Unknown --purge-environment '${name}'. Use ${purgeEnvironments.join(', ')}, or a comma-separated list of them.`);
+      }
+      if (!result.includes(name as PurgeEnvironment)) {
+        result.push(name as PurgeEnvironment);
+      }
+    }
+  }
+  return result.length > 0 ? result : [ 'production' ];
+}
+
 export type PurgeTarget = {
   serviceId: string,
   fastlyApiContext: FastlyApiContext,
+  environments: PurgeEnvironment[],
 };
 
 export type LoadPurgeTargetParams = {
@@ -18,6 +44,7 @@ export type LoadPurgeTargetParams = {
   computeAppDir: string,
   fastlyServiceId: unknown,
   fastlyApiToken: unknown,
+  purgeEnvironments: unknown,
 };
 
 // Finds the service to purge after publishing, so that it stops serving cached
@@ -25,6 +52,9 @@ export type LoadPurgeTargetParams = {
 // Throws if a Service ID is found but an API token is not, so that this fails
 // before anything is uploaded.
 export function loadPurgeTarget(params: LoadPurgeTargetParams): PurgeTarget | null {
+
+  // Check the option even when the purge is skipped, so that a typo is reported.
+  const environments = parsePurgeEnvironments(params.purgeEnvironments);
 
   if (params.localMode) {
     console.log(`- Local mode: will skip purge step after publish.`);
@@ -46,9 +76,12 @@ export function loadPurgeTarget(params: LoadPurgeTargetParams): PurgeTarget | nu
     throw new Error("❌ Fastly API Token not provided.\nSet the FASTLY_API_TOKEN environment variable to an API token that can purge the service.");
   }
 
+  console.log(`✔️ Purge environments: ${environments.join(', ')}`);
+
   return {
     serviceId: serviceIdResult.serviceId,
     fastlyApiContext: { apiToken: apiTokenResult.apiToken },
+    environments,
   };
 }
 
@@ -57,6 +90,7 @@ export async function purgeSurrogateKey(
   fastlyServiceId: string,
   surrogateKey: string,
   softPurge: boolean = false,
+  environment: PurgeEnvironment = 'production',
 ) {
 
   const endpoint = `/service/${encodeURIComponent(fastlyServiceId)}/purge`;
@@ -68,7 +102,12 @@ export async function purgeSurrogateKey(
     if (softPurge) {
       headers.set('fastly-soft-purge', '1');
     }
-    await callFastlyApi(fastlyApiContext, endpoint, `Purging surrogate key [${surrogateKey}] on service [${fastlyServiceId}]`, null, { method: 'POST', headers });
+    // A purge without this header applies to production. Staging needs it.
+    // See https://www.fastly.com/documentation/guides/getting-started/services/working-with-staging/
+    if (environment === 'staging') {
+      headers.set('fastly-purge-environment', 'staging');
+    }
+    await callFastlyApi(fastlyApiContext, endpoint, `Purging surrogate key [${surrogateKey}] on service [${fastlyServiceId}] (${environment})`, null, { method: 'POST', headers });
 
   } catch(err) {
     if (err instanceof FetchError) {

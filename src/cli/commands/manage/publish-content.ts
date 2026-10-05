@@ -70,6 +70,10 @@ Optional:
                                      2. FASTLY_SERVICE_ID environment variable
                                    If none is found, the purge is skipped.
 
+  --purge-environment=<env>        Environment to purge: production, staging, or a
+                                   comma-separated list of both. Can be repeated.
+                                   Default: production
+
   --overwrite-existing             Always overwrite existing entries in storage, even if unchanged.
 
   --brotli-quality=<0-11>          Brotli quality for the 'br' variants. Overrides
@@ -133,6 +137,7 @@ export async function action(actionArgs: string[]) {
     { name: 'local', type: Boolean },
     { name: 'fastly-api-token', type: String, },
     { name: 'fastly-service-id', type: String, },
+    { name: 'purge-environment', type: String, multiple: true, },
     { name: 'kv-overwrite', type: Boolean },
 
     { name: 's3-access-key-id', type: String, },
@@ -165,6 +170,7 @@ export async function action(actionArgs: string[]) {
     local: localMode,
     ['fastly-api-token']: fastlyApiToken,
     ['fastly-service-id']: fastlyServiceId,
+    ['purge-environment']: purgeEnvironmentValues,
     ['kv-overwrite']: _kvOverwrite,
     ['s3-access-key-id']: s3AccessKeyId,
     ['s3-secret-access-key']: s3SecretAccessKey,
@@ -293,6 +299,7 @@ export async function action(actionArgs: string[]) {
       computeAppDir,
       fastlyServiceId,
       fastlyApiToken,
+      purgeEnvironments: purgeEnvironmentValues,
     });
   } catch (err: unknown) {
     console.error(String(err));
@@ -675,9 +682,16 @@ export async function action(actionArgs: string[]) {
 
   if (purgeTarget != null) {
     const surrogateKey = `${publishId}-${collectionName}`;
-    console.log(`Purging surrogate key [${surrogateKey}] on service [${purgeTarget.serviceId}]...`);
-    const purged = await purgeSurrogateKey(purgeTarget.fastlyApiContext, purgeTarget.serviceId, surrogateKey, true);
-    console.log(purged ? 'Purged' : 'Failed purging');
+    for (const environment of purgeTarget.environments) {
+      console.log(`Purging surrogate key [${surrogateKey}] on service [${purgeTarget.serviceId}] (${environment})...`);
+      const purged = await purgeSurrogateKey(purgeTarget.fastlyApiContext, purgeTarget.serviceId, surrogateKey, true, environment);
+      if (purged) {
+        console.log('Purged');
+      } else {
+        // The content is published. Only the cached copies may be stale until they expire.
+        console.warn(`⚠️ Warning: Failed purging (${environment}). Cached copies may be served until they expire.`);
+      }
+    }
   }
 
   console.log(`🎉 Completed.`);
