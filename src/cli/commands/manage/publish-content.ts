@@ -60,9 +60,8 @@ Optional:
                                    Default: rootDir from publish-content.config.js
 
   --fastly-api-token=<token>       Fastly API token for KV Store or cache access.
-                                   If not set, the tool will check:
-                                     1. FASTLY_API_TOKEN environment variable
-                                     2. The default profile in the Fastly CLI
+                                   If not set, the tool uses the FASTLY_API_TOKEN
+                                   environment variable.
 
   --overwrite-existing             Always overwrite existing entries in storage, even if unchanged.
 

@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
    - `KVAssetEntry` renamed to `AssetEntry`
    - `KVAssetEntryMap` renamed to `AssetEntryMap`
 
+- Fastly API token
+   - The CLI no longer falls back to `fastly profile token`. Pass the token with `--fastly-api-token` or the `FASTLY_API_TOKEN` environment variable.
+   - Remove the `@fastly/cli` dependency, which was used only for that fallback.
+
 ### Added
 
 - S3-compatible storage (BETA)
