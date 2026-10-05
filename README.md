@@ -677,6 +677,42 @@ async function handleRequest(request) {
 }
 ```
 
+### ⏱️ Measuring Performance with `Server-Timing`
+
+`PublisherServer` can report how long it spends reading from storage. To turn this on, give it the name of a request header:
+
+```js
+publisherServer.setServerTimingRequestHeader('X-Publisher-Server-Timing');
+```
+
+A request that has this header gets a [`Server-Timing`](https://www.w3.org/TR/server-timing/) response header. Requests without it are not affected. This is off by default.
+
+```
+Server-Timing: settings;dur=12.3, index;dur=40.1, index-body;dur=31.0, index-parse;dur=24.2, asset;dur=11.4
+```
+
+| Name | Duration of |
+|------|-------------|
+| `settings` | Reading and parsing the collection's settings |
+| `index` | Reading the collection's index, until the response headers arrive |
+| `index-body` | Reading the body of the index |
+| `index-parse` | Parsing the index |
+| `asset` | Reading the file, until the response headers arrive. Can appear more than one time, one time for each variant that is tried. |
+
+An entry is missing if `PublisherServer` did not read that item for this request, for example because the item is cached in memory.
+
+`serveRequest()` starts the measurements for each request. If you call `getMatchingAsset()` and `serveAsset()` directly, call `beginRequest()` first:
+
+```js
+publisherServer.beginRequest(request);
+const asset = await publisherServer.getMatchingAsset(pathname);
+if (asset != null) {
+  return publisherServer.serveAsset(request, asset);
+}
+```
+
+Any client can send the request header. Choose a name that is not easy to guess if you do not want to show these timings to the public.
+
 ## 📥 Using Published Assets in Your Code
 
 To access files you've published, use the `getMatchingAsset()` and `loadAssetVariant()` methods on `publisherServer`.
