@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `publish-content`
+   - Add `--fastly-service-id`. In S3 mode, the Service ID to purge after publishing now comes from `--fastly-service-id`, then `service_id` in `fastly.toml`, then the `FASTLY_SERVICE_ID` environment variable. Before, only `fastly.toml` was checked, so the purge was skipped in CI and other environments without a deployed app's `fastly.toml`.
+
 - S3-compatible storage (BETA)
    - Add support for S3-compatible storage, such as Fastly Object Storage
    - Store items using same keys as KV Store
