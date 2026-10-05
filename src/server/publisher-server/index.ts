@@ -5,6 +5,8 @@
 
 /// <reference types="@fastly/js-compute" />
 
+import { CoreCache } from 'fastly:cache';
+
 import {
   type StaticPublishRc,
 } from '../../models/config/static-publish-rc.js';
@@ -30,6 +32,16 @@ import {
 import { checkIfModifiedSince, getIfModifiedSinceHeader } from './serve-preconditions/if-modified-since.js';
 import { checkIfNoneMatch, getIfNoneMatchHeader } from './serve-preconditions/if-none-match.js';
 import { ServerTiming } from '../util/server-timing.js';
+import {
+  type CachedResponseMetadata,
+  type ResponseCacheOptions,
+  CACHEABLE_STATUSES,
+  buildCacheFillRequest,
+  buildResponseCacheKey,
+  decodeCachedResponseMetadata,
+  encodeCachedResponseMetadata,
+  parseAcceptEncodingGroups,
+} from './response-cache.js';
 
 type AssetVariant = {
   storageEntry: StorageEntry,
@@ -84,6 +96,7 @@ export class PublisherServer {
     this.collectionNameHeader = 'X-Publisher-Server-Collection';
     this.serverTimingRequestHeader = null;
     this.serverTiming = null;
+    this.responseCache = null;
   }
 
   static fromStaticPublishRc(config: StaticPublishRc) {
@@ -107,6 +120,9 @@ export class PublisherServer {
   // Timing for the current request, or null if timing is off for it.
   serverTiming: ServerTiming | null;
 
+  // When set, responses are cached with the Core Cache API. See setResponseCache().
+  responseCache: ResponseCacheOptions | null;
+
   // Cached settings
   settingsCached: PublisherServerConfigNormalized | null | undefined;
 
@@ -127,6 +143,15 @@ export class PublisherServer {
   // null (the default) turns timing off.
   setServerTimingRequestHeader(requestHeader: string | null) {
     this.serverTimingRequestHeader = requestHeader;
+  }
+
+  // Cache whole responses with the Core Cache API, keyed by collection, path,
+  // and the client's Accept-Encoding. A cache hit does not read the settings,
+  // the index, or the file from storage. Entries have the surrogate key
+  // `<publishId>-<collectionName>`, which publish-content purges. null (the
+  // default) turns the cache off.
+  setResponseCache(options: ResponseCacheOptions | null) {
+    this.responseCache = options;
   }
 
   // Start handling a new request. serveRequest() calls this. If you call
@@ -286,50 +311,7 @@ export class PublisherServer {
       return [];
     }
 
-    const acceptEncodingHeader = request.headers.get('accept-encoding')?.trim() ?? '';
-    if (acceptEncodingHeader == '') {
-      return [];
-    }
-
-    const priorityMap = new Map<number, ContentCompressionTypes[]>;
-
-    for (const headerValue of acceptEncodingHeader.trim().split(',')) {
-      let [encodingValue, qValueStr] = headerValue.trim().split(';');
-      encodingValue = encodingValue.trim();
-      if (!serverConfig.allowedEncodings.includes(encodingValue as ContentCompressionTypes)) {
-        continue;
-      }
-      let qValue; // q value multiplied by 1000
-      if (qValueStr == null || !qValueStr.startsWith('q=')) {
-        // use default of 1.0
-        qValue = 1000;
-      } else {
-        qValueStr = qValueStr.slice(2); // remove the q=
-        qValue = parseFloat(qValueStr);
-        if (Number.isNaN(qValue) || qValue > 1) {
-          qValue = 1;
-        }
-        if (qValue < 0) {
-          qValue = 0;
-        }
-        // q values can have up to 3 decimal digits
-        qValue = Math.floor(qValue * 1000);
-      }
-
-      let typesForQValue = priorityMap.get(qValue);
-      if (typesForQValue == null) {
-        typesForQValue = [];
-        priorityMap.set(qValue, typesForQValue);
-      }
-      typesForQValue.push(encodingValue as ContentCompressionTypes);
-    }
-
-    // Sort keys, larger numbers to come first
-    const keysSorted = [...priorityMap.keys()]
-      .sort((qValueA, qValueB) => qValueB - qValueA);
-
-    return keysSorted
-      .map(qValue => priorityMap.get(qValue)!);
+    return parseAcceptEncodingGroups(request.headers.get('accept-encoding') ?? '', serverConfig.allowedEncodings);
   }
 
   async testExtendedCache(pathname: string) {
@@ -347,6 +329,12 @@ export class PublisherServer {
   }
 
   handlePreconditions(request: Request, asset: AssetEntry, responseHeaders: Headers): Response | null {
+    return this.handlePreconditionsForLastModified(request, asset.lastModifiedTime, responseHeaders);
+  }
+
+  // lastModifiedTime is in seconds since the epoch, as in AssetEntry. A cached
+  // response has its headers, but not its AssetEntry.
+  private handlePreconditionsForLastModified(request: Request, lastModifiedTime: number, responseHeaders: Headers): Response | null {
     // Handle preconditions according to https://httpwg.org/specs/rfc9110.html#rfc.section.13.2.2
 
     // A recipient cache or origin server MUST evaluate the request preconditions defined by this specification in the following order:
@@ -388,7 +376,7 @@ export class PublisherServer {
       // For us, method is always GET or HEAD here.
       const headerValue = getIfModifiedSinceHeader(request);
       if (headerValue != null) {
-        const result = checkIfModifiedSince(asset.lastModifiedTime, headerValue);
+        const result = checkIfModifiedSince(lastModifiedTime, headerValue);
         if (!result) {
           return new Response(null, {
             status: 304,
@@ -531,6 +519,100 @@ export class PublisherServer {
     );
   }
 
+  // Serve a response through the response cache (see setResponseCache()).
+  // keyPath identifies the response in the active collection. Include in it
+  // anything other than the path and the Accept-Encoding that changes the response.
+  // On a miss, produce() is called with a GET request that has no conditional or
+  // range headers, and its result is cached if it is a 200 or 404 response, or
+  // null (not found). Conditional requests and HEAD are then answered from the
+  // cached response. If the cache is off, produce() gets the original request.
+  async serveCached(
+    request: Request,
+    keyPath: string,
+    produce: (request: Request) => Promise<Response | null>,
+  ): Promise<Response | null> {
+    if (this.responseCache == null) {
+      return produce(request);
+    }
+
+    const key = buildResponseCacheKey(this.publishId, this.activeCollectionName, keyPath, request);
+    const lookupStart = performance.now();
+    const entry = CoreCache.transactionLookup(key);
+    const state = entry.state();
+
+    if (!state.mustInsertOrUpdate()) {
+      const metadata = state.found() && state.usable() ? decodeCachedResponseMetadata(entry.userMetadata()) : null;
+      if (metadata != null) {
+        this.serverTiming?.add('cache', performance.now() - lookupStart, 'hit');
+        return this.responseFromCache(request, metadata, entry.body());
+      }
+      // Not usable, and another request is not filling it for us: serve without the cache.
+      this.serverTiming?.add('cache', performance.now() - lookupStart, 'bypass');
+      return produce(request);
+    }
+
+    // This request must fill the entry (a miss, or a stale entry after a soft purge).
+    this.serverTiming?.add('cache', performance.now() - lookupStart, 'miss');
+    let response: Response | null;
+    try {
+      response = await produce(buildCacheFillRequest(request));
+    } catch (err) {
+      entry.cancel();
+      throw err;
+    }
+
+    let metadata: CachedResponseMetadata;
+    let body: ArrayBuffer;
+    if (response == null) {
+      metadata = { notFound: true };
+      body = new ArrayBuffer(0);
+    } else if (CACHEABLE_STATUSES.includes(response.status)) {
+      const headers = new Headers(response.headers);
+      // Server-Timing describes one request, so it is not stored.
+      headers.delete('Server-Timing');
+      metadata = { status: response.status, headers: [...headers] };
+      body = await response.arrayBuffer();
+    } else {
+      entry.cancel();
+      return response;
+    }
+
+    const writer = entry.insert({
+      maxAge: this.responseCache.maxAge,
+      surrogateKeys: [`${this.publishId}-${this.activeCollectionName}`],
+      userMetadata: encodeCachedResponseMetadata(metadata),
+      length: body.byteLength,
+    });
+    writer.append(body);
+    writer.close();
+
+    return this.responseFromCache(request, metadata, body);
+  }
+
+  private responseFromCache(request: Request, metadata: CachedResponseMetadata, body: BodyInit): Response | null {
+    if (metadata.notFound) {
+      return null;
+    }
+
+    const headers = new Headers(metadata.headers);
+    if (this.serverTiming != null) {
+      headers.append('Server-Timing', this.serverTiming.toHeaderValue());
+    }
+
+    const lastModified = headers.get('Last-Modified');
+    const lastModifiedMs = lastModified != null ? Date.parse(lastModified) : NaN;
+    const lastModifiedTime = Number.isNaN(lastModifiedMs) ? 0 : Math.floor(lastModifiedMs / 1000);
+    const preconditionResponse = this.handlePreconditionsForLastModified(request, lastModifiedTime, headers);
+    if (preconditionResponse != null) {
+      return preconditionResponse;
+    }
+
+    return new Response(request.method === 'HEAD' ? null : body, {
+      status: metadata.status,
+      headers,
+    });
+  }
+
   async serveRequest(request: Request): Promise<Response | null> {
 
     this.beginRequest(request);
@@ -547,6 +629,13 @@ export class PublisherServer {
     if (pathname === '/healthz') {
       return new Response("OK", { status: 200 });
     }
+
+    // The fallback pages (SPA, not found) depend on whether the client accepts HTML.
+    const keyPath = requestAcceptsTextHtml(request) ? pathname : `${pathname}|no-html`;
+    return this.serveCached(request, keyPath, (fillRequest) => this.serveRequestFromStorage(fillRequest, pathname));
+  }
+
+  private async serveRequestFromStorage(request: Request, pathname: string): Promise<Response | null> {
 
     const serverConfig = await this.getServerConfig();
     if (serverConfig == null) {
