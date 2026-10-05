@@ -21,6 +21,7 @@ import { applyDefaults } from '../../util/data.js';
 import { calculateFileSizeAndHash, enumerateFiles, rootRelative } from '../../util/files.js';
 import { ensureVariantFileExists, type Variants } from '../../util/variants.js';
 import { concurrentMap } from '../../util/retryable.js';
+import { type PurgeTarget, loadPurgeTarget, purgeSurrogateKey } from '../../util/purge.js';
 import {
   getStorageKeysByHexPrefix,
   loadStorageProviderFromStaticPublishRc,
@@ -63,11 +64,15 @@ Optional:
                                    If not set, the tool uses the FASTLY_API_TOKEN
                                    environment variable.
 
-  --fastly-service-id=<id>         Fastly Service ID to purge after publishing (S3 storage).
+  --fastly-service-id=<id>         Fastly Service ID to purge after publishing (not with --local).
                                    If not set, the tool will check:
                                      1. service_id in fastly.toml
                                      2. FASTLY_SERVICE_ID environment variable
                                    If none is found, the purge is skipped.
+
+  --purge-environment=<env>        Environment to purge: production, staging, or a
+                                   comma-separated list of both. Can be repeated.
+                                   Default: production
 
   --overwrite-existing             Always overwrite existing entries in storage, even if unchanged.
 
@@ -132,6 +137,7 @@ export async function action(actionArgs: string[]) {
     { name: 'local', type: Boolean },
     { name: 'fastly-api-token', type: String, },
     { name: 'fastly-service-id', type: String, },
+    { name: 'purge-environment', type: String, multiple: true, },
     { name: 'kv-overwrite', type: Boolean },
 
     { name: 's3-access-key-id', type: String, },
@@ -164,6 +170,7 @@ export async function action(actionArgs: string[]) {
     local: localMode,
     ['fastly-api-token']: fastlyApiToken,
     ['fastly-service-id']: fastlyServiceId,
+    ['purge-environment']: purgeEnvironmentValues,
     ['kv-overwrite']: _kvOverwrite,
     ['s3-access-key-id']: s3AccessKeyId,
     ['s3-secret-access-key']: s3SecretAccessKey,
@@ -273,13 +280,28 @@ export async function action(actionArgs: string[]) {
       computeAppDir,
       localMode,
       fastlyApiToken,
-      fastlyServiceId,
       s3AccessKeyId,
       s3SecretAccessKey,
       s3UploadConcurrency,
     });
   } catch (err: unknown) {
     console.error(`❌ Could not instantiate store provider`);
+    console.error(String(err));
+    process.exitCode = 1;
+    return;
+  }
+
+  // Purge target: checked now, so that a missing API token fails before anything is uploaded.
+  let purgeTarget: PurgeTarget | null;
+  try {
+    purgeTarget = loadPurgeTarget({
+      localMode: localMode ?? false,
+      computeAppDir,
+      fastlyServiceId,
+      fastlyApiToken,
+      purgeEnvironments: purgeEnvironmentValues,
+    });
+  } catch (err: unknown) {
     console.error(String(err));
     process.exitCode = 1;
     return;
@@ -658,7 +680,19 @@ export async function action(actionArgs: string[]) {
 
   console.log(`✅  Settings have been saved.`);
 
-  await storageProvider.purgeSurrogateKey(`${publishId}-${collectionName}`);
+  if (purgeTarget != null) {
+    const surrogateKey = `${publishId}-${collectionName}`;
+    for (const environment of purgeTarget.environments) {
+      console.log(`Purging surrogate key [${surrogateKey}] on service [${purgeTarget.serviceId}] (${environment})...`);
+      const purged = await purgeSurrogateKey(purgeTarget.fastlyApiContext, purgeTarget.serviceId, surrogateKey, true, environment);
+      if (purged) {
+        console.log('Purged');
+      } else {
+        // The content is published. Only the cached copies may be stale until they expire.
+        console.warn(`⚠️ Warning: Failed purging (${environment}). Cached copies may be served until they expire.`);
+      }
+    }
+  }
 
   console.log(`🎉 Completed.`);
 

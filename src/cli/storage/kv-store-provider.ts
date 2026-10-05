@@ -247,8 +247,6 @@ export class KvStoreProvider implements StorageProvider {
     return Math.ceil(size / KV_STORE_CHUNK_SIZE);
   }
 
-  async purgeSurrogateKey(_surrogateKey: string): Promise<void> {
-  }
 }
 
 export function kvStoreEntryToStorageEntry(
