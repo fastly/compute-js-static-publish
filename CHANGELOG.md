@@ -28,6 +28,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `publish-content.config.js`
    - Add `brotliQuality` (0 to 11, default 11). A lower value compresses much faster, and gives slightly larger files.
 
+- `PublisherServer`
+   - Add `setServerTimingRequestHeader()`. When set, a request that has this header gets a `Server-Timing` response header with the time spent reading the settings, the index, and the file. Off by default.
+   - Add `beginRequest()`. `serveRequest()` calls it. Call it yourself before `getMatchingAsset()` if you call `getMatchingAsset()` and `serveAsset()` directly.
+
 - `publish-content`
    - Add `--brotli-quality=<0-11>`. It overrides `brotliQuality` in `publish-content.config.js`.
    - Add `--s3-upload-concurrency=<1-256>`: the number of objects to upload to S3-compatible storage at the same time. The default is now 64. It was 12.
