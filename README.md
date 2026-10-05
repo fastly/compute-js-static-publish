@@ -880,9 +880,7 @@ After this process is complete, the PublisherServer object in the Compute applic
 
 - `--local`: Instead of working with the Fastly KV Store, operate on local files that will be used to simulate the KV Store with the local development environment.
 
-- `--fastly-api-token`: API token to use when publishing. If not set, the tool will check:
-   - **`FASTLY_API_TOKEN` environment variable**
-   - The default profile in the Fastly CLI
+- `--fastly-api-token`: API token to use when publishing. If not set, the tool uses the **`FASTLY_API_TOKEN` environment variable**.
 
 **S3 Storage Options (BETA):**
 
@@ -909,9 +907,7 @@ This can include expired collection indexes and orphaned content assets.
 
 - `--local`: Instead of working with the Fastly KV Store, operate on local files that will be used to simulate the KV Store with the local development environment.
 
-- `--fastly-api-token`: API token to use when publishing. If not set, the tool will check:
-    - **`FASTLY_API_TOKEN` environment variable**
-    - The default profile in the Fastly CLI
+- `--fastly-api-token`: API token to use when publishing. If not set, the tool uses the **`FASTLY_API_TOKEN` environment variable**.
 
 **S3 Storage Options (BETA):**
 
@@ -930,9 +926,7 @@ Lists all collections currently published in storage.
 
 - `--local`: Instead of working with the Fastly KV Store, operate on local files that will be used to simulate the KV Store with the local development environment.
 
-- `--fastly-api-token`: API token to use when publishing. If not set, the tool will check:
-    - **`FASTLY_API_TOKEN` environment variable**
-    - The default profile in the Fastly CLI
+- `--fastly-api-token`: API token to use when publishing. If not set, the tool uses the **`FASTLY_API_TOKEN` environment variable**.
 
 **S3 Storage Options (BETA):**
 
@@ -965,9 +959,7 @@ Copies an existing collection (content + config) to a new collection name.
 
 - `--local`: Instead of working with the Fastly KV Store, operate on local files that will be used to simulate the KV Store with the local development environment.
 
-- `--fastly-api-token`: API token to use when publishing. If not set, the tool will check:
-    - **`FASTLY_API_TOKEN` environment variable**
-    - The default profile in the Fastly CLI
+- `--fastly-api-token`: API token to use when publishing. If not set, the tool uses the **`FASTLY_API_TOKEN` environment variable**.
 
 **S3 Storage Options (BETA):**
 
@@ -997,9 +989,7 @@ Sets or updates the expiration time of an existing collection.
 
 - `--local`: Instead of working with the Fastly KV Store, operate on local files that will be used to simulate the KV Store with the local development environment.
 
-- `--fastly-api-token`: API token to use when publishing. If not set, the tool will check:
-    - **`FASTLY_API_TOKEN` environment variable**
-    - The default profile in the Fastly CLI
+- `--fastly-api-token`: API token to use when publishing. If not set, the tool uses the **`FASTLY_API_TOKEN` environment variable**.
 
 **S3 Storage Options (BETA):**
 
@@ -1024,9 +1014,7 @@ Use the `npx @fastly/compute-js-static-publish clean` command afterward to remov
 
 - `--local`: Instead of working with the Fastly KV Store, operate on local files that will be used to simulate the KV Store with the local development environment.
 
-- `--fastly-api-token`: API token to use when publishing. If not set, the tool will check:
-    - **`FASTLY_API_TOKEN` environment variable**
-    - The default profile in the Fastly CLI
+- `--fastly-api-token`: API token to use when publishing. If not set, the tool uses the **`FASTLY_API_TOKEN` environment variable**.
 
 **S3 Storage Options (BETA):**
 
