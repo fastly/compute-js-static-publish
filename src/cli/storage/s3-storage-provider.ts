@@ -6,7 +6,6 @@
 import fs from 'node:fs';
 import http from 'node:http';
 import https from 'node:https';
-import path from 'node:path';
 import {
   DeleteObjectCommand,
   DeleteObjectCommandInput,
@@ -53,16 +52,6 @@ import {
 import {
   rootRelative,
 } from '../util/files.js';
-import {
-  type FastlyApiContext,
-  loadApiToken,
-} from '../util/api-token.js';
-import {
-  loadServiceId,
-} from '../util/service-id.js';
-import {
-  purgeSurrogateKey,
-} from '../util/purge.js';
 
 type CommandOutput<C> = C extends Command<any, any, any, infer O, any> ? O : never;
 
@@ -100,29 +89,7 @@ export const buildStoreProvider: StorageProviderBuilder = async (
   }
   console.log(`✔️ S3 Credentials: ${s3CredentialsResult.s3AccessKeyId.slice(0, 4)}${'*'.repeat(s3CredentialsResult.s3AccessKeyId.length-4)} from '${s3CredentialsResult.source}'`);
 
-  const serviceIdResult = loadServiceId({
-    commandLine: context.fastlyServiceId,
-    fastlyTomlPath: path.resolve(context.computeAppDir, 'fastly.toml'),
-  });
-  const serviceId = serviceIdResult?.serviceId;
-
-  let apiToken = undefined;
-  if (serviceIdResult == null) {
-    console.log(`- Service ID not found (--fastly-service-id, fastly.toml, or FASTLY_SERVICE_ID). Will skip purge step after publish.`);
-  } else {
-    console.log(`✔️ Service ID from ${serviceIdResult.source}: ${serviceIdResult.serviceId}`);
-
-    const apiTokenResult = loadApiToken({commandLine: context.fastlyApiToken});
-    if (apiTokenResult == null) {
-      throw new Error("❌ Fastly API Token not provided.\nSet the FASTLY_API_TOKEN environment variable to an API token that has write access to the KV Store.");
-    }
-    console.log(`✔️ Fastly API Token: ${apiTokenResult.apiToken.slice(0, 4)}${'*'.repeat(apiTokenResult.apiToken.length - 4)} from '${apiTokenResult.source}'`);
-    apiToken = apiTokenResult.apiToken;
-  }
-
   return new S3StorageProvider(
-    serviceId,
-    apiToken,
     region,
     s3CredentialsResult.s3AccessKeyId,
     s3CredentialsResult.s3SecretAccessKey,
@@ -135,8 +102,6 @@ export const buildStoreProvider: StorageProviderBuilder = async (
 
 export class S3StorageProvider implements StorageProvider {
   constructor(
-    fastlyServiceId: string | undefined,
-    fastlyApiToken: string | undefined,
     s3Region: string,
     accessKeyId: string,
     secretAccessKey: string,
@@ -145,8 +110,6 @@ export class S3StorageProvider implements StorageProvider {
     uploadConcurrency: number = DEFAULT_S3_UPLOAD_CONCURRENCY,
   ) {
     this.uploadConcurrency = uploadConcurrency;
-    this.fastlyServiceId = fastlyServiceId;
-    this.fastlyApiContext = fastlyApiToken != null ? { apiToken: fastlyApiToken } : undefined;
     this.s3Region = s3Region;
     this.accessKeyId = accessKeyId;
     this.secretAccessKey = secretAccessKey;
@@ -154,8 +117,6 @@ export class S3StorageProvider implements StorageProvider {
     this.s3Endpoint = s3Endpoint;
   }
 
-  private readonly fastlyServiceId?: string;
-  private readonly fastlyApiContext?: FastlyApiContext;
   private readonly s3Region: string;
   private readonly accessKeyId: string;
   private readonly secretAccessKey: string;
@@ -324,7 +285,6 @@ export class S3StorageProvider implements StorageProvider {
     }
 
     console.log(`📤 Uploading ${toWrite.length} entries to S3 storage (${this.uploadConcurrency} at a time).`);
-    // fastlyApiContext is non-null if useKvStore is true
     await this.doConcurrentParallel(
       toWrite,
       async ({filePath, metadataJson}, key) => {
@@ -373,32 +333,4 @@ export class S3StorageProvider implements StorageProvider {
     return 1;
   }
 
-  async purgeSurrogateKey(surrogateKey: string): Promise<void> {
-
-    if (this.fastlyServiceId == null) {
-      console.log('Fastly Service ID not set, skipping purge...');
-      return;
-    }
-
-    if (this.fastlyApiContext?.apiToken == null) {
-      console.log('Fastly API token not set, skipping purge...');
-      return;
-    }
-
-    console.log(`Purging surrogate key [${surrogateKey}] on service [${this.fastlyServiceId}]...`);
-
-    const result = await purgeSurrogateKey(
-      this.fastlyApiContext,
-      this.fastlyServiceId,
-      surrogateKey,
-      true,
-    );
-
-    if (result) {
-      console.log('Purged');
-    } else {
-      console.log('Failed purging');
-    }
-
-  }
 }

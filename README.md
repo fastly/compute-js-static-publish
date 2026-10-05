@@ -747,7 +747,8 @@ The second argument identifies the response in the collection. If anything other
 
 Notes:
 
-- `PublisherServer` reads a response into memory before it caches it. Thus a very large file uses memory up to its size while it is cached.
+- The response is streamed into the cache. The client, and other requests that wait for the same response, read it from the cache as it is written. Thus a large file is not held in memory.
+- With `--local`, `publish-content` cannot purge the local cache. Restart `fastly compute serve` to see newly published content, or leave the response cache off in local development.
 - On staging, a purge must include the `Fastly-Purge-Environment: staging` header to clear the staging cache. Without it, a purge clears only the production cache.
 
 ## 📥 Using Published Assets in Your Code
@@ -905,6 +906,11 @@ After this process is complete, the PublisherServer object in the Compute applic
 - `--root-dir`: Source directory to read files from (overrides value in `publish-content.config.js`)
 - `--overwrite-existing`: Always upload all files, even if they are already in storage. `--kv-overwrite` is an alias.
 - `--brotli-quality`: Brotli quality for the `br` variants, an integer from 0 to 11. Overrides `brotliQuality` in `publish-content.config.js`. This is useful in CI, where the config file is generated at each run.
+- `--fastly-service-id`: The Fastly Service ID to purge after publishing. The command purges the surrogate key `<publishId>-<collectionName>`, so that the service stops serving cached copies of the collection's settings, index, files, and responses (see [response cache](#️-caching-responses-with-the-core-cache)). If not set, the tool will check:
+   - `service_id` in `fastly.toml`
+   - **`FASTLY_SERVICE_ID` environment variable**
+
+  If none is found, the command skips the purge. The purge also needs an API token (see `--fastly-api-token`). With `--local`, there is no purge.
 
 **Expiration:**
 
@@ -924,11 +930,6 @@ After this process is complete, the PublisherServer object in the Compute applic
 
 - `--s3-access-key-id`, `--s3-secret-access-key`: Access key ID and secret access key for S3-compatible storage. If not set, the tool will check the `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` environment variables.
 - `--s3-upload-concurrency`: Number of objects to upload at the same time, from 1 to 256 (default: 64). Each upload keeps its file in memory, so a site with many large files can need a lower value.
-- `--fastly-service-id`: The Fastly Service ID to purge after publishing. The command purges the surrogate key `<publishId>-<collectionName>`, so that the service stops serving cached copies of the collection's settings, index, and files. If not set, the tool will check:
-   - `service_id` in `fastly.toml`
-   - **`FASTLY_SERVICE_ID` environment variable**
-
-  If none is found, the command skips the purge. The purge also needs an API token (see `--fastly-api-token`).
 
 #### `clean`
 

@@ -48,7 +48,7 @@ Both parts use a registry of builder functions. Each entry point calls `register
   - `kv-store-provider` uses the Fastly API.
   - `kv-store-local-provider` is for the `--local` flag. It writes `static-publisher/kvstore.json` and the prepared files, so that `fastly compute serve` can simulate the KV Store.
   - `s3-storage-provider` uses the AWS SDK.
-  - The CLI interface has list, get, submit, delete, batch, chunking, and surrogate-key purge.
+  - The CLI interface has list, get, submit, delete, batch, and chunking. The purge after publishing is not part of it: `publish-content` does it with `util/purge.ts`, because it is the same for every storage mode.
   - The Fastly API token comes only from `--fastly-api-token` or `FASTLY_API_TOKEN` (`util/api-token.ts`). As of v8, the CLI does not run `fastly profile token`, and the package does not depend on `@fastly/cli`. (The scaffolder still adds `@fastly/cli` to the generated app.)
 - Server (`src/server/storage/`): `kv-store-provider` and `s3-storage-provider`. Both use a small `getEntry(key, tags)` interface. S3 credentials come from a Secret Store. `src/server/index.ts` exports the setters.
 
@@ -60,7 +60,7 @@ All keys start with `publishId` (default `'default'`):
 - `<publishId>_settings_<collection>`: The normalized `server` section of `publish-content.config.js`. The CLI saves it when it publishes.
 - `<publishId>_files_sha256_<hash>[_<variant>]`: The file content, with `br`/`gzip` variants. The key is the hash of the content. Large files are split into chunks.
 
-All collections share the files, because the key is the hash of the content. `clean` removes expired collections and the `_files_` keys that no index uses. After a publish, the CLI purges the surrogate key `<publishId>-<collection>`. The server adds this tag when it reads, and to the responses in the response cache. In S3 mode, the purge runs only if the CLI finds a Service ID (`--fastly-service-id`, then `service_id` in `fastly.toml`, then `FASTLY_SERVICE_ID`, see `util/service-id.ts`) and an API token. It is a soft purge. A purge without the `Fastly-Purge-Environment: staging` header does not clear the cache of a staged service version.
+All collections share the files, because the key is the hash of the content. `clean` removes expired collections and the `_files_` keys that no index uses. After a publish, the CLI purges the surrogate key `<publishId>-<collection>`. The server adds this tag when it reads, and to the responses in the response cache. The purge runs in KV Store and S3 modes (not with `--local`), only if the CLI finds a Service ID (`--fastly-service-id`, then `service_id` in `fastly.toml`, then `FASTLY_SERVICE_ID`, see `util/service-id.ts`). `loadPurgeTarget()` checks this before the upload, and fails if there is a Service ID but no API token. It is a soft purge. A purge without the `Fastly-Purge-Environment: staging` header does not clear the cache of a staged service version.
 
 ### `publish-content` flow
 
@@ -100,7 +100,7 @@ KV batch endpoint behavior (measured, not documented):
 
 1. Select the active collection. This is the default collection, or the collection from `setActiveCollectionName`. The helpers are in `collection-selector/` (for example host, cookie, config store).
    `beginRequest()` resets the per-request state: the `Server-Timing` collector (`util/server-timing.ts`), which is on only if `setServerTimingRequestHeader()` names a header that the request has.
-2. If `setResponseCache()` is set, `serveCached()` (`response-cache.ts`) looks up the whole response in the Core Cache, keyed by publish ID, collection, path, and normalized `Accept-Encoding`. A hit skips steps 3 to 8. A miss uses `transactionLookup()`, so concurrent misses wait for one fill. The fill runs steps 3 to 8 with a `GET` that has no conditional headers, and caches a `200`, a `404`, or "not found". Conditional requests and `HEAD` are then answered from the cached response. The response is read into memory before it is cached.
+2. If `setResponseCache()` is set, `serveCached()` (`response-cache.ts`) looks up the whole response in the Core Cache, keyed by publish ID, collection, path, and normalized `Accept-Encoding`. A hit skips steps 3 to 8. A miss uses `transactionLookup()`, so concurrent misses wait for one fill. The fill runs steps 3 to 8 with a `GET` that has no conditional headers, and caches a `200`, a `404`, or "not found". Conditional requests and `HEAD` are then answered from the cached response. The body is streamed into the entry with `insertAndStreamBack()`: `copyBodyToCache()` copies the chunks, because `FastlyBody.append()` takes only host-backed streams, and the storage providers build their streams in JavaScript. The client reads the entry's stream. If the copy fails, the entry is not closed, so the cache drops it.
 3. Load the settings and the index for that collection, and keep them in a cache. An expired collection is the same as a collection that does not exist.
 4. Find the path with `publicDir`, `autoIndex`, and `autoExt`.
 5. If the request accepts HTML, use the SPA file or the 404 file when no file matches.

@@ -5,6 +5,7 @@
 
 /// <reference types="@fastly/js-compute" />
 
+import type { FastlyBody } from 'fastly:body';
 import { CoreCache } from 'fastly:cache';
 
 import {
@@ -562,32 +563,65 @@ export class PublisherServer {
       throw err;
     }
 
-    let metadata: CachedResponseMetadata;
-    let body: ArrayBuffer;
+    const insertOptions = {
+      maxAge: this.responseCache.maxAge,
+      surrogateKeys: [`${this.publishId}-${this.activeCollectionName}`],
+    };
+
     if (response == null) {
-      metadata = { notFound: true };
-      body = new ArrayBuffer(0);
-    } else if (CACHEABLE_STATUSES.includes(response.status)) {
-      const headers = new Headers(response.headers);
-      // Server-Timing describes one request, so it is not stored.
-      headers.delete('Server-Timing');
-      metadata = { status: response.status, headers: [...headers] };
-      body = await response.arrayBuffer();
-    } else {
+      const metadata: CachedResponseMetadata = { notFound: true };
+      const writer = entry.insert({
+        ...insertOptions,
+        userMetadata: encodeCachedResponseMetadata(metadata),
+        length: 0,
+      });
+      writer.close();
+      return null;
+    }
+
+    if (!CACHEABLE_STATUSES.includes(response.status)) {
       entry.cancel();
       return response;
     }
 
-    const writer = entry.insert({
-      maxAge: this.responseCache.maxAge,
-      surrogateKeys: [`${this.publishId}-${this.activeCollectionName}`],
-      userMetadata: encodeCachedResponseMetadata(metadata),
-      length: body.byteLength,
-    });
-    writer.append(body);
-    writer.close();
+    const headers = new Headers(response.headers);
+    // Server-Timing describes one request, so it is not stored.
+    headers.delete('Server-Timing');
+    const metadata: CachedResponseMetadata = { status: response.status, headers: [...headers] };
+    const contentLength = Number(headers.get('Content-Length'));
 
-    return this.responseFromCache(request, metadata, body);
+    // Stream the body into the cache entry, and give the client (and any requests
+    // waiting on this key) the entry's own stream as it fills. FastlyBody.append()
+    // can take only host-backed streams, and the storage providers build their
+    // bodies in JavaScript, so copy the chunks.
+    const [writer, streamedEntry] = entry.insertAndStreamBack({
+      ...insertOptions,
+      userMetadata: encodeCachedResponseMetadata(metadata),
+      length: Number.isInteger(contentLength) && headers.has('Content-Length') ? contentLength : undefined,
+    });
+    void this.copyBodyToCache(response, writer);
+
+    return this.responseFromCache(request, metadata, streamedEntry.body());
+  }
+
+  private async copyBodyToCache(response: Response, writer: FastlyBody) {
+    try {
+      if (response.body != null) {
+        const reader = response.body.getReader();
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) {
+            break;
+          }
+          writer.append(value);
+        }
+      }
+      writer.close();
+    } catch (err) {
+      // Without close(), the cache treats the insertion as incomplete, so a
+      // partial body is not kept. Readers of this entry get a stream error.
+      console.error('Could not write the response to the cache:', err);
+    }
   }
 
   private responseFromCache(request: Request, metadata: CachedResponseMetadata, body: BodyInit): Response | null {

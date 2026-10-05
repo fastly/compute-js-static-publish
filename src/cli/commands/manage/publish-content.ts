@@ -21,6 +21,7 @@ import { applyDefaults } from '../../util/data.js';
 import { calculateFileSizeAndHash, enumerateFiles, rootRelative } from '../../util/files.js';
 import { ensureVariantFileExists, type Variants } from '../../util/variants.js';
 import { concurrentMap } from '../../util/retryable.js';
+import { type PurgeTarget, loadPurgeTarget, purgeSurrogateKey } from '../../util/purge.js';
 import {
   getStorageKeysByHexPrefix,
   loadStorageProviderFromStaticPublishRc,
@@ -63,7 +64,7 @@ Optional:
                                    If not set, the tool uses the FASTLY_API_TOKEN
                                    environment variable.
 
-  --fastly-service-id=<id>         Fastly Service ID to purge after publishing (S3 storage).
+  --fastly-service-id=<id>         Fastly Service ID to purge after publishing (not with --local).
                                    If not set, the tool will check:
                                      1. service_id in fastly.toml
                                      2. FASTLY_SERVICE_ID environment variable
@@ -273,13 +274,27 @@ export async function action(actionArgs: string[]) {
       computeAppDir,
       localMode,
       fastlyApiToken,
-      fastlyServiceId,
       s3AccessKeyId,
       s3SecretAccessKey,
       s3UploadConcurrency,
     });
   } catch (err: unknown) {
     console.error(`❌ Could not instantiate store provider`);
+    console.error(String(err));
+    process.exitCode = 1;
+    return;
+  }
+
+  // Purge target: checked now, so that a missing API token fails before anything is uploaded.
+  let purgeTarget: PurgeTarget | null;
+  try {
+    purgeTarget = loadPurgeTarget({
+      localMode: localMode ?? false,
+      computeAppDir,
+      fastlyServiceId,
+      fastlyApiToken,
+    });
+  } catch (err: unknown) {
     console.error(String(err));
     process.exitCode = 1;
     return;
@@ -658,7 +673,12 @@ export async function action(actionArgs: string[]) {
 
   console.log(`✅  Settings have been saved.`);
 
-  await storageProvider.purgeSurrogateKey(`${publishId}-${collectionName}`);
+  if (purgeTarget != null) {
+    const surrogateKey = `${publishId}-${collectionName}`;
+    console.log(`Purging surrogate key [${surrogateKey}] on service [${purgeTarget.serviceId}]...`);
+    const purged = await purgeSurrogateKey(purgeTarget.fastlyApiContext, purgeTarget.serviceId, surrogateKey, true);
+    console.log(purged ? 'Purged' : 'Failed purging');
+  }
 
   console.log(`🎉 Completed.`);
 
