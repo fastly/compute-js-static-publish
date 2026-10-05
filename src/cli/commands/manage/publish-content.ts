@@ -60,9 +60,14 @@ Optional:
                                    Default: rootDir from publish-content.config.js
 
   --fastly-api-token=<token>       Fastly API token for KV Store or cache access.
+                                   If not set, the tool uses the FASTLY_API_TOKEN
+                                   environment variable.
+
+  --fastly-service-id=<id>         Fastly Service ID to purge after publishing (S3 storage).
                                    If not set, the tool will check:
-                                     1. FASTLY_API_TOKEN environment variable
-                                     2. The default profile in the Fastly CLI
+                                     1. service_id in fastly.toml
+                                     2. FASTLY_SERVICE_ID environment variable
+                                   If none is found, the purge is skipped.
 
   --overwrite-existing             Always overwrite existing entries in storage, even if unchanged.
 
@@ -126,6 +131,7 @@ export async function action(actionArgs: string[]) {
 
     { name: 'local', type: Boolean },
     { name: 'fastly-api-token', type: String, },
+    { name: 'fastly-service-id', type: String, },
     { name: 'kv-overwrite', type: Boolean },
 
     { name: 's3-access-key-id', type: String, },
@@ -157,6 +163,7 @@ export async function action(actionArgs: string[]) {
     ['expires-never']: expiresNever,
     local: localMode,
     ['fastly-api-token']: fastlyApiToken,
+    ['fastly-service-id']: fastlyServiceId,
     ['kv-overwrite']: _kvOverwrite,
     ['s3-access-key-id']: s3AccessKeyId,
     ['s3-secret-access-key']: s3SecretAccessKey,
@@ -266,6 +273,7 @@ export async function action(actionArgs: string[]) {
       computeAppDir,
       localMode,
       fastlyApiToken,
+      fastlyServiceId,
       s3AccessKeyId,
       s3SecretAccessKey,
       s3UploadConcurrency,

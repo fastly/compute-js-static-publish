@@ -13,7 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
    - `KVAssetEntry` renamed to `AssetEntry`
    - `KVAssetEntryMap` renamed to `AssetEntryMap`
 
+- Fastly API token
+   - The CLI no longer falls back to `fastly profile token`. Pass the token with `--fastly-api-token` or the `FASTLY_API_TOKEN` environment variable.
+   - Remove the `@fastly/cli` dependency, which was used only for that fallback.
+
 ### Added
+
+- `publish-content`
+   - Add `--fastly-service-id`. In S3 mode, the Service ID to purge after publishing now comes from `--fastly-service-id`, then `service_id` in `fastly.toml`, then the `FASTLY_SERVICE_ID` environment variable. Before, only `fastly.toml` was checked, so the purge was skipped in CI and other environments without a deployed app's `fastly.toml`.
 
 - S3-compatible storage (BETA)
    - Add support for S3-compatible storage, such as Fastly Object Storage
