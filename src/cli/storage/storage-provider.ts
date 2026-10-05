@@ -63,6 +63,8 @@ export type StorageProviderBuilderContext = {
   computeAppDir: string,
   localMode?: boolean,
   fastlyApiToken?: string,
+  // The service to purge after publishing. See loadServiceId() for the fallbacks.
+  fastlyServiceId?: string,
   s3AccessKeyId?: string,
   s3SecretAccessKey?: string,
   // The number of objects that the S3 provider uploads at the same time.

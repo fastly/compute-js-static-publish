@@ -58,8 +58,8 @@ import {
   loadApiToken,
 } from '../util/api-token.js';
 import {
-  readServiceId,
-} from '../util/fastly-toml.js';
+  loadServiceId,
+} from '../util/service-id.js';
 import {
   purgeSurrogateKey,
 } from '../util/purge.js';
@@ -100,14 +100,17 @@ export const buildStoreProvider: StorageProviderBuilder = async (
   }
   console.log(`✔️ S3 Credentials: ${s3CredentialsResult.s3AccessKeyId.slice(0, 4)}${'*'.repeat(s3CredentialsResult.s3AccessKeyId.length-4)} from '${s3CredentialsResult.source}'`);
 
-  const fastlyTomlPath = path.resolve(context.computeAppDir, 'fastly.toml');
-  const serviceId = readServiceId(fastlyTomlPath);
+  const serviceIdResult = loadServiceId({
+    commandLine: context.fastlyServiceId,
+    fastlyTomlPath: path.resolve(context.computeAppDir, 'fastly.toml'),
+  });
+  const serviceId = serviceIdResult?.serviceId;
 
   let apiToken = undefined;
-  if (serviceId == null) {
-    console.log(`- Service ID not found in fastly.toml, application may not have been deployed yet. Will skip purge step after publish.`);
+  if (serviceIdResult == null) {
+    console.log(`- Service ID not found (--fastly-service-id, fastly.toml, or FASTLY_SERVICE_ID). Will skip purge step after publish.`);
   } else {
-    console.log(`✔️ Service ID from fastly.toml: ${serviceId}`);
+    console.log(`✔️ Service ID from ${serviceIdResult.source}: ${serviceIdResult.serviceId}`);
 
     const apiTokenResult = loadApiToken({commandLine: context.fastlyApiToken});
     if (apiTokenResult == null) {
