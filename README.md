@@ -698,8 +698,9 @@ Server-Timing: settings;dur=12.3, index;dur=40.1, index-body;dur=31.0, index-par
 | `index-body` | Reading the body of the index |
 | `index-parse` | Parsing the index |
 | `asset` | Reading the file, until the response headers arrive. Can appear more than one time, one time for each variant that is tried. |
+| `cache` | Looking up the response cache, if it is on (see [Caching Responses with the Core Cache](#️-caching-responses-with-the-core-cache)). `desc` is `hit` (with the age of the cached response, for example `hit age=42s`), `miss`, or `bypass`. |
 
-An entry is missing if `PublisherServer` did not read that item for this request, for example because the item is cached in memory.
+An entry is missing if `PublisherServer` did not read that item for this request, for example because the item is cached in memory, or because the response came from the response cache.
 
 `serveRequest()` starts the measurements for each request. If you call `getMatchingAsset()` and `serveAsset()` directly, call `beginRequest()` first:
 
@@ -712,6 +713,42 @@ if (asset != null) {
 ```
 
 Any client can send the request header. Choose a name that is not easy to guess if you do not want to show these timings to the public.
+
+### 🗄️ Caching Responses with the Core Cache
+
+To serve a file, `PublisherServer` reads the collection's settings, the collection's index, and the file. Fastly can cache these reads, but `PublisherServer` must still parse the index for each request, and the index of a large site is large. To skip this work, `PublisherServer` can cache whole responses with the Fastly [Core Cache](https://www.fastly.com/documentation/guides/concepts/cache/) API:
+
+```js
+publisherServer.setResponseCache({ maxAge: 3600 });
+```
+
+`maxAge` is in seconds. This is off by default.
+
+- A response is cached by the publish ID, the collection, the path, and the client's `Accept-Encoding`. A cache hit does not read the settings, the index, or the file.
+- A path that does not match a file is cached, too, so a missing path does not read the index again.
+- If several requests miss the same response at the same time, one request produces it, and the others wait for it.
+- Only `200` and `404` responses are cached. Conditional requests (`304`) and `HEAD` requests are answered from the cached response.
+- Each cached response has the surrogate key `<publishId>-<collectionName>`. After you publish, `publish-content` purges this key (see [`--fastly-service-id`](#publish-content)), so the next request gets the new content.
+
+`serveRequest()` uses the response cache automatically. If you call `getMatchingAsset()` and `serveAsset()` directly, wrap them in `serveCached()`. When a response is not cached yet, `serveCached()` calls your function to produce it, with a `GET` request that has no conditional headers:
+
+```js
+publisherServer.beginRequest(request);
+const response = await publisherServer.serveCached(request, pathname, async (fillRequest) => {
+  const asset = await publisherServer.getMatchingAsset(pathname);
+  if (asset == null) {
+    return null; // not found; this result is cached, too
+  }
+  return publisherServer.serveAsset(fillRequest, asset);
+});
+```
+
+The second argument identifies the response in the collection. If anything other than the path and `Accept-Encoding` changes your response, include it in this value.
+
+Notes:
+
+- `PublisherServer` reads a response into memory before it caches it. Thus a very large file uses memory up to its size while it is cached.
+- On staging, a purge must include the `Fastly-Purge-Environment: staging` header to clear the staging cache. Without it, a purge clears only the production cache.
 
 ## 📥 Using Published Assets in Your Code
 

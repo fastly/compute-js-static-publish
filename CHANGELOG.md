@@ -38,6 +38,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `PublisherServer`
    - Add `setServerTimingRequestHeader()`. When set, a request that has this header gets a `Server-Timing` response header with the time spent reading the settings, the index, and the file. Off by default.
    - Add `beginRequest()`. `serveRequest()` calls it. Call it yourself before `getMatchingAsset()` if you call `getMatchingAsset()` and `serveAsset()` directly.
+   - Add `setResponseCache()`. When set, whole responses are cached with the Core Cache API, keyed by publish ID, collection, path, and the client's `Accept-Encoding`. A cache hit does not read the settings, the index, or the file. Paths that are not found are cached, too. Entries have the surrogate key `<publishId>-<collectionName>`, which `publish-content` purges. Off by default.
+   - Add `serveCached()`, to use the response cache with `getMatchingAsset()` and `serveAsset()`. `serveRequest()` uses it automatically.
+   - `Server-Timing` has a `cache` entry when the response cache is on: `hit` (with the age of the cached response), `miss`, or `bypass`.
 
 - `publish-content`
    - Add `--brotli-quality=<0-11>`. It overrides `brotliQuality` in `publish-content.config.js`.
@@ -68,6 +71,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Release with the same CI workflow as `main`: npm trusted publishing, and publish to GitHub packages as well
 
 ### Fixed
+
+- `304 Not Modified` responses now keep the `ETag`, `Vary`, `Cache-Control`, `Content-Location`, and `Expires` headers of the full response. Before, these headers were missing because of a wrong check.
 
 - KV Store: assets that are larger than 20 MiB were served truncated to the first 20 MiB. The CLI also uploaded these assets again at each publish.
 

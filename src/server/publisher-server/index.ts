@@ -50,7 +50,7 @@ type AssetVariant = {
 export function buildHeadersSubset(responseHeaders: Headers, keys: Readonly<string[]>) {
   const resultHeaders = new Headers();
   for (const value of keys) {
-    if (value in responseHeaders) {
+    if (responseHeaders.has(value)) {
       const responseHeaderValue = responseHeaders.get(value);
       if (responseHeaderValue != null) {
         resultHeaders.set(value, responseHeaderValue);
@@ -543,7 +543,8 @@ export class PublisherServer {
     if (!state.mustInsertOrUpdate()) {
       const metadata = state.found() && state.usable() ? decodeCachedResponseMetadata(entry.userMetadata()) : null;
       if (metadata != null) {
-        this.serverTiming?.add('cache', performance.now() - lookupStart, 'hit');
+        // age() is in milliseconds. A hit younger than the time since a purge proves the entry was refilled.
+        this.serverTiming?.add('cache', performance.now() - lookupStart, `hit age=${Math.round(entry.age() / 1000)}s`);
         return this.responseFromCache(request, metadata, entry.body());
       }
       // Not usable, and another request is not filling it for us: serve without the cache.
