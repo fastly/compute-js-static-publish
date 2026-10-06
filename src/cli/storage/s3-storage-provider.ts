@@ -1,0 +1,336 @@
+/*
+ * Copyright Fastly, Inc.
+ * Licensed under the MIT license. See LICENSE file for details.
+ */
+
+import fs from 'node:fs';
+import http from 'node:http';
+import https from 'node:https';
+import {
+  DeleteObjectCommand,
+  DeleteObjectCommandInput,
+  GetObjectCommand,
+  GetObjectCommandInput,
+  HeadObjectCommand,
+  HeadObjectCommandInput,
+  ListObjectsV2CommandInput,
+  PutObjectCommand,
+  PutObjectCommandInput,
+  S3Client,
+  S3ServiceException,
+  S3PaginationConfiguration,
+  paginateListObjectsV2,
+} from '@aws-sdk/client-s3';
+import {
+  type Command,
+  type HttpHandlerOptions,
+} from '@aws-sdk/types';
+
+import {
+  type StaticPublishRc,
+  isS3StorageConfigRc,
+} from '../../models/config/static-publish-rc.js';
+import {
+  getS3StorageConfigFromRc,
+} from '../../models/config/s3-storage-config.js';
+import {
+  type StorageEntry,
+  type StorageProvider,
+  type StorageProviderBuilder,
+  type StorageProviderBuilderContext,
+  type StorageProviderBatch,
+  type ApplyBatchOptions,
+} from './storage-provider.js';
+import { entriesToUpload } from '../util/kv-store-items.js';
+import {
+  loadS3Credentials,
+} from '../util/s3-credentials.js';
+import {
+  concurrentParallel,
+  makeRetryable,
+} from '../util/retryable.js';
+import {
+  rootRelative,
+} from '../util/files.js';
+
+type CommandOutput<C> = C extends Command<any, any, any, infer O, any> ? O : never;
+
+// The number of objects to upload at the same time. S3 accepts many parallel
+// requests, and each request mostly waits for the network. In a test with small
+// objects, 64 was approximately 4 times faster than 12.
+export const DEFAULT_S3_UPLOAD_CONCURRENCY = 64;
+
+export const buildStoreProvider: StorageProviderBuilder = async (
+  config: StaticPublishRc,
+  context: StorageProviderBuilderContext,
+) => {
+  if (isS3StorageConfigRc(config)) {
+    console.log(`  Working on S3 (or compatible) storage (BETA)...`);
+  } else {
+    return null;
+  }
+
+  const {
+    region,
+    bucket,
+    endpoint,
+  } = getS3StorageConfigFromRc(config);
+  console.log(`  | Using S3 storage (BETA)`);
+  console.log(`     Region  : ${region}`);
+  console.log(`     Bucket  : ${bucket}`);
+  console.log(`     Endpoint: ${endpoint ?? 'default'}`);
+
+  const s3CredentialsResult = await loadS3Credentials({
+    s3AccessKeyId: context.s3AccessKeyId,
+    s3SecretAccessKey: context.s3SecretAccessKey,
+  });
+  if (s3CredentialsResult == null) {
+    throw new Error("❌ S3 Credentials not provided.\nProvide an access key ID and secret access key that have write access to the S3 or compatible storage.\nRefer to the README file and --help for additional information.");
+  }
+  console.log(`✔️ S3 Credentials: ${s3CredentialsResult.s3AccessKeyId.slice(0, 4)}${'*'.repeat(s3CredentialsResult.s3AccessKeyId.length-4)} from '${s3CredentialsResult.source}'`);
+
+  return new S3StorageProvider(
+    region,
+    s3CredentialsResult.s3AccessKeyId,
+    s3CredentialsResult.s3SecretAccessKey,
+    bucket,
+    endpoint,
+    context.s3UploadConcurrency ?? DEFAULT_S3_UPLOAD_CONCURRENCY,
+  );
+};
+
+
+export class S3StorageProvider implements StorageProvider {
+  constructor(
+    s3Region: string,
+    accessKeyId: string,
+    secretAccessKey: string,
+    s3Bucket: string,
+    s3Endpoint?: string,
+    uploadConcurrency: number = DEFAULT_S3_UPLOAD_CONCURRENCY,
+  ) {
+    this.uploadConcurrency = uploadConcurrency;
+    this.s3Region = s3Region;
+    this.accessKeyId = accessKeyId;
+    this.secretAccessKey = secretAccessKey;
+    this.s3Bucket = s3Bucket;
+    this.s3Endpoint = s3Endpoint;
+  }
+
+  private readonly s3Region: string;
+  private readonly accessKeyId: string;
+  private readonly secretAccessKey: string;
+  private readonly s3Bucket: string;
+  private readonly s3Endpoint?: string;
+  private readonly uploadConcurrency: number;
+
+  private s3Client?: S3Client;
+  getS3Client() {
+    if (this.s3Client != null) {
+      return this.s3Client;
+    }
+    // The SDK default is 50 sockets. Use at least one socket for each
+    // concurrent upload, so that uploads do not wait for a socket.
+    const maxSockets = Math.max(50, this.uploadConcurrency);
+    this.s3Client = new S3Client({
+      requestHandler: {
+        httpAgent: new http.Agent({ keepAlive: true, maxSockets }),
+        httpsAgent: new https.Agent({ keepAlive: true, maxSockets }),
+      },
+      region: this.s3Region,
+      endpoint: this.s3Endpoint,
+      forcePathStyle: this.s3Endpoint != null,
+      credentials: {
+        accessKeyId: this.accessKeyId,
+        secretAccessKey: this.secretAccessKey,
+      },
+      maxAttempts: 1,
+    });
+    return this.s3Client;
+  }
+
+  async sendS3ClientCommand<C extends Command<any, any, any, any, any>>(
+    command: C,
+    options?: HttpHandlerOptions
+  ): Promise<CommandOutput<C>> {
+    try {
+      return await this.getS3Client().send(command, options);
+    } catch(ex) {
+      if (ex instanceof S3ServiceException && ex.$retryable) {
+        throw makeRetryable(ex);
+      }
+      throw ex;
+    }
+  }
+
+  async getStorageKeys(prefix?: string): Promise<string[] | null> {
+
+    const paginationConfig = {
+      client: this.getS3Client(),
+    } satisfies S3PaginationConfiguration;
+    const input = {
+      Bucket: this.s3Bucket,
+      Prefix: prefix,
+    } satisfies ListObjectsV2CommandInput;
+
+    const paginator = paginateListObjectsV2(
+      paginationConfig,
+      input,
+    );
+
+    const objectKeys: string[] = [];
+    for await (const { Contents } of paginator) {
+      if (Contents == null) {
+        continue;
+      }
+      for (const obj of Contents) {
+        if (obj.Key != null) {
+          objectKeys.push(obj.Key);
+        }
+      }
+    }
+
+    return objectKeys.length > 0 ? objectKeys : null;
+  }
+
+  async getStorageEntry(key: string): Promise<StorageEntry | null> {
+
+    const input = {
+      Bucket: this.s3Bucket, // required
+      Key: key,              // required
+    } satisfies GetObjectCommandInput;
+    const command = new GetObjectCommand(input);
+    let response;
+    try {
+      response = await this.sendS3ClientCommand(command);
+    } catch(err) {
+      if (err instanceof S3ServiceException && (err.name === "NotFound" || err.name === "NoSuchKey")) {
+        console.log("Object does not exist");
+        return null;
+      } else {
+        throw err; // some other problem (auth, network, etc.)
+      }
+    }
+    if (response.Body == null) {
+      return null;
+    }
+
+    return {
+      data: response.Body.transformToWebStream(),
+      metadata: response.Metadata,
+    } satisfies StorageEntry;
+
+  }
+
+  async getStorageEntryInfo(key: string): Promise<StorageEntry | null> {
+
+    const input = {
+      Bucket: this.s3Bucket, // required
+      Key: key,              // required
+    } satisfies HeadObjectCommandInput;
+    const command = new HeadObjectCommand(input);
+    let response;
+    try {
+      response = await this.sendS3ClientCommand(command);
+    } catch(err) {
+      if (err instanceof S3ServiceException && (err.name === "NotFound" || err.name === "NoSuchKey")) {
+        console.log("Object does not exist");
+        return null;
+      } else {
+        throw err; // some other problem (auth, network, etc.)
+      }
+    }
+
+    return {
+      metadata: response.Metadata,
+    } satisfies StorageEntry;
+  }
+
+  async submitStorageEntry(
+    key: string,
+    _filePath: string,
+    data: ReadableStream<Uint8Array> | Uint8Array | string | null | undefined,
+    metadata?: Record<string, string>,
+  ): Promise<void> {
+
+    const input = {
+      Bucket: this.s3Bucket, // required
+      Key: key,              // required
+      Body: data ?? undefined,
+      Metadata: metadata,
+    } satisfies PutObjectCommandInput;
+    const command = new PutObjectCommand(input);
+    await this.sendS3ClientCommand(command);
+
+  }
+
+  async deleteStorageEntry(key: string): Promise<void> {
+
+    const input = {
+      Bucket: this.s3Bucket, // required
+      Key: key,              // required
+    } as DeleteObjectCommandInput;
+    const command = new DeleteObjectCommand(input);
+    await this.sendS3ClientCommand(command);
+
+  }
+
+  async applyBatch(batch: StorageProviderBatch, options: ApplyBatchOptions = {}): Promise<void> {
+
+    const { existingKeys } = options;
+
+    let toWrite = batch.storageProviderBatchEntries;
+    if (existingKeys != null) {
+      toWrite = entriesToUpload(toWrite, existingKeys);
+    }
+
+    console.log(`📤 Uploading ${toWrite.length} entries to S3 storage (${this.uploadConcurrency} at a time).`);
+    await this.doConcurrentParallel(
+      toWrite,
+      async ({filePath, metadataJson}, key) => {
+        // const fileStream = fs.createReadStream(filePath);
+        const fileData = fs.readFileSync(filePath);
+        await this.submitStorageEntry(
+          key,
+          filePath,
+          fileData,
+          metadataJson,
+        );
+        console.log(` 🌐 Submitted asset "${rootRelative(filePath)}" to S3 storage with key "${key}".`)
+      },
+      this.uploadConcurrency,
+      true,
+    );
+    console.log(`✅  Uploaded entries to S3 storage.`);
+
+  }
+
+  async doConcurrentParallel<TObject extends { key: string }>(
+    objects: TObject[],
+    fn: (obj: TObject, key: string, index: number) => Promise<void>,
+    maxConcurrent: number = 12,
+    throwOnError: boolean = false,
+  ): Promise<void> {
+
+    await concurrentParallel(
+      objects,
+      fn,
+      (err) => {
+        if (err instanceof S3ServiceException) {
+          return `S3 error [${err.name}] - ${err.message}`;
+        } else if (err instanceof TypeError) {
+          return 'transport';
+        }
+        return null;
+      },
+      maxConcurrent,
+      throwOnError,
+    );
+
+  }
+
+  calculateNumChunks(_size: number): number {
+    return 1;
+  }
+
+}
