@@ -40,7 +40,7 @@ export interface ExcludeDirTest {
   test(name: string): boolean;
 }
 
-export type KVStoreAssetInclusionTest = (assetKey: string, contentType?: string) => boolean;
+export type AssetInclusionTest = (assetKey: string, contentType?: string) => boolean;
 
 export type PublishContentConfig = {
   // Set to a directory that acts as the root of all files that will be included in this publish.
@@ -61,11 +61,19 @@ export type PublishContentConfig = {
   includeWellKnown?: boolean,
 
   // A test to run on each asset key to determine whether and how to include the file.
-  kvStoreAssetInclusionTest?: KVStoreAssetInclusionTest | null,
+  assetInclusionTest?: AssetInclusionTest | null,
+
+  // A test to run on each asset key to determine whether and how to include the file.
+  // DEPRECATED: Use assetInclusionTest instead
+  kvStoreAssetInclusionTest?: AssetInclusionTest | null,
 
   // Pre-generate content in these formats as well and serve them in tandem with the
   // allowedEncodings setting in the server settings. Default value is [ 'br' | 'gzip' ].
   contentCompression?: ('br' | 'gzip')[],
+
+  // Brotli quality for the 'br' variants, an integer from 0 to 11. Lower values
+  // compress much faster and give slightly larger files. Default value is 11.
+  brotliQuality?: number,
 
   // Additional / override content types.
   contentTypes?: ContentTypeDef[],
@@ -79,8 +87,9 @@ export type PublishContentConfigNormalized = {
   excludeDirs: ExcludeDirTest[],
   excludeDotFiles: boolean,
   includeWellKnown: boolean,
-  kvStoreAssetInclusionTest: KVStoreAssetInclusionTest | null,
+  assetInclusionTest: AssetInclusionTest | null,
   contentCompression: ContentCompressionTypes[],
+  brotliQuality: number | undefined,
   contentTypes: ContentTypeDef[],
   server: PublisherServerConfigNormalized | null,
 };

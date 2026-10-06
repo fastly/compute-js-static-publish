@@ -5,7 +5,7 @@
 
 import fs from 'node:fs';
 import { type ContentCompressionTypes } from '../../models/compression/index.js';
-import { algs } from '../compression/index.js';
+import { algs, type CompressOptions } from '../compression/index.js';
 import { rootRelative } from './files.js';
 
 export type Variants = 'original' | ContentCompressionTypes;
@@ -14,6 +14,8 @@ export async function ensureVariantFileExists(
   variantFilePath: string,
   variant: Variants,
   file: string,
+  verbose: boolean,
+  compressOptions: CompressOptions = {},
 ) {
 
   // Compress/prepare the asset if it doesn't already exist
@@ -23,13 +25,17 @@ export async function ensureVariantFileExists(
     if (variant === 'original') {
 
       fs.cpSync(file, variantFilePath);
-      console.log(` 📄→📄 Copied file '${rootRelative(file)}' to '${rootRelative(variantFilePath)}'.`);
+      if (verbose) {
+        console.log(` 📄→📄 Copied file '${rootRelative(file)}' to '${rootRelative(variantFilePath)}'.`);
+      }
 
     } else {
 
       const compressTo = algs[variant];
-      await compressTo(file, variantFilePath);
-      console.log(` 📄→🗄️ Compressed file '${rootRelative(file)}' to '${rootRelative(variantFilePath)}' [${variant}].`);
+      await compressTo(file, variantFilePath, compressOptions);
+      if (verbose) {
+        console.log(` 📄→🗄️ Compressed file '${rootRelative(file)}' to '${rootRelative(variantFilePath)}' [${variant}].`);
+      }
 
     }
 
