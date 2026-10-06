@@ -41,7 +41,7 @@
     "@fastly/cli": "^11.2.0",
     "command-line-args": "^5.2.1",
     "glob-to-regexp": "^0.4.1",
-    "toml": "^3.0.0"
+    "toml": "^4.2.0"
   },
   "peerDependencies": {
     "@fastly/js-compute": "^3.33.2"
