@@ -4,9 +4,22 @@
  */
 
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 import globToRegExp from 'glob-to-regexp';
 
+import {
+  type StaticPublishRc,
+  type StaticPublishPartialStorage,
+  isKvStoreConfigRc,
+  isS3StorageConfigRc,
+} from '../../models/config/static-publish-rc.js';
+import {
+  getKvStoreConfigFromRc,
+} from '../../models/config/kv-store-config.js';
+import {
+  getS3StorageConfigFromRc,
+} from '../../models/config/s3-storage-config.js';
 import {
   type PublishContentConfigNormalized,
   type ContentTypeDef,
@@ -18,7 +31,6 @@ import {
   isStringAndNotEmpty,
 } from './data.js';
 import { type PublisherServerConfigNormalized } from '../../models/config/publisher-server-config.js';
-import { type StaticPublishRc } from '../../models/config/static-publish-rc.js';
 
 export class LoadConfigError extends Error {
   errors: string[];
@@ -35,16 +47,20 @@ export async function loadStaticPublisherRcFile(): Promise<StaticPublishRc> {
 
   const configFile = './static-publish.rc.js';
 
+  const configFilePath = path.resolve(configFile);
   try {
-    const filePath = path.resolve(configFile);
-    configRaw = (await import(filePath)).default;
-  } catch {
-    //
+    configRaw = (await import(pathToFileURL(configFilePath).href)).default;
+  } catch (ex) {
+    throw new LoadConfigError(configFile, [
+      `Unable to load ${configFilePath}`,
+      String(ex),
+    ]);
   }
 
   if (configRaw == null) {
     throw new LoadConfigError(configFile, [
-      'Unable to load ' + configFile,
+      `Unable to load ${configFilePath}`,
+      `default export does not exist or is null.`
     ]);
   }
 
@@ -62,20 +78,22 @@ export async function loadStaticPublisherRcFile(): Promise<StaticPublishRc> {
 export const normalizeStaticPublisherRc = buildNormalizeFunctionForObject<StaticPublishRc>((config, errors) => {
 
   let {
-    kvStoreName,
     publishId,
     defaultCollectionName,
     staticPublisherWorkingDir,
   } = config;
 
-  if (!isSpecified(config, 'kvStoreName')) {
-    errors.push('kvStoreName must be specified.');
-  } else {
-    if (isStringAndNotEmpty(kvStoreName)) {
-      // ok
-    } else {
-      errors.push('kvStoreName must be a non-empty string.');
-    }
+  let storage: StaticPublishPartialStorage | null = null;
+  if (isKvStoreConfigRc(config)) {
+    storage = {
+      storageMode: 'kv-store',
+      kvStore: getKvStoreConfigFromRc(config),
+    };
+  } else if (isS3StorageConfigRc(config)) {
+    storage = {
+      storageMode: 's3',
+      s3: getS3StorageConfigFromRc(config),
+    };
   }
 
   if (!isSpecified(config, 'publishId')) {
@@ -116,28 +134,34 @@ export const normalizeStaticPublisherRc = buildNormalizeFunctionForObject<Static
     }
   }
 
-  return {
-    kvStoreName,
-    publishId,
-    defaultCollectionName,
-    staticPublisherWorkingDir,
-  };
+  return Object.assign({},
+    storage,
+    {
+      publishId,
+      defaultCollectionName,
+      staticPublisherWorkingDir,
+    },
+  );
 });
 
 export async function loadPublishContentConfigFile(configFile: string): Promise<PublishContentConfigNormalized> {
 
   let configRaw;
 
+  const configFilePath = path.resolve(configFile);
   try {
-    const filePath = path.resolve(configFile);
-    configRaw = (await import(filePath)).default;
-  } catch {
-    //
+    configRaw = (await import(pathToFileURL(configFilePath).href)).default;
+  } catch (ex) {
+    throw new LoadConfigError(configFile, [
+      `Unable to load ${configFilePath}`,
+      String(ex),
+    ]);
   }
 
   if (configRaw == null) {
     throw new LoadConfigError(configFile, [
-      'Unable to load ' + configFile,
+      `Unable to load ${configFilePath}`,
+      `default export does not exist or is null.`
     ]);
   }
 
@@ -200,8 +224,10 @@ export const normalizePublishContentConfig = buildNormalizeFunctionForObject<Pub
     excludeDirs,
     excludeDotFiles,
     includeWellKnown,
+    assetInclusionTest,
     kvStoreAssetInclusionTest,
     contentCompression,
+    brotliQuality,
     contentTypes,
     server,
   } = config;
@@ -273,12 +299,22 @@ export const normalizePublishContentConfig = buildNormalizeFunctionForObject<Pub
     errors.push('excludeDirs, if specified, must be null, a string value, a RegExp, or an array of strings and RegExp values.');
   }
 
-  if (!isSpecified(config, 'kvStoreAssetInclusionTest')) {
-    kvStoreAssetInclusionTest = null;
-  } else if (kvStoreAssetInclusionTest === null || typeof kvStoreAssetInclusionTest === 'function') {
+  if (!isSpecified(config, 'assetInclusionTest')) {
+    if (!isSpecified(config, 'kvStoreAssetInclusionTest')) {
+      assetInclusionTest = null;
+    } else if (kvStoreAssetInclusionTest === null || typeof kvStoreAssetInclusionTest === 'function') {
+      // ok
+      assetInclusionTest = kvStoreAssetInclusionTest;
+    } else {
+      errors.push('assetInclusionTest, if specified, must be null or a function.');
+    }
+  } else if (assetInclusionTest === null || typeof assetInclusionTest === 'function') {
     // ok
+    if (isSpecified(config, 'kvStoreAssetInclusionTest')) {
+      errors.push('assetInclusionTest and kvStoreAssetInclusionTest must not both be specified.');
+    }
   } else {
-    errors.push('kvStoreAssetInclusionTest, if specified, must be null or a function.');
+    errors.push('assetInclusionTest, if specified, must be null or a function.');
   }
 
   if (!isSpecified(config, 'contentCompression')) {
@@ -292,6 +328,12 @@ export const normalizePublishContentConfig = buildNormalizeFunctionForObject<Pub
     if (contentCompression.some((x: any) => x !== 'br' && x !== 'gzip')) {
       errors.push(`contentCompression, if specified, must be null or an array and can only contain 'br' and 'gzip'.`);
     }
+  }
+
+  if (!isSpecified(config, 'brotliQuality') || brotliQuality === null) {
+    brotliQuality = undefined;
+  } else if (!Number.isInteger(brotliQuality) || brotliQuality < 0 || brotliQuality > 11) {
+    errors.push('brotliQuality, if specified, must be an integer from 0 to 11.');
   }
 
   if (!isSpecified(config, 'contentTypes')) {
@@ -335,8 +377,9 @@ export const normalizePublishContentConfig = buildNormalizeFunctionForObject<Pub
     excludeDirs,
     excludeDotFiles,
     includeWellKnown,
-    kvStoreAssetInclusionTest,
+    assetInclusionTest,
     contentCompression,
+    brotliQuality,
     contentTypes,
     server,
   };

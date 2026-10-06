@@ -1,25 +1,27 @@
 {
   "name": "@fastly/compute-js-static-publish",
   "type": "module",
-  "version": "7.0.2",
+  "version": "8.0.0-beta.6",
   "description": "Static Publisher for Fastly Compute JavaScript",
   "main": "build/index.js",
   "exports": {
     ".": {
-      "types": "./build/index.d.ts",
-      "default": "./build/index.js"
+      "types": "./build/server/server/index.d.ts",
+      "default": "./build/server/server/index.js"
     }
   },
   "scripts": {
     "clean": "rimraf build",
     "prepack": "npm run build",
     "build": "npm run clean && npm run compile",
-    "compile": "tsc",
+    "compile": "npm run compile:cli && npm run compile:server",
+    "compile:cli": "tsc -p tsconfig.cli.json",
+    "compile:server": "tsc -p tsconfig.server.json",
     "test": "echo \"Error: no test specified\" && exit 1",
     "prepublishOnly": "cp README.short.md README.md"
   },
   "bin": {
-    "compute-js-static-publish": "./build/cli/index.js"
+    "compute-js-static-publish": "./build/cli/cli/index.js"
   },
   "repository": {
     "type": "git",
@@ -38,7 +40,7 @@
   },
   "homepage": "https://github.com/fastly/compute-js-static-publish#readme",
   "dependencies": {
-    "@fastly/cli": "^11.2.0",
+    "@aws-sdk/client-s3": "3.888.0",
     "command-line-args": "^5.2.1",
     "glob-to-regexp": "^0.4.1",
     "toml": "^3.0.0"

@@ -25,16 +25,22 @@ Available Subcommands:
                                    to a new collection name
   update-expiration                Modify expiration time for an existing collection
 
-Global Options:
+KV Store Options:
   --local                          Instead of working with the Fastly KV Store, operate on
                                    local files that will be used to simulate the KV Store
                                    with the local development environment.
 
   --fastly-api-token=<token>       Fastly API token for KV Store access.
-                                   If not set, the tool will check:
-                                     1. FASTLY_API_TOKEN environment variable
-                                     2. Logged-in Fastly CLI profile
+                                   If not set, the tool uses the FASTLY_API_TOKEN
+                                   environment variable.
 
+S3 Storage Options (BETA):
+  --s3-access-key-id=<id>          Access Key ID and Secret Access Key used to
+  --s3-secret-access-key=<key>     interface with S3 or compatible storage.
+                                   If not set, the tool will check the S3_ACCESS_KEY_ID
+                                   and S3_SECRET_ACCESS_KEY environment variables.
+
+Global Options:
   -h, --help                       Show this help message and exit.
 
 Examples:

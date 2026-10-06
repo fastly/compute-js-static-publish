@@ -6,7 +6,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { type KVStoreItemDesc } from './kv-store-items.js';
+import { type StorageProviderBatchEntry } from '../storage/storage-provider.js';
+import { type KvStoreEntryInfo } from './kv-store.js';
 
 type KVStoreLocalServerEntry = ({ data: string, } | { file: string }) & { metadata?:string };
 type KVStoreLocalServerData = Record<string, KVStoreLocalServerEntry>;
@@ -39,7 +40,7 @@ export async function getLocalKvStoreEntry(
   storeFile: string,
   key: string,
   metadataOnly?: boolean,
-) {
+): Promise<KvStoreEntryInfo | null> {
 
   let store: KVStoreLocalServerData;
   try {
@@ -120,7 +121,7 @@ export async function localKvStoreDeleteEntry(
 export function writeKVStoreEntriesForLocal(
   storeFile: string,
   computeAppDir: string,
-  kvStoreItemDescriptions: KVStoreItemDesc[],
+  kvStoreItemDescriptions: StorageProviderBatchEntry[],
 ) {
 
   let store: KVStoreLocalServerData;
