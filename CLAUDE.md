@@ -17,11 +17,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm run build          # clean + compile both parts
 npm run compile:cli    # tsc -p tsconfig.cli.json    -> build/cli   (Node types, ES2021)
 npm run compile:server # tsc -p tsconfig.server.json -> build/server (WebWorker lib, no Node types)
+npm test               # build, then the unit tests (node:test, test/unit)
+npm run test:e2e       # build, then the end-to-end tests (test/e2e)
 ```
 
-There is no test suite and no linter. `npm test` is a stub that fails on purpose. To examine a change, type-check it with `npm run build`.
+There is no linter. The tests are JavaScript files that import the compiled modules from `build/`, so they do not need a TypeScript runner. The unit tests can import only modules that do not import `fastly:*`. `test/README.md` has the environment variables for the end-to-end tests. Without them, the KV Store and S3 tests are skipped.
 
-For an end-to-end test, scaffold a project that uses this checkout. The scaffolder keeps a `file:` dependency on this package as an absolute path, so the generated app uses your local build (see `src/cli/util/package.ts`). Then run `npm run dev:publish` and `npm run dev:start` in the generated `compute-js/` directory.
+The end-to-end tests do these steps automatically. To do them by hand, scaffold a project that uses this checkout. The scaffolder keeps a `file:` dependency on this package as an absolute path, so the generated app uses your local build (see `src/cli/util/package.ts`). Then run `npm run dev:publish` and `npm run dev:start` in the generated `compute-js/` directory.
 
 `--local` mode does not list the keys in storage. Thus it does not test the skip logic in `publish-content`. To test that logic, publish to a real test KV Store or S3 bucket. Delete the working directory (`static-publisher/`) between runs, to simulate a new CI checkout.
 

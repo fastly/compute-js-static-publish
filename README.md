@@ -1168,6 +1168,10 @@ async function handleRequest(event) {
 - Use in CI to automate branch previews
 - Visit [https://developer.fastly.com](https://developer.fastly.com) for Compute platform docs
 
+## Development
+
+To build the package, run `npm run build`. To run the tests, see [test/README.md](./test/README.md).
+
 ## Issues
 
 If you encounter any non-security-related bug or unexpected behavior, please [file an issue][bug] using the bug report template.

@@ -17,7 +17,8 @@
     "compile": "npm run compile:cli && npm run compile:server",
     "compile:cli": "tsc -p tsconfig.cli.json",
     "compile:server": "tsc -p tsconfig.server.json",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "npm run build && node --test \"test/unit/*.test.js\"",
+    "test:e2e": "npm run build && node --test --test-concurrency=1 \"test/e2e/*.test.js\"",
     "prepublishOnly": "cp README.short.md README.md"
   },
   "bin": {
