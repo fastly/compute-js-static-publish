@@ -91,6 +91,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `clean` and `collections delete` exit with an error if a delete operation fails. Before, they showed "Completed".
 
+- S3-compatible storage: `clean`, `collections list`, and `collections delete` stopped with "Can't query indexes in storage" when no key matched, for example after the last collection was deleted. An empty list is now a valid result.
+
 ## [7.0.7] - 2026-07-16
 
 - Update to CLI v15
