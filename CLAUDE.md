@@ -110,10 +110,10 @@ KV batch endpoint behavior (measured, not documented):
 
 ## Branches and releases
 
-- `main` is the v7 line. `v8` is the v8 line (S3 support, now in beta). Older major versions have their own branches (`v6`, `v7`, ...).
-- Fixes usually go to both `main` and `v8`. `beta` gets the changes from `v8` at release time.
+- `main` is the v8 line (S3 support, now in beta). Older major versions have their own branches (`v6`, `v7`, ...).
+- Fixes for v7 go to the `v7` branch. `beta` gets the changes from `main` at release time.
 - `.github/workflows/ci-release.yaml` publishes a release when a `v*` tag is pushed. It uses the reusable workflows in `fastly/devex-reusable-workflows` (npm trusted publishing, and GitHub Packages). The first prerelease identifier becomes the npm dist-tag (`v8.0.0-beta.9` gives `beta`). A tag runs the workflow file in the tagged commit. Thus workflow changes must be on the branch that you tag.
 - `prepublishOnly` replaces `README.md` with `README.short.md` in the package. Thus `README.short.md` is the README on npm.
-- The version change commits for betas are on `beta`. Thus `package.json` on `v8` can show an older version.
-- To find changes to port between `main` and `v8`, use `git cherry -v origin/v8 origin/main`. This command shows manual ports as missing, so compare the content. Some differences are intentional: `package.json`, the tsconfigs, and much of `src` (v8 has a separate CLI and server build, and storage providers).
+- The version change commits for betas are on `beta`. Thus `package.json` on `main` can show an older version.
+- To find changes to port between `main` and `v7`, use `git cherry -v origin/v7 origin/main`. This command shows manual ports as missing, so compare the content. Some differences are intentional: `package.json`, the tsconfigs, and much of `src` (v8 has a separate CLI and server build, and storage providers).
 - Record changes that users can see in `CHANGELOG.md`, under `[unreleased]` (Keep a Changelog format). `MIGRATING.md` has the instructions to upgrade to a new major version.
