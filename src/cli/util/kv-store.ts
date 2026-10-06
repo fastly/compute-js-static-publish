@@ -4,6 +4,7 @@
  */
 
 import { callFastlyApi, type FastlyApiContext, FetchError } from './api-token.js';
+import { makeRetryable } from './retryable.js';
 
 type KVStoreInfo = {
   id: string,
@@ -18,7 +19,11 @@ type DataAndMeta<TEntry> = {
   meta: KVStoreInfoMeta,
 };
 
-type KVStoreEntryInfo = string;
+export type KvStoreEntryInfo = {
+  response: Response,
+  metadata: string | null,
+  generation: string | null,
+};
 
 type CachedValues = {
   kvStoreNameMap?: Record<string, string>,
@@ -105,11 +110,14 @@ export async function getKVStoreInfos(fastlyApiContext: FastlyApiContext) {
   return kvStoreInfos;
 }
 
-export const _getKVStoreKeys = createArrayGetter<KVStoreEntryInfo>()(
+export const _getKVStoreKeys = createArrayGetter<string>()(
   (kvStoreId: string, prefix?: string) => {
-    let endpoint = `/resources/stores/kv/${encodeURIComponent(kvStoreId)}/keys`;
+    // Read from the primary data source. An eventual read can show a key
+    // that was deleted a short time ago. Then publish-content does not upload
+    // an item that the new index needs.
+    let endpoint = `/resources/stores/kv/${encodeURIComponent(kvStoreId)}/keys?consistency=strong`;
     if (prefix != null) {
-      endpoint += '?prefix=' + encodeURIComponent(prefix);
+      endpoint += '&prefix=' + encodeURIComponent(prefix);
     }
     return endpoint;
   }
@@ -134,7 +142,7 @@ export async function getKVStoreKeys(
   );
 }
 
-export async function getKvStoreEntryInfo(fastlyApiContext: FastlyApiContext, kvStoreName: string, key: string) {
+export async function getKvStoreEntryInfo(fastlyApiContext: FastlyApiContext, kvStoreName: string, key: string): Promise<KvStoreEntryInfo | null> {
 
   return getKvStoreEntry(fastlyApiContext, kvStoreName, key, true);
 
@@ -145,7 +153,7 @@ export async function getKvStoreEntry(
   kvStoreName: string,
   key: string,
   metadataOnly?: boolean,
-) {
+): Promise<KvStoreEntryInfo | null> {
 
   const kvStoreId = await getKVStoreIdForName(fastlyApiContext, kvStoreName);
   if (kvStoreId == null) {
@@ -217,4 +225,59 @@ export async function kvStoreDeleteEntry(fastlyApiContext: FastlyApiContext, kvS
     method: 'DELETE',
   });
 
+}
+
+export type KvStoreBatchError = {
+  key: string,
+  code?: string,
+  reason?: string,
+};
+
+// Returns the items that the KV Store reports as failed. The caller can
+// submit only these items again. Throws if the response does not identify
+// the failed items.
+export async function kvStoreSubmitBatch(
+  fastlyApiContext: FastlyApiContext,
+  kvStoreName: string,
+  ndjsonLines: string[],
+): Promise<KvStoreBatchError[]> {
+
+  const kvStoreId = await getKVStoreIdForName(fastlyApiContext, kvStoreName);
+  if (kvStoreId == null) {
+    throw new Error(`KV Store '${kvStoreName}' not found.`);
+  }
+
+  const response = await callFastlyApi(
+    fastlyApiContext,
+    `/resources/stores/kv/${encodeURIComponent(kvStoreId)}/batch`,
+    `Submitting batch of ${ndjsonLines.length} item(s) to KV Store`,
+    null,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/x-ndjson' },
+      body: ndjsonLines.join('\n'),
+    },
+  );
+
+  // A 207 response has the body
+  //   {"title":"some inserts failed","errors":[{"key":"...","code":"...","reason":"..."}]}
+  // A 200 response has the body {"title":"success","errors":[]}.
+  // Read the body in all cases, so that the connection can be used again.
+  const detail = await response.text().catch(() => '');
+  let errors: unknown;
+  try {
+    errors = JSON.parse(detail)?.errors;
+  } catch {
+    errors = undefined;
+  }
+
+  if (Array.isArray(errors) && errors.every(e => typeof e?.key === 'string')) {
+    return errors.map(e => ({ key: e.key, code: e.code, reason: e.reason }));
+  }
+
+  if (response.status === 207) {
+    throw makeRetryable(new FetchError(`Batch upload partially failed (207): ${detail.slice(0, 300)}`, 207));
+  }
+
+  return [];
 }
