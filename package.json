@@ -44,7 +44,7 @@
     "@aws-sdk/client-s3": "3.888.0",
     "command-line-args": "^5.2.1",
     "glob-to-regexp": "^0.4.1",
-    "toml": "^3.0.0"
+    "toml": "^5.0.0"
   },
   "peerDependencies": {
     "@fastly/js-compute": "^3.33.2 || ^4.0.0"
