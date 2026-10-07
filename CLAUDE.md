@@ -53,6 +53,7 @@ Both parts use a registry of builder functions. Each entry point calls `register
   - The CLI interface has list, get, submit, delete, batch, and chunking. The purge after publishing is not part of it: `publish-content` does it with `util/purge.ts`, because it is the same for every storage mode.
   - The Fastly API token comes only from `--fastly-api-token` or `FASTLY_API_TOKEN` (`util/api-token.ts`). As of v8, the CLI does not run `fastly profile token`, and the package does not depend on `@fastly/cli`. (The scaffolder still adds `@fastly/cli` to the generated app.)
 - Server (`src/server/storage/`): `kv-store-provider` and `s3-storage-provider`. Both use a small `getEntry(key, tags)` interface. S3 credentials come from a Secret Store. `src/server/index.ts` exports the setters.
+  - The server's `s3-storage-provider` does not use the AWS SDK. It signs a `GET` with `@smithy/signature-v4` and reads the status code, the body, and the `x-amz-meta-*` headers. The SDK's browser build, which js-compute bundles, parses XML with `DOMParser` (since `@aws-sdk/xml-builder` 3.894.0), and Compute does not have `DOMParser`. Do not import `@aws-sdk/*` in `src/server`.
 
 ### Storage key layout (shared contract)
 
