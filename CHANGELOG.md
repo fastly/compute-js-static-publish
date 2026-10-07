@@ -20,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `publish-content`
-   - Add `--fastly-service-id`. The Service ID to purge after publishing now comes from `--fastly-service-id`, then `service_id` in `fastly.toml`, then the `FASTLY_SERVICE_ID` environment variable. Before, only `fastly.toml` was checked, so the purge was skipped in CI and other environments without a deployed app's `fastly.toml`.
+   - Add `--fastly-service-id`. The Service ID to purge after publishing now comes from `--fastly-service-id`, then the `FASTLY_SERVICE_ID` environment variable, then `service_id` in `fastly.toml`. This is the same order as the Fastly CLI's `--service-id`. Before, only `fastly.toml` was checked, so the purge was skipped in CI and other environments without a deployed app's `fastly.toml`.
    - The purge after publishing now runs in KV Store mode too (not with `--local`). Before, it ran only in S3 mode. This matters if you use the response cache.
    - Add `--purge-environment` to purge `production` (the default), `staging`, or both. A staging purge sends the `Fastly-Purge-Environment: staging` header.
    - A failed purge shows a warning on stderr. The command still completes, because the content is already published.
