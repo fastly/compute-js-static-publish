@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { mergeContentTypes, testFileContentType } from '../../build/cli/cli/util/content-types.js';
+import { mockConsoleLog } from './mock-console.js';
 
 test('default content types', () => {
   for (const [ file, contentType, text ] of [
@@ -34,7 +35,8 @@ test('gives null for an unknown extension', () => {
   assert.equal(testFileContentType(null, '/file.unknown'), null);
 });
 
-test('custom content types come before the defaults', () => {
+test('custom content types come before the defaults', (t) => {
+  const messages = mockConsoleLog(t);
   const contentTypes = mergeContentTypes([
     { test: /\.html$/, contentType: 'application/xhtml+xml', text: true },
     { test: (key) => key.endsWith('.custom'), contentType: 'application/x-custom' },
@@ -42,9 +44,13 @@ test('custom content types come before the defaults', () => {
   assert.equal(testFileContentType(contentTypes, '/a.html').contentType, 'application/xhtml+xml');
   assert.equal(testFileContentType(contentTypes, '/a.custom').contentType, 'application/x-custom');
   assert.equal(testFileContentType(contentTypes, '/a.css').contentType, 'text/css');
+  assert.deepEqual(messages(), [
+    '✔️ Applying 2 custom content type(s).',
+  ]);
 });
 
-test('ignores custom content types that are not valid', () => {
+test('ignores custom content types that are not valid', (t) => {
+  const messages = mockConsoleLog(t);
   const contentTypes = mergeContentTypes([
     { test: 'not a test', contentType: 'text/plain' },
     { test: /\.a$/, contentType: 'no-slash' },
@@ -52,4 +58,10 @@ test('ignores custom content types that are not valid', () => {
   ]);
   assert.equal(testFileContentType(contentTypes, '/file.a'), null);
   assert.equal(testFileContentType(contentTypes, '/file.b'), null);
+  assert.deepEqual(messages(), [
+    `⚠️ Ignoring contentTypes[0]: 'test' must be a function or regular expression.`,
+    `⚠️ Ignoring contentTypes[1]: 'contentType' must be a string representing a MIME type.`,
+    `⚠️ Ignoring contentTypes[2]: optional 'text' must be a boolean value.`,
+    '✔️ Applying 0 custom content type(s).',
+  ]);
 });

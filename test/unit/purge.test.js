@@ -12,6 +12,7 @@ import { after, before, beforeEach, describe, test } from 'node:test';
 import { loadApiToken } from '../../build/cli/cli/util/api-token.js';
 import { loadPurgeTarget, parsePurgeEnvironments } from '../../build/cli/cli/util/purge.js';
 import { loadServiceId } from '../../build/cli/cli/util/service-id.js';
+import { mockConsoleLog } from './mock-console.js';
 
 // Saves and restores the environment variables that these tests change.
 const ENV_NAMES = [ 'FASTLY_API_TOKEN', 'FASTLY_SERVICE_ID' ];
@@ -116,22 +117,35 @@ describe('loadPurgeTarget', () => {
     ...overrides,
   });
 
-  test('skips the purge in local mode', () => {
+  test('skips the purge in local mode', (t) => {
+    const messages = mockConsoleLog(t);
     writeFastlyToml('from-toml');
     assert.equal(loadPurgeTarget(params({ localMode: true, fastlyApiToken: 'token' })), null);
+    assert.deepEqual(messages(), [
+      '- Local mode: will skip purge step after publish.',
+    ]);
   });
 
-  test('skips the purge if no Service ID is found', () => {
+  test('skips the purge if no Service ID is found', (t) => {
+    const messages = mockConsoleLog(t);
     writeFastlyToml(null);
     assert.equal(loadPurgeTarget(params({ fastlyApiToken: 'token' })), null);
+    assert.deepEqual(messages(), [
+      '- Service ID not found (--fastly-service-id, fastly.toml, or FASTLY_SERVICE_ID). Will skip purge step after publish.',
+    ]);
   });
 
-  test('fails if there is a Service ID but no API token', () => {
+  test('fails if there is a Service ID but no API token', (t) => {
+    const messages = mockConsoleLog(t);
     writeFastlyToml('from-toml');
     assert.throws(() => loadPurgeTarget(params({})), /API Token not provided/);
+    assert.deepEqual(messages(), [
+      '✔️ Service ID from fastly.toml: from-toml',
+    ]);
   });
 
-  test('gives the purge target', () => {
+  test('gives the purge target', (t) => {
+    const messages = mockConsoleLog(t);
     writeFastlyToml(null);
     assert.deepEqual(loadPurgeTarget(params({
       fastlyServiceId: 'service',
@@ -142,6 +156,10 @@ describe('loadPurgeTarget', () => {
       fastlyApiContext: { apiToken: 'token' },
       environments: [ 'staging' ],
     });
+    assert.deepEqual(messages(), [
+      '✔️ Service ID from commandline: service',
+      '✔️ Purge environments: staging',
+    ]);
   });
 
   test('reports an unknown environment also in local mode', () => {
