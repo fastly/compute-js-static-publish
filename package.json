@@ -47,10 +47,10 @@
     "toml": "^3.0.0"
   },
   "peerDependencies": {
-    "@fastly/js-compute": "^3.33.2"
+    "@fastly/js-compute": "^3.33.2 || ^4.0.0"
   },
   "devDependencies": {
-    "@fastly/js-compute": "^3.33.2",
+    "@fastly/js-compute": "^4.0.0",
     "@types/command-line-args": "^5.2.0",
     "@types/glob-to-regexp": "^0.4.1",
     "@types/node": "^20.11.0",
