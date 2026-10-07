@@ -76,16 +76,21 @@ describe('loadServiceId', () => {
     assert.deepEqual(loadServiceId({ commandLine: 'from-cli', fastlyTomlPath }), { serviceId: 'from-cli', source: 'commandline' });
   });
 
-  test('then fastly.toml', () => {
+  test('then the FASTLY_SERVICE_ID environment variable', () => {
     process.env.FASTLY_SERVICE_ID = 'from-env';
+    const fastlyTomlPath = writeFastlyToml('from-toml');
+    assert.deepEqual(loadServiceId({ commandLine: undefined, fastlyTomlPath }), { serviceId: 'from-env', source: 'env' });
+  });
+
+  test('then fastly.toml', () => {
     const fastlyTomlPath = writeFastlyToml('from-toml');
     assert.deepEqual(loadServiceId({ commandLine: undefined, fastlyTomlPath }), { serviceId: 'from-toml', source: 'fastly.toml' });
   });
 
-  test('then the FASTLY_SERVICE_ID environment variable', () => {
-    process.env.FASTLY_SERVICE_ID = 'from-env';
-    const fastlyTomlPath = writeFastlyToml(null);
-    assert.deepEqual(loadServiceId({ commandLine: undefined, fastlyTomlPath }), { serviceId: 'from-env', source: 'env' });
+  test('an empty FASTLY_SERVICE_ID falls through to fastly.toml', () => {
+    process.env.FASTLY_SERVICE_ID = ' ';
+    const fastlyTomlPath = writeFastlyToml('from-toml');
+    assert.deepEqual(loadServiceId({ commandLine: undefined, fastlyTomlPath }), { serviceId: 'from-toml', source: 'fastly.toml' });
   });
 
   test('gives null if no Service ID is found', () => {
@@ -131,7 +136,7 @@ describe('loadPurgeTarget', () => {
     writeFastlyToml(null);
     assert.equal(loadPurgeTarget(params({ fastlyApiToken: 'token' })), null);
     assert.deepEqual(messages(), [
-      '- Service ID not found (--fastly-service-id, fastly.toml, or FASTLY_SERVICE_ID). Will skip purge step after publish.',
+      '- Service ID not found (--fastly-service-id, FASTLY_SERVICE_ID, or fastly.toml). Will skip purge step after publish.',
     ]);
   });
 

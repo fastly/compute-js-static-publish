@@ -66,8 +66,8 @@ Optional:
 
   --fastly-service-id=<id>         Fastly Service ID to purge after publishing (not with --local).
                                    If not set, the tool will check:
-                                     1. service_id in fastly.toml
-                                     2. FASTLY_SERVICE_ID environment variable
+                                     1. FASTLY_SERVICE_ID environment variable
+                                     2. service_id in fastly.toml
                                    If none is found, the purge is skipped.
 
   --purge-environment=<env>        Environment to purge: production, staging, or a
