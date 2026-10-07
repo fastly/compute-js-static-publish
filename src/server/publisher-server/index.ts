@@ -600,9 +600,16 @@ export class PublisherServer {
       userMetadata: encodeCachedResponseMetadata(metadata),
       length: Number.isInteger(contentLength) && headers.has('Content-Length') ? contentLength : undefined,
     });
-    void this.copyBodyToCache(response, writer);
+    const copied = this.copyBodyToCache(response, writer);
 
-    return this.responseFromCache(request, metadata, streamedEntry.body());
+    const cachedResponse = this.responseFromCache(request, metadata, streamedEntry.body());
+    // A response without a body (HEAD, 304) does not keep the request running
+    // until the copy finishes. If the copy is cut short, the entry can be stored
+    // with a partial body, so wait for it.
+    if (cachedResponse?.body == null) {
+      await copied;
+    }
+    return cachedResponse;
   }
 
   private async copyBodyToCache(response: Response, writer: FastlyBody) {
