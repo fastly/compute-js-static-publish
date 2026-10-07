@@ -17,7 +17,8 @@
     "compile": "npm run compile:cli && npm run compile:server",
     "compile:cli": "tsc -p tsconfig.cli.json",
     "compile:server": "tsc -p tsconfig.server.json",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "npm run build && node --test \"test/unit/*.test.js\"",
+    "test:e2e": "npm run build && node --test --test-concurrency=1 \"test/e2e/*.test.js\"",
     "prepublishOnly": "cp README.short.md README.md"
   },
   "bin": {
@@ -40,16 +41,18 @@
   },
   "homepage": "https://github.com/fastly/compute-js-static-publish#readme",
   "dependencies": {
-    "@aws-sdk/client-s3": "3.888.0",
+    "@aws-crypto/sha256-js": "^5.2.0",
+    "@aws-sdk/client-s3": "^3.1147.0",
+    "@smithy/signature-v4": "^5.7.4",
     "command-line-args": "^5.2.1",
     "glob-to-regexp": "^0.4.1",
-    "toml": "^3.0.0"
+    "toml": "^5.0.0"
   },
   "peerDependencies": {
-    "@fastly/js-compute": "^3.33.2"
+    "@fastly/js-compute": "^3.33.2 || ^4.0.0"
   },
   "devDependencies": {
-    "@fastly/js-compute": "^3.33.2",
+    "@fastly/js-compute": "^4.0.0",
     "@types/command-line-args": "^5.2.0",
     "@types/glob-to-regexp": "^0.4.1",
     "@types/node": "^20.11.0",

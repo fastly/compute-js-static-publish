@@ -190,7 +190,8 @@ export class S3StorageProvider implements StorageProvider {
       }
     }
 
-    return objectKeys.length > 0 ? objectKeys : null;
+    // An empty list is a valid result. The callers use null only for an error.
+    return objectKeys;
   }
 
   async getStorageEntry(key: string): Promise<StorageEntry | null> {

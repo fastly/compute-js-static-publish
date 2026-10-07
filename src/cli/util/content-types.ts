@@ -66,7 +66,7 @@ export function mergeContentTypes(contentTypes: ContentTypeDef[]) {
       }
 
       if(typeof contentType.contentType !== 'string' || contentType.contentType.indexOf('/') === -1) {
-        console.log(`⚠️ Ignoring contentTypes[${index}]: 'type' must be a string representing a MIME type.`);
+        console.log(`⚠️ Ignoring contentTypes[${index}]: 'contentType' must be a string representing a MIME type.`);
         invalid = true;
       }
 
