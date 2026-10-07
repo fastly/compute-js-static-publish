@@ -73,6 +73,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Update to CLI v16
 - Support `@fastly/js-compute` 4. The peer dependency is now `^3.33.2 || ^4.0.0`.
 - Update `toml` to 5. This fixes two security advisories in `toml` 4.1.2 and earlier ([GHSA-82x6-q7mm-w9cf](https://github.com/advisories/GHSA-82x6-q7mm-w9cf), [GHSA-v5mp-jgw5-2x6j](https://github.com/advisories/GHSA-v5mp-jgw5-2x6j)). Reading the Service ID also works now with a `fastly.toml` that uses dotted keys, such as `backends.origin.url = "..."`.
+- S3-compatible storage: `PublisherServer` no longer uses the AWS SDK. It signs requests with `@smithy/signature-v4`. Newer AWS SDK versions parse XML with `DOMParser`, which Fastly Compute does not have, so the SDK had been pinned to 3.888.0. The CLI now uses the current AWS SDK, which removes the security advisories of `fast-xml-parser`, `uuid`, and `@smithy/config-resolver` in the old version. Without the SDK, the server also builds to a much smaller Wasm binary.
 - Release with the same CI workflow as `main`: npm trusted publishing, and publish to GitHub packages as well
 
 ### Fixed

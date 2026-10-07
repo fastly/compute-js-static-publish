@@ -5,18 +5,8 @@
 
 import { CacheOverride } from 'fastly:cache-override';
 import { SecretStore } from 'fastly:secret-store';
-import { Command } from '@smithy/types';
-import { FetchHttpHandler } from '@smithy/fetch-http-handler';
-import {
-  GetObjectCommand,
-  GetObjectCommandInput,
-  GetObjectCommandOutput,
-  S3Client,
-  S3ClientResolvedConfig,
-  S3ServiceException,
-  ServiceInputTypes,
-  ServiceOutputTypes,
-} from '@aws-sdk/client-s3';
+import { Sha256 } from '@aws-crypto/sha256-js';
+import { SignatureV4 } from '@smithy/signature-v4';
 
 import {
   isS3StorageConfigRc,
@@ -111,8 +101,26 @@ export type S3StorageProviderParams = {
   s3FastlyBackendName?: string,
 };
 
-type S3ClientCommand<InputType extends ServiceInputTypes, OutputType extends ServiceOutputTypes> =
-  Command<ServiceInputTypes, InputType, ServiceOutputTypes, OutputType, S3ClientResolvedConfig>;
+// Attempts for a request that fails with a retryable status or a network error.
+const MAX_ATTEMPTS = 5;
+const RETRY_BASE_DELAY_MS = 100;
+
+// Status codes that S3 asks clients to retry.
+const RETRYABLE_STATUS_CODES = [ 429, 500, 502, 503, 504 ];
+
+// The S3 key as a URL path. Like the AWS SDK, this also escapes !'()*.
+function encodeS3Key(key: string) {
+  return key.split('/').map(segment =>
+    encodeURIComponent(segment).replace(/[!'()*]/g, c => '%' + c.charCodeAt(0).toString(16).toUpperCase())
+  ).join('/');
+}
+
+// The error code and message from an S3 XML error body, for the error message.
+function describeS3Error(status: number, bodyText: string) {
+  const code = /<Code>([^<]*)<\/Code>/.exec(bodyText)?.[1];
+  const message = /<Message>([^<]*)<\/Message>/.exec(bodyText)?.[1];
+  return [ `S3 GetObject failed with status ${status}`, code, message ].filter(Boolean).join(': ');
+}
 
 export class S3StorageProvider implements StorageProvider {
   constructor(
@@ -131,58 +139,104 @@ export class S3StorageProvider implements StorageProvider {
   private readonly s3Endpoint?: string;
   private readonly s3FastlyBackendName?: string;
 
-  async sendS3Command<InputType extends ServiceInputTypes, OutputType extends ServiceOutputTypes>(
-    command: S3ClientCommand<InputType, OutputType>,
-    requestInit?: RequestInit,
-  ): Promise<OutputType> {
+  // The URL of an object. With a custom endpoint, such as Fastly Object Storage,
+  // the bucket is in the path. Otherwise, it is in the AWS host name.
+  objectUrl(key: string): URL {
+    if (this.s3Endpoint != null) {
+      const url = new URL(this.s3Endpoint);
+      url.pathname = url.pathname.replace(/\/$/, '') + '/' + encodeURIComponent(this.s3Bucket) + '/' + encodeS3Key(key);
+      return url;
+    }
+    return new URL(`https://${this.s3Bucket}.s3.${this.s3Region}.amazonaws.com/${encodeS3Key(key)}`);
+  }
+
+  // Sends a signed GET request for an object. The AWS SDK is not used here: its
+  // browser build, which js-compute bundles, parses XML with DOMParser, which
+  // Compute does not have.
+  async fetchObject(key: string, requestInit: RequestInit): Promise<Response> {
     const s3Credentials = await _s3CredentialsBuilder();
-    const s3Client = new S3Client({
+    const signer = new SignatureV4({
+      service: 's3',
       region: this.s3Region,
-      endpoint: this.s3Endpoint,
-      forcePathStyle: this.s3Endpoint != null,
       credentials: {
         accessKeyId: s3Credentials.accessKeyId,
         secretAccessKey: s3Credentials.secretAccessKey,
       },
-      maxAttempts: 5,
-      requestHandler: new FetchHttpHandler({
-        requestInit() {
-          return requestInit ?? {};
-        },
-      }),
+      sha256: Sha256,
+      // The path is already escaped by encodeS3Key(). S3 expects it escaped once.
+      uriEscapePath: false,
     });
-    return s3Client.send(command);
+
+    const url = this.objectUrl(key);
+    for (let attempt = 1; ; attempt++) {
+      const signed = await signer.sign({
+        method: 'GET',
+        protocol: url.protocol,
+        hostname: url.hostname,
+        port: url.port !== '' ? Number(url.port) : undefined,
+        path: url.pathname,
+        headers: {
+          host: url.host,
+          'x-amz-content-sha256': 'UNSIGNED-PAYLOAD',
+        },
+      });
+
+      let response: Response | null = null;
+      let error: unknown = null;
+      try {
+        response = await fetch(url, {
+          ...requestInit,
+          method: 'GET',
+          headers: signed.headers,
+        });
+      } catch(err) {
+        error = err;
+      }
+
+      const retryable = response == null || RETRYABLE_STATUS_CODES.includes(response.status);
+      if (!retryable || attempt >= MAX_ATTEMPTS) {
+        if (response == null) {
+          throw error;
+        }
+        return response;
+      }
+      // Exponential backoff with jitter.
+      const delay = Math.random() * RETRY_BASE_DELAY_MS * 2 ** (attempt - 1);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
   }
 
   async getEntry(key: string, tags?: string[]): Promise<StorageEntry | null> {
-    const input = {
-      Bucket: this.s3Bucket, // required
-      Key: key,              // required
-    } satisfies GetObjectCommandInput;
-    const command = new GetObjectCommand(input);
-    let response: GetObjectCommandOutput;
-    try {
-      response = await this.sendS3Command(command, {
-        backend: this.s3FastlyBackendName ?? "s3_storage",
-        cacheOverride: new CacheOverride({
-          ttl: 3600,
-          surrogateKey: (tags ?? []).join(' ') || undefined,
-        }),
-      });
-    } catch(err) {
-      if (err instanceof S3ServiceException && (err.name === "NotFound" || err.name === "NoSuchKey")) {
-        console.log("Object does not exist");
-        return null;
-      } else {
-        throw err; // some other problem (auth, network, etc.)
-      }
+    const response = await this.fetchObject(key, {
+      backend: this.s3FastlyBackendName ?? "s3_storage",
+      cacheOverride: new CacheOverride({
+        ttl: 3600,
+        surrogateKey: (tags ?? []).join(' ') || undefined,
+      }),
+    });
+
+    if (response.status === 404) {
+      console.log("Object does not exist");
+      return null;
     }
-    if (response.Body == null) {
+    if (!response.ok) {
+      // some other problem (auth, etc.)
+      throw new Error(describeS3Error(response.status, await response.text()));
+    }
+    if (response.body == null) {
       return null;
     }
 
-    const body = concatReadableStreams([response.Body.transformToWebStream()]);
-    const metadataText = JSON.stringify(response.Metadata ?? {});
+    // User-defined object metadata comes in x-amz-meta-* headers.
+    const metadata: Record<string, string> = {};
+    for (const [ name, value ] of response.headers.entries()) {
+      if (name.startsWith('x-amz-meta-')) {
+        metadata[name.slice('x-amz-meta-'.length)] = value;
+      }
+    }
+
+    const body = concatReadableStreams([response.body]);
+    const metadataText = JSON.stringify(metadata);
 
     return new StorageEntryImpl(body, metadataText);
   }

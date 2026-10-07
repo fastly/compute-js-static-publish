@@ -41,7 +41,9 @@
   },
   "homepage": "https://github.com/fastly/compute-js-static-publish#readme",
   "dependencies": {
-    "@aws-sdk/client-s3": "3.888.0",
+    "@aws-crypto/sha256-js": "^5.2.0",
+    "@aws-sdk/client-s3": "^3.1147.0",
+    "@smithy/signature-v4": "^5.7.4",
     "command-line-args": "^5.2.1",
     "glob-to-regexp": "^0.4.1",
     "toml": "^5.0.0"
