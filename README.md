@@ -24,6 +24,7 @@
 - [🧹 Cleaning Up](#-cleaning-up)
 - [🔄 Content Compression](#-content-compression)
 - [🧩 Using PublisherServer in Custom Apps](#-using-publisherserver-in-custom-apps)
+- [🔥 Using Hono](#-using-hono)
 - [📥 Using Published Assets in Your Code](#-using-published-assets-in-your-code)
 - [📚 CLI Reference](#-cli-reference)
 - [📕 Appendix](#-appendix)
@@ -387,6 +388,12 @@ Pass `null` to select the default collection.
 
 Compute can reuse a sandbox for more than one request (see [Sandbox lifecycle](https://www.fastly.com/documentation/guides/compute/developer-guides/sandbox-lifecycle/)), and the active collection stays set until you change it. Thus, call `setActiveCollectionName()` for each request, also when the request does not select a collection.
 
+To select a collection for one call only, pass the `collectionName` option to `serveRequest()`. This does not change the active collection:
+
+```js
+const response = await publisherServer.serveRequest(request, { collectionName: "preview-42" });
+```
+
 #### Example: Subdomain-based Routing
 
 In the following example, assume that the Compute application is hosted using a wildcard domain `*.example.com`. A request for `preview-pr-123.example.com` would activate the collection `'pr-123'`.
@@ -677,6 +684,101 @@ async function handleRequest(request) {
 }
 ```
 
+### Options for `serveRequest()`
+
+`serveRequest(request, options)` takes these options:
+
+| Option | Description |
+|---|---|
+| `collectionName` | The collection for this call. `null` selects the default collection. If not set, the active collection is used. |
+| `pathname` | The path to look up, in place of the path of the request URL. It must be decoded, and start with `/`. |
+| `fallback` | `false`: when no file matches, do not serve the SPA file or the 404 page. The default is `true`. |
+| `healthCheck` | `false`: do not answer `/healthz`. The default is `true`. |
+
+With `fallback: false`, your app can handle the paths that do not match a file, and then call `serveFallback()` to serve the SPA file or the 404 page:
+
+```js
+const response = await publisherServer.serveRequest(request, { fallback: false });
+if (response != null) {
+  return response;
+}
+
+// Add your custom logic here
+
+return await publisherServer.serveFallback(request) ?? new Response("Not Found", { status: 404 });
+```
+
+`serveFallback()` returns `null` if the client does not accept HTML, or if the collection has no SPA file and no 404 page. It takes the `collectionName` option, too.
+
+`PublisherServer` keeps the settings and the index that it reads for each request. Thus, `serveRequest()` and then `serveFallback()` for the same request read the index one time. Nothing is kept from one request to the next.
+
+## 🔥 Using Hono
+
+`@fastly/compute-js-static-publish/hono` has middleware for [Hono](https://hono.dev/). To scaffold a Hono app, add `--template hono`:
+
+```sh
+npx @fastly/compute-js-static-publish@latest --template hono --root-dir=./public --kv-store-name=site-content
+```
+
+The scaffolded `src/index.js` looks like this. Add your routes before `serveStatic()` or after it:
+
+```js
+import { Hono } from 'hono';
+import { buildFire } from '@fastly/hono-fastly-compute';
+import { fromStaticPublishRc } from '@fastly/compute-js-static-publish/hono';
+import rc from '../static-publish.rc.js';
+
+const fire = buildFire({});
+
+const { serveStatic, serveFallback } = fromStaticPublishRc(rc);
+
+const app = new Hono();
+
+app.get('/api/hello', (c) => c.json({ greeting: 'hi' }));
+
+// Serve the published files. If no file matches, the request goes to the next handler.
+app.use('*', serveStatic());
+
+// When nothing matches, serve the SPA file or the 404 page.
+app.notFound(serveFallback());
+
+fire(app);
+```
+
+`fire()` from [`@fastly/hono-fastly-compute`](https://hono.dev/docs/getting-started/fastly) runs the app on Fastly Compute. To use a KV Store, a Config Store, or other resources from `c.env`, add bindings to `buildFire()`. Do not use `hono/service-worker`: by default, it sends each 404 response to `fetch()`, and Compute has no default backend.
+
+- `serveStatic()` serves only files. It does not serve the SPA file or the 404 page, so a route after it gets the paths that do not match a file. It does not answer `/healthz`, and it does not serve methods other than `GET` and `HEAD`.
+- `serveFallback()` is for `app.notFound()`. If there is no fallback page for the request, it gives Hono's default 404 response.
+- `fromStaticPublishRc()` also returns `publisherServer`, to configure the server. For example, `publisherServer.setResponseCache({ maxAge: 3600 })`.
+- Use `fromPublisherServer(publisherServer)` if you make the `PublisherServer` yourself.
+
+`serveStatic()` takes options like the `serveStatic()` of Hono:
+
+| Option | Description |
+|---|---|
+| `root` | The directory that request paths are relative to, in the published files (after `publicDir`). The default is `./`. A path that resolves outside `root` is not served. |
+| `path` | The path to serve, in place of the request path. For example, `./favicon.ico`. |
+| `rewriteRequestPath` | `(path, c) => string`. Changes the request path before it is resolved against `root`. |
+| `collectionName` | The collection: a string, `null` for the default collection, or `(c) => string \| null \| undefined`. |
+
+For example, to serve `/assets/*` from the `static` directory:
+
+```js
+app.use('/assets/*', serveStatic({ root: './static', rewriteRequestPath: (path) => path.replace(/^\/assets/, '') }));
+```
+
+To select a collection for each request, pass `collectionName` to `fromStaticPublishRc()`. `serveStatic()` and `serveFallback()` then use the same collection:
+
+```js
+import { collectionSelector } from '@fastly/compute-js-static-publish';
+
+const { serveStatic, serveFallback } = fromStaticPublishRc(rc, {
+  collectionName: (c) => collectionSelector.fromHostDomain(c.req.raw, /^preview-([^\.]*)\./),
+});
+```
+
+The middleware imports only types from `hono`. `hono` is an optional peer dependency.
+
 ### ⏱️ Measuring Performance with `Server-Timing`
 
 `PublisherServer` can report how long it spends reading from storage. To turn this on, give it the name of a request header:
@@ -702,7 +804,7 @@ Server-Timing: settings;dur=12.3, index;dur=40.1, index-body;dur=31.0, index-par
 
 An entry is missing if `PublisherServer` did not read that item for this request, for example because the item is cached in memory, or because the response came from the response cache.
 
-`serveRequest()` starts the measurements for each request. If you call `getMatchingAsset()` and `serveAsset()` directly, call `beginRequest()` first:
+`serveRequest()` and `serveFallback()` start the measurements for each request. If you call `getMatchingAsset()` and `serveAsset()` directly, call `beginRequest()` first:
 
 ```js
 publisherServer.beginRequest(request);
@@ -828,6 +930,7 @@ npx @fastly/compute-js-static-publish@latest \
   --root-dir=./public \
   { [--storage-mode=kv-store] --kv-store-name=<site-content> | \
     --storage-mode=s3 --s3-region=<s3 region> --s3-bucket=<bucket name> [--s3-endpoint=<endpoint>] } \
+  [--template=plain|hono] \
   [--output=./compute-js] \
   [--static-publisher-working-dir=<output>/static-publisher] \
   [--publish-id=<prefix>] \
@@ -846,6 +949,7 @@ npx @fastly/compute-js-static-publish@latest \
 #### Options:
 
 **Used to generate the Compute app:**
+- `--template`: The template for `src/index.js`. `plain` (the default) calls `PublisherServer.serveRequest()` from a fetch event listener. `hono` makes a [Hono](https://hono.dev/) app (see [Using Hono](#-using-hono)).
 - `--storage-mode`: Specifies the storage mode. Must be either `kv-store` or `s3` (default: `kv-store`).
 
    If `--storage-mode=kv-store`:

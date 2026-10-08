@@ -8,6 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **CLI** (`src/cli`, Node.js): It scaffolds a Fastly Compute JS app. It publishes static files to storage: the Fastly KV Store, or S3-compatible storage (v8 beta).
 - **Server library** (`src/server`, runs in Fastly Compute/Wasm): `PublisherServer`. The scaffolded app imports it to serve the content.
+- **Hono middleware** (`src/hono`, the `@fastly/compute-js-static-publish/hono` export): `serveStatic()` and `serveFallback()`, which call `PublisherServer`. It compiles with the server build, and it imports only types from `hono` (an optional peer dependency). `src/hono/path.ts` does not import `fastly:*`, so the unit tests can test it.
 
 `src/models` has the types and the encode/decode helpers that both parts use. Both parts use the same storage key layout. Thus a change to one part usually needs a change to the other part.
 
@@ -29,7 +30,7 @@ The end-to-end tests do these steps automatically. To do them by hand, scaffold 
 
 After a rebuild, the bin in `node_modules/.bin` of a scaffolded app can lose its execute bit. If this occurs, run `node <repo>/build/cli/cli/index.js ...` from the `compute-js/` directory.
 
-Because `rootDir` is `./src`, the output has one more directory level: the bin is `build/cli/cli/index.js`, and the library entry is `build/server/server/index.js`. The tsconfigs list `src/shared` in `include`, but that directory does not exist. The shared code is in `src/models`. Each build compiles it through imports.
+Because `rootDir` is `./src`, the output has one more directory level: the bin is `build/cli/cli/index.js`, the library entry is `build/server/server/index.js`, and the Hono entry is `build/server/hono/index.js`. The tsconfigs list `src/shared` in `include`, but that directory does not exist. The shared code is in `src/models`. Each build compiles it through imports.
 
 The server build must not use Node APIs. It uses `/// <reference types="@fastly/js-compute" />` and web-standard APIs only.
 
@@ -39,7 +40,7 @@ The server build must not use Node APIs. It uses `/// <reference types="@fastly/
 
 `src/cli/index.ts` selects the mode from the current directory:
 
-- If there is no `./static-publish.rc.js`, it runs the **scaffold** command (`commands/scaffold/index.ts`). This command generates the `compute-js/` app: `fastly.toml`, `package.json`, `static-publish.rc.js`, `publish-content.config.js`, and `src/index.js`.
+- If there is no `./static-publish.rc.js`, it runs the **scaffold** command (`commands/scaffold/index.ts`). This command generates the `compute-js/` app: `fastly.toml`, `package.json`, `static-publish.rc.js`, `publish-content.config.js`, and `src/index.js`. `--template` selects `src/index.js` and the extra dependencies from `commands/scaffold/templates/` (`plain`, the default, and `hono`).
 - If not, it runs the **management** commands (`commands/manage/`): `publish-content`, `clean`, and `collections list|delete|promote|update-expiration`.
 
 ### Storage providers (pluggable, in both parts)
@@ -101,12 +102,13 @@ KV batch endpoint behavior (measured, not documented):
 
 `src/server/publisher-server/index.ts`:
 
-1. Select the active collection. This is the default collection, or the collection from `setActiveCollectionName`. The helpers are in `collection-selector/` (for example host, cookie, config store).
-   `beginRequest()` resets the per-request state: the `Server-Timing` collector (`util/server-timing.ts`), which is on only if `setServerTimingRequestHeader()` names a header that the request has.
+1. Select the collection: the `collectionName` option of the call, or else the active collection (`setActiveCollectionName()`, default `defaultCollectionName`). The helpers are in `collection-selector/` (for example host, cookie, config store).
+   The per-request state is a `CollectionScope`: the collection, the settings and index that were read, and the `Server-Timing` collector (`util/server-timing.ts`, on only if `setServerTimingRequestHeader()` names a header that the request has). `serveRequest()` and `serveFallback()` get it from a `WeakMap` keyed by the `Request` and the collection, so two calls for one request read the index one time. Compute can reuse a sandbox, so do not keep request state on the instance. The public methods that take no request (`getMatchingAsset()`, `serveAsset()`, ...) use `currentScope`, which `beginRequest()` and `setActiveCollectionName()` replace.
 2. If `setResponseCache()` is set, `serveCached()` (`response-cache.ts`) looks up the whole response in the Core Cache, keyed by publish ID, collection, path, and normalized `Accept-Encoding`. A hit skips steps 3 to 8. A miss uses `transactionLookup()`, so concurrent misses wait for one fill. The fill runs steps 3 to 8 with a `GET` that has no conditional headers, and caches a `200`, a `404`, or "not found". Conditional requests and `HEAD` are then answered from the cached response. The body is streamed into the entry with `insertAndStreamBack()`: `copyBodyToCache()` copies the chunks, because `FastlyBody.append()` takes only host-backed streams, and the storage providers build their streams in JavaScript. The client reads the entry's stream. If the copy fails, the entry is not closed, so the cache drops it.
-3. Load the settings and the index for that collection, and keep them in a cache. An expired collection is the same as a collection that does not exist.
+3. Load the settings and the index for that collection, and keep them in the scope. An expired collection is the same as a collection that does not exist.
 4. Find the path with `publicDir`, `autoIndex`, and `autoExt`.
-5. If the request accepts HTML, use the SPA file or the 404 file when no file matches.
+5. If the request accepts HTML, use the SPA file or the 404 file when no file matches. With `fallback: false`, return `null`; then `serveFallback()` does only this step, with the cache key `|fallback` (one entry for all paths). The response for `fallback: false` does not depend on HTML, so it uses the `<path>|no-html` key.
+   `requestAcceptsTextHtml()` returns `false` only for an `Accept` header that has a bare `*` and not `text/html` or `*/*`. Thus, most requests count as accepting HTML.
 6. Select an encoding variant from `Accept-Encoding` and `allowedEncodings`.
 7. Process `If-None-Match` and `If-Modified-Since` (304).
 8. Set the cache headers. Files in `staticItems` get a long TTL.
