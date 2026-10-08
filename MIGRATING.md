@@ -102,6 +102,36 @@ To stop using `publicDirPrefix`:
    publish it again. The keys of the files are the hashes of the content, so the CLI does not upload the same files
    again.
 
+### Move from `@fastly/hono-compute-js-static-publish`
+
+The Hono middleware is now part of this package, at `@fastly/compute-js-static-publish/hono`. The
+`@fastly/hono-compute-js-static-publish` package supports only v6 and v7.
+
+1. Uninstall `@fastly/hono-compute-js-static-publish`, and make sure that `hono` is a dependency of your app.
+
+2. Change the import, and get `serveStatic` from the object that `fromStaticPublishRc()` returns:
+
+   ```js
+   // v7
+   import { fromStaticPublishRc } from '@fastly/hono-compute-js-static-publish';
+   const serveStatic = fromStaticPublishRc(rc);
+
+   // v8
+   import { fromStaticPublishRc } from '@fastly/compute-js-static-publish/hono';
+   const { serveStatic, serveFallback } = fromStaticPublishRc(rc);
+   ```
+
+   `fromPublisherServer()` changed in the same way.
+
+3. Examine these changes:
+   - `serveStatic()` now serves files as `PublisherServer.serveRequest()` does. It applies `publicDirPrefix`,
+     `autoIndex`, and `autoExt`, and it serves only `GET` and `HEAD`. Before, it looked up the request path in the
+     published files only. Thus, if you set `publicDirPrefix` (deprecated), `root` is now relative to it. If your `root`
+     included the `publicDirPrefix`, remove that part.
+   - `serveStatic()` does not serve the SPA file or the 404 page. To serve them, add `app.notFound(serveFallback())`.
+
+See "Using Hono" in `README.md`.
+
 ### Move from the KV Store to S3-compatible storage (BETA)
 
 You do not have to move to S3-compatible storage. The KV Store continues to be the default storage mode.
