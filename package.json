@@ -8,6 +8,10 @@
     ".": {
       "types": "./build/server/server/index.d.ts",
       "default": "./build/server/server/index.js"
+    },
+    "./hono": {
+      "types": "./build/server/hono/index.d.ts",
+      "default": "./build/server/hono/index.js"
     }
   },
   "scripts": {
@@ -49,13 +53,20 @@
     "toml": "^5.0.0"
   },
   "peerDependencies": {
-    "@fastly/js-compute": "^3.33.2 || ^4.0.0"
+    "@fastly/js-compute": "^3.33.2 || ^4.0.0",
+    "hono": "^4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "hono": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@fastly/js-compute": "^4.0.0",
     "@types/command-line-args": "^5.2.0",
     "@types/glob-to-regexp": "^0.4.1",
     "@types/node": "^20.11.0",
+    "hono": "^4.13.13",
     "rimraf": "^4.3.0",
     "typescript": "^5.8.0"
   },

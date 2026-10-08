@@ -22,7 +22,11 @@ export {
   setSecretStoreKeyForS3SecretAccessKey,
   setS3CredentialsBuilder,
 } from './storage/s3-storage-provider.js';
-export { PublisherServer } from './publisher-server/index.js';
+export {
+  PublisherServer,
+  type ServeRequestOptions,
+  type ServeFallbackOptions,
+} from './publisher-server/index.js';
 
 // Register storage builder providers
 import { registerStorageProviderBuilder } from './storage/storage-provider.js';

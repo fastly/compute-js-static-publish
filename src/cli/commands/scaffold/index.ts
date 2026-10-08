@@ -18,6 +18,7 @@ import { parseCommandLine } from '../../util/args.js';
 import { dotRelative, rootRelative } from '../../util/files.js';
 import { findComputeJsStaticPublisherVersion, type PackageJson } from '../../util/package.js';
 import { findHostnameForAwsS3RegionAndBucket } from '../../util/s3.js';
+import { appTemplates } from './templates/index.js';
 
 function help() {
   console.log(`\
@@ -32,6 +33,9 @@ Description:
   management mode.
 
 Options:
+  --template <name>                     Template for src/index.js of the Compute app.
+                                        Can be "plain" or "hono".
+                                        (default: plain)
   --storage-mode <mode>                 Storage mode for content storage. 
                                         Can be "kv-store" or "s3" (BETA).
                                         (default: kv-store)
@@ -84,6 +88,7 @@ export type InitAppOptions = {
   description: string | undefined,
   serviceId: string | undefined,
   publishId: string | undefined,
+  template: string | undefined,
   storageMode: string | undefined,
   kvStoreName: string | undefined,
   s3Region: string | undefined,
@@ -106,6 +111,7 @@ const defaultOptions: InitAppOptions = {
   description: 'Fastly Compute static site',
   serviceId: undefined,
   publishId: undefined,
+  template: undefined,
   storageMode: undefined,
   kvStoreName: undefined,
   s3Region: undefined,
@@ -335,6 +341,17 @@ function buildOptions(
   }
 
   {
+    let template: string | undefined;
+    const templateValue = commandLineOptions['template'];
+    if (templateValue == null || typeof templateValue === 'string') {
+      template = templateValue;
+    }
+    if (template !== undefined) {
+      options.template = template;
+    }
+  }
+
+  {
     let storageMode: string | undefined;
     const storageModeValue = commandLineOptions['storage-mode'];
     if (storageModeValue == null || typeof storageModeValue === 'string') {
@@ -407,6 +424,9 @@ export async function action(actionArgs: string[]) {
 
   const optionDefinitions: OptionDefinition[] = [
     { name: 'verbose', type: Boolean },
+
+    // Template for src/index.js. Can be "plain" or "hono".
+    { name: 'template', type: String, defaultValue: 'plain', },
 
     // Storage mode for content storage. Can be "kv-store" or "s3".
     { name: 'storage-mode', type: String, defaultValue: 'kv-store', },
@@ -652,6 +672,14 @@ export async function action(actionArgs: string[]) {
   const name = options.name;
   const description = options.description;
   const fastlyServiceId = options.serviceId;
+  const templateName = options.template;
+  const appTemplate = templateName != null && Object.prototype.hasOwnProperty.call(appTemplates, templateName) ? appTemplates[templateName] : undefined;
+  if (appTemplate == null) {
+    console.error(`❌ parameter --template must be set to one of: ${Object.keys(appTemplates).map(x => `'${x}'`).join(', ')}.`);
+    process.exitCode = 1;
+    return;
+  }
+
   const storageMode = options.storageMode;
   if (!(storageMode === 'kv-store' || storageMode === 's3')) {
     console.error(`❌ parameter --storage-mode must be set to 'kv-store' or 's3'.`);
@@ -801,6 +829,7 @@ export async function action(actionArgs: string[]) {
     },
     dependencies: {
       '@fastly/js-compute': '^4.0.0',
+      ...appTemplate.dependencies,
     },
     engines: {
       node: '>=20.11.0',
@@ -997,32 +1026,7 @@ export default config;
 `;
 
   // src/index.js
-  resourceFiles['./src/index.js'] = /* language=text */ `\
-/// <reference types="@fastly/js-compute" />
-import { env } from 'fastly:env';
-import { PublisherServer } from '@fastly/compute-js-static-publish';
-import rc from '../static-publish.rc.js';
-const publisherServer = PublisherServer.fromStaticPublishRc(rc);
-
-// eslint-disable-next-line no-restricted-globals
-addEventListener("fetch", (event) => event.respondWith(handleRequest(event)));
-async function handleRequest(event) {
-
-  console.log('FASTLY_SERVICE_VERSION', env('FASTLY_SERVICE_VERSION'));
-
-  const request = event.request;
-
-  const response = await publisherServer.serveRequest(request);
-  if (response != null) {
-    return response;
-  }
-
-  // Do custom things here!
-  // Handle API requests, serve non-static responses, etc.
-
-  return new Response('Not found', { status: 404 });
-}
-`;
+  resourceFiles['./src/index.js'] = appTemplate.indexJs;
 
   // Write out the files
   for (const [filename, content] of Object.entries(resourceFiles)) {

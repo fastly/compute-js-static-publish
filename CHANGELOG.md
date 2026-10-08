@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+### Added
+
+- `PublisherServer`
+   - `serveRequest()` takes options: `collectionName` (the collection for this call only), `pathname` (the path to look up), `fallback` (`false` to not serve the SPA file or the 404 page), and `healthCheck` (`false` to not answer `/healthz`).
+   - Add `serveFallback()`, which serves only the SPA file or the 404 page. Use it after `serveRequest()` with `fallback: false`. With the response cache, the fallback page has one cache entry for all paths.
+
+- Hono
+   - Add `@fastly/compute-js-static-publish/hono`, with `serveStatic()` and `serveFallback()` middleware for Hono apps. It replaces the `@fastly/hono-compute-js-static-publish` package. `serveStatic()` now uses `serveRequest()`, so it applies `publicDir`, `autoIndex`, `autoExt`, the response cache, and `Server-Timing`, and it serves only `GET` and `HEAD`. `fromStaticPublishRc()` and `fromPublisherServer()` now return `{ publisherServer, serveStatic, serveFallback }`. `serveStatic()` adds the `rewriteRequestPath` and `collectionName` options. `hono` is an optional peer dependency.
+   - Scaffolding: add `--template hono` to make a Hono app. It runs the app with `fire()` from `@fastly/hono-fastly-compute`. `--template plain` (the default) makes the same app as before.
+
+### Changed
+
+- `PublisherServer`
+   - `serveRequest()` and `serveFallback()` keep the settings and the index for each request. Thus, two calls for the same request read the index one time, and nothing is kept from one request to the next. `serveRequest()` no longer calls `beginRequest()`. Call `beginRequest()` only if you call `getMatchingAsset()` and `serveAsset()` directly.
+
+### Removed
+
+- `PublisherServer`
+   - Remove the public fields `serverTiming`, `settingsCached`, and `assetEntryMapCache`. They held the state of one request. Use `getServerConfig()` and `getAssetEntryMap()`.
+
+## [v8 (to be released)]
+
 ### Breaking
 
 - Rename symbols
