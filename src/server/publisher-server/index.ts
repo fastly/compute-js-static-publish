@@ -130,8 +130,11 @@ export class PublisherServer {
   // Cached index
   assetEntryMapCache: AssetEntryMap | null | undefined;
 
-  setActiveCollectionName(collectionName: string) {
-    this.activeCollectionName = collectionName;
+  // null selects the default collection. A sandbox can be reused for more than
+  // one request, so call this for each request, also when no collection is
+  // selected. Otherwise, the collection of the previous request stays active.
+  setActiveCollectionName(collectionName: string | null) {
+    this.activeCollectionName = collectionName ?? this.defaultCollectionName;
     this.settingsCached = undefined;
     this.assetEntryMapCache = undefined;
   }
@@ -157,7 +160,12 @@ export class PublisherServer {
 
   // Start handling a new request. serveRequest() calls this. If you call
   // getMatchingAsset() and serveAsset() directly, call this first.
+  // A sandbox can be reused for more than one request, so this also clears the
+  // settings and the index that a previous request read. Without this, a reused
+  // sandbox serves an old index after a publish, and serves an expired collection.
   beginRequest(request: Request) {
+    this.settingsCached = undefined;
+    this.assetEntryMapCache = undefined;
     const header = this.serverTimingRequestHeader;
     this.serverTiming = header != null && request.headers.has(header) ? new ServerTiming() : null;
   }
@@ -166,7 +174,8 @@ export class PublisherServer {
     return this.serverTiming != null ? this.serverTiming.measure(name, fn) : fn();
   }
 
-  // Server config is obtained from storage, and cached for the duration of this object.
+  // Server config is obtained from storage, and cached until the next beginRequest()
+  // or setActiveCollectionName().
   async getServerConfig() {
     if (this.settingsCached !== undefined) {
       return this.settingsCached;
