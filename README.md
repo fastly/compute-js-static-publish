@@ -383,7 +383,9 @@ By default, the server app serves assets from the "default collection", named in
 publisherServer.setActiveCollectionName("preview-42");
 ```
 
-This only affects the current request (in Compute, requests do not share state).
+Pass `null` to select the default collection.
+
+Compute can reuse a sandbox for more than one request (see [Sandbox lifecycle](https://www.fastly.com/documentation/guides/compute/developer-guides/sandbox-lifecycle/)), and the active collection stays set until you change it. Thus, call `setActiveCollectionName()` for each request, also when the request does not select a collection.
 
 #### Example: Subdomain-based Routing
 
@@ -398,9 +400,7 @@ const publisherServer = PublisherServer.fromStaticPublishRc(rc);
 addEventListener("fetch", event => {
   const request = event.request;
   const collectionName = collectionSelector.fromHostDomain(request, /^preview-([^\.]*)\./);
-  if (collectionName != null) {
-    publisherServer.setActiveCollectionName(collectionName);
-  }
+  publisherServer.setActiveCollectionName(collectionName); // null selects the default collection
 
   event.respondWith(publisherServer.serveRequest(request));
 });
@@ -1146,9 +1146,7 @@ async function handleRequest(event) {
     // obey redirect first
     return redirectResponse;
   }
-  if (collectionName != null) {
-    publisherServer.setActiveCollectionName(collectionName);
-  }
+  publisherServer.setActiveCollectionName(collectionName); // null selects the default collection
   // --- Cookie handling ends here
 
   // Regular routing follows...
