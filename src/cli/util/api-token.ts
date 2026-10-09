@@ -3,9 +3,6 @@
  * Licensed under the MIT license. See LICENSE file for details.
  */
 
-import { spawnSync } from 'node:child_process';
-import cli from '@fastly/cli';
-
 import { makeRetryable } from './retryable.js';
 
 export interface FastlyApiContext {
@@ -37,30 +34,6 @@ export function loadApiToken(params: LoadApiParams): LoadApiTokenResult | null {
     apiToken = process.env.FASTLY_API_TOKEN || null;
     if (apiToken != null) {
       source = 'env';
-    }
-  }
-
-  // Try fastly cli
-  if (apiToken == null) {
-    try {
-      const { stdout, error, status } = spawnSync(cli, ['profile', 'token', '--quiet'], {
-        encoding: 'utf-8',
-      });
-      if (status != null && status !== 0) {
-        console.warn(`⚠️ Warning: 'fastly profile token' returned a non-zero status code.`);
-        apiToken = null;
-      } else if (error) {
-        console.warn(`⚠️ Warning: 'fastly profile token' returned an error:`);
-        console.warn(String(error));
-        apiToken = null;
-      } else {
-        apiToken = stdout.trim();
-      }
-    } catch {
-      apiToken = null;
-    }
-    if (apiToken != null) {
-      source = 'fastly-profile-token';
     }
   }
 

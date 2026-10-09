@@ -4,7 +4,9 @@
  */
 
 /// <reference types="@fastly/js-compute" />
-import { KVStore, type KVStoreEntry } from 'fastly:kv-store';
+
+import type { FastlyBody } from 'fastly:body';
+import { CoreCache } from 'fastly:cache';
 
 import {
   type StaticPublishRc,
@@ -16,25 +18,40 @@ import {
   type ContentCompressionTypes,
 } from '../../models/compression/index.js';
 import {
-  isKVAssetVariantMetadata,
-  type KVAssetEntry,
-  type KVAssetEntryMap,
-  type KVAssetVariantMetadata,
-} from '../../models/assets/kvstore-assets.js';
-import { type IndexMetadata } from '../../models/server/index.js';
-import { getKVStoreEntry } from '../util/kv-store.js';
+  type AssetEntry,
+  type AssetEntryMap,
+  type AssetVariantMetadata,
+  decodeAssetVariantMetadata,
+} from '../../models/assets/index.js';
+import { decodeIndexMetadata, } from '../../models/server/index.js';
+import { isExpired } from '../../models/time/index.js';
+import {
+  type StorageEntry,
+  type StorageProvider,
+  loadStorageProviderFromStaticPublishRc,
+} from '../storage/storage-provider.js';
 import { checkIfModifiedSince, getIfModifiedSinceHeader } from './serve-preconditions/if-modified-since.js';
 import { checkIfNoneMatch, getIfNoneMatchHeader } from './serve-preconditions/if-none-match.js';
-import { isExpired } from "../../models/time/index.js";
+import { ServerTiming } from '../util/server-timing.js';
+import {
+  type CachedResponseMetadata,
+  type ResponseCacheOptions,
+  CACHEABLE_STATUSES,
+  buildCacheFillRequest,
+  buildResponseCacheKey,
+  decodeCachedResponseMetadata,
+  encodeCachedResponseMetadata,
+  parseAcceptEncodingGroups,
+} from './response-cache.js';
 
-type KVAssetVariant = {
-  kvStoreEntry: KVStoreEntry,
-} & KVAssetVariantMetadata;
+type AssetVariant = {
+  storageEntry: StorageEntry,
+} & AssetVariantMetadata;
 
 export function buildHeadersSubset(responseHeaders: Headers, keys: Readonly<string[]>) {
   const resultHeaders = new Headers();
   for (const value of keys) {
-    if (value in responseHeaders) {
+    if (responseHeaders.has(value)) {
       const responseHeaderValue = responseHeaders.get(value);
       if (responseHeaderValue != null) {
         resultHeaders.set(value, responseHeaderValue);
@@ -70,61 +87,109 @@ type AssetInit = {
 export class PublisherServer {
   public constructor(
     publishId: string,
-    kvStoreName: string,
+    storageProvider: StorageProvider,
     defaultCollectionName: string,
   ) {
     this.publishId = publishId;
-    this.kvStoreName = kvStoreName;
+    this.storageProvider = storageProvider;
     this.defaultCollectionName = defaultCollectionName;
     this.activeCollectionName = this.defaultCollectionName;
     this.collectionNameHeader = 'X-Publisher-Server-Collection';
+    this.serverTimingRequestHeader = null;
+    this.serverTiming = null;
+    this.responseCache = null;
   }
 
   static fromStaticPublishRc(config: StaticPublishRc) {
+    const storeProvider = loadStorageProviderFromStaticPublishRc(config);
     return new PublisherServer(
       config.publishId,
-      config.kvStoreName,
+      storeProvider,
       config.defaultCollectionName,
     );
   }
 
   publishId: string;
-  kvStoreName: string;
+  storageProvider: StorageProvider;
   defaultCollectionName: string;
   activeCollectionName: string;
   collectionNameHeader: string | null;
+
+  // When set, a request that has this header gets a Server-Timing response header.
+  serverTimingRequestHeader: string | null;
+
+  // Timing for the current request, or null if timing is off for it.
+  serverTiming: ServerTiming | null;
+
+  // When set, responses are cached with the Core Cache API. See setResponseCache().
+  responseCache: ResponseCacheOptions | null;
 
   // Cached settings
   settingsCached: PublisherServerConfigNormalized | null | undefined;
 
   // Cached index
-  kvAssetsIndex: KVAssetEntryMap | null | undefined;
+  assetEntryMapCache: AssetEntryMap | null | undefined;
 
-  setActiveCollectionName(collectionName: string) {
-    this.activeCollectionName = collectionName;
+  // null selects the default collection. A sandbox can be reused for more than
+  // one request, so call this for each request, also when no collection is
+  // selected. Otherwise, the collection of the previous request stays active.
+  setActiveCollectionName(collectionName: string | null) {
+    this.activeCollectionName = collectionName ?? this.defaultCollectionName;
     this.settingsCached = undefined;
-    this.kvAssetsIndex = undefined;
+    this.assetEntryMapCache = undefined;
   }
 
   setCollectionNameHeader(collectionHeader: string | null) {
     this.collectionNameHeader = collectionHeader;
   }
 
-  // Server config is obtained from the KV Store, and cached for the duration of this object.
+  // Set the request header that turns on the Server-Timing response header.
+  // null (the default) turns timing off.
+  setServerTimingRequestHeader(requestHeader: string | null) {
+    this.serverTimingRequestHeader = requestHeader;
+  }
+
+  // Cache whole responses with the Core Cache API, keyed by collection, path,
+  // and the client's Accept-Encoding. A cache hit does not read the settings,
+  // the index, or the file from storage. Entries have the surrogate key
+  // `<publishId>-<collectionName>`, which publish-content purges. null (the
+  // default) turns the cache off.
+  setResponseCache(options: ResponseCacheOptions | null) {
+    this.responseCache = options;
+  }
+
+  // Start handling a new request. serveRequest() calls this. If you call
+  // getMatchingAsset() and serveAsset() directly, call this first.
+  // A sandbox can be reused for more than one request, so this also clears the
+  // settings and the index that a previous request read. Without this, a reused
+  // sandbox serves an old index after a publish, and serves an expired collection.
+  beginRequest(request: Request) {
+    this.settingsCached = undefined;
+    this.assetEntryMapCache = undefined;
+    const header = this.serverTimingRequestHeader;
+    this.serverTiming = header != null && request.headers.has(header) ? new ServerTiming() : null;
+  }
+
+  private timed<T>(name: string, fn: () => Promise<T>): Promise<T> {
+    return this.serverTiming != null ? this.serverTiming.measure(name, fn) : fn();
+  }
+
+  // Server config is obtained from storage, and cached until the next beginRequest()
+  // or setActiveCollectionName().
   async getServerConfig() {
     if (this.settingsCached !== undefined) {
       return this.settingsCached;
     }
     const settingsFileKey = `${this.publishId}_settings_${this.activeCollectionName}`;
-    const kvStore = new KVStore(this.kvStoreName);
-    const settingsFile = await getKVStoreEntry(kvStore, settingsFileKey);
-    if (settingsFile == null) {
-      console.error(`Settings File not found at ${settingsFileKey}.`);
-      console.error(`You may need to publish your application.`);
-      this.settingsCached = null;
-    } else {
-      this.settingsCached = (await settingsFile.json()) as PublisherServerConfigNormalized;
-    }
+    this.settingsCached = await this.timed('settings', async () => {
+      const settingsFile = await this.storageProvider.getEntry(settingsFileKey, [`${this.publishId}-${this.activeCollectionName}`, 'settings']);
+      if (settingsFile == null) {
+        console.error(`Settings File not found at ${settingsFileKey}.`);
+        console.error(`You may need to publish your application.`);
+        return null;
+      }
+      return (await settingsFile.json()) as PublisherServerConfigNormalized;
+    });
     return this.settingsCached;
   }
 
@@ -148,56 +213,63 @@ export class PublisherServer {
       .filter(x => Boolean(x));
   }
 
-  async getKvAssetsIndex() {
-    if (this.kvAssetsIndex !== undefined) {
-      return this.kvAssetsIndex;
+  async getAssetEntryMap() {
+    if (this.assetEntryMapCache !== undefined) {
+      return this.assetEntryMapCache;
     }
     const indexFileKey = `${this.publishId}_index_${this.activeCollectionName}`;
-    const kvStore = new KVStore(this.kvStoreName);
-    const indexFile = await getKVStoreEntry(kvStore, indexFileKey);
+    const indexFile = await this.timed('index', () =>
+      this.storageProvider.getEntry(indexFileKey, [`${this.publishId}-${this.activeCollectionName}`, 'index']),
+    );
     if (indexFile == null) {
       console.error(`Index File not found at ${indexFileKey}.`);
       console.error(`You may need to publish your application.`);
-      this.kvAssetsIndex = null;
+      this.assetEntryMapCache = null;
       return null;
     }
 
     let collectionIsExpired = false;
     if (this.activeCollectionName !== this.defaultCollectionName) {
+      let metadata;
       const metadataText = indexFile.metadataText()
       if (metadataText != null) {
         try {
-          const metadata = JSON.parse(metadataText) as IndexMetadata;
-          collectionIsExpired = metadata.expirationTime != null && isExpired(metadata.expirationTime);
+          metadata = JSON.parse(metadataText);
         } catch {
         }
+        metadata = decodeIndexMetadata(metadata);
+      }
+      if (metadata != null) {
+        collectionIsExpired = metadata.expirationTime != null && isExpired(metadata.expirationTime);
       }
     }
 
     if (collectionIsExpired) {
       console.error(`Requested collection expired at ${indexFileKey}.`);
-      this.kvAssetsIndex = null;
+      this.assetEntryMapCache = null;
       return null;
     }
 
-    this.kvAssetsIndex = (await indexFile.json()) as KVAssetEntryMap;
-    return this.kvAssetsIndex;
+    // Read and parse in two steps, so that Server-Timing can report each one.
+    const indexText = await this.timed('index-body', () => indexFile.text());
+    this.assetEntryMapCache = await this.timed('index-parse', async () => JSON.parse(indexText) as AssetEntryMap);
+    return this.assetEntryMapCache;
   }
 
-  async getMatchingAsset(assetKey: string, applyAuto: boolean = false): Promise<KVAssetEntry | null> {
+  async getMatchingAsset(assetKey: string, applyAuto: boolean = false): Promise<AssetEntry | null> {
 
     const serverConfig = await this.getServerConfig();
     if (serverConfig == null) {
       return null;
     }
-    const kvAssetsIndex = await this.getKvAssetsIndex();
-    if (kvAssetsIndex == null) {
+    const assetEntryMap = await this.getAssetEntryMap();
+    if (assetEntryMap == null) {
       return null;
     }
 
     if(!assetKey.endsWith('/')) {
       // A path that does not end in a slash can match an asset directly
-      const asset = kvAssetsIndex[assetKey];
+      const asset = assetEntryMap[assetKey];
       if (asset != null) {
         return asset;
       }
@@ -207,7 +279,7 @@ export class PublisherServer {
         // looks for an asset that has the specified suffix (usually extension, such as .html)
         for (const extEntry of serverConfig.autoExt) {
           let assetKeyWithExt = assetKey + extEntry;
-          const asset = kvAssetsIndex[assetKeyWithExt];
+          const asset = assetEntryMap[assetKeyWithExt];
           if (asset != null) {
             return asset;
           }
@@ -228,7 +300,7 @@ export class PublisherServer {
         assetNameAsDir = assetNameAsDir + '/';
         for (const indexEntry of serverConfig.autoIndex) {
           let assetKeyIndex = assetNameAsDir + indexEntry;
-          const asset = kvAssetsIndex[assetKeyIndex];
+          const asset = assetEntryMap[assetKeyIndex];
           if (asset != null) {
             return asset;
           }
@@ -249,50 +321,7 @@ export class PublisherServer {
       return [];
     }
 
-    const acceptEncodingHeader = request.headers.get('accept-encoding')?.trim() ?? '';
-    if (acceptEncodingHeader == '') {
-      return [];
-    }
-
-    const priorityMap = new Map<number, ContentCompressionTypes[]>;
-
-    for (const headerValue of acceptEncodingHeader.trim().split(',')) {
-      let [encodingValue, qValueStr] = headerValue.trim().split(';');
-      encodingValue = encodingValue.trim();
-      if (!serverConfig.allowedEncodings.includes(encodingValue as ContentCompressionTypes)) {
-        continue;
-      }
-      let qValue; // q value multiplied by 1000
-      if (qValueStr == null || !qValueStr.startsWith('q=')) {
-        // use default of 1.0
-        qValue = 1000;
-      } else {
-        qValueStr = qValueStr.slice(2); // remove the q=
-        qValue = parseFloat(qValueStr);
-        if (Number.isNaN(qValue) || qValue > 1) {
-          qValue = 1;
-        }
-        if (qValue < 0) {
-          qValue = 0;
-        }
-        // q values can have up to 3 decimal digits
-        qValue = Math.floor(qValue * 1000);
-      }
-
-      let typesForQValue = priorityMap.get(qValue);
-      if (typesForQValue == null) {
-        typesForQValue = [];
-        priorityMap.set(qValue, typesForQValue);
-      }
-      typesForQValue.push(encodingValue as ContentCompressionTypes);
-    }
-
-    // Sort keys, larger numbers to come first
-    const keysSorted = [...priorityMap.keys()]
-      .sort((qValueA, qValueB) => qValueB - qValueA);
-
-    return keysSorted
-      .map(qValue => priorityMap.get(qValue)!);
+    return parseAcceptEncodingGroups(request.headers.get('accept-encoding') ?? '', serverConfig.allowedEncodings);
   }
 
   async testExtendedCache(pathname: string) {
@@ -309,7 +338,13 @@ export class PublisherServer {
       });
   }
 
-  handlePreconditions(request: Request, asset: KVAssetEntry, responseHeaders: Headers): Response | null {
+  handlePreconditions(request: Request, asset: AssetEntry, responseHeaders: Headers): Response | null {
+    return this.handlePreconditionsForLastModified(request, asset.lastModifiedTime, responseHeaders);
+  }
+
+  // lastModifiedTime is in seconds since the epoch, as in AssetEntry. A cached
+  // response has its headers, but not its AssetEntry.
+  private handlePreconditionsForLastModified(request: Request, lastModifiedTime: number, responseHeaders: Headers): Response | null {
     // Handle preconditions according to https://httpwg.org/specs/rfc9110.html#rfc.section.13.2.2
 
     // A recipient cache or origin server MUST evaluate the request preconditions defined by this specification in the following order:
@@ -351,7 +386,7 @@ export class PublisherServer {
       // For us, method is always GET or HEAD here.
       const headerValue = getIfModifiedSinceHeader(request);
       if (headerValue != null) {
-        const result = checkIfModifiedSince(asset.lastModifiedTime, headerValue);
+        const result = checkIfModifiedSince(lastModifiedTime, headerValue);
         if (!result) {
           return new Response(null, {
             status: 304,
@@ -370,20 +405,18 @@ export class PublisherServer {
     return null;
   }
   
-  public async loadKvAssetVariant(entry: KVAssetEntry, variant: ContentCompressionTypes | null): Promise<KVAssetVariant | null> {
+  public async loadAssetVariant(entry: AssetEntry, variant: ContentCompressionTypes | null): Promise<AssetVariant | null> {
 
-    const kvStore = new KVStore(this.kvStoreName);
-    
     const baseHash = entry.key.slice(7);
     const baseKey = `${this.publishId}_files_sha256_${baseHash}`;
     const variantKey = variant != null ? `${baseKey}_${variant}` : baseKey;
 
-    const kvStoreEntry = await getKVStoreEntry(kvStore, variantKey);
-    if (kvStoreEntry == null) {
+    const storageEntry = await this.timed('asset', () => this.storageProvider.getEntry(variantKey));
+    if (storageEntry == null) {
       return null;
     }
-    const metadataText = kvStoreEntry.metadataText() ?? '';
-    if (metadataText === '') {
+    const metadataText = storageEntry.metadataText();
+    if (metadataText == null) {
       return null;
     }
     let metadata;
@@ -392,19 +425,17 @@ export class PublisherServer {
     } catch {
       return null;
     }
-    if (!isKVAssetVariantMetadata(metadata)) {
-      return null;
-    }
-    if (metadata.size == null) {
+    metadata = decodeAssetVariantMetadata(metadata);
+    if (metadata == null) {
       return null;
     }
     return {
-      kvStoreEntry,
+      storageEntry,
       ...metadata,
     };
   }
 
-  private async findKVAssetVariantForAcceptEncodingsGroups(entry: KVAssetEntry, acceptEncodingsGroups: ContentCompressionTypes[][] = []): Promise<KVAssetVariant> {
+  private async findAssetVariantForAcceptEncodingsGroups(entry: AssetEntry, acceptEncodingsGroups: ContentCompressionTypes[][] = []): Promise<AssetVariant> {
 
     if (!entry.key.startsWith('sha256:')) {
       throw new TypeError(`Key must start with 'sha256:': ${entry.key}`);
@@ -415,37 +446,37 @@ export class PublisherServer {
     for (const encodingGroup of acceptEncodingsGroups) {
 
       let smallestSize: number | undefined = undefined;
-      let smallestEntry: KVAssetVariant | undefined = undefined;
+      let smallestVariant: AssetVariant | undefined = undefined;
 
       for (const encoding of encodingGroup) {
         if (!entry.variants.includes(encoding)) {
           continue;
         }
 
-        const variantKvStoreEntry = await this.loadKvAssetVariant(entry, encoding);
-        if (variantKvStoreEntry == null) {
+        const assetVariant = await this.loadAssetVariant(entry, encoding);
+        if (assetVariant == null) {
           continue;
         }
-        if (smallestSize == null || variantKvStoreEntry.size < smallestSize) {
-          smallestSize = variantKvStoreEntry.size;
-          smallestEntry = variantKvStoreEntry;
+        if (smallestSize == null || assetVariant.size < smallestSize) {
+          smallestSize = assetVariant.size;
+          smallestVariant = assetVariant;
         }
       }
 
-      if (smallestEntry != null) {
-        return smallestEntry;
+      if (smallestVariant != null) {
+        return smallestVariant;
       }
     }
 
-    const baseKvStoreEntry = await this.loadKvAssetVariant(entry, null);
-    if (baseKvStoreEntry == null) {
+    const baseAssetVariant = await this.loadAssetVariant(entry, null);
+    if (baseAssetVariant == null) {
       throw new TypeError('Key not found: ' + entry.key);
     }
 
-    return baseKvStoreEntry;
+    return baseAssetVariant;
   }
 
-  async serveAsset(request: Request, asset: KVAssetEntry, init?: AssetInit): Promise<Response> {
+  async serveAsset(request: Request, asset: AssetEntry, init?: AssetInit): Promise<Response> {
 
     const headers = new Headers(init?.headers);
     headers.set('Content-Type', asset.contentType);
@@ -469,14 +500,18 @@ export class PublisherServer {
     }
 
     const acceptEncodings = await this.findAcceptEncodingsGroups(request);
-    const kvAssetVariant = await this.findKVAssetVariantForAcceptEncodingsGroups(asset, acceptEncodings);
-    if (kvAssetVariant.contentEncoding != null) {
-      headers.append('Content-Encoding', kvAssetVariant.contentEncoding);
+    const assetVariant = await this.findAssetVariantForAcceptEncodingsGroups(asset, acceptEncodings);
+    if (assetVariant.contentEncoding != null) {
+      headers.append('Content-Encoding', assetVariant.contentEncoding);
     }
 
-    headers.set('ETag', `"${kvAssetVariant.hash}"`);
+    headers.set('ETag', `"${assetVariant.hash}"`);
     if (asset.lastModifiedTime !== 0) {
       headers.set('Last-Modified', (new Date( asset.lastModifiedTime * 1000 )).toUTCString());
+    }
+
+    if (this.serverTiming != null) {
+      headers.append('Server-Timing', this.serverTiming.toHeaderValue());
     }
 
     const preconditionResponse = this.handlePreconditions(request, asset, headers);
@@ -484,9 +519,9 @@ export class PublisherServer {
       return preconditionResponse;
     }
 
-    const kvStoreEntry = kvAssetVariant.kvStoreEntry;
+    const storageEntry = assetVariant.storageEntry;
     return new Response(
-      kvStoreEntry.body,
+      storageEntry.body,
       {
         status: init?.status ?? 200,
         headers,
@@ -494,7 +529,145 @@ export class PublisherServer {
     );
   }
 
+  // Serve a response through the response cache (see setResponseCache()).
+  // keyPath identifies the response in the active collection. Include in it
+  // anything other than the path and the Accept-Encoding that changes the response.
+  // On a miss, produce() is called with a GET request that has no conditional or
+  // range headers, and its result is cached if it is a 200 or 404 response, or
+  // null (not found). Conditional requests and HEAD are then answered from the
+  // cached response. If the cache is off, produce() gets the original request.
+  async serveCached(
+    request: Request,
+    keyPath: string,
+    produce: (request: Request) => Promise<Response | null>,
+  ): Promise<Response | null> {
+    if (this.responseCache == null) {
+      return produce(request);
+    }
+
+    const key = buildResponseCacheKey(this.publishId, this.activeCollectionName, keyPath, request);
+    const lookupStart = performance.now();
+    const entry = CoreCache.transactionLookup(key);
+    const state = entry.state();
+
+    if (!state.mustInsertOrUpdate()) {
+      const metadata = state.found() && state.usable() ? decodeCachedResponseMetadata(entry.userMetadata()) : null;
+      if (metadata != null) {
+        // age() is in milliseconds. A hit younger than the time since a purge proves the entry was refilled.
+        this.serverTiming?.add('cache', performance.now() - lookupStart, `hit age=${Math.round(entry.age() / 1000)}s`);
+        return this.responseFromCache(request, metadata, entry.body());
+      }
+      // Not usable, and another request is not filling it for us: serve without the cache.
+      this.serverTiming?.add('cache', performance.now() - lookupStart, 'bypass');
+      return produce(request);
+    }
+
+    // This request must fill the entry (a miss, or a stale entry after a soft purge).
+    this.serverTiming?.add('cache', performance.now() - lookupStart, 'miss');
+    let response: Response | null;
+    try {
+      response = await produce(buildCacheFillRequest(request));
+    } catch (err) {
+      entry.cancel();
+      throw err;
+    }
+
+    const insertOptions = {
+      // The Core Cache takes maxAge in milliseconds. ResponseCacheOptions.maxAge is in seconds.
+      maxAge: this.responseCache.maxAge * 1000,
+      surrogateKeys: [`${this.publishId}-${this.activeCollectionName}`],
+    };
+
+    if (response == null) {
+      const metadata: CachedResponseMetadata = { notFound: true };
+      const writer = entry.insert({
+        ...insertOptions,
+        userMetadata: encodeCachedResponseMetadata(metadata),
+        length: 0,
+      });
+      writer.close();
+      return null;
+    }
+
+    if (!CACHEABLE_STATUSES.includes(response.status)) {
+      entry.cancel();
+      return response;
+    }
+
+    const headers = new Headers(response.headers);
+    // Server-Timing describes one request, so it is not stored.
+    headers.delete('Server-Timing');
+    const metadata: CachedResponseMetadata = { status: response.status, headers: [...headers] };
+    const contentLength = Number(headers.get('Content-Length'));
+
+    // Stream the body into the cache entry, and give the client (and any requests
+    // waiting on this key) the entry's own stream as it fills. FastlyBody.append()
+    // can take only host-backed streams, and the storage providers build their
+    // bodies in JavaScript, so copy the chunks.
+    const [writer, streamedEntry] = entry.insertAndStreamBack({
+      ...insertOptions,
+      userMetadata: encodeCachedResponseMetadata(metadata),
+      length: Number.isInteger(contentLength) && headers.has('Content-Length') ? contentLength : undefined,
+    });
+    const copied = this.copyBodyToCache(response, writer);
+
+    const cachedResponse = this.responseFromCache(request, metadata, streamedEntry.body());
+    // A response without a body (HEAD, 304) does not keep the request running
+    // until the copy finishes. If the copy is cut short, the entry can be stored
+    // with a partial body, so wait for it.
+    if (cachedResponse?.body == null) {
+      await copied;
+    }
+    return cachedResponse;
+  }
+
+  private async copyBodyToCache(response: Response, writer: FastlyBody) {
+    try {
+      if (response.body != null) {
+        const reader = response.body.getReader();
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) {
+            break;
+          }
+          writer.append(value);
+        }
+      }
+      writer.close();
+    } catch (err) {
+      // Without close(), the cache treats the insertion as incomplete, so a
+      // partial body is not kept. Readers of this entry get a stream error.
+      console.error('Could not write the response to the cache:', err);
+    }
+  }
+
+  private responseFromCache(request: Request, metadata: CachedResponseMetadata, body: BodyInit): Response | null {
+    if (metadata.notFound) {
+      return null;
+    }
+
+    const headers = new Headers(metadata.headers);
+    if (this.serverTiming != null) {
+      headers.append('Server-Timing', this.serverTiming.toHeaderValue());
+    }
+
+    const lastModified = headers.get('Last-Modified');
+    const lastModifiedMs = lastModified != null ? Date.parse(lastModified) : NaN;
+    const lastModifiedTime = Number.isNaN(lastModifiedMs) ? 0 : Math.floor(lastModifiedMs / 1000);
+    const preconditionResponse = this.handlePreconditionsForLastModified(request, lastModifiedTime, headers);
+    if (preconditionResponse != null) {
+      return preconditionResponse;
+    }
+
+    return new Response(request.method === 'HEAD' ? null : body, {
+      status: metadata.status,
+      headers,
+    });
+  }
+
   async serveRequest(request: Request): Promise<Response | null> {
+
+    this.beginRequest(request);
 
     // Only handle GET and HEAD
     if (request.method !== 'GET' && request.method !== 'HEAD') {
@@ -508,6 +681,13 @@ export class PublisherServer {
     if (pathname === '/healthz') {
       return new Response("OK", { status: 200 });
     }
+
+    // The fallback pages (SPA, not found) depend on whether the client accepts HTML.
+    const keyPath = requestAcceptsTextHtml(request) ? pathname : `${pathname}|no-html`;
+    return this.serveCached(request, keyPath, (fillRequest) => this.serveRequestFromStorage(fillRequest, pathname));
+  }
+
+  private async serveRequestFromStorage(request: Request, pathname: string): Promise<Response | null> {
 
     const serverConfig = await this.getServerConfig();
     if (serverConfig == null) {
@@ -532,8 +712,8 @@ export class PublisherServer {
     // fallback HTML responses, like SPA and "not found" pages
     if (requestAcceptsTextHtml(request)) {
 
-      const kvAssetsIndex = await this.getKvAssetsIndex();
-      if (kvAssetsIndex == null) {
+      const assetEntryMap = await this.getAssetEntryMap();
+      if (assetEntryMap == null) {
         return null;
       }
 
@@ -541,7 +721,7 @@ export class PublisherServer {
       const { spaFile } = serverConfig;
 
       if (spaFile != null) {
-        const asset = kvAssetsIndex[spaFile];
+        const asset = assetEntryMap[spaFile];
         if (asset != null) {
           return this.serveAsset(request, asset, {
             cache: 'never',
@@ -551,7 +731,7 @@ export class PublisherServer {
 
       const { notFoundPageFile } = serverConfig;
       if (notFoundPageFile != null) {
-        const asset = kvAssetsIndex[notFoundPageFile];
+        const asset = assetEntryMap[notFoundPageFile];
         if (asset != null) {
           return this.serveAsset(request, asset, {
             status: 404,

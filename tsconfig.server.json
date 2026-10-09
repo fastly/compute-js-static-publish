@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "build/server",
+    "lib": ["ES2021", "WebWorker"],
+    "types": [],
+  },
+  "include": [
+    "src/server",
+    "src/shared",
+  ]
+}

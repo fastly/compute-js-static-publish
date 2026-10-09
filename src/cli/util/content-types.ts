@@ -25,8 +25,10 @@ const defaultContentTypes: ContentTypeDef[] = [
   { test: /\.gif$/, contentType: 'image/gif', text: false },
   { test: /\.jp(e)?g$/, contentType: 'image/jpeg', text: false },
   { test: /\.ico$/, contentType: 'image/vnd.microsoft.icon', text: false },
-  { test: /\.tif(f)?$/, contentType: 'image/png', text: false },
+  { test: /\.tif(f)?$/, contentType: 'image/tiff', text: false },
   { test: /\.webp$/, contentType: 'image/webp', text: false },
+  { test: /\.avif$/, contentType: 'image/avif', text: false },
+  { test: /\.jxl$/, contentType: 'image/jxl', text: false },
   { test: /\.aac$/, contentType: 'audio/aac', text: false },
   { test: /\.mp3$/, contentType: 'audio/mpeg', text: false },
   { test: /\.avi$/, contentType: 'video/x-msvideo', text: false },
@@ -36,6 +38,7 @@ const defaultContentTypes: ContentTypeDef[] = [
   { test: /\.pdf$/, contentType: 'application/pdf', text: false },
   { test: /\.tar$/, contentType: 'application/x-tar', text: false, precompressAsset: true, },
   { test: /\.zip$/, contentType: 'application/zip', text: false },
+  { test: /\.wasm$/, contentType: 'application/wasm', text: false },
   { test: /\.eot$/, contentType: 'application/vnd.ms-fontobject', text: false },
   { test: /\.otf$/, contentType: 'font/otf', text: false },
   { test: /\.ttf$/, contentType: 'font/ttf', text: false },
@@ -63,7 +66,7 @@ export function mergeContentTypes(contentTypes: ContentTypeDef[]) {
       }
 
       if(typeof contentType.contentType !== 'string' || contentType.contentType.indexOf('/') === -1) {
-        console.log(`⚠️ Ignoring contentTypes[${index}]: 'type' must be a string representing a MIME type.`);
+        console.log(`⚠️ Ignoring contentTypes[${index}]: 'contentType' must be a string representing a MIME type.`);
         invalid = true;
       }
 
