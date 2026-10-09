@@ -94,7 +94,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `clean` and `collections delete` exit with an error if a delete operation fails. Before, they showed "Completed".
 
-- `PublisherServer` in a reused sandbox: the settings and the index of a collection stayed in memory for the life of the sandbox. Thus, after a publish, the sandbox served the old content, and it served a collection after it expired. `beginRequest()` (which `serveRequest()` calls) now clears them.
+- `PublisherServer` in a reused sandbox (if the app turns on sandbox reuse): the settings and the index of a collection stayed in memory for the life of the sandbox. Thus, after a publish, the sandbox served the old content, and it served a collection after it expired. `beginRequest()` (which `serveRequest()` calls) now clears them.
    - `setActiveCollectionName()` accepts `null`, which selects the default collection. In a reused sandbox, the active collection stays set from the previous request, so call it for each request.
 
 - S3-compatible storage: `clean`, `collections list`, and `collections delete` stopped with "Can't query indexes in storage" when no key matched, for example after the last collection was deleted. An empty list is now a valid result.

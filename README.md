@@ -385,7 +385,7 @@ publisherServer.setActiveCollectionName("preview-42");
 
 Pass `null` to select the default collection.
 
-Compute can reuse a sandbox for more than one request (see [Sandbox lifecycle](https://www.fastly.com/documentation/guides/compute/developer-guides/sandbox-lifecycle/)), and the active collection stays set until you change it. Thus, call `setActiveCollectionName()` for each request, also when the request does not select a collection.
+If the app turns on sandbox reuse, Compute can use a sandbox for more than one request (see [Sandbox lifecycle](https://www.fastly.com/documentation/guides/compute/developer-guides/sandbox-lifecycle/)), and the active collection stays set until you change it. Thus, call `setActiveCollectionName()` for each request, also when the request does not select a collection.
 
 #### Example: Subdomain-based Routing
 
