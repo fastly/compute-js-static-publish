@@ -35,13 +35,6 @@ The server build must not use Node APIs. It uses `/// <reference types="@fastly/
 
 ## Architecture
 
-### CLI mode selection
-
-`src/cli/index.ts` selects the mode from the current directory:
-
-- If there is no `./static-publish.rc.js`, it runs the **scaffold** command (`commands/scaffold/index.ts`). This command generates the `compute-js/` app: `fastly.toml`, `package.json`, `static-publish.rc.js`, `publish-content.config.js`, and `src/index.js`.
-- If not, it runs the **management** commands (`commands/manage/`): `publish-content`, `clean`, and `collections list|delete|promote|update-expiration`.
-
 ### Storage providers (pluggable, in both parts)
 
 Both parts use a registry of builder functions. Each entry point calls `registerStorageProviderBuilder(...)`. `loadStorageProviderFromStaticPublishRc` returns the first builder result that is not null for `rc.storageMode`.
@@ -79,11 +72,7 @@ All collections share the files, because the key is the hash of the content. `cl
    - The S3 provider uploads one `PutObject` for each entry, 64 at a time by default (`--s3-upload-concurrency`). The S3 client gets an HTTP agent with enough sockets for this; the SDK default is 50.
 5. The CLI writes the index and the settings only after all uploads are successful.
 
-KV batch endpoint behavior (measured, not documented):
-
-- No limit on the item count up to 25,000 items. No limit on the request size up to 133 MiB.
-- A limit of approximately 32 MiB for each NDJSON line. A longer line causes a `503`. The lines before it are stored.
-- A `207` response lists the failed keys in `errors[].key`. The CLI retries only these keys.
+`src/cli/storage/CLAUDE.md` has the measured limits of the KV batch endpoint.
 
 ### Error handling in concurrent loops
 
@@ -105,11 +94,7 @@ KV batch endpoint behavior (measured, not documented):
    `beginRequest()` resets the per-request state: the `Server-Timing` collector (`util/server-timing.ts`), which is on only if `setServerTimingRequestHeader()` names a header that the request has.
 2. If `setResponseCache()` is set, `serveCached()` (`response-cache.ts`) looks up the whole response in the Core Cache, keyed by publish ID, collection, path, and normalized `Accept-Encoding`. A hit skips steps 3 to 8. A miss uses `transactionLookup()`, so concurrent misses wait for one fill. The fill runs steps 3 to 8 with a `GET` that has no conditional headers, and caches a `200`, a `404`, or "not found". Conditional requests and `HEAD` are then answered from the cached response. The body is streamed into the entry with `insertAndStreamBack()`: `copyBodyToCache()` copies the chunks, because `FastlyBody.append()` takes only host-backed streams, and the storage providers build their streams in JavaScript. The client reads the entry's stream. If the copy fails, the entry is not closed, so the cache drops it.
 3. Load the settings and the index for that collection, and keep them in a cache. An expired collection is the same as a collection that does not exist.
-4. Find the path with `publicDir`, `autoIndex`, and `autoExt`.
-5. If the request accepts HTML, use the SPA file or the 404 file when no file matches.
-6. Select an encoding variant from `Accept-Encoding` and `allowedEncodings`.
-7. Process `If-None-Match` and `If-Modified-Since` (304).
-8. Set the cache headers. Files in `staticItems` get a long TTL.
+4. to 8. Find the file, select the encoding, process the conditional headers, and set the cache headers (see the code).
 
 ## Branches and releases
 
@@ -117,7 +102,5 @@ KV batch endpoint behavior (measured, not documented):
 - `main` stays at 7.0.2 until that merge. It is the default branch, and its ruleset ("Require CODEOWNERS Review") applies to the default branch. Thus, do not make `v8` the default branch, or each PR to `v8` needs an approval.
 - Older major versions have their own branches (`v6`, `v7`, ...). Fixes for v7 go to the `v7` branch.
 - Tag betas on `v8`, after a version change commit on `v8`. There is no `beta` branch.
-- `.github/workflows/ci-release.yaml` publishes a release when a `v*` tag is pushed. It uses the reusable workflows in `fastly/devex-reusable-workflows` (npm trusted publishing, and GitHub Packages). The first prerelease identifier becomes the npm dist-tag (`v8.0.0-beta.9` gives `beta`). A tag runs the workflow file in the tagged commit. Thus workflow changes must be on the branch that you tag.
-- `prepublishOnly` replaces `README.md` with `README.short.md` in the package. Thus `README.short.md` is the README on npm.
-- To find changes to port between `v7` and `v8`, use `git cherry -v origin/v7 origin/v8`. This command shows manual ports as missing, so compare the content. Some differences are intentional: `package.json`, the tsconfigs, and much of `src` (v8 has a separate CLI and server build, and storage providers).
+- The `release-and-port` skill has the release workflow details and the procedure to port changes between `v7` and `v8`.
 - Record changes that users can see in `CHANGELOG.md`, under `[unreleased]` (Keep a Changelog format). `MIGRATING.md` has the instructions to upgrade to a new major version.
