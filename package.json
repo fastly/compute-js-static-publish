@@ -22,7 +22,7 @@
     "prepublishOnly": "cp README.short.md README.md"
   },
   "bin": {
-    "compute-js-static-publish": "./build/cli/cli/index.js"
+    "compute-js-static-publish": "build/cli/cli/index.js"
   },
   "repository": {
     "type": "git",
