@@ -2,6 +2,12 @@
 
 Fastly Compute + KV Store for static websites and web apps.
 
+> [!IMPORTANT]
+> This is v7, an old version. The current version is v8, in the [`main` branch](https://github.com/fastly/compute-js-static-publish/tree/main).
+> To upgrade, see [MIGRATING.md](https://github.com/fastly/compute-js-static-publish/blob/main/MIGRATING.md) in `main`.
+>
+> To continue to use v7, install it as `@fastly/compute-js-static-publish@7`, not `@latest`.
+
 This CLI tool helps you:
 
 - ✅ Deploy static sites to Fastly Compute with zero backend
@@ -17,7 +23,7 @@ This CLI tool helps you:
 Create a directory for your project, place your static files in `./public`, then type:
 
 ```sh
-npx @fastly/compute-js-static-publish@latest --root-dir=./public --kv-store-name=site-content
+npx @fastly/compute-js-static-publish@7 --root-dir=./public --kv-store-name=site-content
 ```
 
 ### 🔧 Local Preview
@@ -58,7 +64,7 @@ npm run fastly:publish       # upload your static files
 ## Documentation
 
 📘 Full documentation available on GitHub:  
-[https://github.com/fastly/compute-js-static-publish](https://github.com/fastly/compute-js-static-publish)
+[https://github.com/fastly/compute-js-static-publish/tree/v7](https://github.com/fastly/compute-js-static-publish/tree/v7)
 
 ### Security issues
 

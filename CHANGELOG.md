@@ -5,7 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+This file does not list v6 releases after 6.3.0. For those, see `CHANGELOG.md` in the [v6 branch](https://github.com/fastly/compute-js-static-publish/blob/v6/CHANGELOG.md).
+
 ## [unreleased]
+
+### Updated
+
+- v7 is an old version. The README says that the current version is v8, in `main`. The docs and the CLI help use `@7` in place of `@latest`.
+- A stable v7 release gets the npm dist-tag `latest-v7`, not `latest`. To install v7, use `@fastly/compute-js-static-publish@7`.
 
 ## [7.0.8] - 2026-10-14
 
