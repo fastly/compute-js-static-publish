@@ -61,7 +61,9 @@ export async function getLocalKvStoreEntry(
   } else if ('data' in obj) {
     response = new Response(obj.data);
   } else {
-    const fileData = fs.readFileSync(obj.file);
+    // readFileSync() returns a Buffer on an ArrayBuffer (never a SharedArrayBuffer).
+    // The cast is necessary because this file is compiled with the @fastly/js-compute types.
+    const fileData = fs.readFileSync(obj.file) as Uint8Array<ArrayBuffer>;
     response = new Response(fileData);
   }
   return {

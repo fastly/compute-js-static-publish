@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Updated
 
 - Update to CLI v16
+- Support `@fastly/js-compute` 4. The peer dependency is now `^3.33.2 || ^4.0.0`.
 
 ### Fixed
 
