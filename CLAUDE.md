@@ -98,9 +98,9 @@ All collections share the files, because the key is the hash of the content. `cl
 
 ## Branches and releases
 
-- `v8` is the development branch for v8 (S3 support, now in beta). Merge PRs to `v8` without approval. The final review is the PR that merges `v8` into `main`, at the 8.0.0 release.
-- `main` stays at 7.0.2 until that merge. It is the default branch, and its ruleset ("Require CODEOWNERS Review") applies to the default branch. Thus, do not make `v8` the default branch, or each PR to `v8` needs an approval.
-- Older major versions have their own branches (`v6`, `v7`, ...). Fixes for v7 go to the `v7` branch.
-- Tag betas on `v8`, after a version change commit on `v8`. There is no `beta` branch.
-- The `release-and-port` skill has the release workflow details and the procedure to port changes between `v7` and `v8`.
+- `main` is the v8 line (the latest stable major), and the default branch. Its ruleset ("Require CODEOWNERS Review") applies to the default branch. Thus each PR to `main` needs an approval. Fixes and features for v8 go to `main`.
+- Older major versions have their own branches (`v6`, `v7`, ...). Fixes for v7 go to the `v7` branch. There is no `v8` branch. Make it from `main` when the next major merges into `main`.
+- The next major (for example `v9`) gets a development branch. Merge PRs to it without approval. Tag its betas on that branch, after a version change commit on that branch. Merge `main` into it often. The final review is the PR that merges it into `main`. Do not make it the default branch, or each PR to it needs an approval.
+- There is no `beta` branch. The npm dist-tag comes from the tag name.
+- The `release-and-port` skill has the release workflow details and the procedure to port changes between `v7` and `main`.
 - Record changes that users can see in `CHANGELOG.md`, under `[unreleased]` (Keep a Changelog format). `MIGRATING.md` has the instructions to upgrade to a new major version.
