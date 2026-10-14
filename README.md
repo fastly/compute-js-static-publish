@@ -2,6 +2,12 @@
 
 > NOTE: `@fastly/compute-js-static-publish` is provided as a Fastly Labs product. Visit the [Fastly Labs](https://www.fastlylabs.com/) site for terms of use.
 
+> [!IMPORTANT]
+> This is v7, an old version. The current version is v8, in the [`main` branch](https://github.com/fastly/compute-js-static-publish/tree/main).
+> To upgrade, see [MIGRATING.md](https://github.com/fastly/compute-js-static-publish/blob/main/MIGRATING.md) in `main`.
+>
+> To continue to use v7, install it as `@fastly/compute-js-static-publish@7`, not `@latest`.
+
 > [!NOTE]
 > These docs are for v7, a major rewrite that adds powerful new features such as named collections.
 > If you're looking for v6, please check out the [v6 branch](https://github.com/fastly/compute-js-static-publish/tree/v6).
@@ -47,7 +53,7 @@ Serve static websites and web apps at the edge &mdash; no backends and no CDN in
 Create a directory for your project, place your static files in `./public`, then type:
 
 ```sh
-npx @fastly/compute-js-static-publish@latest \
+npx @fastly/compute-js-static-publish@7 \
   --root-dir=./public \
   --kv-store-name=site-content
 ```
@@ -522,7 +528,7 @@ You can stream `kvAssetVariant.kvStoreEntry.body` directly to a `Response`, or r
 ### Available Commands
 
 #### Outside a Compute App Directory
-- `npx @fastly/compute-js-static-publish@latest [options]` - Scaffold a new Compute app
+- `npx @fastly/compute-js-static-publish@7 [options]` - Scaffold a new Compute app
 
 #### Inside a Compute App Directory
 - `publish-content` - Publish static files to the KV Store under a named collection
@@ -537,7 +543,7 @@ You can stream `kvAssetVariant.kvStoreEntry.body` directly to a `Response`, or r
 Run outside an existing Compute app directory:
 
 ```sh
-npx @fastly/compute-js-static-publish@latest \
+npx @fastly/compute-js-static-publish@7 \
   --root-dir=./public \
   --kv-store-name=site-content \
   [--output=./compute-js] \

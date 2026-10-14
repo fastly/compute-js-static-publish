@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+### Updated
+
+- v7 is an old version. The README says that the current version is v8, in `main`. The docs and the CLI help use `@7` in place of `@latest`.
+- A stable v7 release gets the npm dist-tag `latest-v7`, not `latest`. To install v7, use `@fastly/compute-js-static-publish@7`.
+
 ## [7.0.8] - 2026-10-14
 
 ### Added
