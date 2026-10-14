@@ -24,7 +24,7 @@ To upgrade an app that uses the KV Store:
    ```
 
 2. Make sure that the CLI can get a Fastly API token. Set the `FASTLY_API_TOKEN` environment variable, or use
-   `--fastly-api-token`. v8 no longer uses the token logged in by the Fastly API.
+   `--fastly-api-token`. v8 no longer uses the token logged in by the Fastly CLI.
 
 3. Build and deploy your app again. The Wasm binary contains a copy of `static-publish.rc.js`, and the server code
    changed.
