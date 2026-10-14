@@ -8,39 +8,32 @@ import * as path from 'node:path';
 
 import { type OptionDefinition } from 'command-line-args';
 
-import { type KVAssetEntryMap, type KVAssetVariantMetadata, isKVAssetVariantMetadata } from '../../../models/assets/kvstore-assets.js';
+import { type AssetEntryMap, } from '../../../models/assets/index.js';
 import { type ContentCompressionTypes } from '../../../models/compression/index.js';
 import { type PublisherServerConfigNormalized } from '../../../models/config/publisher-server-config.js';
 import { type ContentTypeDef } from '../../../models/config/publish-content-config.js';
-import { type IndexMetadata } from '../../../models/server/index.js';
+import { encodeIndexMetadata, type IndexMetadata } from '../../../models/server/index.js';
 import { calcExpirationTime } from '../../../models/time/index.js';
-import { type FastlyApiContext, loadApiToken } from '../../util/api-token.js';
-import { getKvStoreEntryInfo, kvStoreSubmitEntry } from '../../util/kv-store.js';
 import { parseCommandLine } from '../../util/args.js';
 import { mergeContentTypes, testFileContentType } from '../../util/content-types.js';
 import { LoadConfigError, loadPublishContentConfigFile, loadStaticPublisherRcFile } from '../../util/config.js';
 import { applyDefaults } from '../../util/data.js';
-import { readServiceId } from '../../util/fastly-toml.js';
 import { calculateFileSizeAndHash, enumerateFiles, rootRelative } from '../../util/files.js';
-import {
-  applyKVStoreEntriesChunks,
-  doKvStoreItemsOperation,
-  type KVStoreItemDesc,
-} from '../../util/kv-store-items.js';
-import {
-  localKvStoreSubmitEntry,
-  writeKVStoreEntriesForLocal,
-} from '../../util/kv-store-local-server.js';
-import { isNodeError } from '../../util/node.js';
 import { ensureVariantFileExists, type Variants } from '../../util/variants.js';
+import { concurrentMap } from '../../util/retryable.js';
+import { type PurgeTarget, loadPurgeTarget, purgeSurrogateKey } from '../../util/purge.js';
+import {
+  getStorageKeysByHexPrefix,
+  loadStorageProviderFromStaticPublishRc,
+  StorageProvider,
+  StorageProviderBatch,
+  type StorageProviderBatchEntry,
+} from '../../storage/storage-provider.js';
 
-// KV Store key format:
+// Storage key format:
 // <publishId>_index_<preview_id>.json
 // <publishId>_settings_<preview_id>.json
 // <publishId>_files_sha256_<hash>_<variant>
-
-// split large files into 20MiB chunks
-const KV_STORE_CHUNK_SIZE = 1_024 * 1_024 * 20;
 
 function help() {
   console.log(`\
@@ -67,9 +60,25 @@ Optional:
   --root-dir=<dir>                 Directory to publish from. Overrides the config file setting.
                                    Default: rootDir from publish-content.config.js
 
-  --kv-overwrite                   Cannot be used with --local.
-                                   When using Fastly KV Store, always overwrite
-                                   existing entries, even if unchanged.
+  --fastly-api-token=<token>       Fastly API token for KV Store or cache access.
+                                   If not set, the tool uses the FASTLY_API_TOKEN
+                                   environment variable.
+
+  --fastly-service-id=<id>         Fastly Service ID to purge after publishing (not with --local).
+                                   If not set, the tool will check:
+                                     1. FASTLY_SERVICE_ID environment variable
+                                     2. service_id in fastly.toml
+                                   If none is found, the purge is skipped.
+
+  --purge-environment=<env>        Environment to purge: production, staging, or a
+                                   comma-separated list of both. Can be repeated.
+                                   Default: production
+
+  --overwrite-existing             Always overwrite existing entries in storage, even if unchanged.
+
+  --brotli-quality=<0-11>          Brotli quality for the 'br' variants. Overrides
+                                   brotliQuality in the config file.
+                                   Default: brotliQuality from publish-content.config.js, or 11
 
 Expiration:
   --expires-in=<duration>          Expiration duration from now.
@@ -83,16 +92,23 @@ Expiration:
                                    ⚠ These three options are mutually exclusive.
                                    Specify only one.
 
-Global Options:
+KV Store Options:
   --local                          Instead of working with the Fastly KV Store, operate on
                                    local files that will be used to simulate the KV Store
                                    with the local development environment.
 
-  --fastly-api-token=<token>       Fastly API token for KV Store access.
-                                   If not set, the tool will check:
-                                     1. FASTLY_API_TOKEN environment variable
-                                     2. Logged-in Fastly CLI profile
+  --kv-overwrite                   Alias for --overwrite-existing.
 
+S3 Storage Options (BETA):
+  --s3-access-key-id=<id>          Access Key ID and Secret Access Key used to
+  --s3-secret-access-key=<key>     interface with S3 or compatible storage.
+                                   If not set, the tool will check the S3_ACCESS_KEY_ID
+                                   and S3_SECRET_ACCESS_KEY environment variables.
+
+  --s3-upload-concurrency=<1-256>  Number of objects to upload at the same time.
+                                   Default: 64
+
+Global Options:
   -h, --help                       Show this help message and exit.
 
 Examples:
@@ -111,7 +127,8 @@ export async function action(actionArgs: string[]) {
     { name: 'config', type: String },
     { name: 'collection-name', type: String, },
     { name: 'root-dir', type: String, },
-    { name: 'kv-overwrite', type: Boolean },
+    { name: 'overwrite-existing', type: Boolean },
+    { name: 'brotli-quality', type: String },
 
     { name: 'expires-in', type: String },
     { name: 'expires-at', type: String },
@@ -119,6 +136,13 @@ export async function action(actionArgs: string[]) {
 
     { name: 'local', type: Boolean },
     { name: 'fastly-api-token', type: String, },
+    { name: 'fastly-service-id', type: String, },
+    { name: 'purge-environment', type: String, multiple: true, },
+    { name: 'kv-overwrite', type: Boolean },
+
+    { name: 's3-access-key-id', type: String, },
+    { name: 's3-secret-access-key', type: String, },
+    { name: 's3-upload-concurrency', type: String, },
   ];
 
   const parsed = parseCommandLine(actionArgs, optionDefinitions);
@@ -138,58 +162,39 @@ export async function action(actionArgs: string[]) {
     config: configFilePathValue,
     ['collection-name']: collectionNameValue,
     ['root-dir']: rootDir,
-    ['kv-overwrite']: overwriteKvStoreItems,
+    ['overwrite-existing']: _overwriteExisting,
+    ['brotli-quality']: brotliQualityValue,
     ['expires-in']: expiresIn,
     ['expires-at']: expiresAt,
     ['expires-never']: expiresNever,
     local: localMode,
     ['fastly-api-token']: fastlyApiToken,
+    ['fastly-service-id']: fastlyServiceId,
+    ['purge-environment']: purgeEnvironmentValues,
+    ['kv-overwrite']: _kvOverwrite,
+    ['s3-access-key-id']: s3AccessKeyId,
+    ['s3-secret-access-key']: s3SecretAccessKey,
+    ['s3-upload-concurrency']: s3UploadConcurrencyValue,
   } = parsed.commandLineOptions;
+
+  let s3UploadConcurrency: number | undefined;
+  if (s3UploadConcurrencyValue !== undefined) {
+    if (typeof s3UploadConcurrencyValue !== 'string' || !/^\d+$/.test(s3UploadConcurrencyValue) ||
+      Number(s3UploadConcurrencyValue) < 1 || Number(s3UploadConcurrencyValue) > 256) {
+      console.error(`❌ --s3-upload-concurrency must be an integer from 1 to 256.`);
+      process.exitCode = 1;
+      return;
+    }
+    s3UploadConcurrency = Number(s3UploadConcurrencyValue);
+  }
+
+  const overwriteExisting = _overwriteExisting ?? _kvOverwrite;
 
   // compute-js-static-publisher cli is always run from the Compute application directory
   // in other words, the directory that contains `fastly.toml`.
   const computeAppDir = path.resolve();
 
-  // Check to see if we have a service ID listed in `fastly.toml`.
-  // If we do NOT, then we do not use the KV Store.
-  let serviceId: string | undefined;
-  try {
-    serviceId = readServiceId(path.resolve(computeAppDir, './fastly.toml'));
-  } catch(err: unknown) {
-    if (isNodeError(err) && err.code === 'ENOENT') {
-      console.warn(`❌ ERROR: can't find 'fastly.toml'.`);
-      process.exitCode = 1;
-      return;
-    }
-
-    console.warn(`❌ ERROR: can't read or parse 'fastly.toml'.`);
-    process.exitCode = 1;
-    return;
-  }
-
   console.log(`🚀 Publishing content...`);
-
-  // Verify targets
-  let fastlyApiContext: FastlyApiContext | undefined = undefined;
-  if (localMode) {
-    console.log(`  Working on local simulated KV Store...`);
-  } else {
-    if (serviceId === null) {
-      console.log(`❌️ 'service_id' not set in 'fastly.toml' - Deploy your Compute app to Fastly before publishing.`);
-      process.exitCode = 1;
-      return;
-    }
-    const apiTokenResult = loadApiToken({ commandLine: fastlyApiToken });
-    if (apiTokenResult == null) {
-      console.error("❌ Fastly API Token not provided.");
-      console.error("Set the FASTLY_API_TOKEN environment variable to an API token that has write access to the KV Store.");
-      process.exitCode = 1;
-      return;
-    }
-    fastlyApiContext = { apiToken: apiTokenResult.apiToken };
-    console.log(`✔️ Fastly API Token: ${fastlyApiContext.apiToken.slice(0, 4)}${'*'.repeat(fastlyApiContext.apiToken.length-4)} from '${apiTokenResult.source}'`);
-    console.log(`  Working on the Fastly KV Store...`);
-  }
 
   // #### load config
   let staticPublisherRc;
@@ -223,6 +228,18 @@ export async function action(actionArgs: string[]) {
     return;
   }
 
+  // --brotli-quality overrides brotliQuality in the config file.
+  let brotliQualitySource = 'config';
+  if (brotliQualityValue !== undefined) {
+    if (typeof brotliQualityValue !== 'string' || !/^\d+$/.test(brotliQualityValue) || Number(brotliQualityValue) > 11) {
+      console.error(`❌ --brotli-quality must be an integer from 0 to 11.`);
+      process.exitCode = 1;
+      return;
+    }
+    publishContentConfig.brotliQuality = Number(brotliQualityValue);
+    brotliQualitySource = '--brotli-quality';
+  }
+
   const publicDirRoot = path.resolve(rootDir != null ? rootDir : publishContentConfig.rootDir);
   if ((computeAppDir + '/').startsWith(publicDirRoot + '/')) {
     if (verbose) {
@@ -243,12 +260,12 @@ export async function action(actionArgs: string[]) {
   }
 
   console.log(`✔️ Public directory '${rootRelative(publicDirRoot)}'.`);
+  if (publishContentConfig.brotliQuality != null) {
+    console.log(`✔️ Brotli quality: ${publishContentConfig.brotliQuality} (from ${brotliQualitySource})`);
+  }
 
   const publishId = staticPublisherRc.publishId;
   console.log(`  | Publish ID: ${publishId}`);
-
-  const kvStoreName = staticPublisherRc.kvStoreName;
-  console.log(`  | Using KV Store: ${kvStoreName}`);
 
   const defaultCollectionName = staticPublisherRc.defaultCollectionName;
   console.log(`  | Default Collection Name: ${defaultCollectionName}`);
@@ -256,7 +273,39 @@ export async function action(actionArgs: string[]) {
   const staticPublisherWorkingDir = staticPublisherRc.staticPublisherWorkingDir;
   console.log(`  | Static publisher working directory: ${staticPublisherWorkingDir}`);
 
-  const storeFile = path.resolve(staticPublisherWorkingDir, `./kvstore.json`);
+  // Storage Provider
+  let storageProvider: StorageProvider;
+  try {
+    storageProvider = await loadStorageProviderFromStaticPublishRc(staticPublisherRc, {
+      computeAppDir,
+      localMode,
+      fastlyApiToken,
+      s3AccessKeyId,
+      s3SecretAccessKey,
+      s3UploadConcurrency,
+    });
+  } catch (err: unknown) {
+    console.error(`❌ Could not instantiate store provider`);
+    console.error(String(err));
+    process.exitCode = 1;
+    return;
+  }
+
+  // Purge target: checked now, so that a missing API token fails before anything is uploaded.
+  let purgeTarget: PurgeTarget | null;
+  try {
+    purgeTarget = loadPurgeTarget({
+      localMode: localMode ?? false,
+      computeAppDir,
+      fastlyServiceId,
+      fastlyApiToken,
+      purgeEnvironments: purgeEnvironmentValues,
+    });
+  } catch (err: unknown) {
+    console.error(String(err));
+    process.exitCode = 1;
+    return;
+  }
 
   // Load content types
   const contentTypes: ContentTypeDef[] = mergeContentTypes(publishContentConfig.contentTypes);
@@ -310,29 +359,52 @@ export async function action(actionArgs: string[]) {
     kvStore: 0,
   };
 
-  // Create "KV Store content" sub dir if it doesn't exist already.
-  // This will be used to hold a copy of files to prepare for upload to the KV Store
+  // Create "storage content" sub dir if it doesn't exist already.
+  // This will be used to hold a copy of files to prepare for upload to storage
   // and for serving using the local development server.
-  const staticPublisherKvStoreContent = `${staticPublisherWorkingDir}/kv-store-content`;
-  fs.mkdirSync(staticPublisherKvStoreContent, { recursive: true });
+  const storageContentDir = `${staticPublisherWorkingDir}/storage-content`;
+  fs.mkdirSync(storageContentDir, { recursive: true });
 
-  // A list of items in the KV Store at the end of the publishing.
-  // Includes items that already exist as well.  'write' signifies
-  // that the item is to be written
-  const kvStoreItemDescriptions: KVStoreItemDesc[] = [];
+  // The items to write to storage.
+  const batch = new StorageProviderBatch();
 
   // Assets included in the publishing, keyed by asset key
-  const kvAssetsIndex: KVAssetEntryMap = {};
+  const assetsIndex: AssetEntryMap = {};
 
-  // All the metadata of the variants we know about during this publishing, keyed on the base version's hash.
-  type VariantMetadataEntry = KVAssetVariantMetadata & {
-    existsInKvStore: boolean,
-  };
-  type VariantMetadataMap = Map<Variants, VariantMetadataEntry>;
-  const baseHashToVariantMetadatasMap = new Map<string, VariantMetadataMap>();
+  // For each variant that we know about during this publishing, true if the
+  // index keeps the variant. Keyed on the base version's hash.
+  type VariantKeepMap = Map<Variants, boolean>;
+  const baseHashToVariantKeepMap = new Map<string, VariantKeepMap>();
+
+  // #### Keys that are already in storage
+  // The key of a file is the hash of its content. If the key exists, storage
+  // already has the same content. Thus we do not compress, hash, or upload it again.
+  // In local mode, a key can refer to a working file that was deleted, so we do not list.
+  // All the keys that the scan looks for start with `<publishId>_files_sha256_` and a hex
+  // hash, so we list them in 16 parts at the same time.
+  let existingKeys: Set<string> | undefined;
+  if (!overwriteExisting && !localMode) {
+    console.log(`🔎 Listing files that are already in storage...`);
+    const listStart = Date.now();
+    existingKeys = new Set(await getStorageKeysByHexPrefix(storageProvider, `${publishId}_files_sha256_`) ?? []);
+    console.log(`✅  Found ${existingKeys.size} key(s) in ${((Date.now() - listStart) / 1000).toFixed(1)} s.`);
+  }
+  let existingVariantCount = 0;
+
+  function isVariantInStorage(variantKey: string, numChunks: number) {
+    if (existingKeys == null || !existingKeys.has(variantKey)) {
+      return false;
+    }
+    for (let chunkIndex = 1; chunkIndex < numChunks; chunkIndex++) {
+      if (!existingKeys.has(`${variantKey}_${chunkIndex}`)) {
+        return false;
+      }
+    }
+    return true;
+  }
 
   // #### Iterate files
-  for (const file of files) {
+  const fileResults = await concurrentMap(files, async (file) => {
     // #### asset key
     const assetKey = file.slice(publicDirRoot.length)
       // in Windows, assetKey will otherwise end up as \path\file.html
@@ -357,9 +429,9 @@ export async function action(actionArgs: string[]) {
 
     // #### Are we going to include this file?
     let includeAsset;
-    if (publishContentConfig.kvStoreAssetInclusionTest != null) {
+    if (publishContentConfig.assetInclusionTest != null) {
 
-      includeAsset = publishContentConfig.kvStoreAssetInclusionTest(assetKey, contentType);
+      includeAsset = publishContentConfig.assetInclusionTest(assetKey, contentType);
 
     } else {
       // If no test is set, then default to inclusion
@@ -367,7 +439,7 @@ export async function action(actionArgs: string[]) {
     }
 
     if (!includeAsset) {
-      continue;
+      return;
     }
 
     // #### Base file size, hash, last modified time
@@ -376,12 +448,16 @@ export async function action(actionArgs: string[]) {
     const stats = fs.statSync(file);
     const lastModifiedTime = Math.floor((stats.mtime).getTime() / 1000);
 
-    // #### Metadata per variant
-    let variantMetadatas = baseHashToVariantMetadatasMap.get(baseHash);
-    if (variantMetadatas == null) {
-      variantMetadatas = new Map<Variants, VariantMetadataEntry>();
-      baseHashToVariantMetadatasMap.set(baseHash, variantMetadatas);
+    // #### Keep flag per variant
+    let variantKeeps = baseHashToVariantKeepMap.get(baseHash);
+    if (variantKeeps == null) {
+      variantKeeps = new Map<Variants, boolean>();
+      baseHashToVariantKeepMap.set(baseHash, variantKeeps);
     }
+
+    // We know the number of chunks of the original before we read it. For a
+    // compressed variant, we know it only if the original fits in one chunk.
+    const baseNumChunks = storageProvider.calculateNumChunks(baseSize);
 
     const variantsToKeep: ContentCompressionTypes[] = [];
 
@@ -389,6 +465,9 @@ export async function action(actionArgs: string[]) {
       'original',
       ...contentCompression,
     ] as const;
+
+    const batchItems: StorageProviderBatchEntry[] = [];
+
     for (const variant of variants) {
       let variantKey = `${publishId}_files_sha256_${baseHash}`;
       let variantFilename = `${baseHash}`;
@@ -397,183 +476,112 @@ export async function action(actionArgs: string[]) {
         variantFilename = `${variantFilename}_${variant}`;
       }
 
-      const variantFilePath = path.resolve(staticPublisherKvStoreContent, variantFilename);
+      const variantFilePath = path.resolve(storageContentDir, variantFilename);
 
-      let variantMetadata = variantMetadatas.get(variant);
-      if (variantMetadata != null) {
+      let keep = variantKeeps.get(variant);
+      if (keep != null) {
 
-        console.log(` 🏃‍♂️ Asset "${variantKey}" is identical to an item we already know about, reusing existing copy.`);
+        if (verbose) {
+          console.log(` 🏃‍♂️ Asset "${variantKey}" is identical to an item we already know about, reusing existing copy.`);
+        }
+
+      } else if (
+        (variant === 'original' || baseNumChunks === 1) &&
+        isVariantInStorage(variantKey, variant === 'original' ? baseNumChunks : 1)
+      ) {
+
+        if (verbose) {
+          console.log(` ・ Asset found in storage with key "${variantKey}".`);
+        }
+        existingVariantCount++;
+        // We upload a compressed variant only if it is smaller than the
+        // original. Thus if it is in storage, the index keeps it.
+        keep = true;
+        variantKeeps.set(variant, keep);
 
       } else {
 
-        let kvStoreItemMetadata: KVAssetVariantMetadata | null = null;
+        await ensureVariantFileExists(
+          variantFilePath,
+          variant,
+          file,
+          verbose,
+          { brotliQuality: publishContentConfig.brotliQuality },
+        );
 
-        if (!localMode && !overwriteKvStoreItems) {
-          const items = [{
-            key: variantKey,
-          }];
-
-          await doKvStoreItemsOperation(
-            items,
-            async(_, variantKey) => {
-              // fastlyApiContext is non-null if useKvStore is true
-              const kvStoreEntryInfo = await getKvStoreEntryInfo(fastlyApiContext!, kvStoreName, variantKey);
-              if (!kvStoreEntryInfo) {
-                return;
-              }
-              let itemMetadata;
-              if (kvStoreEntryInfo.metadata != null) {
-                try {
-                  itemMetadata = JSON.parse(kvStoreEntryInfo.metadata);
-                } catch {
-                  // if the metadata does not parse successfully as JSON,
-                  // treat it as though it didn't exist.
-                }
-              }
-              if (isKVAssetVariantMetadata(itemMetadata)) {
-                let exists = false;
-                if (itemMetadata.size <= KV_STORE_CHUNK_SIZE) {
-                  // For an item equal to or smaller than the chunk size, if it exists
-                  // and its metadata asserts no chunk count, then we assume it exists.
-                  if (itemMetadata.numChunks === undefined) {
-                    exists = true;
-                  }
-                } else {
-                  // For chunked objects, if the first chunk exists, and its metadata asserts
-                  // the same number of chunks based on size, then we assume it exists (for now).
-                  // In the future we might actually check for the existence and sizes of
-                  // every chunk in the KV Store.
-                  const expectedNumChunks = Math.ceil(itemMetadata.size / KV_STORE_CHUNK_SIZE);
-                  if (itemMetadata.numChunks === expectedNumChunks) {
-                    exists = true;
-                  }
-                }
-                if (exists) {
-                  kvStoreItemMetadata = {
-                    contentEncoding: itemMetadata.contentEncoding,
-                    size: itemMetadata.size,
-                    hash: itemMetadata.hash,
-                    numChunks: itemMetadata.numChunks,
-                  };
-                }
-              }
-            }
-          );
-        }
-
-        if ((kvStoreItemMetadata as KVAssetVariantMetadata | null) != null) {
-
-          console.log(` ・ Asset found in KV Store with key "${variantKey}".`);
-          // And we already know its hash and size.
-
-          variantMetadata = {
-            contentEncoding: kvStoreItemMetadata!.contentEncoding,
-            size: kvStoreItemMetadata!.size,
-            hash: kvStoreItemMetadata!.hash,
-            numChunks: kvStoreItemMetadata!.numChunks,
-            existsInKvStore: true,
-          };
-
+        let contentEncoding, hash, size;
+        if (variant === 'original') {
+          contentEncoding = undefined;
+          hash = baseHash;
+          size = baseSize;
         } else {
-
-          await ensureVariantFileExists(
-            variantFilePath,
-            variant,
-            file,
-          );
-          if (!localMode) {
-            console.log(` ・ Flagging asset for upload to KV Store with key "${variantKey}".`);
-          }
-
-          let contentEncoding, hash, size;
-          if (variant === 'original') {
-            contentEncoding = undefined;
-            hash = baseHash;
-            size = baseSize;
-          } else {
-            contentEncoding = variant;
-            ({hash, size} = await calculateFileSizeAndHash(variantFilePath));
-          }
-
-          const numChunks = Math.ceil(size / KV_STORE_CHUNK_SIZE);
-
-          variantMetadata = {
-            contentEncoding,
-            size,
-            hash,
-            numChunks: numChunks > 1 ? numChunks : undefined,
-            existsInKvStore: false,
-          };
+          contentEncoding = variant;
+          ({hash, size} = await calculateFileSizeAndHash(variantFilePath));
         }
 
-        variantMetadatas.set(variant, variantMetadata);
+        // Only keep variants whose file size actually ends up smaller than
+        // what we started with. Do not upload the other variants.
+        keep = variant === 'original' || size < baseSize;
+        variantKeeps.set(variant, keep);
 
-        kvStoreItemDescriptions.push({
-          write: !variantMetadata.existsInKvStore,
-          size: variantMetadata.size,
-          key: variantKey,
-          filePath: variantFilePath,
-          metadataJson: {
-            contentEncoding: variantMetadata.contentEncoding,
-            size: variantMetadata.size,
-            hash: variantMetadata.hash,
-            numChunks: variantMetadata.numChunks,
-          },
-        });
+        if (keep) {
+          const numChunks = storageProvider.calculateNumChunks(size);
 
-        if (localMode) {
-          // Although we already know the size and hash of the variant, the local server
-          // needs a copy of the file so we create it if it doesn't exist.
-          // This may happen for example if files were uploaded to the KV Store in a previous
-          // publishing, but local static content files have been removed since.
-          await ensureVariantFileExists(
-            variantFilePath,
-            variant,
-            file,
-          );
-          console.log(` ・ Prepping asset for local KV Store with key "${variantKey}".`);
+          const metadataJson: Record<string, string> = {
+            size: String(size),
+            hash,
+          };
+          if (contentEncoding != null) {
+            metadataJson.contentEncoding = contentEncoding;
+          }
+          if (numChunks > 1) {
+            metadataJson.numChunks = String(numChunks);
+          }
+
+          batchItems.push({
+            size,
+            key: variantKey,
+            filePath: variantFilePath,
+            metadataJson,
+          });
+        } else if (verbose) {
+          console.log(` ・ Variant "${variantKey}" is not smaller than the original, not uploading.`);
         }
       }
 
-      // Only keep variants whose file size actually ends up smaller than
-      // what we started with.
-      if (variant !== 'original' && variantMetadata.size < baseSize) {
+      if (variant !== 'original' && keep) {
         variantsToKeep.push(variant);
       }
     }
 
-    kvAssetsIndex[assetKey] = {
-      key: `sha256:${baseHash}`,
-      size: baseSize,
-      contentType: contentTypeTestResult.contentType,
-      lastModifiedTime,
-      variants: variantsToKeep,
+    return {
+      assetKey,
+      asset: {
+        key: `sha256:${baseHash}`,
+        size: baseSize,
+        contentType: contentTypeTestResult.contentType,
+        lastModifiedTime,
+        variants: variantsToKeep,
+      },
+      batchItems,
     };
+  });
 
+  for (const result of fileResults) {
+    if (result == null) {
+      continue;
+    }
+    assetsIndex[result.assetKey] = result.asset;
+    for (const batchItem of result.batchItems) {
+      batch.add(batchItem);
+    }
   }
-  console.log(`✅  Scan complete.`)
-
-  console.log(`🍪 Chunking large files...`);
-  await applyKVStoreEntriesChunks(kvStoreItemDescriptions, KV_STORE_CHUNK_SIZE);
-  console.log(`✅  Large files have been chunked.`);
-
-  if (localMode) {
-    console.log(`📝 Writing local server KV Store entries.`);
-    writeKVStoreEntriesForLocal(storeFile, computeAppDir, kvStoreItemDescriptions);
-    console.log(`✅  Wrote KV Store entries for local server.`);
-  } else {
-    console.log(`📤 Uploading entries to KV Store.`);
-    // fastlyApiContext is non-null if useKvStore is true
-    await doKvStoreItemsOperation(
-      kvStoreItemDescriptions.filter(x => x.write),
-      async ({filePath, metadataJson}, key) => {
-        const fileBytes = fs.readFileSync(filePath);
-        await kvStoreSubmitEntry(fastlyApiContext!, kvStoreName, key, fileBytes, metadataJson != null ? JSON.stringify(metadataJson) : undefined);
-        console.log(` 🌐 Submitted asset "${rootRelative(filePath)}" to KV Store with key "${key}".`)
-      }
-    );
-    console.log(`✅  Uploaded entries to KV Store.`);
+  console.log(`✅  Scan complete.`);
+  if (existingKeys != null) {
+    console.log(`  | ${existingVariantCount} variant(s) already in storage, ${batch.storageProviderBatchEntries.length} to upload.`);
   }
+
+  await storageProvider.applyBatch(batch, { existingKeys });
 
   // #### INDEX FILE
   console.log(`🗂️ Saving Index...`);
@@ -584,29 +592,18 @@ export async function action(actionArgs: string[]) {
     expirationTime: expirationTime ?? undefined,
   };
 
-  if (localMode) {
-    const indexFileName = `index_${collectionName}.json`;
-    const indexFilePath = path.resolve(staticPublisherKvStoreContent, indexFileName);
-    fs.writeFileSync(indexFilePath, JSON.stringify(kvAssetsIndex));
-    await localKvStoreSubmitEntry(
-      storeFile,
-      indexFileKey,
-      path.relative(computeAppDir, indexFilePath),
-      JSON.stringify(indexMetadata),
-    );
-  } else {
-    await kvStoreSubmitEntry(
-      fastlyApiContext!,
-      kvStoreName,
-      indexFileKey,
-      JSON.stringify(kvAssetsIndex),
-      JSON.stringify(indexMetadata),
-    );
-  }
-  console.log(`✅  Index has been saved.`)
+  const indexFileName = `index_${collectionName}.json`;
+  const indexFilePath = path.resolve(storageContentDir, indexFileName);
+  await storageProvider.submitStorageEntry(
+    indexFileKey,
+    indexFilePath,
+    JSON.stringify(assetsIndex),
+    encodeIndexMetadata(indexMetadata),
+  );
+  console.log(`✅  Index has been saved.`);
 
   // #### SERVER SETTINGS
-  // These are saved to KV Store
+  // These are saved to storage
   console.log(`⚙️ Saving server settings...`);
 
   const server = applyDefaults<PublisherServerConfigNormalized>(publishContentConfig.server, {
@@ -630,7 +627,7 @@ export async function action(actionArgs: string[]) {
 
   if(spaFile != null) {
     console.log(` ✔️ Application SPA file '${spaFile}'.`);
-    const spaAsset = kvAssetsIndex[spaFile];
+    const spaAsset = assetsIndex[spaFile];
     if(spaAsset == null || spaAsset.contentType !== 'text/html') {
       if (verbose) {
         console.log(` ⚠️ Notice: '${spaFile}' does not exist or is not of type 'text/html'. Ignoring.`);
@@ -646,7 +643,7 @@ export async function action(actionArgs: string[]) {
   let notFoundPageFile = server.notFoundPageFile;
   if(notFoundPageFile != null) {
     console.log(` ✔️ Application 'not found (404)' file '${notFoundPageFile}'.`);
-    const notFoundPageAsset = kvAssetsIndex[notFoundPageFile];
+    const notFoundPageAsset = assetsIndex[notFoundPageFile];
     if(notFoundPageAsset == null || notFoundPageAsset.contentType !== 'text/html') {
       if (verbose) {
         console.log(` ⚠️ Notice: '${notFoundPageFile}' does not exist or is not of type 'text/html'. Ignoring.`);
@@ -673,28 +670,29 @@ export async function action(actionArgs: string[]) {
   };
 
   const settingsFileKey = `${publishId}_settings_${collectionName}`;
+  const settingsFileName = `settings_${collectionName}.json`;
+  const settingsFilePath = path.resolve(storageContentDir, settingsFileName);
+  await storageProvider.submitStorageEntry(
+    settingsFileKey,
+    settingsFilePath,
+    JSON.stringify(serverSettings),
+  );
 
-  if (localMode) {
-    const settingsFileName = `settings_${collectionName}.json`;
-    const settingsFilePath = path.resolve(staticPublisherKvStoreContent, settingsFileName);
-    fs.writeFileSync(settingsFilePath, JSON.stringify(serverSettings));
-    await localKvStoreSubmitEntry(
-      storeFile,
-      settingsFileKey,
-      path.relative(computeAppDir, settingsFilePath),
-      undefined,
-    );
-
-  } else {
-    await kvStoreSubmitEntry(
-      fastlyApiContext!,
-      kvStoreName,
-      settingsFileKey,
-      JSON.stringify(serverSettings),
-      undefined,
-    );
-  }
   console.log(`✅  Settings have been saved.`);
+
+  if (purgeTarget != null) {
+    const surrogateKey = `${publishId}-${collectionName}`;
+    for (const environment of purgeTarget.environments) {
+      console.log(`Purging surrogate key [${surrogateKey}] on service [${purgeTarget.serviceId}] (${environment})...`);
+      const purged = await purgeSurrogateKey(purgeTarget.fastlyApiContext, purgeTarget.serviceId, surrogateKey, true, environment);
+      if (purged) {
+        console.log('Purged');
+      } else {
+        // The content is published. Only the cached copies may be stale until they expire.
+        console.warn(`⚠️ Warning: Failed purging (${environment}). Cached copies may be served until they expire.`);
+      }
+    }
+  }
 
   console.log(`🎉 Completed.`);
 

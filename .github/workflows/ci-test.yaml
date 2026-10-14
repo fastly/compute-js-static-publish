@@ -1,0 +1,44 @@
+name: Test CI
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - v8
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    name: Build and unit tests (Node ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # npm test gives a glob to `node --test`, which needs Node 21 or later.
+        node-version: [ '22', '24' ]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+
+      # The build and the unit tests need only TypeScript. Do not run the install
+      # scripts of the dependencies (for example, the runtime download of
+      # @fastly/js-compute).
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Build and run the unit tests
+        run: npm test

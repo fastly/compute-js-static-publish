@@ -42,7 +42,7 @@ export function findComputeJsStaticPublisherVersion(packageJson: PackageJson | n
   if (computeJsStaticPublisherVersion == null) {
     // Also try package.json of the package that contains the currently running program
     // This is used when the program doesn't actually install the package (running via npx).
-    const computeJsStaticPublishPackageJsonPath = path.resolve(import.meta.dirname, '../../../package.json');
+    const computeJsStaticPublishPackageJsonPath = path.resolve(import.meta.dirname, '../../../../package.json');
     const computeJsStaticPublishPackageJsonText = fs.readFileSync(computeJsStaticPublishPackageJsonPath, 'utf-8');
     const computeJsStaticPublishPackageJson = JSON.parse(computeJsStaticPublishPackageJsonText);
     computeJsStaticPublisherVersion = computeJsStaticPublishPackageJson?.version;

@@ -5,13 +5,20 @@
 
 import fs from 'node:fs';
 import zlib from 'node:zlib';
+import { promisify } from 'node:util';
+
+import type { CompressOptions } from './index.js';
 
 export const key = 'gzip';
 
-export async function compressTo(src: string, dest: string): Promise<void> {
+// The async version runs on the libuv thread pool, so that more than one
+// file can be compressed at the same time.
+const gzip = promisify(zlib.gzip);
 
-  const buffer = fs.readFileSync(src);
-  const resultBuffer = zlib.gzipSync(buffer);
-  fs.writeFileSync(dest, resultBuffer);
+export async function compressTo(src: string, dest: string, _options: CompressOptions = {}): Promise<void> {
+
+  const buffer = await fs.promises.readFile(src);
+  const resultBuffer = await gzip(buffer);
+  await fs.promises.writeFile(dest, resultBuffer);
 
 }
