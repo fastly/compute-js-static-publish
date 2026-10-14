@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+This file does not list v7 releases after 7.0.7, or v6 releases after 6.3.0. For those, see `CHANGELOG.md` in the [v7 branch](https://github.com/fastly/compute-js-static-publish/blob/v7/CHANGELOG.md) and in the [v6 branch](https://github.com/fastly/compute-js-static-publish/blob/v6/CHANGELOG.md).
+
 ## [unreleased]
 
 ### Breaking
