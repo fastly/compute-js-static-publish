@@ -191,7 +191,8 @@ export async function kvStoreSubmitEntry(
   }
 
   const endpoint = `/resources/stores/kv/${encodeURIComponent(kvStoreId)}/keys/${encodeURIComponent(key)}`;
-  const body = typeof data === 'string' ? encoder.encode(data) : data;
+  // The cast is necessary because this file is compiled with the @fastly/js-compute types.
+  const body = (typeof data === 'string' ? encoder.encode(data) : data) as BodyInit;
 
   await callFastlyApi(fastlyApiContext, endpoint, `Submitting item [${key}]`, null, {
     method: 'PUT',

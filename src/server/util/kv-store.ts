@@ -16,12 +16,13 @@ class CustomKVStoreEntry extends Response implements KVStoreEntry {
   }
 
   private readonly metadataTextValue: string;
-  get body(): ReadableStream<Uint8Array> {
+  // The type of Response.body differs between @fastly/js-compute 3 and 4, so it is inferred.
+  get body() {
     return super.body!;
   }
 
   metadata(): ArrayBuffer | null {
-    return new TextEncoder().encode(this.metadataTextValue);
+    return new TextEncoder().encode(this.metadataTextValue).buffer;
   }
   metadataText(): string | null {
     return this.metadataTextValue;
