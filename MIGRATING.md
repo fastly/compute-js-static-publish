@@ -20,7 +20,7 @@ To upgrade an app that uses the KV Store:
 1. In the `compute-js/` directory of your app, install v8:
 
    ```sh
-   npm install @fastly/compute-js-static-publish@beta
+   npm install @fastly/compute-js-static-publish@latest
    ```
 
 2. Make sure that the CLI can get a Fastly API token. Set the `FASTLY_API_TOKEN` environment variable, or use
