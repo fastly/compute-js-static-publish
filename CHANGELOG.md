@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-This file does not list v7 releases after 7.0.7, or v6 releases after 6.3.0. For those, see `CHANGELOG.md` in the [v7 branch](https://github.com/fastly/compute-js-static-publish/blob/v7/CHANGELOG.md) and in the [v6 branch](https://github.com/fastly/compute-js-static-publish/blob/v6/CHANGELOG.md).
+This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For those, see `CHANGELOG.md` in the [v7 branch](https://github.com/fastly/compute-js-static-publish/blob/v7/CHANGELOG.md) and in the [v6 branch](https://github.com/fastly/compute-js-static-publish/blob/v6/CHANGELOG.md).
 
 ## [unreleased]
 
@@ -100,6 +100,21 @@ This file does not list v7 releases after 7.0.7, or v6 releases after 6.3.0. For
    - `setActiveCollectionName()` accepts `null`, which selects the default collection. In a reused sandbox, the active collection stays set from the previous request, so call it for each request.
 
 - S3-compatible storage: `clean`, `collections list`, and `collections delete` stopped with "Can't query indexes in storage" when no key matched, for example after the last collection was deleted. An empty list is now a valid result.
+
+## [7.0.8] - 2026-10-14
+
+### Added
+
+- Add content types for `.avif` and `.jxl` images
+
+### Updated
+
+- Update to CLI v16
+- Support `@fastly/js-compute` 4. The peer dependency is now `^3.33.2 || ^4.0.0`.
+
+### Fixed
+
+- `.tif`/`.tiff` files were served as `image/png`, now `image/tiff`
 
 ## [7.0.7] - 2026-07-16
 
@@ -455,6 +470,12 @@ This file does not list v7 releases after 7.0.7, or v6 releases after 6.3.0. For
 - Use atob() and removed dependency on Buffer
 
 [unreleased]: https://github.com/fastly/compute-js-static-publish/compare/v7.0.2...HEAD
+[7.0.8]: https://github.com/fastly/compute-js-static-publish/compare/v7.0.7...v7.0.8
+[7.0.7]: https://github.com/fastly/compute-js-static-publish/compare/v7.0.6...v7.0.7
+[7.0.6]: https://github.com/fastly/compute-js-static-publish/compare/v7.0.5...v7.0.6
+[7.0.5]: https://github.com/fastly/compute-js-static-publish/compare/v7.0.4...v7.0.5
+[7.0.4]: https://github.com/fastly/compute-js-static-publish/compare/v7.0.3...v7.0.4
+[7.0.3]: https://github.com/fastly/compute-js-static-publish/compare/v7.0.2...v7.0.3
 [7.0.2]: https://github.com/fastly/compute-js-static-publish/compare/v7.0.1...v7.0.2
 [7.0.1]: https://github.com/fastly/compute-js-static-publish/compare/v7.0.0...v7.0.1
 [7.0.0]: https://github.com/fastly/compute-js-static-publish/compare/v6.3.0...v7.0.0
