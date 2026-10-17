@@ -21,6 +21,9 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 
 ### Added
 
+- Collections can now declare the features that the server must support. A later version adds a feature to the index metadata (`requires`) only if the content that it publishes uses that feature. `PublisherServer` does not serve a collection that requires a feature that it does not support, and it logs the reason. Without this check, an older server would serve such a collection incorrectly. Build and deploy your app again to serve it. `collections list` shows the features that a collection requires. This version does not add features to `requires`.
+   - `collections promote` and `collections update-expiration` now keep the fields of the index metadata that they do not know.
+
 - `publish-content`
    - Add `--fastly-service-id`. The Service ID to purge after publishing now comes from `--fastly-service-id`, then the `FASTLY_SERVICE_ID` environment variable, then `service_id` in `fastly.toml`. This is the same order as the Fastly CLI's `--service-id`. Before, only `fastly.toml` was checked, so the purge was skipped in CI and other environments without a deployed app's `fastly.toml`.
    - The purge after publishing now runs in KV Store mode too (not with `--local`). Before, it ran only in S3 mode. This matters if you use the response cache.
