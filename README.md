@@ -248,7 +248,7 @@ All fields are required unless specified otherwise.
 - `s3.bucket` - The name of the S3-compatible bucket.
 - `s3.endpoint` - (optional) The custom endpoint for the S3-compatible bucket.
 - `defaultCollectionName` - Collection to serve when none is specified.
-- `publishId` - Unique prefix for all keys in the KV Store. Override only for advanced setups (e.g., multiple apps sharing the same KV Store).
+- `publishId` - Unique prefix for all keys in the bucket. Override only for advanced setups (e.g., multiple apps sharing the same bucket).
 - `staticPublisherWorkingDir` - Directory to hold working files during publish.
 
 #### Example: `static-publish.rc.js`
@@ -279,7 +279,7 @@ const config = {
 
   // Include/exclude filters (optional):
   excludeDirs: ['node_modules'],
-  excludeDotfiles: true,
+  excludeDotFiles: true,
   includeWellKnown: true,
 
   // Advanced filtering (optional):
@@ -300,7 +300,6 @@ const config = {
 
   // Server settings
   server: {
-    publicDir: './public',
     spaFile: '/spa.html',
     notFoundPageFile: '/404.html',
     autoIndex: ['index.html'],
@@ -327,8 +326,12 @@ You can override this file for a single `publish-content` command by specifying 
 - `contentTypes` - Additional or override content type definitions.
 
 - `server` - Server runtime config that contains the following fields:  
-   - `publicDir` - The 'public' directory. The Publisher Server will
-     resolve requests relative to this directory (default: same value as 'root-dir').
+   - `publicDirPrefix` - **Deprecated.** A future version will remove it.
+     A prefix that the Publisher Server adds to the path of each
+     request, to get the asset key. Use it if the files to serve are in a subdirectory
+     of `rootDir`. For example, if `rootDir` is `'../site'` and the files to serve are in
+     `'../site/public'`, set it to `'/public'`. The value starts with `/` and does not
+     end with `/` (default: `''`). The scaffolder sets it from `--root-dir` and `--public-dir`.
    - `spaFile` - Path to a file to be used to serve in a SPA application.
    - `notFoundPageFile` - Path to a file to be used to serve as a 404 not found page.
    - `autoIndex` - List of files to automatically use as index.
@@ -563,9 +566,14 @@ When you're ready for production:
 2. Run `npm run fastly:deploy`
    - This builds your Compute app into a Wasm binary
    - Deploys it to a new or existing Fastly Compute service
-   - If creating a new service:
-      - you'll be prompted for backend info - 
-        TODO: 
+   - If creating a new service, the Fastly CLI uses the `[setup]` section of `fastly.toml`:
+      - It creates the backend `s3_storage`. It prompts you for the hostname and the port of the backend.
+        The default values are the hostname of your S3 endpoint and 443. Press Enter to accept them.
+      - It creates the Secret Store `S3_CREDENTIALS` and prompts you for the values of
+        `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY`. Use credentials that can read the bucket.
+      - It links the backend and the Secret Store to your new service.
+   - If you deploy to an existing service, the Fastly CLI does not use the `[setup]` section.
+     Add the backend and the Secret Store to the service yourself, with the same names.
 
 Once deployed, publish content like so:
 
@@ -576,7 +584,7 @@ npm run s3:publish
 This:
 
 - Uses the default collection name
-- Uploads static files to the KV Store
+- Uploads static files to the S3-compatible bucket
 - Stores server configuration for the collection
 
 > [!TIP]
