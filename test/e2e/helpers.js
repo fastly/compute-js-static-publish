@@ -108,7 +108,8 @@ export function runCli(args, options) {
 // Scaffolds an app in <dir>/compute-js that uses this checkout. The scaffolder
 // keeps a `file:` dependency from the package.json in the current directory,
 // so that the generated app installs this checkout and not a version from npm.
-export function scaffoldApp(dir, scaffoldArgs) {
+// rootDir is relative to dir.
+export function scaffoldApp(dir, scaffoldArgs, { rootDir = './public' } = {}) {
   fs.writeFileSync(path.resolve(dir, 'package.json'), JSON.stringify({
     name: 'cjsp-e2e',
     private: true,
@@ -116,7 +117,7 @@ export function scaffoldApp(dir, scaffoldArgs) {
       '@fastly/compute-js-static-publish': `file:${REPO_DIR}`,
     },
   }, undefined, 2));
-  runCli([ '--root-dir', './public', ...scaffoldArgs ], { cwd: dir });
+  runCli([ '--root-dir', rootDir, ...scaffoldArgs ], { cwd: dir });
   const computeJsDir = path.resolve(dir, 'compute-js');
   const packageJson = JSON.parse(fs.readFileSync(path.resolve(computeJsDir, 'package.json'), 'utf-8'));
   const dependency = packageJson.devDependencies['@fastly/compute-js-static-publish'];

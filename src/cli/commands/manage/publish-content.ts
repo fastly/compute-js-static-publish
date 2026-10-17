@@ -617,7 +617,11 @@ export async function action(actionArgs: string[]) {
   });
 
   let publicDirPrefix = server.publicDirPrefix;
-  console.log(` ✔️ Server public dir prefix '${publicDirPrefix}'.`);
+  if (publicDirPrefix !== '') {
+    console.log(` ✔️ Server public dir prefix '${publicDirPrefix}'.`);
+    console.log(` ⚠️ Warning: server.publicDirPrefix is deprecated, and a future version will remove it.`);
+    console.log(`   * To stop using it, see https://github.com/fastly/compute-js-static-publish/blob/main/MIGRATING.md`);
+  }
 
   let staticItems = server.staticItems;
 

@@ -72,6 +72,12 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 - Update `toml` to 5. This fixes two security advisories in `toml` 4.1.2 and earlier ([GHSA-82x6-q7mm-w9cf](https://github.com/advisories/GHSA-82x6-q7mm-w9cf), [GHSA-v5mp-jgw5-2x6j](https://github.com/advisories/GHSA-v5mp-jgw5-2x6j)). Reading the Service ID also works now with a `fastly.toml` that uses dotted keys, such as `backends.origin.url = "..."`.
 - S3-compatible storage: `PublisherServer` no longer uses the AWS SDK. It signs requests with `@smithy/signature-v4`. Newer AWS SDK versions parse XML with `DOMParser`, which Fastly Compute does not have, so the SDK had been pinned to 3.888.0. The CLI now uses the current AWS SDK, which removes the security advisories of `fast-xml-parser`, `uuid`, and `@smithy/config-resolver` in the old version. Without the SDK, the server also builds to a much smaller Wasm binary.
 
+### Deprecated
+
+- Scaffolding: `--public-dir` is deprecated, and a future version will remove it. The scaffolder shows a warning if you use it. This option was added for module assets, which this package no longer supports. If you do not use `--public-dir`, the public directory is the same as `--root-dir`, and nothing changes for you.
+
+- `server.publicDirPrefix` in `publish-content.config.js` is deprecated, and a future version will remove it. `publish-content` shows a warning if it is not empty. The scaffolder no longer writes it, unless you use `--public-dir`. The server still uses it for collections that you publish with it. To stop using it, see `MIGRATING.md`.
+
 ### Fixed
 
 - `304 Not Modified` responses now keep the `ETag`, `Vary`, `Cache-Control`, `Content-Location`, and `Expires` headers of the full response. Before, these headers were missing because of a wrong check.
@@ -92,6 +98,12 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
    - `setActiveCollectionName()` accepts `null`, which selects the default collection. In a reused sandbox, the active collection stays set from the previous request, so call it for each request.
 
 - S3-compatible storage: `clean`, `collections list`, and `collections delete` stopped with "Can't query indexes in storage" when no key matched, for example after the last collection was deleted. An empty list is now a valid result.
+
+- Scaffolding: if `--public-dir` was under `--root-dir`, the generated `publish-content.config.js` set `publicDirPrefix` to an empty string. Thus the server did not find the files, and it returned 404 for all requests. `publicDirPrefix` is now the path of the public directory, relative to the root directory (for example `/public`).
+
+- Scaffolding: the instructions shown at the end referred to `npm run fastly:start`, which does not exist. They now show `npm run fastly:deploy`. For the KV Store, they show `fastly:deploy` before `fastly:publish`, because the deploy creates the KV Store.
+
+- Scaffolding with S3-compatible storage: the generated `fastly.toml` declared the keys of the `S3_CREDENTIALS` Secret Store under `items`. The Fastly CLI reads them only from `entries`. Thus, on the first deploy, the Fastly CLI created the Secret Store with no keys and did not prompt for the credentials, and the server could not read from the bucket. The instructions shown at the end of scaffolding now also tell you that the first deploy prompts for these values.
 
 ## [7.0.8] - 2026-10-14
 
