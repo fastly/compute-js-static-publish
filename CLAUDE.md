@@ -78,7 +78,7 @@ All collections share the files, because the key is the hash of the content. `cl
 
 `src/cli/CLAUDE.md` has how `generateApp()` makes the files of a scaffolded app, and how the tests check them.
 
-### Managed projects (8.1, in development)
+### Managed projects (8.1)
 
 `src/cli/CLAUDE.md` has the details of managed projects.
 

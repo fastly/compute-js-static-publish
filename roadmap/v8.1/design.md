@@ -595,6 +595,7 @@ In ejected mode, `deploy` is an optional wrapper around `fastly compute publish`
 - After step 2, the project dir has no project file, and `compute-js/` has an rc, so detection is clear.
 - `eject` refuses if the target dir exists, unless `--force`.
 - In ejected mode, `eject` gives an error: the app is already ejected.
+- Decided in item 18: eject works on the loaded project, not on its source text, so `publishContent` must be data; with functions or regular expressions, eject stops before it writes anything. If `publishContent` is what `scaffold --managed` wrote, eject writes the same `publish-content.config.js` as an ejected scaffold (a test compares them). The app's `.gitignore` lists the working dir only if it is in the app dir. The tests use `CJSP_TEST_EJECT_PACKAGE_SPEC` in place of a published version. "The fingerprint after eject is the same" is not tested: the ejected files differ from the managed ones by paths (the `file:` link, the `kvstore.json` path), so the test compares the ejected app with an ejected scaffold instead.
 
 ### Docs (item 19)
 

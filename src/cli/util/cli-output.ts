@@ -31,6 +31,7 @@ export type CliErrorCode =
   | 'credentials-missing'       // a token or credentials are necessary, but not given
   | 'version-mismatch'          // managed.staticPublishVersion is not the version that runs
   | 'first-deploy-manual'       // a first deploy that must be done by hand (S3 storage, non-interactive)
+  | 'version-not-published'     // eject needs a version of this package that is on npm
   // Exit 1: the operation failed.
   | 'deploy-failed'             // the build or the deploy of the app failed
   | 'failed'                    // the operation failed, for example storage cannot be reached

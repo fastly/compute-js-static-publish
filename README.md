@@ -206,7 +206,21 @@ my-project/
         └── index.js                     # Your Compute app entry point
 ```
 
-### Managed projects (8.1, in development)
+### Managed and ejected apps
+
+From 8.1.0, a project can be **managed** or **ejected**:
+
+| | Managed | Ejected |
+|---|---|---|
+| In the repo | One file, `static-publish.project.js`, in the project dir | The app dir (`compute-js/`) with `static-publish.rc.js` and `publish-content.config.js`, as above |
+| Who owns the app code | This package: it generates the app | You |
+| Upgrade this package | Run `upgrade`; the next `deploy` deploys the new app | Change the files by hand (see `MIGRATING.md`) |
+| Deploy | `deploy`, only when the generated app changed | `npm run fastly:deploy` (or `deploy`) |
+| Customize | The options of the project file | Anything |
+
+`scaffold` makes an ejected app, as before. `scaffold --managed` makes a managed project. `eject` converts a managed project into an ejected app. To move an existing app to managed mode, see `MIGRATING.md`.
+
+#### Managed projects
 
 `scaffold --managed` writes only one file, `static-publish.project.js`, in the current directory (the project dir), and adds `.static-publish/` and the working directory to the `.gitignore` there:
 
@@ -226,7 +240,7 @@ The project file has the settings that an ejected app has in its two files:
 
 Paths in the project file are relative to it. The name of the file marks the mode: a directory with `static-publish.project.js` is a managed project, and a directory with `static-publish.rc.js` is an ejected app. A directory with both is an error.
 
-`publish-content`, `collections`, and `clean` run in the project dir (or with `--project-dir`), and read the project file. `publish-content` purges the service of `managed.serviceId`, after `--fastly-service-id` and `FASTLY_SERVICE_ID`. `eject` comes in a later 8.1 change.
+`publish-content`, `collections`, and `clean` run in the project dir (or with `--project-dir`), and read the project file. `publish-content` purges the service of `managed.serviceId`, after `--fastly-service-id` and `FASTLY_SERVICE_ID`. 
 
 To run the app on your computer:
 
@@ -264,6 +278,25 @@ npx @fastly/compute-js-static-publish deploy
 | An older version | Stop. An older version never deploys over an app that a newer version made. |
 
 Thus a new release of this package never changes your app by itself, also with `npx @fastly/compute-js-static-publish@latest`.
+
+**Eject.** `eject` converts a managed project into an ejected app that you own:
+
+- It writes the app that `deploy` would deploy into `./compute-js` (or `--dir`). It refuses a directory that exists, unless `--force`.
+- It splits the project file into `compute-js/static-publish.rc.js` (with `generatedFrom`) and `compute-js/publish-content.config.js`, and writes the paths again, so that they point at the same directories (for example `staticPublisherWorkingDir: '../static-publisher'`). Then it deletes `static-publish.project.js`.
+- `publishContent` must be data: eject cannot copy functions or regular expressions (for example `assetInclusionTest`). If it has them, eject stops before it writes anything. Remove them, eject, and add them to `compute-js/publish-content.config.js` by hand.
+- `package.json` gets `"@fastly/compute-js-static-publish": "^<version>"`, and the lockfile has exactly `<version>`, so that the first ejected build is the same app. This needs a version that is published on npm, and one `npm install` (network access).
+- After eject, run the commands in `compute-js/`. Run `publish-content --local` again before `npm run dev:start`. You can delete `.static-publish/`.
+
+**API token scopes.** Give CI the least access that it needs. As far as we know (check the [Fastly documentation of API tokens](https://www.fastly.com/documentation/reference/api/auth-tokens/)):
+
+| Command | Scope |
+|---|---|
+| `status` (the active version of the service) | `global:read` |
+| `publish-content` and `collections` with the KV Store (writes) | `global` |
+| The purge after `publish-content` (S3 storage) | `purge_select` |
+| `deploy` | `global` |
+
+Limit the token to the service of the project, where possible.
 
 
 ### Template hooks
@@ -1196,7 +1229,7 @@ npx @fastly/compute-js-static-publish@latest \
 - `--description`: Application description to insert into `fastly.toml`
 - `--author`: Author to insert into `fastly.toml`
 - `--service-id`: Optional existing Fastly Compute service ID
-- `--managed`: Write only `static-publish.project.js` (a [managed project](#managed-projects-81-in-development)) in the current directory, in place of the app. `--output` is not used.
+- `--managed`: Write only `static-publish.project.js` (a [managed project](#managed-projects)) in the current directory, in place of the app. `--output` is not used.
 
 **Used in building config files:**
 - `--root-dir`: Required. Directory of static site content.

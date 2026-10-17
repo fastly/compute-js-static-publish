@@ -7,6 +7,7 @@ import { getCommandAndArgs } from '../../util/args.js';
 import * as cleanCommand from './clean.js';
 import * as deployCommand from './deploy.js';
 import * as devCommand from './dev.js';
+import * as ejectCommand from './eject.js';
 import * as statusCommand from './status.js';
 import * as upgradeCommand from './upgrade.js';
 import * as publishContentCommand from './publish-content.js';
@@ -35,6 +36,7 @@ Available Commands:
   status                           Show the state of the app, and if a deploy is necessary
   deploy                           Deploy the app of a managed project, if it changed
   upgrade                          Move a managed project to the version of this CLI
+  eject                            Convert a managed project into an ejected app
 
 KV Store Options:
   --local                          Instead of working with the Fastly KV Store, operate on
@@ -72,6 +74,7 @@ export async function action(actionArgs: string[]) {
     'clean': cleanCommand,
     'deploy': deployCommand,
     'dev': devCommand,
+    'eject': ejectCommand,
     'status': statusCommand,
     'upgrade': upgradeCommand,
     'publish-content': publishContentCommand,
