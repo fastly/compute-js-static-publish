@@ -76,7 +76,7 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 
 - Scaffolding: `--public-dir` is deprecated, and a future version will remove it. The scaffolder shows a warning if you use it. This option was added for module assets, which this package no longer supports. If you do not use `--public-dir`, the public directory is the same as `--root-dir`, and nothing changes for you.
 
-- `server.publicDirPrefix` in `publish-content.config.js` is deprecated, and a future version will remove it. `publish-content` shows a warning if it is not empty. The scaffolder no longer writes it, unless you use `--public-dir`. The server still uses it for collections that you publish with it.
+- `server.publicDirPrefix` in `publish-content.config.js` is deprecated, and a future version will remove it. `publish-content` shows a warning if it is not empty. The scaffolder no longer writes it, unless you use `--public-dir`. The server still uses it for collections that you publish with it. To stop using it, see `MIGRATING.md`.
 
 ### Fixed
 
