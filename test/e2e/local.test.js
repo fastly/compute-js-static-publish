@@ -14,6 +14,7 @@ import { after, before, describe, test } from 'node:test';
 
 import {
   makeTempDir,
+  rawRequest,
   removeDir,
   runCli,
   scaffoldApp,
@@ -64,5 +65,58 @@ describe('local mode (fastly compute serve)', { skip: skipUnlessFastlyCli() }, (
   test('lists the collection', () => {
     const { output } = runCli([ 'collections', 'list', '--local' ], { cwd: computeJsDir });
     assert.match(output, /live \*DEFAULT\*/);
+  });
+});
+
+// A newer version can publish a collection that needs a feature that this
+// version does not support. Then this version must not serve the collection.
+describe('local mode with a collection that requires an unsupported feature', { skip: skipUnlessFastlyCli() }, () => {
+  let dir;
+  let computeJsDir;
+  let kvStoreJsonPath;
+  let server;
+
+  const readKvStoreJson = () => JSON.parse(fs.readFileSync(kvStoreJsonPath, 'utf-8'));
+
+  before(async () => {
+    dir = makeTempDir('local-requires');
+    writeFixtureContent(path.resolve(dir, 'public'));
+    computeJsDir = scaffoldApp(dir, [ '--kv-store-name', 'e2e-content' ]);
+    runCli([ 'publish-content', '--local' ], { cwd: computeJsDir });
+
+    // Do what a newer CLI does: add a feature to the metadata of the index.
+    kvStoreJsonPath = path.resolve(computeJsDir, 'static-publisher/kvstore.json');
+    const kvStoreJson = readKvStoreJson();
+    const indexEntry = kvStoreJson['default_index_live'];
+    indexEntry.metadata = JSON.stringify({ ...JSON.parse(indexEntry.metadata), requires: 'future-feature', futureField: 'x' });
+    fs.writeFileSync(kvStoreJsonPath, JSON.stringify(kvStoreJson));
+
+    runCli([ 'collections', 'promote', '--collection-name', 'live', '--to', 'copy', '--local' ], { cwd: computeJsDir });
+    server = await startServe(computeJsDir);
+  });
+
+  after(async () => {
+    await server?.stop();
+    if (dir != null) {
+      removeDir(dir);
+    }
+  });
+
+  test('does not serve the collection', async () => {
+    const res = await rawRequest(server.baseUrl + '/', { headers: { accept: 'text/html' } });
+    assert.equal(res.status, 404);
+    assert.doesNotMatch(res.body.toString(), /<h1>Home<\/h1>/);
+  });
+
+  test('promote keeps the fields of the metadata', () => {
+    const metadata = JSON.parse(readKvStoreJson()['default_index_copy'].metadata);
+    assert.equal(metadata.requires, 'future-feature');
+    assert.equal(metadata.futureField, 'x');
+  });
+
+  test('collections list shows the feature', () => {
+    const { output } = runCli([ 'collections', 'list', '--local' ], { cwd: computeJsDir });
+    assert.match(output, /Requires {3}: future-feature/);
+    assert.match(output, /This version does not support future-feature/);
   });
 });
