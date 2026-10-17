@@ -21,6 +21,11 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
    - `publish-content` to a new collection, and `collections promote --to` a new collection, stop with an error for a name that breaks the rule.
    - A collection that exists continues to work with a name that breaks the rule. `publish-content` and `collections promote --to` show a warning for it.
    - `collectionSelector.fromCookie()`: the activate path returns `400` for a name that breaks the rule, and sets no cookie. Before, it returned `400` only for a name with characters that a cookie value cannot have.
+- `PublisherServer` keeps the state of each request (the settings, the index, and the `Server-Timing` measurements) in a scope for that request and collection. A reused sandbox does not keep this state from one request to the next. A second call for the same request (for example `beginRequest()` and then `serveRequest()`) does not read the index again.
+
+### Deprecated
+
+- `PublisherServer`: the fields `serverTiming`, `settingsCached`, and `assetEntryMapCache`. They are now read-only, and they return the state of the current request. Code that assigns to them gets a TypeScript error. Use `getServerConfig()` and `getAssetEntryMap()`. These fields will be removed in v9.
 
 ## [8.0.0] - 2026-10-27
 
