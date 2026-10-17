@@ -97,6 +97,8 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 
 - Scaffolding: the instructions shown at the end referred to `npm run fastly:start`, which does not exist. They now show `npm run fastly:deploy`. For the KV Store, they show `fastly:deploy` before `fastly:publish`, because the deploy creates the KV Store.
 
+- Scaffolding with S3-compatible storage: the generated `fastly.toml` declared the keys of the `S3_CREDENTIALS` Secret Store under `items`. The Fastly CLI reads them only from `entries`. Thus, on the first deploy, the Fastly CLI created the Secret Store with no keys and did not prompt for the credentials, and the server could not read from the bucket. The instructions shown at the end of scaffolding now also tell you that the first deploy prompts for these values.
+
 ## [7.0.8] - 2026-10-14
 
 ### Added

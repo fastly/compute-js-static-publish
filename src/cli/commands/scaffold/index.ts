@@ -857,10 +857,10 @@ port = 443
 [setup.secret_stores]
 [setup.secret_stores.S3_CREDENTIALS]
 description = "Credentials for S3 storage"
-[setup.secret_stores.S3_CREDENTIALS.items]
-[setup.secret_stores.S3_CREDENTIALS.items.S3_ACCESS_KEY_ID]
+[setup.secret_stores.S3_CREDENTIALS.entries]
+[setup.secret_stores.S3_CREDENTIALS.entries.S3_ACCESS_KEY_ID]
 description = "Access Key ID"
-[setup.secret_stores.S3_CREDENTIALS.items.S3_SECRET_ACCESS_KEY]
+[setup.secret_stores.S3_CREDENTIALS.entries.S3_SECRET_ACCESS_KEY]
 description = "Secret Access Key"
 `;
   }
@@ -1074,13 +1074,17 @@ To run your Compute application locally
 
 To build and deploy to your Compute service:
 
-  Create a Secret Store in your account named S3_CREDENTIALS, and set the following values:
-    S3_ACCESS_KEY_ID: xxxx
-    S3_SECRET_ACCESS_KEY: xxxx
-  
   Run the following commands:
     cd ${COMPUTE_JS_DIR}
     npm run fastly:deploy
+
+  When it creates a new service, the Fastly CLI creates a Secret Store named S3_CREDENTIALS,
+  and prompts you for these values:
+    S3_ACCESS_KEY_ID
+    S3_SECRET_ACCESS_KEY
+
+  If you deploy to an existing service, link a Secret Store named S3_CREDENTIALS to the
+  service, with these values, before you deploy.
 
 `);
   }
