@@ -133,3 +133,33 @@ export type StaticPublishRc =
   | StaticPublishKvStore
   | StaticPublishS3Storage
 ;
+
+// staticPublisherWorkingDir: a relative path that starts with './' or '../',
+// relative to the file that has it (static-publish.rc.js or
+// static-publish.project.js). It must not be that file's directory or a
+// directory above it, so that publish-content never writes its files among the
+// user's own files. Returns an error message, or null if the value is valid.
+export function checkStaticPublisherWorkingDir(value: unknown): string | null {
+  const message = `staticPublisherWorkingDir must be a relative path that starts with './' or '../', and that is not the directory of the config file or a directory above it.`;
+  if (typeof value !== 'string' || !(value.startsWith('./') || value.startsWith('../'))) {
+    return message;
+  }
+  if (value.includes('//') || value.includes('\\')) {
+    return message;
+  }
+  const segments: string[] = [];
+  for (const segment of value.split('/')) {
+    if (segment === '' || segment === '.') {
+      continue;
+    }
+    if (segment === '..' && segments.length > 0 && segments[segments.length - 1] !== '..') {
+      segments.pop();
+    } else {
+      segments.push(segment);
+    }
+  }
+  if (segments.every(x => x === '..')) {
+    return message;
+  }
+  return null;
+}

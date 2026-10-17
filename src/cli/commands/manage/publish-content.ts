@@ -23,7 +23,15 @@ import { calcExpirationTime } from '../../../models/time/index.js';
 import { parseCommandLine } from '../../util/args.js';
 import { checkCollectionNameForWrite } from '../../util/collection-name.js';
 import { mergeContentTypes, testFileContentType } from '../../util/content-types.js';
-import { LoadConfigError, loadPublishContentConfigFile, loadStaticPublisherRcFile } from '../../util/config.js';
+import {
+  LoadConfigError,
+  configFileName,
+  detectProjectMode,
+  loadProjectFile,
+  loadPublishContentConfig,
+  loadStaticPublisherRcFile,
+} from '../../util/config.js';
+import { PROJECT_FILE_NAME } from '../../../models/config/static-publish-project.js';
 import { applyDefaults } from '../../util/data.js';
 import { calculateFileSizeAndHash, enumerateFiles, rootRelative } from '../../util/files.js';
 import { ensureVariantFileExists, OncePerKey, type Variants } from '../../util/variants.js';
@@ -210,22 +218,24 @@ export async function action(actionArgs: string[]) {
   try {
     staticPublisherRc = await loadStaticPublisherRcFile();
   } catch (err) {
-    console.error("❌ Can't load static-publish.rc.js");
+    console.error(`❌ Can't load ${configFileName()}`);
     console.error("Run this from a compute-js-static-publish compute-js directory.");
     if (err instanceof LoadConfigError) {
       for (const error of err.errors) {
         console.error(error);
       }
     }
-    recordError('config-invalid', "Can't load static-publish.rc.js.");
+    recordError('config-invalid', `Can't load ${configFileName()}.`);
     return;
   }
 
-  const configFilePath = configFilePathValue ?? './publish-content.config.js';
+  // In a managed project, the default is the publishContent section of the project file.
+  const managedProject = detectProjectMode() === 'managed' ? await loadProjectFile() : null;
+  const configFilePath = configFilePathValue ?? (managedProject != null ? `${PROJECT_FILE_NAME} (publishContent)` : './publish-content.config.js');
 
   let publishContentConfig: PublishContentConfigNormalized;
   try {
-    publishContentConfig = await loadPublishContentConfigFile(configFilePath);
+    publishContentConfig = await loadPublishContentConfig(configFilePathValue);
   } catch (err) {
     console.error(`❌ Can't load ${configFilePath}`);
     if (err instanceof LoadConfigError) {
@@ -307,6 +317,7 @@ export async function action(actionArgs: string[]) {
       localMode: localMode ?? false,
       computeAppDir,
       fastlyServiceId,
+      projectServiceId: managedProject?.managed.serviceId,
       fastlyApiToken,
       purgeEnvironments: purgeEnvironmentValues,
     });

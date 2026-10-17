@@ -136,7 +136,7 @@ describe('loadPurgeTarget', () => {
     writeFastlyToml(null);
     assert.equal(loadPurgeTarget(params({ fastlyApiToken: 'token' })), null);
     assert.deepEqual(messages(), [
-      '- Service ID not found (--fastly-service-id, FASTLY_SERVICE_ID, or fastly.toml). Will skip the purge.',
+      '- Service ID not found (--fastly-service-id, FASTLY_SERVICE_ID, managed.serviceId, or fastly.toml). Will skip the purge.',
     ]);
   });
 

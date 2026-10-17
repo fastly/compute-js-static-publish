@@ -78,6 +78,10 @@ All collections share the files, because the key is the hash of the content. `cl
 
 `src/cli/CLAUDE.md` has how `generateApp()` makes the files of a scaffolded app, and how the tests check them.
 
+### Managed projects (8.1, in development)
+
+`src/cli/CLAUDE.md` has the details of managed projects.
+
 ### Two config files in a scaffolded app
 
 - `static-publish.rc.js` (`models/config/static-publish-rc.ts`): the storage mode, the store or bucket, `publishId`, and `defaultCollectionName`. The Wasm binary **contains a copy** of this file. Thus, if you change it, you must rebuild the app.

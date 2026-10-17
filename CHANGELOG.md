@@ -29,12 +29,15 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 - Export the types `ServeRequestOptions` and `ServeFallbackOptions`.
 - Scaffolding: add `--default-collection-name`, the collection to serve when no collection is selected. It is written as `defaultCollectionName` in `static-publish.rc.js`. Before, it was always `live`, which is still the default.
 
+- Managed projects (in development): `scaffold --managed` writes only `static-publish.project.js` in the current directory, and adds `.static-publish/` and the working directory to `.gitignore`. The project file has the fields of `static-publish.rc.js` at the top level, the fields of `publish-content.config.js` in `publishContent`, and the settings of the generated app in `managed`. `publish-content`, `collections`, and `clean` read it. A directory with both `static-publish.project.js` and `static-publish.rc.js` is an error. The type is `StaticPublishProject`.
+- `publish-content` purges the service of `managed.serviceId` in a managed project (after `--fastly-service-id` and `FASTLY_SERVICE_ID`, before `fastly.toml`).
 - CLI: global options `--version` (shows only the version, in any directory), `--project-dir <dir>` (run as if in that directory), `--non-interactive` (also on when `CI` is set), and `--json`.
 - CLI: `publish-content --json` and `collections list --json` write one JSON object to stdout at the end (`schemaVersion: 1`), and the log to stderr. `collections list` shows the number of files. See "Using the CLI in CI" in the README.
 - CLI: the API token and the S3 secret access key are replaced with `[REDACTED]` in the output.
 
 ### Changed
 
+- `staticPublisherWorkingDir` has a new rule: a relative path that starts with `./` or `../`, and that is not the directory of the config file or a directory above it. Paths outside the config dir (`../static-publisher`) are now allowed. A value that breaks the rule now stops the command. Before, the check showed no error, and the command continued.
 - CLI exit codes: `2` for a usage or config error (the command could not start), `1` for a failed operation, `0` for success. Before, all errors were `1`. With `--json`, an error is `{ schemaVersion, error: { code, message } }` on stdout.
 - `collections delete` of a collection that does not exist says so, and succeeds. `collections promote` from a collection that does not exist is an error (`2`) with a clear message, not a stack trace.
 

@@ -15,12 +15,15 @@ export type LoadServiceIdResult = {
 export type LoadServiceIdParams = {
   commandLine: unknown,
   fastlyTomlPath: string,
+  // managed.serviceId of a managed project. Checked before fastly.toml.
+  projectServiceId?: string,
 };
 
 // Finds the Fastly Service ID to purge after a change to a collection. Checks, in order:
 //   1. The command line (--fastly-service-id)
 //   2. The FASTLY_SERVICE_ID environment variable
-//   3. service_id in fastly.toml
+//   3. managed.serviceId in static-publish.project.js (a managed project)
+//   4. service_id in fastly.toml
 // This is the same order as the Fastly CLI's --service-id.
 export function loadServiceId(params: LoadServiceIdParams): LoadServiceIdResult | null {
 
@@ -31,6 +34,10 @@ export function loadServiceId(params: LoadServiceIdParams): LoadServiceIdResult 
   const envServiceId = process.env.FASTLY_SERVICE_ID?.trim();
   if (envServiceId) {
     return { serviceId: envServiceId, source: 'env' };
+  }
+
+  if (params.projectServiceId != null && params.projectServiceId.trim() !== '') {
+    return { serviceId: params.projectServiceId.trim(), source: 'managed.serviceId' };
   }
 
   if (fs.existsSync(params.fastlyTomlPath)) {

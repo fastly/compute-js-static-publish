@@ -26,6 +26,8 @@ import {
   writeJsonOutput,
 } from './util/cli-output.js';
 import { getOwnVersion } from './util/package.js';
+import { detectProjectMode } from './util/config.js';
+import { PROJECT_FILE_NAME, RC_FILE_NAME } from '../models/config/static-publish-project.js';
 
 // Register storage builder providers
 import { registerStorageProviderBuilder } from './storage/storage-provider.js';
@@ -111,7 +113,13 @@ async function run(globalOptions: GlobalOptions) {
   process.argv.splice(2, process.argv.length - 2, ...globalOptions.argv);
   const argv = process.argv;
 
-  if (!fs.existsSync('./static-publish.rc.js')) {
+  const mode = detectProjectMode();
+  if (mode === 'conflict') {
+    reportError('config-invalid', `This directory has both ${PROJECT_FILE_NAME} (a managed project) and ${RC_FILE_NAME} (an ejected app). Remove one of them.`);
+    return;
+  }
+
+  if (mode === 'scaffold') {
 
     console.log("🧑‍💻Fastly Compute JavaScript Static Publisher (Scaffolding mode)");
     if (isJsonMode()) {
@@ -122,7 +130,7 @@ async function run(globalOptions: GlobalOptions) {
 
   } else {
 
-    console.log("🧑‍💻Fastly Compute JavaScript Static Publisher (Management mode)");
+    console.log(`🧑‍💻Fastly Compute JavaScript Static Publisher (Management mode${mode === 'managed' ? ', managed project' : ''})`);
     await manageCommands.action(argv);
 
   }
