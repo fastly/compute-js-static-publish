@@ -300,7 +300,6 @@ const config = {
 
   // Server settings
   server: {
-    publicDirPrefix: '',
     spaFile: '/spa.html',
     notFoundPageFile: '/404.html',
     autoIndex: ['index.html'],
@@ -327,7 +326,8 @@ You can override this file for a single `publish-content` command by specifying 
 - `contentTypes` - Additional or override content type definitions.
 
 - `server` - Server runtime config that contains the following fields:  
-   - `publicDirPrefix` - A prefix that the Publisher Server adds to the path of each
+   - `publicDirPrefix` - **Deprecated.** A future version will remove it.
+     A prefix that the Publisher Server adds to the path of each
      request, to get the asset key. Use it if the files to serve are in a subdirectory
      of `rootDir`. For example, if `rootDir` is `'../site'` and the files to serve are in
      `'../site/public'`, set it to `'/public'`. The value starts with `/` and does not
