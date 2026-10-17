@@ -86,6 +86,25 @@ type AssetInit = {
   cache?: 'extended' | 'never' | null,
 };
 
+export type ServeRequestOptions = {
+  // The collection for this call. null selects the default collection. If not
+  // set, the active collection is used (see setActiveCollectionName()).
+  collectionName?: string | null,
+  // The path to look up, in place of the path of the request URL. It must be
+  // decoded, and start with a slash.
+  pathname?: string,
+  // false: when no file matches, do not serve the SPA file or the 404 page.
+  // Call serveFallback() for them. The default is true.
+  fallback?: boolean,
+  // false: do not answer /healthz. The default is true.
+  healthCheck?: boolean,
+};
+
+export type ServeFallbackOptions = {
+  // The collection for this call, as in ServeRequestOptions.
+  collectionName?: string | null,
+};
+
 // The state of one request for one collection: the settings and the index that
 // the request read, and the Server-Timing of the request. A sandbox can be reused
 // for more than one request, so this state is not kept from one request to the next.
@@ -197,14 +216,14 @@ export class PublisherServer {
     this.responseCache = options;
   }
 
-  // Start handling a new request. serveRequest() calls this. If you call
+  // Start handling a new request. serveRequest() and serveFallback() call this. If you call
   // getMatchingAsset() and serveAsset() directly, call this first.
   // A sandbox can be reused for more than one request, so this starts a new
   // scope: the settings and the index that a previous request read are not used.
   // Without this, a reused sandbox serves an old index after a publish, and
   // serves an expired collection.
   beginRequest(request: Request) {
-    this.currentScope = this.scopeForRequest(request, this.activeCollectionName);
+    this.beginRequestFor(request, undefined);
   }
 
   private newServerTiming(request: Request) {
@@ -793,28 +812,76 @@ export class PublisherServer {
     });
   }
 
-  async serveRequest(request: Request): Promise<Response | null> {
+  // Serve the file that matches the request. If no file matches, serve the SPA
+  // file or the 404 page (see options.fallback). Returns null if there is no
+  // response for the request, for example for a method other than GET and HEAD.
+  async serveRequest(request: Request, options: ServeRequestOptions = {}): Promise<Response | null> {
 
-    this.beginRequest(request);
-    const scope = this.currentScope;
+    const scope = this.beginRequestFor(request, options.collectionName);
 
     // Only handle GET and HEAD
     if (request.method !== 'GET' && request.method !== 'HEAD') {
       return null;
     }
 
-    const url = new URL(request.url);
-    const pathname = decodeURI(url.pathname);
+    let pathname;
+    if (options.pathname != null) {
+      if (!options.pathname.startsWith('/')) {
+        throw new TypeError(`pathname must start with '/': ${options.pathname}`);
+      }
+      pathname = options.pathname;
+    } else {
+      pathname = decodeURI(new URL(request.url).pathname);
+    }
 
     // Custom health check route
-    if (pathname === '/healthz') {
+    if (options.healthCheck !== false && pathname === '/healthz') {
       return new Response("OK", { status: 200 });
     }
 
     // The fallback pages (SPA, not found) depend on whether the client accepts HTML.
-    const fallback = requestAcceptsTextHtml(request);
+    // Without them, the response is the same as for a client that does not accept HTML.
+    const fallback = options.fallback !== false && requestAcceptsTextHtml(request);
     const keyPath = fallback ? pathname : `${pathname}|no-html`;
     return this.serveCachedFor(scope, request, keyPath, (fillRequest) => this.serveRequestFromStorage(scope, fillRequest, pathname, fallback));
+  }
+
+  // Serve the SPA file or the 404 page, as serveRequest() does when no file
+  // matches. Use it after serveRequest() with fallback: false. Returns null for
+  // a method other than GET and HEAD, if the client does not accept HTML, or if
+  // the collection has no fallback page.
+  async serveFallback(request: Request, options: ServeFallbackOptions = {}): Promise<Response | null> {
+
+    const scope = this.beginRequestFor(request, options.collectionName);
+
+    // Only handle GET and HEAD
+    if (request.method !== 'GET' && request.method !== 'HEAD') {
+      return null;
+    }
+
+    if (!requestAcceptsTextHtml(request)) {
+      return null;
+    }
+
+    // The fallback response is the same for all paths, so it has one cache key.
+    // A path always starts with a slash, so this key is not the key of a path.
+    return this.serveCachedFor(scope, request, '|fallback', async (fillRequest) => {
+      const serverConfig = await this.getServerConfigFor(scope);
+      if (serverConfig == null) {
+        return null;
+      }
+      return this.serveFallbackFromStorage(scope, fillRequest, serverConfig);
+    });
+  }
+
+  // Make the scope of the request for the collection the current scope.
+  // collectionName is as in ServeRequestOptions.
+  private beginRequestFor(request: Request, collectionName: string | null | undefined): CollectionScope {
+    const name = collectionName === undefined ?
+      this.activeCollectionName :
+      collectionName ?? this.defaultCollectionName;
+    this.currentScope = this.scopeForRequest(request, name);
+    return this.currentScope;
   }
 
   private async serveRequestFromStorage(scope: CollectionScope, request: Request, pathname: string, fallback: boolean): Promise<Response | null> {

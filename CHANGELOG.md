@@ -13,6 +13,9 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 
 - Scaffolding: the `package.json` of a new app has the npm scripts `prebuild`, `postbuild`, and `postinstall`. Each one runs `compute-js-static-publish run-template-hook <name>`, which runs `scripts/template_<name>.js` in the app if it exists. Templates use these hooks. An app can add its own hook file.
 - Scaffolding: `static-publish.rc.js` of a new app has `generatedFrom`: the template, the version of this package, and the date that the app was generated with.
+- `PublisherServer.serveRequest(request, options)`: the options `collectionName` (the collection for this call only), `pathname` (the path to look up, in place of the URL path), `fallback` (`false`: do not serve the SPA file or the 404 page), and `healthCheck` (`false`: do not answer `/healthz`). Without options, the behavior does not change.
+- `PublisherServer.serveFallback(request, { collectionName })`: serves the SPA file or the 404 page, as `serveRequest()` does when no file matches. Use it after `serveRequest()` with `fallback: false`.
+- Export the types `ServeRequestOptions` and `ServeFallbackOptions`.
 - Scaffolding: add `--default-collection-name`, the collection to serve when no collection is selected. It is written as `defaultCollectionName` in `static-publish.rc.js`. Before, it was always `live`, which is still the default.
 
 ### Changed

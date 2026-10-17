@@ -707,6 +707,38 @@ async function handleRequest(request) {
 }
 ```
 
+### Options of `serveRequest()`
+
+`serveRequest(request, options)` takes these options. Without options, it works as above.
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `collectionName` | The collection to serve, for this call only. `null` selects the default collection. | The active collection (see [Switching the active collection](#switching-the-active-collection)) |
+| `pathname` | The path to look up, in place of the path of the request URL. It must be decoded, and it must start with `/`. | The decoded path of the request URL |
+| `fallback` | `false`: if no file matches, do not serve the SPA file or the 404 page. Return `null`. | `true` |
+| `healthCheck` | `false`: do not answer `/healthz`. | `true` |
+
+`serveRequest()` returns `null` for a method other than `GET` and `HEAD`, and when there is no response (no file matches, and there is no fallback page or `fallback` is `false`). If the settings of the collection are not in storage, the response is `500`.
+
+`serveFallback(request, { collectionName })` serves the SPA file (`200`) or the 404 page (`404`) of the collection, as `serveRequest()` does when no file matches. It returns `null` for a method other than `GET` and `HEAD`, for a client that does not accept HTML, or when the collection has no fallback page. Use it with `fallback: false`, to run your own logic between the files and the fallback page:
+
+```js
+async function handleRequest(request) {
+  const response = await publisherServer.serveRequest(request, { fallback: false });
+  if (response) {
+    return response;
+  }
+
+  if (request.url.endsWith('/api/hello')) {
+    return new Response(JSON.stringify({ greeting: "hi" }), {
+      headers: { 'content-type': 'application/json' }
+    });
+  }
+
+  return (await publisherServer.serveFallback(request)) ?? new Response("Not Found", { status: 404 });
+}
+```
+
 ### ⏱️ Measuring Performance with `Server-Timing`
 
 `PublisherServer` can report how long it spends reading from storage. To turn this on, give it the name of a request header:
@@ -762,6 +794,7 @@ publisherServer.setResponseCache({ maxAge: 3600, maxBodySize: 16 * 1024 * 1024 }
 
 - A response is cached by the publish ID, the collection, the path, and the client's `Accept-Encoding`. A cache hit does not read the settings, the index, or the file.
 - A path that does not match a file is cached, too, so a missing path does not read the index again.
+- With the options of `serveRequest()`, the path in the key is the `pathname` option, and the collection is the `collectionName` option. A response with `fallback: false` has its own key. `serveFallback()` caches one response for each collection, for all paths.
 - If several requests miss the same response at the same time, one request produces it, and the others wait for it.
 - Only `200` and `404` responses are cached. Conditional requests (`304`) and `HEAD` requests are answered from the cached response.
 - Each cached response has the surrogate key `<publishId>-<collectionName>`. After you publish, `publish-content` purges this key (see [`--fastly-service-id`](#publish-content)), so the next request gets the new content.
