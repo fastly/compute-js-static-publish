@@ -64,6 +64,7 @@ const cases = {
     '--service-id', 'SVC123', '--name', 'my-site', '--description', 'My site', '--author', 'me@example.com',
     '--publish-id', 'pub1', '--auto-index', 'index.htm', '--auto-ext', '.htm',
   ],
+  'kv-default-collection': [ '--root-dir', './public', '--kv-store-name', 'site-content', '--default-collection-name', 'production' ],
 };
 
 describe('scaffold writes the golden files', () => {
@@ -88,4 +89,14 @@ describe('scaffold writes the golden files', () => {
       }
     });
   }
+
+  test('a --default-collection-name that is not valid stops before anything is written', () => {
+    const dir = makeTempDir('scaffold-golden-bad-name');
+    dirs.push(dir);
+    writeFixture(dir);
+    const result = runCli([ '--root-dir', './public', '--kv-store-name', 'site-content', '--default-collection-name', 'Live' ], { cwd: dir, allowFailure: true });
+    assert.notEqual(result.status, 0);
+    assert.match(result.output, /--default-collection-name is not a valid collection name/);
+    assert.equal(fs.existsSync(path.resolve(dir, 'compute-js')), false);
+  });
 });

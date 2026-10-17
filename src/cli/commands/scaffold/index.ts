@@ -19,6 +19,7 @@ import { rootRelative } from '../../util/files.js';
 import { findComputeJsStaticPublisherVersion, type PackageJson } from '../../util/package.js';
 import { findHostnameForAwsS3RegionAndBucket } from '../../util/s3.js';
 import { generateApp } from './generate-app.js';
+import { COLLECTION_NAME_RULE, isValidCollectionName } from '../../../models/collections/index.js';
 
 function help() {
   console.log(`\
@@ -49,6 +50,7 @@ Options:
   --static-publisher-working-dir <dir>  Working directory for build artifacts (default: <output>/static-publisher)
                                         (default: ./compute-js/static-publisher)
   --publish-id <id>                     Advanced. Prefix for KV keys (default: "default")
+  --default-collection-name <name>      Collection to serve when none is selected (default: "live")
 
 Compute Service Metadata:
   --name <name>                         App name (for fastly.toml)
@@ -85,6 +87,7 @@ export type InitAppOptions = {
   description: string | undefined,
   serviceId: string | undefined,
   publishId: string | undefined,
+  defaultCollectionName: string | undefined,
   storageMode: string | undefined,
   kvStoreName: string | undefined,
   s3Region: string | undefined,
@@ -107,6 +110,7 @@ const defaultOptions: InitAppOptions = {
   description: 'Fastly Compute static site',
   serviceId: undefined,
   publishId: undefined,
+  defaultCollectionName: undefined,
   storageMode: undefined,
   kvStoreName: undefined,
   s3Region: undefined,
@@ -336,6 +340,17 @@ function buildOptions(
   }
 
   {
+    let defaultCollectionName: string | undefined;
+    const defaultCollectionNameValue = commandLineOptions['default-collection-name'];
+    if (defaultCollectionNameValue == null || typeof defaultCollectionNameValue === 'string') {
+      defaultCollectionName = defaultCollectionNameValue;
+    }
+    if (defaultCollectionName !== undefined) {
+      options.defaultCollectionName = defaultCollectionName;
+    }
+  }
+
+  {
     let storageMode: string | undefined;
     const storageModeValue = commandLineOptions['storage-mode'];
     if (storageModeValue == null || typeof storageModeValue === 'string') {
@@ -453,6 +468,10 @@ export async function action(actionArgs: string[]) {
     // Publish ID to be used as a prefix for all KV Store entries.
     // If not provided, the default value of 'default' is used.
     { name: 'publish-id', type: String, },
+
+    // The collection to serve when no collection is selected.
+    // If not provided, the default value of 'live' is used.
+    { name: 'default-collection-name', type: String, },
 
     // The 'static publisher working directory' is the directory under the Compute
     // application where asset files are written in preparation for upload to the
@@ -723,7 +742,13 @@ export async function action(actionArgs: string[]) {
     publishId = 'default';
   }
 
-  const defaultCollectionName = 'live';
+  const defaultCollectionName = options.defaultCollectionName ?? 'live';
+  if (!isValidCollectionName(defaultCollectionName)) {
+    console.error(`❌ parameter --default-collection-name is not a valid collection name: '${defaultCollectionName}'.`);
+    console.error(`  * ${COLLECTION_NAME_RULE}`);
+    process.exitCode = 1;
+    return;
+  }
 
   console.log('');
   console.log('Compute Application Settings');

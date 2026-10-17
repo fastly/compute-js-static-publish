@@ -64,6 +64,10 @@ const cases = {
     publicDir: '/project/site/public',
     notFoundPageFilename: undefined,
   },
+  'kv-default-collection': {
+    ...base,
+    defaultCollectionName: 'production',
+  },
   's3-endpoint': {
     ...base,
     storage: { mode: 's3', region: 'us-east-1', bucket: 'my-bucket', endpointUrl: 'https://s3.example.com/', endpointGenerated: false },

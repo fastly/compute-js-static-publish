@@ -9,6 +9,10 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 
 ## [unreleased]
 
+### Added
+
+- Scaffolding: add `--default-collection-name`, the collection to serve when no collection is selected. It is written as `defaultCollectionName` in `static-publish.rc.js`. Before, it was always `live`, which is still the default.
+
 ### Changed
 
 - Collection names have a rule: a DNS label (lowercase `a-z`, `0-9`, and `-`, from 1 to 63 characters, with no `-` at the start or the end). Thus a name is safe in storage keys, in the surrogate key of the purge, in a cookie, and in a hostname.
