@@ -97,6 +97,17 @@ describe('decodeIndexMetadata and encodeIndexMetadata', () => {
   test('gives null for no metadata', () => {
     assert.equal(decodeIndexMetadata(undefined), null);
   });
+
+  test('encode separates the features with commas', () => {
+    assert.deepEqual(
+      encodeIndexMetadata({ requires: [ 'hidden', 'brotli-dictionary' ] }),
+      { requires: 'hidden,brotli-dictionary' },
+    );
+  });
+
+  test('encode throws if a feature name contains a comma', () => {
+    assert.throws(() => encodeIndexMetadata({ requires: [ 'a,b' ] }), /must not contain a comma/);
+  });
 });
 
 describe('getUnsupportedIndexFeatures', () => {

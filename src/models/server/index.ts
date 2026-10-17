@@ -10,6 +10,7 @@ export type IndexMetadata = {
   expirationTime?: number,
   // The features that the server must support to serve this collection.
   // A newer CLI adds a feature only if the published content uses it.
+  // The metadata keeps them as one string, separated by commas.
   requires?: string[],
   // Fields that this version does not know. They are kept, so that a command
   // that writes the metadata again (for example promote) does not remove them.
@@ -18,6 +19,8 @@ export type IndexMetadata = {
 
 // The features that this version of PublisherServer supports. A server does
 // not serve a collection that requires a feature that is not in this list.
+// A feature name must not contain a comma, because the metadata uses commas to
+// separate the names. Use short kebab-case names, for example 'hidden'.
 export const SUPPORTED_INDEX_FEATURES: readonly string[] = [];
 
 const KNOWN_FIELDS = [ 'publishedTime', 'expirationTime', 'requires' ];
@@ -34,6 +37,11 @@ export function encodeIndexMetadata(indexMetadata: IndexMetadata): Record<string
   }
 
   if (indexMetadata.requires != null && indexMetadata.requires.length > 0) {
+    for (const feature of indexMetadata.requires) {
+      if (feature.includes(',')) {
+        throw new Error(`Feature name '${feature}' must not contain a comma.`);
+      }
+    }
     result['requires'] = indexMetadata.requires.join(',');
   }
 
