@@ -53,6 +53,11 @@ describe('local mode (fastly compute serve)', { skip: skipUnlessFastlyCli() }, (
     assert.ok(keys.some(key => key.startsWith('default_files_sha256_')), 'has files');
   });
 
+  test('does not write publicDirPrefix to publish-content.config.js', () => {
+    const config = fs.readFileSync(path.resolve(computeJsDir, 'publish-content.config.js'), 'utf-8');
+    assert.doesNotMatch(config, /publicDirPrefix/);
+  });
+
   test('serves the published content', async (t) => {
     await checkServedContent(t, server.baseUrl);
   });

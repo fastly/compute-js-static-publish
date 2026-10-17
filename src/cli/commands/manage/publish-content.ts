@@ -617,7 +617,10 @@ export async function action(actionArgs: string[]) {
   });
 
   let publicDirPrefix = server.publicDirPrefix;
-  console.log(` ✔️ Server public dir prefix '${publicDirPrefix}'.`);
+  if (publicDirPrefix !== '') {
+    console.log(` ✔️ Server public dir prefix '${publicDirPrefix}'.`);
+    console.log(` ⚠️ Warning: server.publicDirPrefix is deprecated, and a future version will remove it.`);
+  }
 
   let staticItems = server.staticItems;
 

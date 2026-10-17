@@ -987,8 +987,8 @@ const config = {
   // ],
   
   // Server settings are saved to storage per collection
-  server: {
-    publicDirPrefix: ${JSON.stringify(publicDirPrefix)},
+  server: {${publicDirPrefix !== '' ? `
+    publicDirPrefix: ${JSON.stringify(publicDirPrefix)},` : ''}
     staticItems: ${JSON.stringify(staticItems)},
     allowedEncodings: [ 'br', 'gzip' ],
     spaFile: ${JSON.stringify(spaFile)},
