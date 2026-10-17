@@ -7,6 +7,16 @@ export { type StaticPublishRc } from '../models/config/static-publish-rc.js';
 export { type PublishContentConfig } from '../models/config/publish-content-config.js';
 export * as collectionSelector from './collection-selector/index.js';
 export {
+  type ResolveCollectionResult,
+  resolveCollection,
+} from './collection-selection/index.js';
+export {
+  type CollectionSelection,
+  type CollectionSelectionSource,
+  previewUrl,
+  validateCollectionSelection,
+} from '../models/config/collection-selection.js';
+export {
   CookieCollectionSelector,
   type CookieCollectionSelectorOpts,
 } from './collection-selector/from-cookie.js';

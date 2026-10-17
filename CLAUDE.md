@@ -79,6 +79,10 @@ All collections share the files, because the key is the hash of the content. `cl
 - `static-publish.rc.js` (`models/config/static-publish-rc.ts`): the storage mode, the store or bucket, `publishId`, and `defaultCollectionName`. The Wasm binary **contains a copy** of this file. Thus, if you change it, you must rebuild the app.
 - `publish-content.config.js` (`models/config/publish-content-config.ts`): the publish-time filters, compression, and content types. It also has a `server` section, which the CLI stores for each collection. If you change it, you must publish again. A rebuild is not necessary.
 
+### Collection selection
+
+`collectionSelection` (types, `validateCollectionSelection()`, patterns, `previewUrl()`) is in `models/config/collection-selection.ts`, so that the CLI can use it. `resolveCollection()` is in `server/collection-selection/` (no `fastly:*` imports, so the unit tests load it). A pattern has exactly one `{collection}`; a name is checked with `isValidCollectionName()` and `allow` before use, and a source with a name that fails is skipped. Every redirect (sticky, activate, reset) goes through `sameSiteLocation()`: a path that starts with exactly one `/`, else `/`. The older `collection-selector/` helpers stay for apps that use them.
+
 ### PublisherServer request flow
 
 `src/server/CLAUDE.md` has the steps that `PublisherServer` does for each request, and the response cache.
