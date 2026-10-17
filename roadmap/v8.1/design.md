@@ -266,7 +266,7 @@ resolveCollection(request, rc.collectionSelection): {
 
 - **Caching:** when the collection comes from a cookie, a header, or a query, the same URL serves different content. Responses from collections that are not the default get `Cache-Control: private` (or a `Vary`), so that browsers and shared caches do not mix them. The response cache keys on the collection (test in item 5).
 - **`noindex`:** `X-Robots-Tag: noindex` on responses from collections that are not the default.
-- **`onMissing`:** `not-found` makes a mistyped preview easy to see; `default` never shows an error but can hide mistakes. The server must tell "collection not found" from "file not found" (today both give `null`), so item 9 adds a small API for this.
+- **`onMissing`:** `not-found` makes a mistyped preview easy to see; `default` never shows an error but can hide mistakes. The server must tell "collection not found" from "file not found" (today both give `null`), so item 9 adds a small API for this. Decided in item 9: `PublisherServer` keeps the rc's `collectionSelection`. For a collection that is not the default, `serveRequest()` and `serveFallback()` check that it exists (settings and index; this reads the index also when the response cache has the response). `not-found` returns a `404` ("Collection '<name>' not found.", `no-store`); `default` serves the default collection. The public API is `collectionExists(request, collectionName)`.
 - **Exposure:** without `allow`, anyone who guesses a collection name can see unreleased content. `allow` limits the names. The README says that a preview is public to anyone who knows its name. Protection (a token or basic auth) is a later option (see [../README.md](../README.md#not-in-81-or-82)).
 - **Production host:** with the `host` source, the production hostname must never match the pattern. Check this when it can be checked.
 
@@ -283,16 +283,20 @@ CI tools must show a link for a collection. `previewUrl(collection, baseUrl)` ca
 
 ### Flags (item 10)
 
-So that disposable and CI setups do not need a config file. The syntax is a proposal; the point is that each field has a flag.
+So that disposable and CI setups do not need a config file. Each field has a flag (decided in item 10):
 
 ```
 --collection-selection=host:{collection}.preview.example.com
+--collection-selection=path:/_preview/{collection},sticky
 --collection-selection=query:collection,sticky
---collection-selection=cookie
+--collection-selection=cookie[:<cookieName>][,maxAge=<seconds>][,activatePath=<path>][,resetPath=<path>]
+--collection-selection=header:x-publisher-collection
 --collection-allow=pr-*,staging
 --collection-on-missing=not-found
---collection-noindex
+--collection-noindex=true|false
 ```
+
+`--collection-selection` can be repeated; the order of the flags is the order of the sources.
 
 ## 8. CI basics (items 11 and 12)
 

@@ -5,6 +5,7 @@
 
 import * as path from 'node:path';
 
+import { type CollectionSelection } from '../../../models/config/collection-selection.js';
 import { type GeneratedFrom } from '../../../models/config/static-publish-rc.js';
 import { dotRelative } from '../../util/files.js';
 import { type AppTemplate } from './templates/index.js';
@@ -36,7 +37,39 @@ export type AppConfig = {
   template: AppTemplate,
   // Written into static-publish.rc.js, if set.
   generatedFrom: GeneratedFrom | undefined,
+  // Written into static-publish.rc.js, if set. The template must support it.
+  collectionSelection?: CollectionSelection,
 };
+
+// A value as JavaScript source, for the generated config files. Data only:
+// strings, numbers, booleans, arrays, and plain objects.
+export function toJsLiteral(value: unknown, indent: string = ''): string {
+  const inner = indent + '  ';
+  if (Array.isArray(value)) {
+    if (value.length === 0) {
+      return '[]';
+    }
+    if (value.every(x => typeof x !== 'object' || x == null)) {
+      return `[ ${value.map(x => toJsLiteral(x)).join(', ')} ]`;
+    }
+    return `[\n${value.map(x => `${inner}${toJsLiteral(x, inner)},\n`).join('')}${indent}]`;
+  }
+  if (value != null && typeof value === 'object') {
+    const entries = Object.entries(value).filter(([ , v ]) => v !== undefined);
+    if (entries.length === 0) {
+      return '{}';
+    }
+    const key = (k: string) => /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(k) ? k : JSON.stringify(k);
+    if (entries.every(([ , v ]) => typeof v !== 'object' || v == null) && entries.length <= 3) {
+      const line = `{ ${entries.map(([ k, v ]) => `${key(k)}: ${toJsLiteral(v)}`).join(', ')} }`;
+      if (line.length <= 80) {
+        return line;
+      }
+    }
+    return `{\n${entries.map(([ k, v ]) => `${inner}${key(k)}: ${toJsLiteral(v, inner)},\n`).join('')}${indent}}`;
+  }
+  return JSON.stringify(value);
+}
 
 // The names of the template hooks. Every app has them as npm scripts. Each one
 // runs scripts/template_<name>.js if the app has that file.
@@ -66,8 +99,13 @@ export function generateApp(config: AppConfig): Record<string, string> {
     staticPublishVersionSpec: computeJsStaticPublisherVersion,
     template,
     generatedFrom,
+    collectionSelection,
   } = config;
   const storageMode = storage.mode;
+
+  if (collectionSelection != null && !template.supports?.collectionSelection) {
+    throw new Error(`The template of the app does not support collectionSelection.`);
+  }
 
   const resourceFiles: Record<string, string> = {};
 
@@ -227,7 +265,8 @@ ${staticPublishStorage}
     template: ${JSON.stringify(generatedFrom.template)},
     staticPublishVersion: ${JSON.stringify(generatedFrom.staticPublishVersion)},
     generatedAt: ${JSON.stringify(generatedFrom.generatedAt)},
-  },` : ''}
+  },` : ''}${collectionSelection != null ? `
+  collectionSelection: ${toJsLiteral(collectionSelection, '  ')},` : ''}
 };
 
 export default rc;

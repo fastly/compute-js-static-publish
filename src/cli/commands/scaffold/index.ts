@@ -18,6 +18,7 @@ import { parseCommandLine } from '../../util/args.js';
 import { rootRelative } from '../../util/files.js';
 import { findComputeJsStaticPublisherVersion, getOwnVersion, type PackageJson } from '../../util/package.js';
 import { findHostnameForAwsS3RegionAndBucket } from '../../util/s3.js';
+import { COLLECTION_SELECTION_FLAGS_HELP, collectionSelectionFromFlags } from '../../util/collection-selection-flags.js';
 import { generateApp } from './generate-app.js';
 import { appTemplates } from './templates/index.js';
 import { COLLECTION_NAME_RULE, isValidCollectionName } from '../../../models/collections/index.js';
@@ -66,6 +67,9 @@ Server Config:
   --not-found-page <file>               404 fallback file (e.g., /404.html)
   --auto-index <name>,<name...>         Index filename (e.g., index.html,index.htm)
   --auto-ext <ext>,<ext...>             Automatic extensions (e.g., .html,.htm)
+
+Collection Selection (previews):
+${COLLECTION_SELECTION_FLAGS_HELP}
 
 Other:
   --verbose                             Enable verbose output
@@ -512,6 +516,12 @@ export async function action(actionArgs: string[]) {
     // List of extensions to apply to a path name, for example, if
     // http://example.com/about is requested, we can respond with http://example.com/about.html
     { name: 'auto-ext', type: String, multiple: true, },
+
+    // Collection selection. See util/collection-selection-flags.ts.
+    { name: 'collection-selection', type: String, multiple: true, },
+    { name: 'collection-allow', type: String, multiple: true, },
+    { name: 'collection-on-missing', type: String, },
+    { name: 'collection-noindex', type: String, },
   ];
 
   const parsed = parseCommandLine(actionArgs, optionDefinitions);
@@ -539,6 +549,20 @@ export async function action(actionArgs: string[]) {
     packageJson,
     parsed.commandLineOptions,
   );
+
+  const { collectionSelection, errors: collectionSelectionErrors } = collectionSelectionFromFlags({
+    sources: parsed.commandLineOptions['collection-selection'],
+    allow: parsed.commandLineOptions['collection-allow'],
+    onMissing: parsed.commandLineOptions['collection-on-missing'],
+    noindex: parsed.commandLineOptions['collection-noindex'],
+  });
+  if (collectionSelectionErrors.length > 0) {
+    for (const error of collectionSelectionErrors) {
+      console.error(`❌ ${error}`);
+    }
+    process.exitCode = 1;
+    return;
+  }
 
   const COMPUTE_JS_DIR = options.outputDir;
   if (COMPUTE_JS_DIR == null) {
@@ -791,6 +815,7 @@ export async function action(actionArgs: string[]) {
   console.log('Auto-Index                     :', autoIndex.length > 0 ? autoIndex : '(None)')
   console.log('Auto-Ext                       :', autoExt.length > 0 ? autoExt : '(None)')
   console.log('Static Files Dir               :', staticDirs.length > 0 ? staticDirs.map(rootRelative) : '(None)');
+  console.log('Collection Selection           :', collectionSelection != null ? collectionSelection.sources.map(x => x.type).join(', ') : '(None)');
 
   console.log('');
 
@@ -824,6 +849,7 @@ export async function action(actionArgs: string[]) {
       staticPublishVersion: getOwnVersion(),
       generatedAt: new Date().toISOString().slice(0, 10),
     },
+    collectionSelection,
   });
 
   // Write out the files

@@ -25,6 +25,11 @@ import {
   isHiddenIndexKey,
 } from '../../models/assets/index.js';
 import { parseItemPatterns, testItemPatterns } from '../../models/config/item-patterns.js';
+import {
+  type CollectionSelection,
+  validateCollectionSelection,
+} from '../../models/config/collection-selection.js';
+import { type ResolveCollectionResult, resolveCollection } from '../collection-selection/index.js';
 import { decodeIndexMetadata, getUnsupportedIndexFeatures } from '../../models/server/index.js';
 import { isExpired } from '../../models/time/index.js';
 import {
@@ -145,11 +150,13 @@ export class PublisherServer {
 
   static fromStaticPublishRc(config: StaticPublishRc) {
     const storeProvider = loadStorageProviderFromStaticPublishRc(config);
-    return new PublisherServer(
+    const server = new PublisherServer(
       config.publishId,
       storeProvider,
       config.defaultCollectionName,
     );
+    server.setCollectionSelection(config.collectionSelection ?? null);
+    return server;
   }
 
   publishId: string;
@@ -163,6 +170,9 @@ export class PublisherServer {
 
   // When set, responses are cached with the Core Cache API. See setResponseCache().
   responseCache: ResponseCacheOptions | null;
+
+  // See setCollectionSelection().
+  collectionSelection: CollectionSelection | null = null;
 
   // The scope of the methods that do not take a request, such as getServerConfig()
   // and getMatchingAsset(). beginRequest(), serveRequest(), and
@@ -225,6 +235,31 @@ export class PublisherServer {
   // default) turns the cache off.
   setResponseCache(options: ResponseCacheOptions | null) {
     this.responseCache = options;
+  }
+
+  // The collectionSelection of static-publish.rc.js. fromStaticPublishRc() sets
+  // it. null (the default) turns collection selection off. Throws a TypeError if
+  // the config is not valid.
+  // With a config, a collection that is not the default collection, selected
+  // with the collectionName option of serveRequest() or serveFallback(), gets:
+  // - if it does not exist or has expired: onMissing ('not-found': a 404
+  //   response; 'default': the default collection).
+  // - X-Robots-Tag: noindex (unless noindex is false), and Cache-Control: private.
+  setCollectionSelection(config: CollectionSelection | null) {
+    if (config != null) {
+      const errors = validateCollectionSelection(config);
+      if (errors.length > 0) {
+        throw new TypeError(`Invalid collectionSelection:\n${errors.join('\n')}`);
+      }
+    }
+    this.collectionSelection = config;
+  }
+
+  // Choose the collection for a request with the collectionSelection config.
+  // If the result has a response, return it. Otherwise, pass its collectionName
+  // and pathname to serveRequest().
+  resolveCollection(request: Request): ResolveCollectionResult {
+    return resolveCollection(request, this.collectionSelection);
   }
 
   // Start handling a new request. serveRequest() and serveFallback() call this. If you call
@@ -819,7 +854,7 @@ export class PublisherServer {
   // response for the request, for example for a method other than GET and HEAD.
   async serveRequest(request: Request, options: ServeRequestOptions = {}): Promise<Response | null> {
 
-    const scope = this.beginRequestFor(request, options.collectionName);
+    let scope = this.beginRequestFor(request, options.collectionName);
 
     // Only handle GET and HEAD
     if (request.method !== 'GET' && request.method !== 'HEAD') {
@@ -841,11 +876,18 @@ export class PublisherServer {
       return new Response("OK", { status: 200 });
     }
 
+    const selected = await this.checkSelectedCollection(request, scope);
+    if (selected instanceof Response) {
+      return selected;
+    }
+    scope = selected.scope;
+
     // The fallback pages (SPA, not found) depend on whether the client accepts HTML.
     // Without them, the response is the same as for a client that does not accept HTML.
     const fallback = options.fallback !== false && requestAcceptsTextHtml(request);
     const keyPath = fallback ? pathname : `${pathname}|no-html`;
-    return this.serveCachedFor(scope, request, keyPath, (fillRequest) => this.serveRequestFromStorage(scope, fillRequest, pathname, fallback));
+    const response = await this.serveCachedFor(scope, request, keyPath, (fillRequest) => this.serveRequestFromStorage(scope, fillRequest, pathname, fallback));
+    return selected.preview ? this.markPreviewResponse(response) : response;
   }
 
   // Serve the SPA file or the 404 page, as serveRequest() does when no file
@@ -854,7 +896,7 @@ export class PublisherServer {
   // the collection has no fallback page.
   async serveFallback(request: Request, options: ServeFallbackOptions = {}): Promise<Response | null> {
 
-    const scope = this.beginRequestFor(request, options.collectionName);
+    let scope = this.beginRequestFor(request, options.collectionName);
 
     // Only handle GET and HEAD
     if (request.method !== 'GET' && request.method !== 'HEAD') {
@@ -865,15 +907,79 @@ export class PublisherServer {
       return null;
     }
 
+    const selected = await this.checkSelectedCollection(request, scope);
+    if (selected instanceof Response) {
+      return selected;
+    }
+    scope = selected.scope;
+
     // The fallback response is the same for all paths, so it has one cache key.
     // A path always starts with a slash, so this key is not the key of a path.
-    return this.serveCachedFor(scope, request, '|fallback', async (fillRequest) => {
+    const response = await this.serveCachedFor(scope, request, '|fallback', async (fillRequest) => {
       const serverConfig = await this.getServerConfigFor(scope);
       if (serverConfig == null) {
         return null;
       }
       return this.serveFallbackFromStorage(scope, fillRequest, serverConfig);
     });
+    return selected.preview ? this.markPreviewResponse(response) : response;
+  }
+
+  // Returns true if the collection of the scope exists, has not expired, and can
+  // be served by this version. It reads the settings and the index into the scope.
+  async collectionExists(request: Request, collectionName: string | null): Promise<boolean> {
+    return this.collectionExistsFor(this.scopeForRequest(request, collectionName ?? this.defaultCollectionName));
+  }
+
+  private async collectionExistsFor(scope: CollectionScope): Promise<boolean> {
+    return (await this.getServerConfigFor(scope)) != null && (await this.getAssetEntryMapFor(scope)) != null;
+  }
+
+  // With collection selection, check a collection that is not the default
+  // collection (see setCollectionSelection()). Returns the scope to serve, and
+  // whether to mark the response as a preview, or a 404 response for onMissing:
+  // 'not-found'. The check reads the index, also when the response cache has the
+  // response.
+  private async checkSelectedCollection(request: Request, scope: CollectionScope): Promise<{ scope: CollectionScope, preview: boolean } | Response> {
+    const config = this.collectionSelection;
+    if (config == null || scope.collectionName === this.defaultCollectionName) {
+      return { scope, preview: false };
+    }
+    if (await this.collectionExistsFor(scope)) {
+      return { scope, preview: true };
+    }
+    if (config.onMissing === 'default') {
+      this.currentScope = this.scopeForRequest(request, this.defaultCollectionName);
+      return { scope: this.currentScope, preview: false };
+    }
+    const headers = new Headers({
+      'Content-Type': 'text/plain',
+      'Cache-Control': 'no-store',
+    });
+    if (config.noindex !== false) {
+      headers.set('X-Robots-Tag', 'noindex');
+    }
+    return new Response(`Collection '${scope.collectionName}' not found.`, { status: 404, headers });
+  }
+
+  // A response from a collection that is not the default collection. The same
+  // URL can serve another collection (for example after the cookie is removed),
+  // so shared caches must not store it.
+  private markPreviewResponse(response: Response | null): Response | null {
+    if (response == null || this.collectionSelection == null) {
+      return response;
+    }
+    const headers = new Headers(response.headers);
+    const cacheControl = headers.get('Cache-Control');
+    if (cacheControl == null || cacheControl === '') {
+      headers.set('Cache-Control', 'private');
+    } else if (!/\b(private|no-store)\b/i.test(cacheControl)) {
+      headers.set('Cache-Control', `private, ${cacheControl}`);
+    }
+    if (this.collectionSelection.noindex !== false) {
+      headers.set('X-Robots-Tag', 'noindex');
+    }
+    return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
   }
 
   // Make the scope of the request for the collection the current scope.

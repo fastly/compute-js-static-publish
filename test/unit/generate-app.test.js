@@ -71,6 +71,20 @@ const cases = {
     ...base,
     defaultCollectionName: 'production',
   },
+  'kv-collection-selection': {
+    ...base,
+    collectionSelection: {
+      sources: [
+        { type: 'host', pattern: '{collection}.preview.example.com' },
+        { type: 'query', param: 'collection', sticky: 'cookie' },
+        { type: 'cookie', maxAge: 604800 },
+        { type: 'header', name: 'x-publisher-collection' },
+      ],
+      allow: [ 'pr-*', 'staging' ],
+      onMissing: 'not-found',
+      noindex: true,
+    },
+  },
   's3-endpoint': {
     ...base,
     storage: { mode: 's3', region: 'us-east-1', bucket: 'my-bucket', endpointUrl: 'https://s3.example.com/', endpointGenerated: false },
@@ -152,4 +166,21 @@ describe('generateApp() golden files', () => {
       }
     });
   }
+});
+
+describe('collectionSelection', () => {
+  const collectionSelection = { sources: [ { type: 'header', name: 'x-c' } ] };
+
+  test('a template without supports.collectionSelection fails', () => {
+    const template = { files: { 'src/index.js': '' }, dependencies: {} };
+    assert.throws(() => generateApp({ ...base, template, collectionSelection }), /does not support collectionSelection/);
+  });
+
+  test('every template that supports it can generate it', () => {
+    for (const [ name, template ] of Object.entries(appTemplates)) {
+      if (template.supports?.collectionSelection) {
+        assert.match(generateApp({ ...base, template, collectionSelection })['static-publish.rc.js'], /collectionSelection: \{/, name);
+      }
+    }
+  });
 });

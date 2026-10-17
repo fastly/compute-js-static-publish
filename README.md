@@ -462,9 +462,78 @@ addEventListener("fetch", event => {
 });
 ```
 
+### 👀 Previews: Collection Selection
+
+`collectionSelection` in `static-publish.rc.js` chooses the collection that serves each request, for example to show a preview of a pull request. It is off by default: without it, every request gets the default collection.
+
+```js
+const rc = {
+  // ...
+  collectionSelection: {
+    // Tried in order. The first source that gives a collection wins.
+    // If no source gives a collection, the default collection is used.
+    sources: [
+      { type: 'host',   pattern: '{collection}.preview.example.com' },
+      { type: 'path',   prefix: '/_preview/{collection}', sticky: 'cookie' },
+      { type: 'query',  param: 'collection', sticky: 'cookie' },
+      { type: 'cookie', cookieName: 'publisher-collection',
+        activatePath: '/activate', resetPath: '/reset', maxAge: 604800 },
+      { type: 'header', name: 'x-publisher-collection' },
+    ],
+    // The collections that can be selected ('*' matches any characters). Default: any.
+    allow: ['pr-*', 'staging'],
+    // The selected collection does not exist or has expired:
+    // 'not-found' (default) gives a 404 response, 'default' serves the default collection.
+    onMissing: 'not-found',
+    // X-Robots-Tag: noindex on the responses of a selected collection. Default: true.
+    noindex: true,
+  },
+};
+```
+
+| Source | Reads | Notes |
+|--------|-------|-------|
+| `host` | The hostname, matched against `pattern` | Needs a wildcard domain and TLS for it. The pattern has one `{collection}` in one label, with fixed text around it if you want (`branch-{collection}.preview.example.com`). A host label has at most 63 characters. Make sure that your production hostname does not match the pattern. |
+| `path` | A path prefix, which is removed before the file lookup | Works on `*.edgecompute.app`. Links that start with `/` lose the prefix, so use it with `sticky: 'cookie'`, or for a site with relative links. The links in HTML do not change. |
+| `query` | A query parameter | Only the request that has it. Usually used with `sticky: 'cookie'`. |
+| `cookie` | A cookie | Also serves the activate path (`/activate?collection=<name>&redirectTo=<path>`) and the reset path. |
+| `header` | A request header | For tests, CI checks, and API clients. |
+
+- `sticky: 'cookie'` on a `path` or `query` source: when the source matches, set the cookie of the `cookie` source, and redirect to the URL without the prefix or the parameter. It needs a `cookie` source.
+- A name must follow the [collection name rule](#-collections-publish-preview-promote) and match `allow`. Otherwise the source is skipped.
+- Redirects go only to a path on the same site. `redirectTo` with another site redirects to `/`.
+- The responses of a selected collection (not the default collection) get `Cache-Control: private`, because the same URL can serve another collection.
+- To find out if a selected collection exists, `PublisherServer` reads its index, also when the [response cache](#️-caching-responses-with-the-core-cache) has the response.
+
+The `plain` app does this in `src/index.js`. Apps scaffolded before 8.1.0 do not. To add it to such an app, change `src/index.js`:
+
+```js
+const selection = publisherServer.resolveCollection(request);
+if (selection.response != null) {
+  return selection.response; // a redirect (sticky, activate, reset), or an error
+}
+const response = await publisherServer.serveRequest(request, {
+  collectionName: selection.collectionName, // null: the default collection
+  pathname: selection.pathname,             // the path without the prefix of a path source
+});
+```
+
+To scaffold an app with collection selection, use the [`--collection-selection` flags](#options). To show a link to a collection, for example in CI, use `previewUrl()`. It uses the first source that can make a URL:
+
+```js
+import { previewUrl } from '@fastly/compute-js-static-publish';
+import rc from './static-publish.rc.js';
+
+previewUrl('pr-42', 'https://example.edgecompute.app', rc.collectionSelection);
+// with the sources above: 'https://pr-42.preview.example.com/'
+```
+
+> [!WARNING]
+> A preview is public to anyone who knows its name. Use `allow` to limit the collections that can be selected, and do not publish content that must stay private.
+
 ### 🔀 Selecting a Collection at Runtime
 
-The `collectionSelector` module provides helpers to extract a collection name from different parts of a request:
+For previews, use [collection selection](#-previews-collection-selection). To select a collection in your own code, the `collectionSelector` module provides helpers to extract a collection name from different parts of a request:
 
 ```js
 collectionSelector.fromHostDomain(request, /^preview-([^\.]*)\./);
@@ -985,6 +1054,17 @@ npx @fastly/compute-js-static-publish@latest \
 - `--not-found-page`: 404 fallback file path (e.g., `./public/404.html`).
 - `--auto-index`: List of filenames to use as index files.
 - `--auto-ext`: Extensions to try when resolving URLs.
+
+**Collection selection** (written as `collectionSelection` in `static-publish.rc.js`; see [Previews: Collection Selection](#-previews-collection-selection)):
+- `--collection-selection`: A source. Can be repeated; the sources are tried in the order of the flags.
+   - `host:<pattern>`, for example `host:{collection}.preview.example.com`
+   - `path:<prefix>[,sticky]`, for example `path:/_preview/{collection},sticky`
+   - `query:<param>[,sticky]`, for example `query:collection,sticky`
+   - `cookie[:<cookieName>][,maxAge=<seconds>][,activatePath=<path>][,resetPath=<path>]`
+   - `header:<name>`, for example `header:x-publisher-collection`
+- `--collection-allow`: The collections that can be selected, for example `pr-*,staging`.
+- `--collection-on-missing`: `not-found` (default) or `default`.
+- `--collection-noindex`: `true` (default) or `false`.
 
 ### 🚀 Inside a Compute App Directory
 

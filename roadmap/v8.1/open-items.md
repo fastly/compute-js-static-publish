@@ -6,8 +6,6 @@ No open design questions. These details are to decide or to test in their PRs.
 
 | Item | Detail |
 |---|---|
-| 9 | The small API that tells "collection not found" from "file not found", for `onMissing` |
-| 10 | The final syntax of the collection-selection flags |
 | 18 | `.gitignore` after eject: the working dir (`my-site/static-publisher/`) stays ignored by the project's `.gitignore`. `generateApp()` adds the working dir to the app's own `.gitignore` only if it is inside the app dir. The `.static-publish/` line in the project's `.gitignore` is stale after eject: `eject` says so in its summary, but never changes the user's `.gitignore`. |
 | 16 | The format of the version comment (for example `static-publish 8.1.0 fp:<sha256>`), and whether a user comment (for example a commit SHA) can be added |
 | 11 or 13 | Whether ejected-mode commands also accept `--app-dir`, so that they can run from the repo root |
