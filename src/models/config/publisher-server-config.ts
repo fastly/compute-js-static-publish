@@ -9,6 +9,7 @@ import { type ContentCompressionTypes } from '../compression/index.js';
 export type PublisherServerConfig = {
   // Prefix to apply to web requests. Effectively, a directory within rootDir that is used
   // by the web server to determine the asset to respond with. Defaults to the empty string.
+  /** @deprecated A future version will remove this setting. */
   publicDirPrefix?: string,
 
   // A test to apply to item names to decide whether to serve them as "static" files, in other
