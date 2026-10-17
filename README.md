@@ -831,7 +831,6 @@ npx @fastly/compute-js-static-publish@latest \
   [--output=./compute-js] \
   [--static-publisher-working-dir=<output>/static-publisher] \
   [--publish-id=<prefix>] \
-  [--public-dir=./public] \
   [--static-dir=./public/static] \
   [--spa=./public/spa.html] \
   [--not-found-page=./public/404.html] \
@@ -866,7 +865,7 @@ npx @fastly/compute-js-static-publish@latest \
 **Used in building config files:**
 - `--root-dir`: Required. Directory of static site content.
 - `--publish-id`: Optional key prefix for KV entries (default: `'default'`).
-- `--public-dir`: Public files base directory (default: same as `--root-dir`).
+- `--public-dir`: **Deprecated.** A future version will remove it. Public files base directory, under `--root-dir` (default: same as `--root-dir`). Files that are under `--root-dir` but not under `--public-dir` are published, but requests cannot get them.
 - `--static-dir`: One or more directories to serve with long cache TTLs.
 - `--spa`: SPA fallback file path (e.g., `./public/spa.html`).
 - `--not-found-page`: 404 fallback file path (e.g., `./public/404.html`).

@@ -56,7 +56,7 @@ Compute Service Metadata:
   --service-id <id>                     (optional) Fastly service ID
 
 Server Config:
-  --public-dir <path>                   Base dir for content (default: root-dir)
+  --public-dir <path>                   Deprecated. Base dir for content (default: root-dir)
   --static-dir <path>,<path...>         Directory served with long TTL (can repeat)
   --spa <file>                          SPA fallback file (e.g., /index.html)
   --not-found-page <file>               404 fallback file (e.g., /404.html)
@@ -540,6 +540,11 @@ export async function action(actionArgs: string[]) {
     console.error(`  * ${rootRelative(rootDir)} must exist and be a directory.`);
     process.exitCode = 1;
     return;
+  }
+
+  if (options.publicDir != null) {
+    console.log(`⚠️ Warning: --public-dir is deprecated, and a future version will remove it.`);
+    console.log(`  * Use only --root-dir. Requests then map to the files under --root-dir.`);
   }
 
   // Resolve the public dir as well. If it's not specified, we use the root directory.
