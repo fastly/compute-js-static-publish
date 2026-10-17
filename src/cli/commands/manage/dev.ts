@@ -12,7 +12,7 @@ import { type OptionDefinition } from 'command-line-args';
 import { prepareManagedApp } from '../../managed/app.js';
 import { parseCommandLine } from '../../util/args.js';
 import { EXIT_FAILED, recordError, reportError } from '../../util/cli-output.js';
-import { LoadConfigError, detectProjectMode, loadProjectFile } from '../../util/config.js';
+import { checkVersionForCommand, loadManagedProject } from '../../managed/command-helpers.js';
 import { PROJECT_FILE_NAME } from '../../../models/config/static-publish-project.js';
 
 function help() {
@@ -32,6 +32,8 @@ Description:
   Only in a managed project. In an ejected app, run 'npm run dev:start'.
 
 Options:
+  --auto-upgrade                   If the CLI is newer than managed.staticPublishVersion,
+                                   set it to the version that runs, and continue.
   -- <options>                     Options after -- go to 'fastly compute serve',
                                    for example: dev -- --addr=127.0.0.1:8080
 
@@ -47,7 +49,9 @@ export async function action(actionArgs: string[]) {
   const serveArgs = separator === -1 ? [] : actionArgs.slice(separator + 1);
   const ownArgs = separator === -1 ? actionArgs : actionArgs.slice(0, separator);
 
-  const optionDefinitions: OptionDefinition[] = [];
+  const optionDefinitions: OptionDefinition[] = [
+    { name: 'auto-upgrade', type: Boolean },
+  ];
   const parsed = parseCommandLine(ownArgs, optionDefinitions);
   if (parsed.needHelp) {
     if (parsed.error != null) {
@@ -59,22 +63,11 @@ export async function action(actionArgs: string[]) {
     return;
   }
 
-  if (detectProjectMode() !== 'managed') {
-    reportError('usage', `'dev' works only in a managed project (${PROJECT_FILE_NAME}). In an ejected app, run 'npm run dev:start'.`);
+  const project = await loadManagedProject('dev', `In an ejected app, run 'npm run dev:start'.`);
+  if (project == null) {
     return;
   }
-
-  let project;
-  try {
-    project = await loadProjectFile();
-  } catch (err) {
-    console.error(`❌ Can't load ${PROJECT_FILE_NAME}`);
-    if (err instanceof LoadConfigError) {
-      for (const error of err.errors) {
-        console.error(error);
-      }
-    }
-    recordError('config-invalid', `Can't load ${PROJECT_FILE_NAME}.`);
+  if (!checkVersionForCommand(project, parsed.commandLineOptions['auto-upgrade'] === true)) {
     return;
   }
 

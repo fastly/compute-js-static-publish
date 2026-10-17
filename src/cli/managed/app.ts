@@ -13,7 +13,8 @@ import { MANAGED_APP_DIR } from '../../models/config/static-publish-project.js';
 import { isS3StorageConfigRc } from '../../models/config/static-publish-rc.js';
 import { type AppConfig, generateApp } from '../commands/scaffold/generate-app.js';
 import { appTemplates } from '../commands/scaffold/templates/index.js';
-import { getOwnPackageDir, readOwnPackageJson } from '../util/package.js';
+import { getOwnPackageDir, getOwnVersion, readOwnPackageJson } from '../util/package.js';
+import { computeFingerprint, managedAppFiles } from './fingerprint.js';
 import { findHostnameForAwsS3RegionAndBucket } from '../util/s3.js';
 import { isJsonMode } from '../util/cli-output.js';
 import { appConfigFromProject } from './project-file.js';
@@ -111,16 +112,28 @@ export function installManagedApp(appDir: string): boolean {
   return true;
 }
 
+// The files and the fingerprint of the app of a managed project, in memory.
+export async function managedAppState(projectDir: string, project: StaticPublishProjectNormalized) {
+  const appConfig = await managedAppConfig(projectDir, project);
+  const files = managedAppFiles(generateApp(appConfig));
+  const cliPackageDir = getOwnPackageDir();
+  const fingerprint = computeFingerprint(files, {
+    staticPublishVersion: getOwnVersion(),
+    template: MANAGED_TEMPLATE,
+    machinePaths: [ cliPackageDir, path.relative(appConfig.appDir, cliPackageDir).split(path.sep).join('/') ],
+  });
+  return { appDir: appConfig.appDir, appConfig, files, fingerprint };
+}
+
 // Generate the app of a managed project in .static-publish/app, and install
 // its dependencies if necessary.
 export async function prepareManagedApp(projectDir: string, project: StaticPublishProjectNormalized) {
-  const appConfig = await managedAppConfig(projectDir, project);
-  const files = generateApp(appConfig);
+  const { appConfig, files, fingerprint } = await managedAppState(projectDir, project);
   console.log(`🛠️ Generating the app in ${MANAGED_APP_DIR}...`);
   const written = writeManagedAppFiles(appConfig.appDir, files);
   if (written.length > 0) {
     console.log(`  | Wrote ${written.join(', ')}`);
   }
   const installed = installManagedApp(appConfig.appDir);
-  return { appDir: appConfig.appDir, appConfig, files, installed };
+  return { appDir: appConfig.appDir, appConfig, files, fingerprint, installed };
 }

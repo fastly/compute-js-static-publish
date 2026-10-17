@@ -540,6 +540,7 @@ Generate the app, install (if necessary), then run `fastly compute serve` in `.s
 
 - **The fingerprint** is a SHA-256 over the whole output of `generateApp()` and the version of this package (and, in 8.2, the template name, the contents of `hono-extensions/`, and its lockfile). It does not include the service ID, `generatedFrom`, or any content.
 - **Where the deployed fingerprint is:** in the comment of the service version. `deploy` runs `fastly compute build`, then `fastly compute deploy --comment "…"` (checked in the Fastly CLI source: `--comment` sets the comment before the version is activated). `status` reads the comment of the active version through the API. Thus it is true about what is active, also after a rollback or a deploy by hand.
+- **Version comment** (decided in item 16): `static-publish <version> fp:<sha256>`, and ` | <text>` with `deploy --comment <text>` (for example a commit SHA). The fingerprint leaves out `publish-content.config.js` (a managed app does not have it), the `service_id` line, `generatedFrom`, and the CLI's paths. `deploy` warns when the CLI runs from the npx cache (decided in item 17).
 - **`status [--json]`** shows the mode, the service ID, the current fingerprint, the deployed fingerprint, `needsDeploy`, and the preview URL templates (§7). In ejected mode: the mode and the service ID. Without an API token: the current fingerprint, and the deployed one as unknown.
 
 ### The version of this package (decided 2026-10-18)

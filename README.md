@@ -226,7 +226,7 @@ The project file has the settings that an ejected app has in its two files:
 
 Paths in the project file are relative to it. The name of the file marks the mode: a directory with `static-publish.project.js` is a managed project, and a directory with `static-publish.rc.js` is an ejected app. A directory with both is an error.
 
-`publish-content`, `collections`, and `clean` run in the project dir (or with `--project-dir`), and read the project file. `publish-content` purges the service of `managed.serviceId`, after `--fastly-service-id` and `FASTLY_SERVICE_ID`. The commands that deploy the app (`deploy`, `status`, `eject`) come in later 8.1 changes.
+`publish-content`, `collections`, and `clean` run in the project dir (or with `--project-dir`), and read the project file. `publish-content` purges the service of `managed.serviceId`, after `--fastly-service-id` and `FASTLY_SERVICE_ID`. `eject` comes in a later 8.1 change.
 
 To run the app on your computer:
 
@@ -242,6 +242,29 @@ The same version of this package always generates the same app, with the same ve
 ```sh
 npm install --save-dev @fastly/compute-js-static-publish
 ```
+
+To deploy the app:
+
+```sh
+npx @fastly/compute-js-static-publish deploy
+```
+
+`deploy` generates the app, installs it if necessary, and runs `fastly compute build` and `fastly compute deploy`, only if the app changed. It needs a Fastly API token (`FASTLY_API_TOKEN` or `--fastly-api-token`).
+
+- **The fingerprint** is a SHA-256 of the generated app and the version of this package. It does not depend on the content, on `publishContent`, on the Service ID, or on the path of this package on your computer. `deploy` writes it into the comment of the new service version (`static-publish <version> fp:<fingerprint>`, then ` | <text>` with `--comment <text>`, for example a commit SHA). The next `deploy` reads the comment of the active version, and does nothing if the fingerprint is the same. `--force` deploys anyway.
+- **The first deploy** makes a new service (the Fastly CLI asks for its name and domain, unless `--non-interactive`), and writes its ID into `managed.serviceId`. Commit the project file then. To deploy to a service that exists, use `--fastly-service-id` or `FASTLY_SERVICE_ID`. With S3 storage, the first deploy must be done on your computer, because the Fastly CLI asks for the S3 credentials of the Secret Store; with `--non-interactive`, it is an error (`first-deploy-manual`).
+- `status` shows the fingerprint of the app, the fingerprint of the active version, and if a deploy is necessary, and the preview URLs of [collection selection](#-previews-collection-selection). Without an API token, the deployed fingerprint is unknown.
+
+**The version of this package.** `managed.staticPublishVersion` records the version of this package that the project uses. `dev` and `deploy` compare it with the version that runs:
+
+| The CLI that runs | Result |
+|---|---|
+| The same version | Continue. |
+| A newer version | Stop. Run `upgrade` to move the project to the new version (and commit the project file), or use `--auto-upgrade`. |
+| An older version | Stop. An older version never deploys over an app that a newer version made. |
+
+Thus a new release of this package never changes your app by itself, also with `npx @fastly/compute-js-static-publish@latest`.
+
 
 ### Template hooks
 
@@ -1025,7 +1048,7 @@ These options work with every command:
 - `--version`: Show the version of this package, and exit. It works in any directory.
 - `--project-dir <dir>`: Run as if in this directory. All relative paths, also the paths in other options, are relative to it. Thus a repository can have more than one project.
 - `--non-interactive`: Never ask for input. Missing input is an error. This is also on when the `CI` environment variable is set. (Today no command asks for input.)
-- `--json`: Write one JSON object to stdout at the end. The log lines go to stderr. Only `publish-content`, `collections list`, and `--version` support it. With other commands, it is an error (`json-not-supported`).
+- `--json`: Write one JSON object to stdout at the end. The log lines go to stderr. Only `publish-content`, `collections list`, `status`, `deploy`, and `--version` support it. With other commands, it is an error (`json-not-supported`).
 
 ### Using the CLI in CI
 
@@ -1072,6 +1095,27 @@ These options work with every command:
 }
 ```
 
+`status --json` (a managed project):
+
+```json
+{
+  "schemaVersion": 1,
+  "mode": "managed",
+  "serviceId": "SERVICE_ID",
+  "staticPublishVersion": { "recorded": "8.1.0", "running": "8.1.0", "check": "same" },
+  "fingerprint": { "current": "…", "deployed": "…", "deployedStaticPublishVersion": "8.1.0" },
+  "activeVersion": 12,
+  "domain": "example.edgecompute.app",
+  "needsDeploy": false,
+  "reasons": [],
+  "previewUrls": [ { "type": "query", "url": "https://example.edgecompute.app/?collection={collection}" } ]
+}
+```
+
+`needsDeploy` is `null` if it is unknown (no API token). In an ejected app: `{ "schemaVersion": 1, "mode": "ejected", "serviceId": … }`.
+
+`deploy --json`: `{ "schemaVersion": 1, "deployed": true, "serviceId": "…", "version": 13, "domain": "…", "fingerprint": "…", "staticPublishVersion": "8.1.0" }`. If nothing changed: `"deployed": false, "reason": "up-to-date"`, with the active version.
+
 **Errors:** with `--json`, stdout has one object, `{ "schemaVersion": 1, "error": { "code": "…", "message": "…" } }`. The error also goes to stderr. `message` is for people and can change. `code` is one of:
 
 | Code | Exit code | Meaning |
@@ -1083,6 +1127,9 @@ These options work with every command:
 | `project-dir-not-found` | `2` | `--project-dir` is not a directory |
 | `json-not-supported` | `2` | `--json` with a command that does not support it |
 | `credentials-missing` | `2` | An API token or S3 credentials are necessary, but not given |
+| `version-mismatch` | `2` | `managed.staticPublishVersion` is not the version that runs |
+| `first-deploy-manual` | `2` | The first deploy of an S3 app must be done by hand |
+| `deploy-failed` | `1` | The build or the deploy of the app failed |
 | `failed` | `1` | The operation failed, for example storage cannot be reached |
 
 **Secrets:** give the Fastly API token in `FASTLY_API_TOKEN`, and S3 credentials in `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY`. The CLI replaces the values of the token and the S3 secret access key with `[REDACTED]` in its output, also in errors.
