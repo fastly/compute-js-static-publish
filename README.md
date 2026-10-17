@@ -307,6 +307,9 @@ const config = {
     return true; // include everything by default
   },
 
+  // Files to publish as hidden files (optional):
+  hiddenItems: ['/404.html', '/templates/'],
+
   // Override which compressed variants to create for each asset during publish (optional):
   contentCompression: ['br', 'gzip'],
 
@@ -340,7 +343,8 @@ You can override this file for a single `publish-content` command by specifying 
 - `excludeDirs` - Array of directory names or regex patterns to exclude (default: `['./node_modules']`).
 - `excludeDotFiles` - Exclude dotfiles and dot-named directories (default: true).
 - `includeWellKnown` - Always include `.well-known` even if dotfiles are excluded (default: true).
-- `assetInclusionTest` - Function to determine inclusion and variant behavior per file.
+- `assetInclusionTest` - Function to determine inclusion and variant behavior per file. Return `false` to leave the file out, `true` to include it, or `{ hidden: true }` to include it as a [hidden file](#hidden-files).
+- `hiddenItems` - The files to publish as [hidden files](#hidden-files). The same format as `server.staticItems`, tested against the asset key (the path relative to `rootDir`): a directory that ends with `/`, an exact path, a glob pattern, or `'re:/<regex>/<flags>'` (default: none).
 - `contentCompression` - Array of compression formats to pre-generate (`['br', 'gzip']` by default).
 - `brotliQuality` - Brotli quality for the `br` variants, an integer from 0 to 11 (default: 11). Quality 11 gives the smallest files but is the slowest. Quality 10 is approximately 3 times faster, and its files are approximately 2% larger. If you change this value, variants that are already in storage are not compressed again.
 - `contentTypes` - Additional or override content type definitions.
@@ -361,6 +365,33 @@ You can override this file for a single `publish-content` command by specifying 
      Publisher Server will serve files from these directories with a long TTL.
    - `allowedEncodings` - Specifies which compression formats the server is allowed
      to serve based on the client's `Accept-Encoding` header.
+
+### Hidden files
+
+A hidden file is published, but the Publisher Server does not serve it for a request, also not through `autoExt` or `autoIndex`. Use hidden files for:
+
+- The 404 page: a request for `/404.html` must not get the 404 page with status `200`. If the `spaFile` or the `notFoundPageFile` is hidden, the server still serves it as the fallback page.
+- Files that your code reads, for example templates. Get them with `getMatchingAsset(key, { includeHidden: true })` (see [Using Published Assets in Your Code](#-using-published-assets-in-your-code)).
+
+A file is hidden if `hiddenItems` selects it, or if `assetInclusionTest` returns `{ hidden: true }` for it:
+
+```js
+const config = {
+  rootDir: '../public',
+  hiddenItems: ['/404.html', '/templates/'],
+  assetInclusionTest: (key) => key.endsWith('.tpl') ? { hidden: true } : true,
+  server: {
+    notFoundPageFile: '/404.html',
+  },
+};
+```
+
+`publish-content` and `collections list` show the number of hidden files.
+
+> [!WARNING]
+> **Hidden is not access control.** Hidden files are in storage (the KV Store or the bucket), the same as the other files, and code that asks for hidden files can serve them. Do not use hidden files for secrets.
+
+A collection that has hidden files requires the `hidden` feature. An app that is built with a version earlier than 8.1.0 does not serve such a collection (8.0), or does not find its hidden files (earlier versions). Build and deploy your app with 8.1.0 or later before you publish hidden files.
 
 ## 📦 Collections (Publish, Preview, Promote)
 
@@ -838,6 +869,17 @@ if (asset != null) {
   asset.variants;         // Available variants (e.g., ['gzip'])
 }
 ```
+
+`getMatchingAsset(key, options)` takes these options:
+
+- `applyAuto` - Also try `autoExt` and `autoIndex`, as for a request (default: `false`). The second argument can also be a boolean, the value of `applyAuto`.
+- `includeHidden` - Also find [hidden files](#hidden-files) (default: `false`).
+
+```js
+const template = await publisherServer.getMatchingAsset('/templates/email.html', { includeHidden: true });
+```
+
+`getAssetEntryMap()` returns the whole index. The key of a hidden file in it is `hidden:` and then the asset key, for example `hidden:/404.html`.
 
 ### Load the File from KV Store:
 

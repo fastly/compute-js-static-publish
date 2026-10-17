@@ -40,7 +40,11 @@ export interface ExcludeDirTest {
   test(name: string): boolean;
 }
 
-export type AssetInclusionTest = (assetKey: string, contentType?: string) => boolean;
+// The result of an AssetInclusionTest. false leaves the file out. true, or an
+// object, includes it. { hidden: true } includes it as a hidden file.
+export type AssetInclusionTestResult = boolean | { hidden?: boolean };
+
+export type AssetInclusionTest = (assetKey: string, contentType?: string) => AssetInclusionTestResult;
 
 export type PublishContentConfig = {
   // Set to a directory that acts as the root of all files that will be included in this publish.
@@ -61,7 +65,17 @@ export type PublishContentConfig = {
   includeWellKnown?: boolean,
 
   // A test to run on each asset key to determine whether and how to include the file.
+  // Return false to leave the file out, true to include it, or { hidden: true }
+  // to include it as a hidden file.
   assetInclusionTest?: AssetInclusionTest | null,
+
+  // The files to publish as hidden files. PublisherServer does not serve a hidden
+  // file for a request. Code can get it with getMatchingAsset(key, { includeHidden: true }),
+  // and the SPA file and the 404 page can be hidden files. This is not access control.
+  // The same format as server.staticItems, tested against the asset key (the path
+  // relative to rootDir): a directory that ends with '/', an exact path, a glob
+  // pattern, or 're:/<regex>/<flags>'.
+  hiddenItems?: string[] | string | false | null,
 
   // A test to run on each asset key to determine whether and how to include the file.
   // DEPRECATED: Use assetInclusionTest instead
@@ -88,6 +102,7 @@ export type PublishContentConfigNormalized = {
   excludeDotFiles: boolean,
   includeWellKnown: boolean,
   assetInclusionTest: AssetInclusionTest | null,
+  hiddenItems: string[],
   contentCompression: ContentCompressionTypes[],
   brotliQuality: number | undefined,
   contentTypes: ContentTypeDef[],

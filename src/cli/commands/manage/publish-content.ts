@@ -8,10 +8,16 @@ import * as path from 'node:path';
 
 import { type OptionDefinition } from 'command-line-args';
 
-import { type AssetEntryMap, } from '../../../models/assets/index.js';
+import {
+  type AssetEntryMap,
+  HIDDEN_INDEX_FEATURE,
+  findAssetEntry,
+  hiddenIndexKey,
+} from '../../../models/assets/index.js';
 import { type ContentCompressionTypes } from '../../../models/compression/index.js';
 import { type PublisherServerConfigNormalized } from '../../../models/config/publisher-server-config.js';
 import { type ContentTypeDef, type PublishContentConfigNormalized } from '../../../models/config/publish-content-config.js';
+import { parseItemPatterns, testItemPatterns } from '../../../models/config/item-patterns.js';
 import { encodeIndexMetadata, type IndexMetadata } from '../../../models/server/index.js';
 import { calcExpirationTime } from '../../../models/time/index.js';
 import { parseCommandLine } from '../../util/args.js';
@@ -334,6 +340,14 @@ export async function action(actionArgs: string[]) {
     console.log(`✔️ (.well-known is exempt from exclusion.)`);
   }
 
+  // The files to publish as hidden files (see also assetInclusionTest).
+  const hiddenItems = parseItemPatterns(publishContentConfig.hiddenItems, (i, x) => {
+    console.warn(`⚠️ Cannot parse hiddenItems item index ${i}: '${x}', skipping...`);
+  });
+  if (hiddenItems.length > 0) {
+    console.log(`✔️ Hidden items: ${publishContentConfig.hiddenItems.join(', ')}`);
+  }
+
   // ### Collection name that we're currently publishing
   // for example, live, staging
   const collectionName = collectionNameValue ?? process.env.PUBLISHER_COLLECTION_NAME ?? defaultCollectionName;
@@ -449,9 +463,13 @@ export async function action(actionArgs: string[]) {
       return;
     }
 
+    // A hidden file is published, but PublisherServer does not serve it for a request.
+    const hidden = (typeof includeAsset === 'object' && includeAsset.hidden === true) ||
+      testItemPatterns(hiddenItems, assetKey);
+
     // #### Base file size, hash, last modified time
     const { size: baseSize, hash: baseHash } = await calculateFileSizeAndHash(file);
-    console.log(`📄 File '${rootRelative(file)}' - ${baseSize} bytes, sha256: ${baseHash}`);
+    console.log(`📄 File '${rootRelative(file)}' - ${baseSize} bytes, sha256: ${baseHash}${hidden ? ' (hidden)' : ''}`);
     const stats = fs.statSync(file);
     const lastModifiedTime = Math.floor((stats.mtime).getTime() / 1000);
 
@@ -560,6 +578,7 @@ export async function action(actionArgs: string[]) {
 
     return {
       assetKey,
+      hidden,
       asset: {
         key: `sha256:${baseHash}`,
         size: baseSize,
@@ -571,16 +590,23 @@ export async function action(actionArgs: string[]) {
     };
   });
 
+  let hiddenCount = 0;
   for (const result of fileResults) {
     if (result == null) {
       continue;
     }
-    assetsIndex[result.assetKey] = result.asset;
+    if (result.hidden) {
+      assetsIndex[hiddenIndexKey(result.assetKey)] = result.asset;
+      hiddenCount++;
+    } else {
+      assetsIndex[result.assetKey] = result.asset;
+    }
     for (const batchItem of result.batchItems) {
       batch.add(batchItem);
     }
   }
   console.log(`✅  Scan complete.`);
+  console.log(`  | ${Object.keys(assetsIndex).length} file(s) in the index, ${hiddenCount} of them hidden.`);
   if (existingKeys != null) {
     console.log(`  | ${existingVariantCount} variant(s) already in storage, ${batch.storageProviderBatchEntries.length} to upload.`);
   } else {
@@ -596,6 +622,8 @@ export async function action(actionArgs: string[]) {
   const indexMetadata: IndexMetadata = {
     publishedTime: Math.floor(Date.now() / 1000),
     expirationTime: expirationTime ?? undefined,
+    // A server that does not support hidden files must not serve this collection.
+    requires: hiddenCount > 0 ? [ HIDDEN_INDEX_FEATURE ] : undefined,
   };
 
   const indexFileName = `index_${collectionName}.json`;
@@ -637,7 +665,7 @@ export async function action(actionArgs: string[]) {
 
   if(spaFile != null) {
     console.log(` ✔️ Application SPA file '${spaFile}'.`);
-    const spaAsset = assetsIndex[spaFile];
+    const spaAsset = findAssetEntry(assetsIndex, spaFile, true);
     if(spaAsset == null || spaAsset.contentType !== 'text/html') {
       if (verbose) {
         console.log(` ⚠️ Notice: '${spaFile}' does not exist or is not of type 'text/html'. Ignoring.`);
@@ -653,7 +681,7 @@ export async function action(actionArgs: string[]) {
   let notFoundPageFile = server.notFoundPageFile;
   if(notFoundPageFile != null) {
     console.log(` ✔️ Application 'not found (404)' file '${notFoundPageFile}'.`);
-    const notFoundPageAsset = assetsIndex[notFoundPageFile];
+    const notFoundPageAsset = findAssetEntry(assetsIndex, notFoundPageFile, true);
     if(notFoundPageAsset == null || notFoundPageAsset.contentType !== 'text/html') {
       if (verbose) {
         console.log(` ⚠️ Notice: '${notFoundPageFile}' does not exist or is not of type 'text/html'. Ignoring.`);

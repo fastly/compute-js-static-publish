@@ -175,6 +175,34 @@ export async function loadPublishContentConfigFile(configFile: string): Promise<
 
 }
 
+// staticItems and hiddenItems: a string, an array of strings, false, or null.
+// Glob patterns become 're:' items. See models/config/item-patterns.ts.
+function normalizeItemList(name: string, value: unknown, errors: string[]): string[] {
+  if (value === null || value === false) {
+    value = [];
+  }
+  if (!Array.isArray(value)) {
+    value = [ value ];
+  }
+  const items = value as unknown[];
+  if (!items.every((x) => typeof x === 'string')) {
+    errors.push(`${name}, if specified, must be a string value, an array of string values, false, or null`);
+    return [];
+  }
+  return (items as string[]).map((x, index) => {
+    if (x.includes('*')) {
+      try {
+        const regexp = globToRegExp(x, {globstar: true});
+        return 're:' + String(regexp);
+      } catch {
+        errors.push(`${name} item at index ${index}, '${x}', cannot be parsed as glob pattern.`);
+        return '';
+      }
+    }
+    return x;
+  });
+}
+
 const normalizeContentTypeDef = buildNormalizeFunctionForObject<ContentTypeDef>((config, errors): ContentTypeDef | null => {
 
   let { test, contentType, text } = config;
@@ -226,6 +254,7 @@ export const normalizePublishContentConfig = buildNormalizeFunctionForObject<Pub
     includeWellKnown,
     assetInclusionTest,
     kvStoreAssetInclusionTest,
+    hiddenItems,
     contentCompression,
     brotliQuality,
     contentTypes,
@@ -317,6 +346,12 @@ export const normalizePublishContentConfig = buildNormalizeFunctionForObject<Pub
     errors.push('assetInclusionTest, if specified, must be null or a function.');
   }
 
+  if (!isSpecified(config, 'hiddenItems')) {
+    hiddenItems = [];
+  } else {
+    hiddenItems = normalizeItemList('hiddenItems', hiddenItems, errors);
+  }
+
   if (!isSpecified(config, 'contentCompression')) {
     contentCompression = ['br', 'gzip'];
   } else if (contentCompression === null) {
@@ -378,6 +413,7 @@ export const normalizePublishContentConfig = buildNormalizeFunctionForObject<Pub
     excludeDotFiles,
     includeWellKnown,
     assetInclusionTest,
+    hiddenItems,
     contentCompression,
     brotliQuality,
     contentTypes,
@@ -410,30 +446,7 @@ export const normalizePublisherServerConfig = buildNormalizeFunctionForObject<Pu
   if (!isSpecified(config, 'staticItems')) {
     staticItems = [];
   } else {
-    if (staticItems === null || staticItems === false) {
-      staticItems = [];
-    }
-    if (!Array.isArray(staticItems)) {
-      staticItems = [ staticItems ];
-    }
-    if (staticItems.every((x: any) => typeof x === 'string')) {
-      staticItems = (staticItems as string[]).map((x, index) => {
-        if (x.includes('*')) {
-          let re;
-          try {
-            const regexp = globToRegExp(x, {globstar: true});
-            re = 're:' + String(regexp);
-          } catch {
-            errors.push(`staticItems item at index ${index}, '${x}', cannot be parsed as glob pattern.`);
-            re = null;
-          }
-          return re;
-        }
-        return x;
-      });
-    } else {
-      errors.push('staticItems, if specified, must be a string value, an array of string values, false, or null');
-    }
+    staticItems = normalizeItemList('staticItems', staticItems, errors);
   }
 
   if (!isSpecified(config, 'allowedEncodings')) {

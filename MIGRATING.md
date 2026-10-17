@@ -72,10 +72,20 @@ To stop using `publicDirPrefix`:
 1. Find the files that are under `rootDir` but not under the public directory (`site/public/` in the example). For
    each file, do one of these steps:
    - If your app does not use the file, do nothing. After step 2, the CLI does not publish it.
-   - If the file is your `spaFile` or your `notFoundPageFile`, move it into the public directory. Then requests can
-     also get it at its own URL, for example `/404.html`.
-   - If your code reads the file with `getMatchingAsset()`, move it into the public directory. Then requests can also
-     get it at its own URL. To prevent this, return a response in `src/index.js` before you call `serveRequest()`:
+   - If the file is your `spaFile` or your `notFoundPageFile`, or if your code reads the file with
+     `getMatchingAsset()`, move it into the public directory, and add it to `hiddenItems` in
+     `publish-content.config.js` (from 8.1.0). A hidden file is published, but requests cannot get it at its own URL,
+     for example `/404.html`. The server still serves a hidden `spaFile` or `notFoundPageFile` as the fallback page,
+     and your code gets a hidden file with `getMatchingAsset(key, { includeHidden: true })`. See "Hidden files" in
+     `README.md`. Your app must be built with 8.1.0 or later to serve a collection that has hidden files:
+
+     ```js
+     hiddenItems: [ '/404.html', '/templates/' ],
+     ```
+
+     Before 8.1.0, there are no hidden files. Move the file into the public directory. Then requests can also get it
+     at its own URL. To prevent this for a file that your code reads, return a response in `src/index.js` before you
+     call `serveRequest()`:
 
      ```js
      const url = new URL(request.url);
