@@ -69,6 +69,10 @@ All collections share the files, because the key is the hash of the content. `cl
 - Uploads must be successful before the CLI writes the index.
 - `clean` must read all indexes before it deletes items. Before this rule, a read error that was not reported caused `clean` to delete the files of a live collection.
 
+### Generating the app
+
+`src/cli/CLAUDE.md` has how `generateApp()` makes the files of a scaffolded app, and how the tests check them.
+
 ### Two config files in a scaffolded app
 
 - `static-publish.rc.js` (`models/config/static-publish-rc.ts`): the storage mode, the store or bucket, `publishId`, and `defaultCollectionName`. The Wasm binary **contains a copy** of this file. Thus, if you change it, you must rebuild the app.
