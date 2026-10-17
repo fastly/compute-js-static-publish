@@ -19,6 +19,9 @@
     "dev:start": "fastly compute serve",
     "fastly:deploy": "fastly compute publish",
     "build": "js-compute-runtime ./src/index.js ./bin/main.wasm",
+    "prebuild": "compute-js-static-publish run-template-hook prebuild",
+    "postbuild": "compute-js-static-publish run-template-hook postbuild",
+    "postinstall": "compute-js-static-publish run-template-hook postinstall",
     "s3:publish": "npx @fastly/compute-js-static-publish publish-content"
   }
 }

@@ -14,6 +14,7 @@ import { describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import { generateApp } from '../../build/cli/cli/commands/scaffold/generate-app.js';
+import { appTemplates } from '../../build/cli/cli/commands/scaffold/templates/index.js';
 
 const GOLDEN_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../golden');
 const UPDATE = process.env.UPDATE_GOLDEN === '1';
@@ -42,6 +43,8 @@ const base = {
   autoIndex: [ 'index.html', 'index.htm' ],
   autoExt: [ '.html', '.htm' ],
   staticPublishVersionSpec: '<compute-js-static-publish>',
+  template: appTemplates.plain,
+  generatedFrom: { template: 'plain', staticPublishVersion: '<static-publish-version>', generatedAt: '<generated-at>' },
 };
 
 const cases = {
@@ -93,6 +96,38 @@ function readGolden(dir) {
   walk('');
   return files;
 }
+
+describe('templates', () => {
+  // Only we write templates. A template only adds: it never replaces a file
+  // that generateApp() writes.
+  for (const [ name, template ] of Object.entries(appTemplates)) {
+    test(`${name} does not replace a file that generateApp() writes`, () => {
+      assert.doesNotThrow(() => generateApp({ ...base, template }));
+    });
+  }
+
+  test('generateApp() throws for a template file that it writes itself', () => {
+    for (const file of [ 'package.json', './fastly.toml', 'static-publish.rc.js', '.gitignore' ]) {
+      const template = { files: { [file]: 'x' }, dependencies: {} };
+      assert.throws(() => generateApp({ ...base, template }), /is a file that generateApp\(\) writes/, file);
+    }
+  });
+
+  test('generateApp() adds the dependencies and the .gitignore lines of a template', () => {
+    const template = {
+      files: { 'src/index.js': '' },
+      dependencies: { hono: '^4.0.0' },
+      devDependencies: { typescript: '^5.0.0' },
+      gitignore: [ '/.extra' ],
+    };
+    const files = generateApp({ ...base, template });
+    const pkg = JSON.parse(files['package.json']);
+    assert.equal(pkg.dependencies.hono, '^4.0.0');
+    assert.equal(pkg.dependencies['@fastly/js-compute'], '^4.0.0');
+    assert.equal(pkg.devDependencies.typescript, '^5.0.0');
+    assert.match(files['.gitignore'], /\n\/\.extra\n$/);
+  });
+});
 
 describe('generateApp() golden files', () => {
   for (const [ name, config ] of Object.entries(cases)) {

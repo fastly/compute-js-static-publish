@@ -16,9 +16,10 @@ import { type CommandLineOptions, type OptionDefinition } from 'command-line-arg
 
 import { parseCommandLine } from '../../util/args.js';
 import { rootRelative } from '../../util/files.js';
-import { findComputeJsStaticPublisherVersion, type PackageJson } from '../../util/package.js';
+import { findComputeJsStaticPublisherVersion, getOwnVersion, type PackageJson } from '../../util/package.js';
 import { findHostnameForAwsS3RegionAndBucket } from '../../util/s3.js';
 import { generateApp } from './generate-app.js';
+import { appTemplates } from './templates/index.js';
 import { COLLECTION_NAME_RULE, isValidCollectionName } from '../../../models/collections/index.js';
 
 function help() {
@@ -817,6 +818,12 @@ export async function action(actionArgs: string[]) {
     autoIndex,
     autoExt,
     staticPublishVersionSpec: findComputeJsStaticPublisherVersion(packageJson),
+    template: appTemplates.plain,
+    generatedFrom: {
+      template: 'plain',
+      staticPublishVersion: getOwnVersion(),
+      generatedAt: new Date().toISOString().slice(0, 10),
+    },
   });
 
   // Write out the files

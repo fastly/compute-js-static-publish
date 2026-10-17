@@ -5,7 +5,9 @@
 
 import * as path from 'node:path';
 
+import { type GeneratedFrom } from '../../../models/config/static-publish-rc.js';
 import { dotRelative } from '../../util/files.js';
+import { type AppTemplate } from './templates/index.js';
 
 // The resolved settings of an app: everything that generateApp() needs.
 // Paths are absolute. The fields map onto the scaffold flags.
@@ -30,7 +32,15 @@ export type AppConfig = {
   autoExt: string[],
   // The version spec of this package for the app's package.json.
   staticPublishVersionSpec: string,
+  // What the app's code comes from.
+  template: AppTemplate,
+  // Written into static-publish.rc.js, if set.
+  generatedFrom: GeneratedFrom | undefined,
 };
+
+// The names of the template hooks. Every app has them as npm scripts. Each one
+// runs scripts/template_<name>.js if the app has that file.
+export const TEMPLATE_HOOKS = [ 'prebuild', 'postbuild', 'postinstall' ] as const;
 
 // Makes the files of the app, keyed by the path relative to the app dir.
 // It does not use the file system or the network, so scaffolding, managed
@@ -54,6 +64,8 @@ export function generateApp(config: AppConfig): Record<string, string> {
     autoIndex,
     autoExt,
     staticPublishVersionSpec: computeJsStaticPublisherVersion,
+    template,
+    generatedFrom,
   } = config;
   const storageMode = storage.mode;
 
@@ -65,7 +77,7 @@ export function generateApp(config: AppConfig): Record<string, string> {
 /bin
 /pkg
 /${path.relative(computeJsDir, staticPublisherWorkingDir)}
-`;
+` + (template.gitignore ?? []).map(line => `${line}\n`).join('');
 
   // package.json
   const packageJsonScripts: Record<string, string> = {
@@ -73,6 +85,9 @@ export function generateApp(config: AppConfig): Record<string, string> {
     'fastly:deploy': 'fastly compute publish',
     'build': 'js-compute-runtime ./src/index.js ./bin/main.wasm',
   };
+  for (const hook of TEMPLATE_HOOKS) {
+    packageJsonScripts[hook] = `compute-js-static-publish run-template-hook ${hook}`;
+  }
   if (storageMode === 'kv-store') {
     packageJsonScripts['dev:publish'] = 'npx @fastly/compute-js-static-publish publish-content --local';
     packageJsonScripts['fastly:publish'] = 'npx @fastly/compute-js-static-publish publish-content';
@@ -88,9 +103,11 @@ export function generateApp(config: AppConfig): Record<string, string> {
     devDependencies: {
       "@fastly/cli": "^16.0.0",
       '@fastly/compute-js-static-publish': computeJsStaticPublisherVersion,
+      ...template.devDependencies,
     },
     dependencies: {
       '@fastly/js-compute': '^4.0.0',
+      ...template.dependencies,
     },
     engines: {
       node: '>=20.11.0',
@@ -205,7 +222,12 @@ const rc = {
 ${staticPublishStorage}
   publishId: ${JSON.stringify(publishId)},
   defaultCollectionName: ${JSON.stringify(defaultCollectionName)},
-  staticPublisherWorkingDir: ${JSON.stringify(dotRelative(computeJsDir, staticPublisherWorkingDir))},
+  staticPublisherWorkingDir: ${JSON.stringify(dotRelative(computeJsDir, staticPublisherWorkingDir))},${generatedFrom != null ? `
+  generatedFrom: {
+    template: ${JSON.stringify(generatedFrom.template)},
+    staticPublishVersion: ${JSON.stringify(generatedFrom.staticPublishVersion)},
+    generatedAt: ${JSON.stringify(generatedFrom.generatedAt)},
+  },` : ''}
 };
 
 export default rc;
@@ -288,33 +310,14 @@ const config = {
 export default config;
 `;
 
-  // src/index.js
-  resourceFiles['./src/index.js'] = /* language=text */ `\
-/// <reference types="@fastly/js-compute" />
-import { env } from 'fastly:env';
-import { PublisherServer } from '@fastly/compute-js-static-publish';
-import rc from '../static-publish.rc.js';
-const publisherServer = PublisherServer.fromStaticPublishRc(rc);
-
-// eslint-disable-next-line no-restricted-globals
-addEventListener("fetch", (event) => event.respondWith(handleRequest(event)));
-async function handleRequest(event) {
-
-  console.log('FASTLY_SERVICE_VERSION', env('FASTLY_SERVICE_VERSION'));
-
-  const request = event.request;
-
-  const response = await publisherServer.serveRequest(request);
-  if (response != null) {
-    return response;
+  // The template's files. A template only adds files.
+  for (const [ file, content ] of Object.entries(template.files)) {
+    const key = path.posix.normalize(file);
+    if (Object.keys(resourceFiles).some(x => path.posix.normalize(x) === key)) {
+      throw new Error(`Template file '${file}' is a file that generateApp() writes.`);
+    }
+    resourceFiles[file] = content;
   }
-
-  // Do custom things here!
-  // Handle API requests, serve non-static responses, etc.
-
-  return new Response('Not found', { status: 404 });
-}
-`;
 
   return resourceFiles;
 }

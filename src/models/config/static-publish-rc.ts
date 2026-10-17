@@ -15,6 +15,18 @@ export type StaticPublishRcBase = {
   // relative to the Compute application.
   // These files should not be committed to source control.
   staticPublisherWorkingDir: string,
+
+  // What the app was generated from. scaffold and eject write it. Optional.
+  generatedFrom?: GeneratedFrom,
+};
+
+export type GeneratedFrom = {
+  // The template that the app was generated from, for example 'plain'.
+  template: string,
+  // The version of @fastly/compute-js-static-publish that generated the app.
+  staticPublishVersion: string,
+  // The date when the app was generated, as YYYY-MM-DD.
+  generatedAt: string,
 };
 
 // New KV Store config

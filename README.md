@@ -201,10 +201,24 @@ my-project/
     ├── publish-content.config.js        # Publishing / runtime config
     ├── static-publisher/                # ⚠️ Do not commit - generated content for local dev and publishing
     │   ├── kvstore.json                 # Simulates KV Store content for local preview
-    │   └── kv-store-content/            # Preprocessed and compressed files for KV upload
+    │   └── storage-content/             # Preprocessed and compressed files for upload
     └── src/
         └── index.js                     # Your Compute app entry point
 ```
+
+### Template hooks
+
+The `package.json` of a scaffolded app has three npm scripts that run the hooks of a template:
+
+```json
+"prebuild":    "compute-js-static-publish run-template-hook prebuild",
+"postbuild":   "compute-js-static-publish run-template-hook postbuild",
+"postinstall": "compute-js-static-publish run-template-hook postinstall"
+```
+
+Each one runs `scripts/template_<name>.js` in the app, if that file exists. Otherwise it does nothing. npm runs them before and after `npm run build` (which `fastly compute build`, `publish`, and `serve` use) and after `npm install`. You can add your own hook by adding the file, for example `scripts/template_prebuild.js`.
+
+If you install with `--omit=dev` or `--ignore-scripts`, the hooks do not run: the `compute-js-static-publish` command comes from the dev dependency of the app.
 
 ## ⚙️ Configuring `static-publish.rc.js`
 
@@ -224,6 +238,7 @@ All fields are required unless specified otherwise.
 - `defaultCollectionName` - Collection to serve when none is specified.
 - `publishId` - Unique prefix for all keys in the KV Store. Override only for advanced setups (e.g., multiple apps sharing the same KV Store).
 - `staticPublisherWorkingDir` - Directory to hold working files during publish.
+- `generatedFrom` - (optional) Written by the scaffolder: the template (`template`), the version of this package (`staticPublishVersion`), and the date (`generatedAt`) that the app was generated with. Nothing at runtime uses it.
 
 #### Example: `static-publish.rc.js`
 
@@ -254,6 +269,7 @@ All fields are required unless specified otherwise.
 - `defaultCollectionName` - Collection to serve when none is specified.
 - `publishId` - Unique prefix for all keys in the bucket. Override only for advanced setups (e.g., multiple apps sharing the same bucket).
 - `staticPublisherWorkingDir` - Directory to hold working files during publish.
+- `generatedFrom` - (optional) Written by the scaffolder: the template (`template`), the version of this package (`staticPublishVersion`), and the date (`generatedAt`) that the app was generated with. Nothing at runtime uses it.
 
 #### Example: `static-publish.rc.js`
 

@@ -31,8 +31,9 @@ function writeFixture(dir) {
 }
 
 // The files of a dir, without node_modules and package-lock.json. The
-// dependency on this package is replaced with the placeholder of the
-// golden files, and .gitignore is named _gitignore, as in test/golden/.
+// dependency on this package, its version, and the date in generatedFrom are
+// replaced with the placeholders of the golden files, and .gitignore is named
+// _gitignore, as in test/golden/.
 function readFiles(dir) {
   const files = {};
   const walk = (sub) => {
@@ -48,6 +49,11 @@ function readFiles(dir) {
       let content = fs.readFileSync(path.join(dir, rel), 'utf-8');
       if (rel === 'package.json') {
         content = content.replace(/"file:[^"]*"/, '"<compute-js-static-publish>"');
+      }
+      if (rel === 'static-publish.rc.js') {
+        content = content
+          .replace(/staticPublishVersion: "[^"]*"/, 'staticPublishVersion: "<static-publish-version>"')
+          .replace(/generatedAt: "\d{4}-\d{2}-\d{2}"/, 'generatedAt: "<generated-at>"');
       }
       files[rel.replace(/(^|\/)\.gitignore$/, '$1_gitignore')] = content;
     }
