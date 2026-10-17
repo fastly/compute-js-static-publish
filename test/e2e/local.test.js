@@ -66,3 +66,36 @@ describe('local mode (fastly compute serve)', { skip: skipUnlessFastlyCli() }, (
     assert.match(output, /live \*DEFAULT\*/);
   });
 });
+
+// The public dir is under the root dir. The asset keys are relative to the
+// root dir, so the server must add publicDirPrefix to the request path.
+describe('local mode with a public dir under the root dir', { skip: skipUnlessFastlyCli() }, () => {
+  let dir;
+  let computeJsDir;
+  let server;
+
+  before(async () => {
+    dir = makeTempDir('local-public-dir');
+    writeFixtureContent(path.resolve(dir, 'site/public'));
+    computeJsDir = scaffoldApp(dir, [ '--public-dir', './site/public', '--kv-store-name', 'e2e-content' ], { rootDir: './site' });
+    writeTestAppIndex(computeJsDir);
+    runCli([ 'publish-content', '--local' ], { cwd: computeJsDir });
+    server = await startServe(computeJsDir);
+  });
+
+  after(async () => {
+    await server?.stop();
+    if (dir != null) {
+      removeDir(dir);
+    }
+  });
+
+  test('writes publicDirPrefix to publish-content.config.js', () => {
+    const config = fs.readFileSync(path.resolve(computeJsDir, 'publish-content.config.js'), 'utf-8');
+    assert.match(config, /publicDirPrefix: "\/public"/);
+  });
+
+  test('serves the published content', async (t) => {
+    await checkServedContent(t, server.baseUrl);
+  });
+});

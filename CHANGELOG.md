@@ -93,6 +93,10 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 
 - S3-compatible storage: `clean`, `collections list`, and `collections delete` stopped with "Can't query indexes in storage" when no key matched, for example after the last collection was deleted. An empty list is now a valid result.
 
+- Scaffolding: if `--public-dir` was under `--root-dir`, the generated `publish-content.config.js` set `publicDirPrefix` to an empty string. Thus the server did not find the files, and it returned 404 for all requests. `publicDirPrefix` is now the path of the public directory, relative to the root directory (for example `/public`).
+
+- Scaffolding: the instructions shown at the end referred to `npm run fastly:start`, which does not exist. They now show `npm run fastly:deploy`. For the KV Store, they show `fastly:deploy` before `fastly:publish`, because the deploy creates the KV Store.
+
 ## [7.0.8] - 2026-10-14
 
 ### Added

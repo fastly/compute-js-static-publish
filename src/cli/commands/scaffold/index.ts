@@ -930,7 +930,7 @@ export default rc;
   // We've already established publicDir.startsWith(rootDir)
   let publicDirPrefix = '';
   if (rootDir !== publicDir) {
-    publicDirPrefix = rootDir.slice(rootDir.length);
+    publicDirPrefix = publicDir.slice(rootDir.length);
   }
 
   // staticItems - specified as prefixes, relative to publicDir
@@ -1049,8 +1049,8 @@ To run your Compute application locally:
 To build and deploy to your Compute service:
 
   cd ${COMPUTE_JS_DIR}
+  npm run fastly:deploy
   npm run fastly:publish
-  npm run fastly:start  
 
 `);
   } else if (storageMode === 's3') {
@@ -1080,7 +1080,7 @@ To build and deploy to your Compute service:
   
   Run the following commands:
     cd ${COMPUTE_JS_DIR}
-    npm run fastly:start  
+    npm run fastly:deploy
 
 `);
   }
