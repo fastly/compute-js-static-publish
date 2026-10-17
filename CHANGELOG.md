@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For those, see `CHANGELOG.md` in the [v7 branch](https://github.com/fastly/compute-js-static-publish/blob/v7/CHANGELOG.md) and in the [v6 branch](https://github.com/fastly/compute-js-static-publish/blob/v6/CHANGELOG.md).
+
 ## [unreleased]
 
 ### Breaking
@@ -20,7 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `publish-content`
-   - Add `--fastly-service-id`. The Service ID to purge after publishing now comes from `--fastly-service-id`, then `service_id` in `fastly.toml`, then the `FASTLY_SERVICE_ID` environment variable. Before, only `fastly.toml` was checked, so the purge was skipped in CI and other environments without a deployed app's `fastly.toml`.
+   - Add `--fastly-service-id`. The Service ID to purge after publishing now comes from `--fastly-service-id`, then the `FASTLY_SERVICE_ID` environment variable, then `service_id` in `fastly.toml`. This is the same order as the Fastly CLI's `--service-id`. Before, only `fastly.toml` was checked, so the purge was skipped in CI and other environments without a deployed app's `fastly.toml`.
    - The purge after publishing now runs in KV Store mode too (not with `--local`). Before, it ran only in S3 mode. This matters if you use the response cache.
    - Add `--purge-environment` to purge `production` (the default), `staging`, or both. A staging purge sends the `Fastly-Purge-Environment: staging` header.
    - A failed purge shows a warning on stderr. The command still completes, because the content is already published.
@@ -49,10 +51,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
    - Add `--brotli-quality=<0-11>`. It overrides `brotliQuality` in `publish-content.config.js`.
    - Add `--s3-upload-concurrency=<1-256>`: the number of objects to upload to S3-compatible storage at the same time. The default is now 64. It was 12.
 
-- Add content types for `.avif` and `.jxl` images
-
-- Add `application/wasm` to default content types
-
 ### Changed
 
 - `publish-content.config.js`
@@ -70,8 +68,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Updated
 
-- Update to CLI v16
-- Release with the same CI workflow as `main`: npm trusted publishing, and publish to GitHub packages as well
+- Scaffolded apps use `@fastly/js-compute` `^4.0.0`.
+- Update `toml` to 5. This fixes two security advisories in `toml` 4.1.2 and earlier ([GHSA-82x6-q7mm-w9cf](https://github.com/advisories/GHSA-82x6-q7mm-w9cf), [GHSA-v5mp-jgw5-2x6j](https://github.com/advisories/GHSA-v5mp-jgw5-2x6j)). Reading the Service ID also works now with a `fastly.toml` that uses dotted keys, such as `backends.origin.url = "..."`.
+- S3-compatible storage: `PublisherServer` no longer uses the AWS SDK. It signs requests with `@smithy/signature-v4`. Newer AWS SDK versions parse XML with `DOMParser`, which Fastly Compute does not have, so the SDK had been pinned to 3.888.0. The CLI now uses the current AWS SDK, which removes the security advisories of `fast-xml-parser`, `uuid`, and `@smithy/config-resolver` in the old version. Without the SDK, the server also builds to a much smaller Wasm binary.
 
 ### Fixed
 
@@ -85,11 +84,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Scaffolding: the generated `publish-content.config.js` set `spaFile` or `notFoundPageFile` to a file that does not exist.
 
-- The content type for `.tif`/`.tiff` files is now `image/tiff`. It was `image/png`.
-
 - `clean` stops with an error if it cannot read a collection index. Before, it continued and deleted the files of that collection.
 
 - `clean` and `collections delete` exit with an error if a delete operation fails. Before, they showed "Completed".
+
+- `PublisherServer` in a reused sandbox (if the app turns on sandbox reuse): the settings and the index of a collection stayed in memory for the life of the sandbox. Thus, after a publish, the sandbox served the old content, and it served a collection after it expired. `beginRequest()` (which `serveRequest()` calls) now clears them.
+   - `setActiveCollectionName()` accepts `null`, which selects the default collection. In a reused sandbox, the active collection stays set from the previous request, so call it for each request.
+
+- S3-compatible storage: `clean`, `collections list`, and `collections delete` stopped with "Can't query indexes in storage" when no key matched, for example after the last collection was deleted. An empty list is now a valid result.
+
+## [7.0.8] - 2026-10-14
+
+### Added
+
+- Add content types for `.avif` and `.jxl` images
+
+### Updated
+
+- Update to CLI v16
+- Support `@fastly/js-compute` 4. The peer dependency is now `^3.33.2 || ^4.0.0`.
+
+### Fixed
+
+- `.tif`/`.tiff` files were served as `image/png`, now `image/tiff`
 
 ## [7.0.7] - 2026-07-16
 
@@ -444,7 +461,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated generated app's webpack and webpack-cli versions
 - Use atob() and removed dependency on Buffer
 
-[unreleased]: https://github.com/fastly/compute-js-static-publish/compare/v7.0.2...HEAD
+[unreleased]: https://github.com/fastly/compute-js-static-publish/compare/v7.0.8...HEAD
+[7.0.8]: https://github.com/fastly/compute-js-static-publish/compare/v7.0.7...v7.0.8
+[7.0.7]: https://github.com/fastly/compute-js-static-publish/compare/v7.0.6...v7.0.7
+[7.0.6]: https://github.com/fastly/compute-js-static-publish/compare/v7.0.5...v7.0.6
+[7.0.5]: https://github.com/fastly/compute-js-static-publish/compare/v7.0.4...v7.0.5
+[7.0.4]: https://github.com/fastly/compute-js-static-publish/compare/v7.0.3...v7.0.4
+[7.0.3]: https://github.com/fastly/compute-js-static-publish/compare/v7.0.2...v7.0.3
 [7.0.2]: https://github.com/fastly/compute-js-static-publish/compare/v7.0.1...v7.0.2
 [7.0.1]: https://github.com/fastly/compute-js-static-publish/compare/v7.0.0...v7.0.1
 [7.0.0]: https://github.com/fastly/compute-js-static-publish/compare/v6.3.0...v7.0.0

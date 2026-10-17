@@ -66,7 +66,7 @@ export function loadPurgeTarget(params: LoadPurgeTargetParams): PurgeTarget | nu
     fastlyTomlPath: path.resolve(params.computeAppDir, 'fastly.toml'),
   });
   if (serviceIdResult == null) {
-    console.log(`- Service ID not found (--fastly-service-id, fastly.toml, or FASTLY_SERVICE_ID). Will skip purge step after publish.`);
+    console.log(`- Service ID not found (--fastly-service-id, FASTLY_SERVICE_ID, or fastly.toml). Will skip purge step after publish.`);
     return null;
   }
   console.log(`✔️ Service ID from ${serviceIdResult.source}: ${serviceIdResult.serviceId}`);

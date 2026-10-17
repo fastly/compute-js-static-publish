@@ -800,7 +800,7 @@ export async function action(actionArgs: string[]) {
       '@fastly/compute-js-static-publish': computeJsStaticPublisherVersion,
     },
     dependencies: {
-      '@fastly/js-compute': '^3.26.0',
+      '@fastly/js-compute': '^4.0.0',
     },
     engines: {
       node: '>=20.11.0',
