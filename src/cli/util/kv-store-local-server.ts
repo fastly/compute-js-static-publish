@@ -40,6 +40,8 @@ export async function getLocalKvStoreEntry(
   storeFile: string,
   key: string,
   metadataOnly?: boolean,
+  // The paths of the entries are relative to the Compute app dir.
+  computeAppDir: string = '.',
 ): Promise<KvStoreEntryInfo | null> {
 
   let store: KVStoreLocalServerData;
@@ -62,7 +64,7 @@ export async function getLocalKvStoreEntry(
   } else if ('data' in obj) {
     response = new Response(obj.data);
   } else {
-    const fileData = fs.readFileSync(obj.file);
+    const fileData = fs.readFileSync(path.resolve(computeAppDir, obj.file));
     response = new Response(fileData);
   }
   return {

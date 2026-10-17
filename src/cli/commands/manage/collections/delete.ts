@@ -8,7 +8,12 @@ import path from 'node:path';
 import { type OptionDefinition } from 'command-line-args';
 
 import { parseCommandLine } from '../../../util/args.js';
-import { LoadConfigError, configFileName, loadStaticPublisherRcFile } from '../../../util/config.js';
+import {
+  LoadConfigError,
+  configFileName,
+  getComputeAppDir,
+  loadStaticPublisherRcFile,
+} from '../../../util/config.js';
 import { loadStorageProviderFromStaticPublishRc } from '../../../storage/storage-provider.js';
 import { type PurgeTarget, loadPurgeTarget, purgeCollection } from '../../../util/purge.js';
 import { errorCodeOf, recordError } from '../../../util/cli-output.js';
@@ -105,7 +110,7 @@ export async function action(actionArgs: string[]) {
 
   // compute-js-static-publisher cli is always run from the Compute application directory
   // in other words, the directory that contains `fastly.toml`.
-  const computeAppDir = path.resolve();
+  const computeAppDir = getComputeAppDir();
 
   if (collectionNameValue == null) {
     console.error("❌ Required argument '--collection-name' not specified.");

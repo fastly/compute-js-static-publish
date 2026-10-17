@@ -18,6 +18,7 @@ import {
 } from '../../models/config/static-publish-rc.js';
 import {
   type StaticPublishProjectManaged,
+  MANAGED_APP_DIR,
   PROJECT_FILE_NAME,
   RC_FILE_NAME,
 } from '../../models/config/static-publish-project.js';
@@ -59,6 +60,13 @@ export function detectProjectMode(dir: string = '.'): ProjectMode {
     return 'conflict';
   }
   return hasProject ? 'managed' : hasRc ? 'ejected' : 'scaffold';
+}
+
+// The directory of the Compute app: the current directory in an ejected app,
+// or .static-publish/app in a managed project. The local KV Store file has
+// paths relative to it, because `fastly compute serve` runs there.
+export function getComputeAppDir(): string {
+  return detectProjectMode() === 'managed' ? path.resolve(MANAGED_APP_DIR) : path.resolve();
 }
 
 // The name of the config file of the current directory, for messages.

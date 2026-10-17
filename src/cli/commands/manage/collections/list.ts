@@ -11,7 +11,12 @@ import { type AssetEntryMap, countHiddenEntries } from '../../../../models/asset
 import { decodeIndexMetadata, getUnsupportedIndexFeatures } from '../../../../models/server/index.js';
 import { isExpired } from '../../../../models/time/index.js';
 import { parseCommandLine } from '../../../util/args.js';
-import { LoadConfigError, configFileName, loadStaticPublisherRcFile } from '../../../util/config.js';
+import {
+  LoadConfigError,
+  configFileName,
+  getComputeAppDir,
+  loadStaticPublisherRcFile,
+} from '../../../util/config.js';
 import { loadStorageProviderFromStaticPublishRc } from '../../../storage/storage-provider.js';
 import { errorCodeOf, recordError, setJsonResult } from '../../../util/cli-output.js';
 
@@ -79,7 +84,7 @@ export async function action(actionArgs: string[]) {
 
   // compute-js-static-publisher cli is always run from the Compute application directory
   // in other words, the directory that contains `fastly.toml`.
-  const computeAppDir = path.resolve();
+  const computeAppDir = getComputeAppDir();
 
   console.log(`📃 Listing collections...`);
 

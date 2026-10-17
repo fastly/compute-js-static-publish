@@ -81,6 +81,8 @@ export class KvStoreLocalProvider implements StorageProvider {
     const kvStoreEntry = await getLocalKvStoreEntry(
       this.storeFile,
       key,
+      false,
+      this.computeAppDir,
     );
 
     if (kvStoreEntry == null) {
@@ -96,6 +98,7 @@ export class KvStoreLocalProvider implements StorageProvider {
       this.storeFile,
       key,
       true,
+      this.computeAppDir,
     );
 
     if (kvStoreEntry == null) {

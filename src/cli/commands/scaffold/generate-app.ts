@@ -39,6 +39,8 @@ export type AppConfig = {
   generatedFrom: GeneratedFrom | undefined,
   // Written into static-publish.rc.js, if set. The template must support it.
   collectionSelection?: CollectionSelection,
+  // Written as package-lock.json, if set (a managed app).
+  packageLock?: string,
 };
 
 // A value as JavaScript source, for the generated config files. Data only:
@@ -100,6 +102,7 @@ export function generateApp(config: AppConfig): Record<string, string> {
     template,
     generatedFrom,
     collectionSelection,
+    packageLock,
   } = config;
   const storageMode = storage.mode;
 
@@ -109,13 +112,13 @@ export function generateApp(config: AppConfig): Record<string, string> {
 
   const resourceFiles: Record<string, string> = {};
 
-  // .gitignore
+  // .gitignore. The working dir only if it is in the app dir.
+  const workingDirInApp = path.relative(computeJsDir, staticPublisherWorkingDir);
   resourceFiles['.gitignore'] = `\
 /node_modules
 /bin
 /pkg
-/${path.relative(computeJsDir, staticPublisherWorkingDir)}
-` + (template.gitignore ?? []).map(line => `${line}\n`).join('');
+${!workingDirInApp.startsWith('..') ? `/${workingDirInApp}\n` : ''}` + (template.gitignore ?? []).map(line => `${line}\n`).join('');
 
   // package.json
   const packageJsonScripts: Record<string, string> = {
@@ -153,6 +156,10 @@ export function generateApp(config: AppConfig): Record<string, string> {
     private: true,
     scripts: packageJsonScripts,
   }, undefined, 2);
+
+  if (packageLock != null) {
+    resourceFiles['package-lock.json'] = packageLock;
+  }
 
   // fastly.toml
   let fastlyTomlLocalServer = '';

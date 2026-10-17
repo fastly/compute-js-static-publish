@@ -27,6 +27,7 @@ import {
   LoadConfigError,
   configFileName,
   detectProjectMode,
+  getComputeAppDir,
   loadProjectFile,
   loadPublishContentConfig,
   loadStaticPublisherRcFile,
@@ -209,7 +210,7 @@ export async function action(actionArgs: string[]) {
 
   // compute-js-static-publisher cli is always run from the Compute application directory
   // in other words, the directory that contains `fastly.toml`.
-  const computeAppDir = path.resolve();
+  const computeAppDir = getComputeAppDir();
 
   console.log(`🚀 Publishing content...`);
 
