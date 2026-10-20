@@ -10,7 +10,7 @@ import path from 'node:path';
 import { after, before, beforeEach, describe, test } from 'node:test';
 
 import { loadApiToken } from '../../build/cli/cli/util/api-token.js';
-import { loadPurgeTarget, parsePurgeEnvironments } from '../../build/cli/cli/util/purge.js';
+import { loadPurgeTarget, parsePurgeEnvironments, purgeCollection } from '../../build/cli/cli/util/purge.js';
 import { loadServiceId } from '../../build/cli/cli/util/service-id.js';
 import { mockConsoleLog } from './mock-console.js';
 
@@ -127,7 +127,7 @@ describe('loadPurgeTarget', () => {
     writeFastlyToml('from-toml');
     assert.equal(loadPurgeTarget(params({ localMode: true, fastlyApiToken: 'token' })), null);
     assert.deepEqual(messages(), [
-      '- Local mode: will skip purge step after publish.',
+      '- Local mode: will skip the purge.',
     ]);
   });
 
@@ -136,7 +136,7 @@ describe('loadPurgeTarget', () => {
     writeFastlyToml(null);
     assert.equal(loadPurgeTarget(params({ fastlyApiToken: 'token' })), null);
     assert.deepEqual(messages(), [
-      '- Service ID not found (--fastly-service-id, FASTLY_SERVICE_ID, or fastly.toml). Will skip purge step after publish.',
+      '- Service ID not found (--fastly-service-id, FASTLY_SERVICE_ID, or fastly.toml). Will skip the purge.',
     ]);
   });
 
@@ -169,5 +169,46 @@ describe('loadPurgeTarget', () => {
 
   test('reports an unknown environment also in local mode', () => {
     assert.throws(() => loadPurgeTarget(params({ localMode: true, purgeEnvironments: [ 'prod' ] })), /Unknown --purge-environment/);
+  });
+});
+
+describe('purgeCollection', () => {
+  const purgeTarget = {
+    serviceId: 'service',
+    fastlyApiContext: { apiToken: 'token' },
+    environments: [ 'production', 'staging' ],
+  };
+
+  test('soft purges the surrogate key of the collection in each environment', async (t) => {
+    const messages = mockConsoleLog(t);
+    const fetchMock = t.mock.method(globalThis, 'fetch', async () => new Response('{"status":"ok"}'));
+    await purgeCollection(purgeTarget, 'site', 'preview');
+    const requests = fetchMock.mock.calls.map(call => call.arguments[0]);
+    assert.deepEqual(requests.map(r => [
+      r.method,
+      r.url,
+      r.headers.get('surrogate-key'),
+      r.headers.get('fastly-soft-purge'),
+      r.headers.get('fastly-purge-environment'),
+    ]), [
+      [ 'POST', 'https://api.fastly.com/service/service/purge', 'site-preview', '1', null ],
+      [ 'POST', 'https://api.fastly.com/service/service/purge', 'site-preview', '1', 'staging' ],
+    ]);
+    assert.deepEqual(messages(), [
+      'Purging surrogate key [site-preview] on service [service] (production)...',
+      'Purged',
+      'Purging surrogate key [site-preview] on service [service] (staging)...',
+      'Purged',
+    ]);
+  });
+
+  test('warns, and does not throw, if a purge fails', async (t) => {
+    mockConsoleLog(t);
+    const warn = t.mock.method(console, 'warn', () => {});
+    t.mock.method(globalThis, 'fetch', async () => new Response('{}', { status: 403 }));
+    await purgeCollection({ ...purgeTarget, environments: [ 'production' ] }, 'site', 'preview');
+    assert.deepEqual(warn.mock.calls.map(call => call.arguments.join(' ')), [
+      '⚠️ Warning: Failed purging (production). Cached copies may be served until they expire.',
+    ]);
   });
 });

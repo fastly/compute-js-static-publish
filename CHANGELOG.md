@@ -27,6 +27,9 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
    - Add `--purge-environment` to purge `production` (the default), `staging`, or both. A staging purge sends the `Fastly-Purge-Environment: staging` header.
    - A failed purge shows a warning on stderr. The command still completes, because the content is already published.
 
+- `collections delete`
+   - After the delete, purge the surrogate key of the collection, so that the service stops serving cached responses of the deleted collection. This has the same options and rules as the purge of `publish-content`: `--fastly-service-id`, `--purge-environment`, and the API token.
+
 - S3-compatible storage (BETA)
    - Add support for S3-compatible storage, such as Fastly Object Storage
    - Store items using same keys as KV Store

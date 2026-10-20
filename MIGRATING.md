@@ -38,7 +38,8 @@ To upgrade an app that uses the KV Store:
   in KV Store mode too. It finds the Service ID from `--fastly-service-id`, then the `FASTLY_SERVICE_ID`
   environment variable, then `service_id` in `fastly.toml`. If it finds a Service ID, the API token must have permission to purge
   that service. If you do not want a purge, make sure that the CLI does not find a Service ID. If the purge fails,
-  the CLI shows a warning, and the publish is complete.
+  the CLI shows a warning, and the publish is complete. `collections delete` purges the same way after it deletes a
+  collection.
 - **`kvStoreAssetInclusionTest` has a new name.** In `publish-content.config.js`, use `assetInclusionTest`. The old
   name continues to work, but it is deprecated.
 - **Some types have new names.** `KVAssetEntry` is now `AssetEntry`, and `KVAssetEntryMap` is now `AssetEntryMap`.

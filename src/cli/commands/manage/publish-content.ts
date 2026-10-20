@@ -21,7 +21,7 @@ import { applyDefaults } from '../../util/data.js';
 import { calculateFileSizeAndHash, enumerateFiles, rootRelative } from '../../util/files.js';
 import { ensureVariantFileExists, type Variants } from '../../util/variants.js';
 import { concurrentMap } from '../../util/retryable.js';
-import { type PurgeTarget, loadPurgeTarget, purgeSurrogateKey } from '../../util/purge.js';
+import { type PurgeTarget, loadPurgeTarget, purgeCollection } from '../../util/purge.js';
 import {
   getStorageKeysByHexPrefix,
   loadStorageProviderFromStaticPublishRc,
@@ -685,17 +685,7 @@ export async function action(actionArgs: string[]) {
   console.log(`✅  Settings have been saved.`);
 
   if (purgeTarget != null) {
-    const surrogateKey = `${publishId}-${collectionName}`;
-    for (const environment of purgeTarget.environments) {
-      console.log(`Purging surrogate key [${surrogateKey}] on service [${purgeTarget.serviceId}] (${environment})...`);
-      const purged = await purgeSurrogateKey(purgeTarget.fastlyApiContext, purgeTarget.serviceId, surrogateKey, true, environment);
-      if (purged) {
-        console.log('Purged');
-      } else {
-        // The content is published. Only the cached copies may be stale until they expire.
-        console.warn(`⚠️ Warning: Failed purging (${environment}). Cached copies may be served until they expire.`);
-      }
-    }
+    await purgeCollection(purgeTarget, publishId, collectionName);
   }
 
   console.log(`🎉 Completed.`);

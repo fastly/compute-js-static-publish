@@ -10,6 +10,7 @@ import { type OptionDefinition } from 'command-line-args';
 import { parseCommandLine } from '../../../util/args.js';
 import { LoadConfigError, loadStaticPublisherRcFile } from '../../../util/config.js';
 import { loadStorageProviderFromStaticPublishRc } from '../../../storage/storage-provider.js';
+import { type PurgeTarget, loadPurgeTarget, purgeCollection } from '../../../util/purge.js';
 
 function help() {
   console.log(`\
@@ -24,6 +25,9 @@ Description:
   Use the 'npx @fastly/compute-js-static-publish clean' command afterward to remove content
   files that are no longer referenced by any collection.  
 
+  If a Service ID is found, the tool then purges the cached responses of the collection
+  from that service.
+
 Required:
   --collection-name=<name>         The name of the collection to delete 
 
@@ -32,9 +36,20 @@ KV Store Options:
                                    local files that will be used to simulate the KV Store
                                    with the local development environment.
 
-  --fastly-api-token=<token>       Fastly API token for KV Store access.
+  --fastly-api-token=<token>       Fastly API token for KV Store or cache access.
                                    If not set, the tool uses the FASTLY_API_TOKEN
                                    environment variable.
+
+Purge Options:
+  --fastly-service-id=<id>         Fastly Service ID to purge after deleting (not with --local).
+                                   If not set, the tool will check:
+                                     1. FASTLY_SERVICE_ID environment variable
+                                     2. service_id in fastly.toml
+                                   If none is found, the purge is skipped.
+
+  --purge-environment=<env>        Environment to purge: production, staging, or a
+                                   comma-separated list of both. Can be repeated.
+                                   Default: production
 
 S3 Storage Options (BETA):
   --s3-access-key-id=<id>          Access Key ID and Secret Access Key used to
@@ -56,6 +71,8 @@ export async function action(actionArgs: string[]) {
 
     { name: 'local', type: Boolean },
     { name: 'fastly-api-token', type: String, },
+    { name: 'fastly-service-id', type: String, },
+    { name: 'purge-environment', type: String, multiple: true, },
 
     { name: 's3-access-key-id', type: String, },
     { name: 's3-secret-access-key', type: String, },
@@ -77,6 +94,8 @@ export async function action(actionArgs: string[]) {
     verbose,
     ['collection-name']: collectionNameValue,
     ['fastly-api-token']: fastlyApiToken,
+    ['fastly-service-id']: fastlyServiceId,
+    ['purge-environment']: purgeEnvironmentValues,
     local: localMode,
     ['s3-access-key-id']: s3AccessKeyId,
     ['s3-secret-access-key']: s3SecretAccessKey,
@@ -145,6 +164,22 @@ export async function action(actionArgs: string[]) {
 
   console.log(`✔️ Collection to delete: ${collectionName}`);
 
+  // Purge target: checked now, so that a missing API token fails before anything is deleted.
+  let purgeTarget: PurgeTarget | null;
+  try {
+    purgeTarget = loadPurgeTarget({
+      localMode: localMode ?? false,
+      computeAppDir,
+      fastlyServiceId,
+      fastlyApiToken,
+      purgeEnvironments: purgeEnvironmentValues,
+    });
+  } catch (err: unknown) {
+    console.error(String(err));
+    process.exitCode = 1;
+    return;
+  }
+
   // ### Asset Keys to delete
   const assetKeysToDelete = new Set<string>();
 
@@ -180,6 +215,10 @@ export async function action(actionArgs: string[]) {
     undefined,
     true,
   )
+
+  if (purgeTarget != null) {
+    await purgeCollection(purgeTarget, publishId, collectionName);
+  }
 
   console.log("✅  Completed.")
 }

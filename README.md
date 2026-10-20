@@ -1063,9 +1063,15 @@ Deletes a collection index from storage. The content files will remain as they m
 
 Use the `npx @fastly/compute-js-static-publish clean` command afterward to remove content files that are no longer referenced by any collection.
 
+If a Service ID is found, the command then purges the surrogate key `<publishId>-<collectionName>`, so that the service stops serving cached responses of the deleted collection. This uses the same options as [`publish-content`](#publish-content).
+
 ##### Options:
 
 - `--collection-name`: The name of the collection to delete (required)
+
+- `--fastly-service-id`: The Fastly Service ID to purge after deleting. If not set, the tool checks the `FASTLY_SERVICE_ID` environment variable, then `service_id` in `fastly.toml`. If none is found, the command skips the purge. The purge also needs an API token (see `--fastly-api-token`). With `--local`, there is no purge. If the purge fails, the command shows a warning and completes, because the collection is already deleted.
+
+- `--purge-environment`: The environments to purge: `production` (the default), `staging`, or both, as a comma-separated list. You can also repeat the option.
 
 **KV Store Options:**
 
