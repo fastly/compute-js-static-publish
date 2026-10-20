@@ -110,6 +110,8 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 
 - `collectionSelector.fromCookie()`: the activate and reset paths now accept only a path on the same site for `redirectTo`. Any other value redirects to `/`. The activate path returns `400` for a `collection` value with characters that a cookie value cannot have, and sets no cookie.
 
+- S3-compatible storage: `--local` stops the command with an error before it connects to storage. Before, `publish-content`, `collections list`, `collections delete`, `collections promote`, `collections update-expiration`, and `clean` ignored `--local` for storage, and changed the bucket. There is no local simulation of S3 storage. If you used `--local` in S3 mode to skip the purge after `publish-content`, remove `--local`, and do not set a Service ID. `--help` and the README now tell that `--local` is for KV Store mode only.
+
 ## [7.0.8] - 2026-10-14
 
 ### Added

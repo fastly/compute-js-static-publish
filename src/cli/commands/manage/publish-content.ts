@@ -96,6 +96,7 @@ KV Store Options:
   --local                          Instead of working with the Fastly KV Store, operate on
                                    local files that will be used to simulate the KV Store
                                    with the local development environment.
+                                   KV Store mode only. In S3 mode, --local is an error.
 
   --kv-overwrite                   Alias for --overwrite-existing.
 

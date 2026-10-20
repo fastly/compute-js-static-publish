@@ -60,15 +60,21 @@ type CommandOutput<C> = C extends Command<any, any, any, infer O, any> ? O : nev
 // objects, 64 was approximately 4 times faster than 12.
 export const DEFAULT_S3_UPLOAD_CONCURRENCY = 64;
 
+export const S3_LOCAL_MODE_ERROR = '--local is available only in KV Store mode. In S3 mode, the commands always use the bucket in static-publish.rc.js.';
+
 export const buildStoreProvider: StorageProviderBuilder = async (
   config: StaticPublishRc,
   context: StorageProviderBuilderContext,
 ) => {
-  if (isS3StorageConfigRc(config)) {
-    console.log(`  Working on S3 (or compatible) storage (BETA)...`);
-  } else {
+  if (!isS3StorageConfigRc(config)) {
     return null;
   }
+  // There is no local simulation of S3 storage. Stop before the command
+  // connects to the bucket.
+  if (context.localMode) {
+    throw new Error(S3_LOCAL_MODE_ERROR);
+  }
+  console.log(`  Working on S3 (or compatible) storage (BETA)...`);
 
   const {
     region,

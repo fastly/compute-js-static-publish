@@ -935,7 +935,7 @@ After this process is complete, the PublisherServer object in the Compute applic
 
 **KV Store Options:**
 
-- `--local`: Instead of working with the Fastly KV Store, operate on local files that will be used to simulate the KV Store with the local development environment.
+- `--local`: Instead of working with the Fastly KV Store, operate on local files that will be used to simulate the KV Store with the local development environment. KV Store mode only. In S3 mode, `--local` is an error, because there is no local simulation of S3 storage.
 
 - `--fastly-api-token`: API token to use when publishing. If not set, the tool uses the **`FASTLY_API_TOKEN` environment variable**.
 
@@ -962,7 +962,7 @@ This can include expired collection indexes and orphaned content assets.
 
 **KV Store Options:**
 
-- `--local`: Instead of working with the Fastly KV Store, operate on local files that will be used to simulate the KV Store with the local development environment.
+- `--local`: Instead of working with the Fastly KV Store, operate on local files that will be used to simulate the KV Store with the local development environment. KV Store mode only. In S3 mode, `--local` is an error, because there is no local simulation of S3 storage.
 
 - `--fastly-api-token`: API token to use when publishing. If not set, the tool uses the **`FASTLY_API_TOKEN` environment variable**.
 
@@ -981,7 +981,7 @@ Lists all collections currently published in storage.
 
 **KV Store Options:**
 
-- `--local`: Instead of working with the Fastly KV Store, operate on local files that will be used to simulate the KV Store with the local development environment.
+- `--local`: Instead of working with the Fastly KV Store, operate on local files that will be used to simulate the KV Store with the local development environment. KV Store mode only. In S3 mode, `--local` is an error, because there is no local simulation of S3 storage.
 
 - `--fastly-api-token`: API token to use when publishing. If not set, the tool uses the **`FASTLY_API_TOKEN` environment variable**.
 
@@ -1014,7 +1014,7 @@ Copies an existing collection (content + config) to a new collection name.
 
 **KV Store Options:**
 
-- `--local`: Instead of working with the Fastly KV Store, operate on local files that will be used to simulate the KV Store with the local development environment.
+- `--local`: Instead of working with the Fastly KV Store, operate on local files that will be used to simulate the KV Store with the local development environment. KV Store mode only. In S3 mode, `--local` is an error, because there is no local simulation of S3 storage.
 
 - `--fastly-api-token`: API token to use when publishing. If not set, the tool uses the **`FASTLY_API_TOKEN` environment variable**.
 
@@ -1044,7 +1044,7 @@ Sets or updates the expiration time of an existing collection.
 
 **KV Store Options:**
 
-- `--local`: Instead of working with the Fastly KV Store, operate on local files that will be used to simulate the KV Store with the local development environment.
+- `--local`: Instead of working with the Fastly KV Store, operate on local files that will be used to simulate the KV Store with the local development environment. KV Store mode only. In S3 mode, `--local` is an error, because there is no local simulation of S3 storage.
 
 - `--fastly-api-token`: API token to use when publishing. If not set, the tool uses the **`FASTLY_API_TOKEN` environment variable**.
 
@@ -1075,7 +1075,7 @@ If a Service ID is found, the command then purges the surrogate key `<publishId>
 
 **KV Store Options:**
 
-- `--local`: Instead of working with the Fastly KV Store, operate on local files that will be used to simulate the KV Store with the local development environment.
+- `--local`: Instead of working with the Fastly KV Store, operate on local files that will be used to simulate the KV Store with the local development environment. KV Store mode only. In S3 mode, `--local` is an error, because there is no local simulation of S3 storage.
 
 - `--fastly-api-token`: API token to use when publishing. If not set, the tool uses the **`FASTLY_API_TOKEN` environment variable**.
 
