@@ -1079,17 +1079,28 @@ To run your Compute application locally
 
 To build and deploy to your Compute service:
 
+  The application reads the S3 credentials from the Secret Store that has the resource
+  link name 'S3_CREDENTIALS' on the service. The Secret Store can have a different name.
+
+  To deploy to an existing service, do these steps first:
+    1. Create a Secret Store with the values 'S3_ACCESS_KEY_ID' and 'S3_SECRET_ACCESS_KEY'.
+       Give it a name that tells what it is for.
+    2. Link the Secret Store to the service, with the resource link name 'S3_CREDENTIALS'.
+       If the service already has a link with this name, make sure that it points to
+       this Secret Store.
+
   Run the following commands:
     cd ${COMPUTE_JS_DIR}
     npm run fastly:deploy
 
-  When it creates a new service, the Fastly CLI creates a Secret Store named S3_CREDENTIALS,
-  and prompts you for these values:
-    S3_ACCESS_KEY_ID
-    S3_SECRET_ACCESS_KEY
+  When the Fastly CLI creates a new service, it creates a Secret Store named
+  'S3_CREDENTIALS', links it to the service with the same name, and prompts you for
+  the values 'S3_ACCESS_KEY_ID' and 'S3_SECRET_ACCESS_KEY'.
 
-  If you deploy to an existing service, link a Secret Store named S3_CREDENTIALS to the
-  service, with these values, before you deploy.
+  If a Secret Store named 'S3_CREDENTIALS' already exists, the Fastly CLI asks for a
+  different name. If you leave it empty, it uses the existing Secret Store. If you give
+  a different name, the Fastly CLI uses it for the resource link too. Then call
+  setSecretStoreForS3Credentials() with that name in src/index.js, and deploy again.
 
 `);
   }

@@ -175,6 +175,10 @@ Ready to go live? All you need is a [free Fastly account](https://www.fastly.com
 npm run fastly:deploy
 ```
 
+The app reads the S3 credentials from the Secret Store that has the resource link name `S3_CREDENTIALS` on your service.
+
+When the Fastly CLI creates a new service, it creates a Secret Store named `S3_CREDENTIALS`, links it to the service with the same name, and prompts you for the values `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY`.
+
 ---
 
 ## 🗂 Project Layout

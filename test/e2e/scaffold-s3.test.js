@@ -35,8 +35,7 @@ describe('scaffold with S3-compatible storage', () => {
     }
   });
 
-  // The Fastly CLI reads the keys of a Secret Store from "entries". It ignores
-  // other names, and then creates the Secret Store with no keys.
+  // The Fastly CLI reads the keys of a Secret Store from "entries".
   test('declares the Secret Store keys in [setup] as entries', () => {
     assert.match(fastlyToml, /^\[setup\.secret_stores\.S3_CREDENTIALS\.entries\.S3_ACCESS_KEY_ID\]$/m);
     assert.match(fastlyToml, /^\[setup\.secret_stores\.S3_CREDENTIALS\.entries\.S3_SECRET_ACCESS_KEY\]$/m);
