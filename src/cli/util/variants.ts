@@ -10,6 +10,23 @@ import { rootRelative } from './files.js';
 
 export type Variants = 'original' | ContentCompressionTypes;
 
+// Runs an async function one time for each key. The first call for a key
+// starts the function and stores its promise before it returns. Later calls
+// for the same key, also concurrent calls, get the same promise.
+export class OncePerKey<T> {
+  private readonly promises = new Map<string, Promise<T>>();
+
+  run(key: string, fn: () => Promise<T>): { promise: Promise<T>, first: boolean } {
+    let promise = this.promises.get(key);
+    if (promise != null) {
+      return { promise, first: false };
+    }
+    promise = fn();
+    this.promises.set(key, promise);
+    return { promise, first: true };
+  }
+}
+
 export async function ensureVariantFileExists(
   variantFilePath: string,
   variant: Variants,

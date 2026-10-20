@@ -112,6 +112,9 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 
 - S3-compatible storage: `--local` stops the command with an error before it connects to storage. Before, `publish-content`, `collections list`, `collections delete`, `collections promote`, `collections update-expiration`, and `clean` ignored `--local` for storage, and changed the bucket. There is no local simulation of S3 storage. If you used `--local` in S3 mode to skip the purge after `publish-content`, remove `--local`, and do not set a Service ID. `--help` and the README now tell that `--local` is for KV Store mode only.
 
+- `publish-content` prepares each variant of the same content one time. Before, when several files had the same content, the files that were processed at the same time each compressed the content again, and each added the same keys to the upload. The uploaded content was correct, but the publish used more CPU time and more upload requests (in S3 mode, one `PutObject` for each duplicate). Each variant file in the working directory is now also written one time, so a file is not read while another file writes it.
+   - `publish-content --local` shows the number of variants to upload.
+
 ## [7.0.8] - 2026-10-14
 
 ### Added
