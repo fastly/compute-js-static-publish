@@ -45,12 +45,17 @@ export const buildStoreProvider: StorageProviderBuilder = (config: StaticPublish
   );
 };
 
-let _secretStoreForS3Credentials = 'S3_CREDENTIALS';
+let _secretStoreLinkNameForS3Credentials = 'S3_CREDENTIALS';
 let _secretStoreKeyForS3AccessKeyId = 'S3_ACCESS_KEY_ID';
 let _secretStoreKeyForS3SecretAccessKey = 'S3_SECRET_ACCESS_KEY';
 
-export function setSecretStoreForS3Credentials(secretStoreName: string) {
-  _secretStoreForS3Credentials = secretStoreName;
+/**
+ * Sets the resource link name of the Secret Store that has the S3 credentials.
+ * This is the name of the link between the service and the Secret Store, not
+ * the name of the Secret Store. The default is 'S3_CREDENTIALS'.
+ */
+export function setSecretStoreForS3Credentials(resourceLinkName: string) {
+  _secretStoreLinkNameForS3Credentials = resourceLinkName;
 }
 
 export function setSecretStoreKeyForS3AccessKeyId(secretStoreKey: string) {
@@ -68,19 +73,19 @@ export async function buildS3CredentialsFromSecretStore() {
   }
   let secretStore;
   try {
-    secretStore = new SecretStore(_secretStoreForS3Credentials);
+    secretStore = new SecretStore(_secretStoreLinkNameForS3Credentials);
   } catch {
-    throw new Error(`Could not open secret store for S3 credentials: ${_secretStoreForS3Credentials}`);
+    throw new Error(`Could not open the secret store for S3 credentials with the resource link name '${_secretStoreLinkNameForS3Credentials}'`);
   }
   const accessKeyIdEntry = await secretStore.get(_secretStoreKeyForS3AccessKeyId);
   if (accessKeyIdEntry == null) {
-    throw new Error(`Could not retrieve value '${_secretStoreKeyForS3AccessKeyId}' in secret store '${_secretStoreForS3Credentials}'`);
+    throw new Error(`Could not retrieve value '${_secretStoreKeyForS3AccessKeyId}' in the secret store with the resource link name '${_secretStoreLinkNameForS3Credentials}'`);
   }
   const accessKeyId = accessKeyIdEntry.plaintext();
 
   const secretAccessKeyEntry = await secretStore.get(_secretStoreKeyForS3SecretAccessKey);
   if (secretAccessKeyEntry == null) {
-    throw new Error(`Could not retrieve value '${_secretStoreKeyForS3SecretAccessKey}' in secret store '${_secretStoreForS3Credentials}'`);
+    throw new Error(`Could not retrieve value '${_secretStoreKeyForS3SecretAccessKey}' in the secret store with the resource link name '${_secretStoreLinkNameForS3Credentials}'`);
   }
   const secretAccessKey = secretAccessKeyEntry.plaintext();
 

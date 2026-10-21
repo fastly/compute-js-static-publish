@@ -46,8 +46,61 @@ To upgrade an app that uses the KV Store:
 - **The `build/` layout changed.** The package entry is now `build/server/server/index.js`, and the CLI is
   `build/cli/cli/index.js`. Imports of `@fastly/compute-js-static-publish` do not change. If your code imports files
   from `build/`, change the paths.
+- **`--public-dir` and `server.publicDirPrefix` are deprecated.** `publish-content` shows a warning if
+  `publicDirPrefix` is not empty. See [Stop using `publicDirPrefix`](#stop-using-publicdirprefix-deprecated).
 - **The `@fastly/cli` dependency is removed** from this package. A scaffolded app continues to have `@fastly/cli` as
   its own dependency.
+
+### Stop using `publicDirPrefix` (deprecated)
+
+`--public-dir` and `server.publicDirPrefix` are deprecated. A future version will remove them. If `publish-content`
+shows a warning about `server.publicDirPrefix`, do the steps in this section. If it does not show the warning, you do
+not use this feature, and you do not have to do anything.
+
+`publicDirPrefix` lets you publish files that requests cannot get. For example, with this layout, `rootDir` is
+`'../site'` and `publicDirPrefix` is `'/public'`:
+
+```
+site/
+  404.html          published as /404.html, but /404.html is not a URL
+  templates/
+    email.html      published as /templates/email.html, but it is not a URL
+  public/
+    index.html      published as /public/index.html, served at /index.html
+```
+
+To stop using `publicDirPrefix`:
+
+1. Find the files that are under `rootDir` but not under the public directory (`site/public/` in the example). For
+   each file, do one of these steps:
+   - If your app does not use the file, do nothing. After step 2, the CLI does not publish it.
+   - If the file is your `spaFile` or your `notFoundPageFile`, move it into the public directory. Then requests can
+     also get it at its own URL, for example `/404.html`.
+   - If your code reads the file with `getMatchingAsset()`, move it into the public directory. Then requests can also
+     get it at its own URL. To prevent this, return a response in `src/index.js` before you call `serveRequest()`:
+
+     ```js
+     const url = new URL(request.url);
+     if (url.pathname.startsWith('/templates/')) {
+       return new Response('Not found', { status: 404 });
+     }
+     const response = await publisherServer.serveRequest(request);
+     ```
+
+2. In `publish-content.config.js`:
+   - Set `rootDir` to the public directory, for example `'../site/public'`.
+   - Remove `publicDirPrefix` from the `server` section.
+   - In `spaFile` and `notFoundPageFile`, remove the prefix, for example change `'/public/404.html'` to
+     `'/404.html'`. These values are asset keys, and asset keys are relative to `rootDir`.
+   - Do not change `staticItems`. These values are already relative to the public directory.
+
+3. If your code calls `getMatchingAsset()` with a key that starts with the prefix, remove the prefix from the key, for
+   example change `'/public/index.html'` to `'/index.html'`. Then build and deploy your app. Between the deploy and
+   step 4, your code does not find these files.
+
+4. Publish each collection that you serve again. Each collection keeps its old settings and its old index until you
+   publish it again. The keys of the files are the hashes of the content, so the CLI does not upload the same files
+   again.
 
 ### Move from the KV Store to S3-compatible storage (BETA)
 

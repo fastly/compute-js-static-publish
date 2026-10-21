@@ -56,7 +56,7 @@ Compute Service Metadata:
   --service-id <id>                     (optional) Fastly service ID
 
 Server Config:
-  --public-dir <path>                   Base dir for content (default: root-dir)
+  --public-dir <path>                   Deprecated. Base dir for content (default: root-dir)
   --static-dir <path>,<path...>         Directory served with long TTL (can repeat)
   --spa <file>                          SPA fallback file (e.g., /index.html)
   --not-found-page <file>               404 fallback file (e.g., /404.html)
@@ -542,6 +542,11 @@ export async function action(actionArgs: string[]) {
     return;
   }
 
+  if (options.publicDir != null) {
+    console.log(`⚠️ Warning: --public-dir is deprecated, and a future version will remove it.`);
+    console.log(`  * Use only --root-dir. Requests then map to the files under --root-dir.`);
+  }
+
   // Resolve the public dir as well. If it's not specified, we use the root directory.
   const PUBLIC_DIR = options.publicDir ?? ROOT_DIR;
   const publicDir = path.resolve(PUBLIC_DIR);
@@ -857,10 +862,10 @@ port = 443
 [setup.secret_stores]
 [setup.secret_stores.S3_CREDENTIALS]
 description = "Credentials for S3 storage"
-[setup.secret_stores.S3_CREDENTIALS.items]
-[setup.secret_stores.S3_CREDENTIALS.items.S3_ACCESS_KEY_ID]
+[setup.secret_stores.S3_CREDENTIALS.entries]
+[setup.secret_stores.S3_CREDENTIALS.entries.S3_ACCESS_KEY_ID]
 description = "Access Key ID"
-[setup.secret_stores.S3_CREDENTIALS.items.S3_SECRET_ACCESS_KEY]
+[setup.secret_stores.S3_CREDENTIALS.entries.S3_SECRET_ACCESS_KEY]
 description = "Secret Access Key"
 `;
   }
@@ -930,7 +935,7 @@ export default rc;
   // We've already established publicDir.startsWith(rootDir)
   let publicDirPrefix = '';
   if (rootDir !== publicDir) {
-    publicDirPrefix = rootDir.slice(rootDir.length);
+    publicDirPrefix = publicDir.slice(rootDir.length);
   }
 
   // staticItems - specified as prefixes, relative to publicDir
@@ -982,8 +987,8 @@ const config = {
   // ],
   
   // Server settings are saved to storage per collection
-  server: {
-    publicDirPrefix: ${JSON.stringify(publicDirPrefix)},
+  server: {${publicDirPrefix !== '' ? `
+    publicDirPrefix: ${JSON.stringify(publicDirPrefix)},` : ''}
     staticItems: ${JSON.stringify(staticItems)},
     allowedEncodings: [ 'br', 'gzip' ],
     spaFile: ${JSON.stringify(spaFile)},
@@ -1049,8 +1054,8 @@ To run your Compute application locally:
 To build and deploy to your Compute service:
 
   cd ${COMPUTE_JS_DIR}
+  npm run fastly:deploy
   npm run fastly:publish
-  npm run fastly:start  
 
 `);
   } else if (storageMode === 's3') {
@@ -1074,13 +1079,28 @@ To run your Compute application locally
 
 To build and deploy to your Compute service:
 
-  Create a Secret Store in your account named S3_CREDENTIALS, and set the following values:
-    S3_ACCESS_KEY_ID: xxxx
-    S3_SECRET_ACCESS_KEY: xxxx
-  
+  The application reads the S3 credentials from the Secret Store that has the resource
+  link name 'S3_CREDENTIALS' on the service. The Secret Store can have a different name.
+
+  To deploy to an existing service, do these steps first:
+    1. Create a Secret Store with the values 'S3_ACCESS_KEY_ID' and 'S3_SECRET_ACCESS_KEY'.
+       Give it a name that tells what it is for.
+    2. Link the Secret Store to the service, with the resource link name 'S3_CREDENTIALS'.
+       If the service already has a link with this name, make sure that it points to
+       this Secret Store.
+
   Run the following commands:
     cd ${COMPUTE_JS_DIR}
-    npm run fastly:start  
+    npm run fastly:deploy
+
+  When the Fastly CLI creates a new service, it creates a Secret Store named
+  'S3_CREDENTIALS', links it to the service with the same name, and prompts you for
+  the values 'S3_ACCESS_KEY_ID' and 'S3_SECRET_ACCESS_KEY'.
+
+  If a Secret Store named 'S3_CREDENTIALS' already exists, the Fastly CLI asks for a
+  different name. If you leave it empty, it uses the existing Secret Store. If you give
+  a different name, the Fastly CLI uses it for the resource link too. Then call
+  setSecretStoreForS3Credentials() with that name in src/index.js, and deploy again.
 
 `);
   }
