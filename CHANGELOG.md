@@ -105,6 +105,8 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 
 - Scaffolding with S3-compatible storage: the generated `fastly.toml` declared the keys of the `S3_CREDENTIALS` Secret Store under `items`. The Fastly CLI reads them only from `entries`. Thus, on the first deploy, the Fastly CLI created the Secret Store with no keys and did not prompt for the credentials, and the server could not read from the bucket. The instructions shown at the end of scaffolding now also tell you that the first deploy prompts for these values.
 
+- `collectionSelector.fromCookie()`: the activate and reset paths now accept only a path on the same site for `redirectTo`. Any other value redirects to `/`. The activate path returns `400` for a `collection` value with characters that a cookie value cannot have, and sets no cookie.
+
 ## [7.0.8] - 2026-10-14
 
 ### Added

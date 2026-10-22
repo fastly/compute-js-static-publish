@@ -9,6 +9,29 @@ import {
   type RequestCollectionNameSelector,
 } from './request-collection-selector.js';
 
+// The characters that a cookie value can have (cookie-octet in RFC 6265):
+// no controls, spaces, '"', ',', ';', or '\'.
+const COOKIE_VALUE_PATTERN = /^[\x21\x23-\x2B\x2D-\x3A\x3C-\x5B\x5D-\x7E]+$/;
+
+// The redirect target after activate or reset. Only a path on the same site
+// is allowed; anything else gives '/'.
+function getRedirectTo(url: URL): string {
+  const redirectTo = url.searchParams.get('redirectTo');
+  if (redirectTo == null || !redirectTo.startsWith('/') || redirectTo.startsWith('//') || redirectTo.startsWith('/\\')) {
+    return '/';
+  }
+  let target;
+  try {
+    target = new URL(redirectTo, url.origin);
+  } catch {
+    return '/';
+  }
+  if (target.origin !== url.origin) {
+    return '/';
+  }
+  return target.pathname + target.search + target.hash;
+}
+
 export type CookieCollectionSelectorOpts = {
   cookieName: string,
   activatePath: string,
@@ -57,7 +80,11 @@ export class CookieCollectionSelector implements RequestCollectionNameSelector {
       if (collectionName == null) {
         return new Response(`Missing required 'collection' query parameter.`, { status: 400 });
       }
-      const redirectTo = url.searchParams.get('redirectTo') ?? '/';
+      // The value goes into Set-Cookie, so it must be a valid cookie value.
+      if (!COOKIE_VALUE_PATTERN.test(collectionName)) {
+        return new Response(`The 'collection' query parameter has characters that are not allowed.`, { status: 400 });
+      }
+      const redirectTo = getRedirectTo(url);
 
       const cookieSegments = [
         `${this.opts.cookieName}=${collectionName}`,
@@ -85,7 +112,7 @@ export class CookieCollectionSelector implements RequestCollectionNameSelector {
     }
 
     if (url.pathname === this.opts.resetPath) {
-      const redirectTo = url.searchParams.get('redirectTo') ?? '/';
+      const redirectTo = getRedirectTo(url);
 
       const cookieSegments = [
         `${this.opts.cookieName}=`,
