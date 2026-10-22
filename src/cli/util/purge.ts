@@ -47,17 +47,17 @@ export type LoadPurgeTargetParams = {
   purgeEnvironments: unknown,
 };
 
-// Finds the service to purge after publishing, so that it stops serving cached
-// copies of the collection. Returns null, and logs why, if the purge is skipped.
-// Throws if a Service ID is found but an API token is not, so that this fails
-// before anything is uploaded.
+// Finds the service to purge after a change to a collection, so that it stops
+// serving cached copies of the collection. Returns null, and logs why, if the
+// purge is skipped. Throws if a Service ID is found but an API token is not, so
+// that a command can fail before it changes storage.
 export function loadPurgeTarget(params: LoadPurgeTargetParams): PurgeTarget | null {
 
   // Check the option even when the purge is skipped, so that a typo is reported.
   const environments = parsePurgeEnvironments(params.purgeEnvironments);
 
   if (params.localMode) {
-    console.log(`- Local mode: will skip purge step after publish.`);
+    console.log(`- Local mode: will skip the purge.`);
     return null;
   }
 
@@ -66,7 +66,7 @@ export function loadPurgeTarget(params: LoadPurgeTargetParams): PurgeTarget | nu
     fastlyTomlPath: path.resolve(params.computeAppDir, 'fastly.toml'),
   });
   if (serviceIdResult == null) {
-    console.log(`- Service ID not found (--fastly-service-id, FASTLY_SERVICE_ID, or fastly.toml). Will skip purge step after publish.`);
+    console.log(`- Service ID not found (--fastly-service-id, FASTLY_SERVICE_ID, or fastly.toml). Will skip the purge.`);
     return null;
   }
   console.log(`✔️ Service ID from ${serviceIdResult.source}: ${serviceIdResult.serviceId}`);
@@ -118,4 +118,19 @@ export async function purgeSurrogateKey(
 
   return true;
 
+}
+
+// Purges the cached responses of a collection in each environment of the purge
+// target. A failed purge is a warning, because the change to storage is done.
+export async function purgeCollection(purgeTarget: PurgeTarget, publishId: string, collectionName: string) {
+  const surrogateKey = `${publishId}-${collectionName}`;
+  for (const environment of purgeTarget.environments) {
+    console.log(`Purging surrogate key [${surrogateKey}] on service [${purgeTarget.serviceId}] (${environment})...`);
+    const purged = await purgeSurrogateKey(purgeTarget.fastlyApiContext, purgeTarget.serviceId, surrogateKey, true, environment);
+    if (purged) {
+      console.log('Purged');
+    } else {
+      console.warn(`⚠️ Warning: Failed purging (${environment}). Cached copies may be served until they expire.`);
+    }
+  }
 }

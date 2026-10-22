@@ -935,7 +935,7 @@ After this process is complete, the PublisherServer object in the Compute applic
 
 **KV Store Options:**
 
-- `--local`: Instead of working with the Fastly KV Store, operate on local files that will be used to simulate the KV Store with the local development environment.
+- `--local`: Instead of working with the Fastly KV Store, operate on local files that will be used to simulate the KV Store with the local development environment. KV Store mode only. In S3 mode, `--local` is an error, because there is no local simulation of S3 storage.
 
 - `--fastly-api-token`: API token to use when publishing. If not set, the tool uses the **`FASTLY_API_TOKEN` environment variable**.
 
@@ -962,7 +962,7 @@ This can include expired collection indexes and orphaned content assets.
 
 **KV Store Options:**
 
-- `--local`: Instead of working with the Fastly KV Store, operate on local files that will be used to simulate the KV Store with the local development environment.
+- `--local`: Instead of working with the Fastly KV Store, operate on local files that will be used to simulate the KV Store with the local development environment. KV Store mode only. In S3 mode, `--local` is an error, because there is no local simulation of S3 storage.
 
 - `--fastly-api-token`: API token to use when publishing. If not set, the tool uses the **`FASTLY_API_TOKEN` environment variable**.
 
@@ -981,7 +981,7 @@ Lists all collections currently published in storage.
 
 **KV Store Options:**
 
-- `--local`: Instead of working with the Fastly KV Store, operate on local files that will be used to simulate the KV Store with the local development environment.
+- `--local`: Instead of working with the Fastly KV Store, operate on local files that will be used to simulate the KV Store with the local development environment. KV Store mode only. In S3 mode, `--local` is an error, because there is no local simulation of S3 storage.
 
 - `--fastly-api-token`: API token to use when publishing. If not set, the tool uses the **`FASTLY_API_TOKEN` environment variable**.
 
@@ -1014,7 +1014,7 @@ Copies an existing collection (content + config) to a new collection name.
 
 **KV Store Options:**
 
-- `--local`: Instead of working with the Fastly KV Store, operate on local files that will be used to simulate the KV Store with the local development environment.
+- `--local`: Instead of working with the Fastly KV Store, operate on local files that will be used to simulate the KV Store with the local development environment. KV Store mode only. In S3 mode, `--local` is an error, because there is no local simulation of S3 storage.
 
 - `--fastly-api-token`: API token to use when publishing. If not set, the tool uses the **`FASTLY_API_TOKEN` environment variable**.
 
@@ -1044,7 +1044,7 @@ Sets or updates the expiration time of an existing collection.
 
 **KV Store Options:**
 
-- `--local`: Instead of working with the Fastly KV Store, operate on local files that will be used to simulate the KV Store with the local development environment.
+- `--local`: Instead of working with the Fastly KV Store, operate on local files that will be used to simulate the KV Store with the local development environment. KV Store mode only. In S3 mode, `--local` is an error, because there is no local simulation of S3 storage.
 
 - `--fastly-api-token`: API token to use when publishing. If not set, the tool uses the **`FASTLY_API_TOKEN` environment variable**.
 
@@ -1063,13 +1063,19 @@ Deletes a collection index from storage. The content files will remain as they m
 
 Use the `npx @fastly/compute-js-static-publish clean` command afterward to remove content files that are no longer referenced by any collection.
 
+If a Service ID is found, the command then purges the surrogate key `<publishId>-<collectionName>`, so that the service stops serving cached responses of the deleted collection. This uses the same options as [`publish-content`](#publish-content).
+
 ##### Options:
 
 - `--collection-name`: The name of the collection to delete (required)
 
+- `--fastly-service-id`: The Fastly Service ID to purge after deleting. If not set, the tool checks the `FASTLY_SERVICE_ID` environment variable, then `service_id` in `fastly.toml`. If none is found, the command skips the purge. The purge also needs an API token (see `--fastly-api-token`). With `--local`, there is no purge. If the purge fails, the command shows a warning and completes, because the collection is already deleted.
+
+- `--purge-environment`: The environments to purge: `production` (the default), `staging`, or both, as a comma-separated list. You can also repeat the option.
+
 **KV Store Options:**
 
-- `--local`: Instead of working with the Fastly KV Store, operate on local files that will be used to simulate the KV Store with the local development environment.
+- `--local`: Instead of working with the Fastly KV Store, operate on local files that will be used to simulate the KV Store with the local development environment. KV Store mode only. In S3 mode, `--local` is an error, because there is no local simulation of S3 storage.
 
 - `--fastly-api-token`: API token to use when publishing. If not set, the tool uses the **`FASTLY_API_TOKEN` environment variable**.
 

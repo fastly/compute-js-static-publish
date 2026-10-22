@@ -27,6 +27,9 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
    - Add `--purge-environment` to purge `production` (the default), `staging`, or both. A staging purge sends the `Fastly-Purge-Environment: staging` header.
    - A failed purge shows a warning on stderr. The command still completes, because the content is already published.
 
+- `collections delete`
+   - After the delete, purge the surrogate key of the collection, so that the service stops serving cached responses of the deleted collection. This has the same options and rules as the purge of `publish-content`: `--fastly-service-id`, `--purge-environment`, and the API token.
+
 - S3-compatible storage (BETA)
    - Add support for S3-compatible storage, such as Fastly Object Storage
    - Store items using same keys as KV Store
@@ -106,6 +109,11 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 - Scaffolding with S3-compatible storage: the generated `fastly.toml` declared the keys of the `S3_CREDENTIALS` Secret Store under `items`. The Fastly CLI reads them only from `entries`. Thus, on the first deploy, the Fastly CLI created the Secret Store with no keys and did not prompt for the credentials, and the server could not read from the bucket. The instructions shown at the end of scaffolding now also tell you that the first deploy prompts for these values.
 
 - `collectionSelector.fromCookie()`: the activate and reset paths now accept only a path on the same site for `redirectTo`. Any other value redirects to `/`. The activate path returns `400` for a `collection` value with characters that a cookie value cannot have, and sets no cookie.
+
+- S3-compatible storage: `--local` stops the command with an error before it connects to storage. Before, `publish-content`, `collections list`, `collections delete`, `collections promote`, `collections update-expiration`, and `clean` ignored `--local` for storage, and changed the bucket. There is no local simulation of S3 storage. If you used `--local` in S3 mode to skip the purge after `publish-content`, remove `--local`, and do not set a Service ID. `--help` and the README now tell that `--local` is for KV Store mode only.
+
+- `publish-content` prepares each variant of the same content one time. Before, when several files had the same content, the files that were processed at the same time each compressed the content again, and each added the same keys to the upload. The uploaded content was correct, but the publish used more CPU time and more upload requests (in S3 mode, one `PutObject` for each duplicate). Each variant file in the working directory is now also written one time, so a file is not read while another file writes it.
+   - `publish-content --local` shows the number of variants to upload.
 
 ## [7.0.8] - 2026-10-14
 

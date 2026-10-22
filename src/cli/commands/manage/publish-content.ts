@@ -11,7 +11,7 @@ import { type OptionDefinition } from 'command-line-args';
 import { type AssetEntryMap, } from '../../../models/assets/index.js';
 import { type ContentCompressionTypes } from '../../../models/compression/index.js';
 import { type PublisherServerConfigNormalized } from '../../../models/config/publisher-server-config.js';
-import { type ContentTypeDef } from '../../../models/config/publish-content-config.js';
+import { type ContentTypeDef, type PublishContentConfigNormalized } from '../../../models/config/publish-content-config.js';
 import { encodeIndexMetadata, type IndexMetadata } from '../../../models/server/index.js';
 import { calcExpirationTime } from '../../../models/time/index.js';
 import { parseCommandLine } from '../../util/args.js';
@@ -19,9 +19,9 @@ import { mergeContentTypes, testFileContentType } from '../../util/content-types
 import { LoadConfigError, loadPublishContentConfigFile, loadStaticPublisherRcFile } from '../../util/config.js';
 import { applyDefaults } from '../../util/data.js';
 import { calculateFileSizeAndHash, enumerateFiles, rootRelative } from '../../util/files.js';
-import { ensureVariantFileExists, type Variants } from '../../util/variants.js';
+import { ensureVariantFileExists, OncePerKey, type Variants } from '../../util/variants.js';
 import { concurrentMap } from '../../util/retryable.js';
-import { type PurgeTarget, loadPurgeTarget, purgeSurrogateKey } from '../../util/purge.js';
+import { type PurgeTarget, loadPurgeTarget, purgeCollection } from '../../util/purge.js';
 import {
   getStorageKeysByHexPrefix,
   loadStorageProviderFromStaticPublishRc,
@@ -96,6 +96,7 @@ KV Store Options:
   --local                          Instead of working with the Fastly KV Store, operate on
                                    local files that will be used to simulate the KV Store
                                    with the local development environment.
+                                   KV Store mode only. In S3 mode, --local is an error.
 
   --kv-overwrite                   Alias for --overwrite-existing.
 
@@ -214,7 +215,7 @@ export async function action(actionArgs: string[]) {
 
   const configFilePath = configFilePathValue ?? './publish-content.config.js';
 
-  let publishContentConfig;
+  let publishContentConfig: PublishContentConfigNormalized;
   try {
     publishContentConfig = await loadPublishContentConfigFile(configFilePath);
   } catch (err) {
@@ -372,9 +373,10 @@ export async function action(actionArgs: string[]) {
   const assetsIndex: AssetEntryMap = {};
 
   // For each variant that we know about during this publishing, true if the
-  // index keeps the variant. Keyed on the base version's hash.
-  type VariantKeepMap = Map<Variants, boolean>;
-  const baseHashToVariantKeepMap = new Map<string, VariantKeepMap>();
+  // index keeps the variant. Keyed on the variant's storage key. Files with the
+  // same content have the same keys, so the first of them prepares each variant
+  // one time, and the other files await its result.
+  const variantKeeps = new OncePerKey<boolean>();
 
   // #### Keys that are already in storage
   // The key of a file is the hash of its content. If the key exists, storage
@@ -448,13 +450,6 @@ export async function action(actionArgs: string[]) {
     const stats = fs.statSync(file);
     const lastModifiedTime = Math.floor((stats.mtime).getTime() / 1000);
 
-    // #### Keep flag per variant
-    let variantKeeps = baseHashToVariantKeepMap.get(baseHash);
-    if (variantKeeps == null) {
-      variantKeeps = new Map<Variants, boolean>();
-      baseHashToVariantKeepMap.set(baseHash, variantKeeps);
-    }
-
     // We know the number of chunks of the original before we read it. For a
     // compressed variant, we know it only if the original fits in one chunk.
     const baseNumChunks = storageProvider.calculateNumChunks(baseSize);
@@ -468,24 +463,10 @@ export async function action(actionArgs: string[]) {
 
     const batchItems: StorageProviderBatchEntry[] = [];
 
-    for (const variant of variants) {
-      let variantKey = `${publishId}_files_sha256_${baseHash}`;
-      let variantFilename = `${baseHash}`;
-      if (variant !== 'original') {
-        variantKey = `${variantKey}_${variant}`;
-        variantFilename = `${variantFilename}_${variant}`;
-      }
-
-      const variantFilePath = path.resolve(storageContentDir, variantFilename);
-
-      let keep = variantKeeps.get(variant);
-      if (keep != null) {
-
-        if (verbose) {
-          console.log(` 🏃‍♂️ Asset "${variantKey}" is identical to an item we already know about, reusing existing copy.`);
-        }
-
-      } else if (
+    // Finds the variant in storage, or prepares it and adds it to batchItems.
+    // Returns true if the index keeps the variant.
+    async function prepareVariant(variant: Variants, variantKey: string, variantFilePath: string) {
+      if (
         (variant === 'original' || baseNumChunks === 1) &&
         isVariantInStorage(variantKey, variant === 'original' ? baseNumChunks : 1)
       ) {
@@ -496,58 +477,76 @@ export async function action(actionArgs: string[]) {
         existingVariantCount++;
         // We upload a compressed variant only if it is smaller than the
         // original. Thus if it is in storage, the index keeps it.
-        keep = true;
-        variantKeeps.set(variant, keep);
+        return true;
 
-      } else {
-
-        await ensureVariantFileExists(
-          variantFilePath,
-          variant,
-          file,
-          verbose,
-          { brotliQuality: publishContentConfig.brotliQuality },
-        );
-
-        let contentEncoding, hash, size;
-        if (variant === 'original') {
-          contentEncoding = undefined;
-          hash = baseHash;
-          size = baseSize;
-        } else {
-          contentEncoding = variant;
-          ({hash, size} = await calculateFileSizeAndHash(variantFilePath));
-        }
-
-        // Only keep variants whose file size actually ends up smaller than
-        // what we started with. Do not upload the other variants.
-        keep = variant === 'original' || size < baseSize;
-        variantKeeps.set(variant, keep);
-
-        if (keep) {
-          const numChunks = storageProvider.calculateNumChunks(size);
-
-          const metadataJson: Record<string, string> = {
-            size: String(size),
-            hash,
-          };
-          if (contentEncoding != null) {
-            metadataJson.contentEncoding = contentEncoding;
-          }
-          if (numChunks > 1) {
-            metadataJson.numChunks = String(numChunks);
-          }
-
-          batchItems.push({
-            size,
-            key: variantKey,
-            filePath: variantFilePath,
-            metadataJson,
-          });
-        } else if (verbose) {
-          console.log(` ・ Variant "${variantKey}" is not smaller than the original, not uploading.`);
-        }
       }
+
+      await ensureVariantFileExists(
+        variantFilePath,
+        variant,
+        file,
+        verbose,
+        { brotliQuality: publishContentConfig.brotliQuality },
+      );
+
+      let contentEncoding, hash, size;
+      if (variant === 'original') {
+        contentEncoding = undefined;
+        hash = baseHash;
+        size = baseSize;
+      } else {
+        contentEncoding = variant;
+        ({hash, size} = await calculateFileSizeAndHash(variantFilePath));
+      }
+
+      // Only keep variants whose file size actually ends up smaller than
+      // what we started with. Do not upload the other variants.
+      const keep = variant === 'original' || size < baseSize;
+
+      if (keep) {
+        const numChunks = storageProvider.calculateNumChunks(size);
+
+        const metadataJson: Record<string, string> = {
+          size: String(size),
+          hash,
+        };
+        if (contentEncoding != null) {
+          metadataJson.contentEncoding = contentEncoding;
+        }
+        if (numChunks > 1) {
+          metadataJson.numChunks = String(numChunks);
+        }
+
+        batchItems.push({
+          size,
+          key: variantKey,
+          filePath: variantFilePath,
+          metadataJson,
+        });
+      } else if (verbose) {
+        console.log(` ・ Variant "${variantKey}" is not smaller than the original, not uploading.`);
+      }
+      return keep;
+    }
+
+    for (const variant of variants) {
+      let variantKey = `${publishId}_files_sha256_${baseHash}`;
+      let variantFilename = `${baseHash}`;
+      if (variant !== 'original') {
+        variantKey = `${variantKey}_${variant}`;
+        variantFilename = `${variantFilename}_${variant}`;
+      }
+
+      const variantFilePath = path.resolve(storageContentDir, variantFilename);
+
+      const { promise, first } = variantKeeps.run(
+        variantKey,
+        () => prepareVariant(variant, variantKey, variantFilePath),
+      );
+      if (!first && verbose) {
+        console.log(` 🏃‍♂️ Asset "${variantKey}" is identical to an item we already know about, reusing existing copy.`);
+      }
+      const keep = await promise;
 
       if (variant !== 'original' && keep) {
         variantsToKeep.push(variant);
@@ -579,6 +578,8 @@ export async function action(actionArgs: string[]) {
   console.log(`✅  Scan complete.`);
   if (existingKeys != null) {
     console.log(`  | ${existingVariantCount} variant(s) already in storage, ${batch.storageProviderBatchEntries.length} to upload.`);
+  } else {
+    console.log(`  | ${batch.storageProviderBatchEntries.length} variant(s) to upload.`);
   }
 
   await storageProvider.applyBatch(batch, { existingKeys });
@@ -685,17 +686,7 @@ export async function action(actionArgs: string[]) {
   console.log(`✅  Settings have been saved.`);
 
   if (purgeTarget != null) {
-    const surrogateKey = `${publishId}-${collectionName}`;
-    for (const environment of purgeTarget.environments) {
-      console.log(`Purging surrogate key [${surrogateKey}] on service [${purgeTarget.serviceId}] (${environment})...`);
-      const purged = await purgeSurrogateKey(purgeTarget.fastlyApiContext, purgeTarget.serviceId, surrogateKey, true, environment);
-      if (purged) {
-        console.log('Purged');
-      } else {
-        // The content is published. Only the cached copies may be stale until they expire.
-        console.warn(`⚠️ Warning: Failed purging (${environment}). Cached copies may be served until they expire.`);
-      }
-    }
+    await purgeCollection(purgeTarget, publishId, collectionName);
   }
 
   console.log(`🎉 Completed.`);

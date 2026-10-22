@@ -56,7 +56,7 @@ export function removeDir(dir) {
 }
 
 // Content to publish. The files test content types, auto index, auto
-// extensions, compression, and the 404 page.
+// extensions, compression, the 404 page, and files with the same content.
 export const LARGE_TEXT = 'The quick brown fox jumps over the lazy dog.\n'.repeat(2000);
 export function writeFixtureContent(publicDir, { largeBinaryBytes = 0 } = {}) {
   const files = {
@@ -66,6 +66,9 @@ export function writeFixtureContent(publicDir, { largeBinaryBytes = 0 } = {}) {
     'cached.html': '<!doctype html><title>Cached</title><h1>Cached</h1>',
     '404.html': '<!doctype html><title>Not found</title><h1>Not found</h1>',
     'style.css': LARGE_TEXT,
+    'copies/style-1.css': LARGE_TEXT,
+    'copies/style-2.css': LARGE_TEXT,
+    'copies/style-3.css': LARGE_TEXT,
     'image.tiff': crypto.randomBytes(256),
     'image.avif': crypto.randomBytes(256),
     'module.wasm': crypto.randomBytes(256),
