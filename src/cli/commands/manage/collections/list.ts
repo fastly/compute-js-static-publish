@@ -7,7 +7,7 @@ import path from 'node:path';
 
 import { type OptionDefinition } from 'command-line-args';
 
-import { decodeIndexMetadata } from '../../../../models/server/index.js';
+import { decodeIndexMetadata, getUnsupportedIndexFeatures } from '../../../../models/server/index.js';
 import { isExpired } from '../../../../models/time/index.js';
 import { parseCommandLine } from '../../../util/args.js';
 import { LoadConfigError, loadStaticPublisherRcFile } from '../../../util/config.js';
@@ -158,6 +158,15 @@ export async function action(actionArgs: string[]) {
         console.log(`    Published  : ${new Date(indexMetadata.publishedTime * 1000)}`);
       }
       
+      if (indexMetadata.requires != null) {
+        console.log(`    Requires   : ${indexMetadata.requires.join(', ')}`);
+        const unsupportedFeatures = getUnsupportedIndexFeatures(indexMetadata);
+        if (unsupportedFeatures.length > 0) {
+          console.log(`      ⚠️ This version does not support ${unsupportedFeatures.join(', ')}. An application`);
+          console.log(`         that is built with this version does not serve this collection.`);
+        }
+      }
+
       if (indexMetadata.expirationTime == null) {
         console.log('    Expiration : not set');
       } else {
