@@ -49,7 +49,7 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 - `PublisherServer`
    - Add `setServerTimingRequestHeader()`. When set, a request that has this header gets a `Server-Timing` response header with the time spent reading the settings, the index, and the file. Off by default.
    - Add `beginRequest()`. `serveRequest()` calls it. Call it yourself before `getMatchingAsset()` if you call `getMatchingAsset()` and `serveAsset()` directly.
-   - Add `setResponseCache()`. When set, whole responses are cached with the Core Cache API, keyed by publish ID, collection, path, and the client's `Accept-Encoding`. A cache hit does not read the settings, the index, or the file. Paths that are not found are cached, too. The response is streamed into the cache, so a large file is not held in memory. Entries have the surrogate key `<publishId>-<collectionName>`, which `publish-content` purges. Off by default.
+   - Add `setResponseCache()`. When set, whole responses are cached with the Core Cache API, keyed by publish ID, collection, path, and the client's `Accept-Encoding`. A cache hit does not read the settings, the index, or the file. Paths that are not found are cached, too. A response is read completely, and is cached only if its body has the size in the file's metadata. A response that is larger than `maxBodySize` (default 8 MiB) is served from storage and not cached, so a large file is not held in memory. Entries have the surrogate key `<publishId>-<collectionName>`, which `publish-content` purges. Off by default.
    - Add `serveCached()`, to use the response cache with `getMatchingAsset()` and `serveAsset()`. `serveRequest()` uses it automatically.
    - `Server-Timing` has a `cache` entry when the response cache is on: `hit` (with the age of the cached response), `miss`, or `bypass`.
 
@@ -117,6 +117,8 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 
 - `publish-content` prepares each variant of the same content one time. Before, when several files had the same content, the files that were processed at the same time each compressed the content again, and each added the same keys to the upload. The uploaded content was correct, but the publish used more CPU time and more upload requests (in S3 mode, one `PutObject` for each duplicate). Each variant file in the working directory is now also written one time, so a file is not read while another file writes it.
    - `publish-content --local` shows the number of variants to upload.
+
+- `PublisherServer` compares the body of each file with the size in the file's metadata. Storage can return a body that does not have this size for a short time, for example a KV Store entry whose metadata reached the POP before its body. Before, such a body was served as a complete `200` response, and a CDN or a cache in front of the service could keep it. Now an empty body makes `serveRequest()` and `serveAsset()` throw an error before the response starts, and any other mismatch stops the response with a stream error, so that the client sees an incomplete response. The server logs the file, the expected size, and the actual size.
 
 ## [7.0.8] - 2026-10-14
 

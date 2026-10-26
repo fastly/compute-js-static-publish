@@ -5,7 +5,6 @@
 
 /// <reference types="@fastly/js-compute" />
 
-import type { FastlyBody } from 'fastly:body';
 import { CoreCache } from 'fastly:cache';
 
 import {
@@ -37,12 +36,15 @@ import {
   type CachedResponseMetadata,
   type ResponseCacheOptions,
   CACHEABLE_STATUSES,
+  DEFAULT_MAX_BODY_SIZE,
   buildCacheFillRequest,
   buildResponseCacheKey,
   decodeCachedResponseMetadata,
   encodeCachedResponseMetadata,
   parseAcceptEncodingGroups,
+  readBodyUpTo,
 } from './response-cache.js';
+import { checkBodyLength } from '../util/body-length.js';
 
 type AssetVariant = {
   storageEntry: StorageEntry,
@@ -528,9 +530,16 @@ export class PublisherServer {
       return preconditionResponse;
     }
 
-    const storageEntry = assetVariant.storageEntry;
+    // If the body does not have the size in its metadata, the response must not
+    // look complete. An empty body throws here, and any other mismatch causes an
+    // error in the body stream, so that the client gets an incomplete response.
+    const body = await checkBodyLength(
+      assetVariant.storageEntry.body,
+      assetVariant.size,
+      `File ${asset.key} (${assetVariant.contentEncoding ?? 'identity'})`,
+    );
     return new Response(
-      storageEntry.body,
+      body,
       {
         status: init?.status ?? 200,
         headers,
@@ -561,6 +570,10 @@ export class PublisherServer {
 
     if (!state.mustInsertOrUpdate()) {
       const metadata = state.found() && state.usable() ? decodeCachedResponseMetadata(entry.userMetadata()) : null;
+      if (metadata?.tooLarge) {
+        this.serverTiming?.add('cache', performance.now() - lookupStart, 'bypass');
+        return produce(request);
+      }
       if (metadata != null) {
         // age() is in milliseconds. A hit younger than the time since a purge proves the entry was refilled.
         this.serverTiming?.add('cache', performance.now() - lookupStart, `hit age=${Math.round(entry.age() / 1000)}s`);
@@ -607,50 +620,48 @@ export class PublisherServer {
     // Server-Timing describes one request, so it is not stored.
     headers.delete('Server-Timing');
     const metadata: CachedResponseMetadata = { status: response.status, headers: [...headers] };
-    const contentLength = Number(headers.get('Content-Length'));
 
-    // Stream the body into the cache entry, and give the client (and any requests
-    // waiting on this key) the entry's own stream as it fills. FastlyBody.append()
-    // can take only host-backed streams, and the storage providers build their
-    // bodies in JavaScript, so copy the chunks.
-    const [writer, streamedEntry] = entry.insertAndStreamBack({
+    // Read the whole body before the insertion starts. After it starts, a body
+    // that is not complete is not safe: the requests that read the entry get
+    // a short body that ends as if it is complete. If the read fails (for example,
+    // serveAsset() finds a body that does not have the size in its metadata),
+    // cancel() stores nothing, and the next request fills the entry again.
+    let readResult;
+    try {
+      readResult = await readBodyUpTo(response.body, this.responseCache.maxBodySize ?? DEFAULT_MAX_BODY_SIZE);
+    } catch (err) {
+      entry.cancel();
+      throw err;
+    }
+
+    if ('body' in readResult) {
+      // Too large to cache. Cache a marker, so that later requests do not read
+      // the body to find this again, and serve the body from storage.
+      const tooLargeMetadata: CachedResponseMetadata = { tooLarge: true };
+      const writer = entry.insert({
+        ...insertOptions,
+        userMetadata: encodeCachedResponseMetadata(tooLargeMetadata),
+        length: 0,
+      });
+      writer.close();
+      return this.responseFromCache(request, metadata, readResult.body);
+    }
+
+    const writer = entry.insert({
       ...insertOptions,
       userMetadata: encodeCachedResponseMetadata(metadata),
-      length: Number.isInteger(contentLength) && headers.has('Content-Length') ? contentLength : undefined,
+      length: readResult.bytes.byteLength,
     });
-    const copied = this.copyBodyToCache(response, writer);
-
-    const cachedResponse = this.responseFromCache(request, metadata, streamedEntry.body());
-    // A response without a body (HEAD, 304) does not keep the request running
-    // until the copy finishes. If the copy is cut short, the entry can be stored
-    // with a partial body, so wait for it.
-    if (cachedResponse?.body == null) {
-      await copied;
-    }
-    return cachedResponse;
+    writer.append(readResult.bytes);
+    writer.close();
+    return this.responseFromCache(request, metadata, readResult.bytes);
   }
 
-  private async copyBodyToCache(response: Response, writer: FastlyBody) {
-    try {
-      if (response.body != null) {
-        const reader = response.body.getReader();
-        for (;;) {
-          const { done, value } = await reader.read();
-          if (done) {
-            break;
-          }
-          writer.append(value);
-        }
-      }
-      writer.close();
-    } catch (err) {
-      // Without close(), the cache treats the insertion as incomplete, so a
-      // partial body is not kept. Readers of this entry get a stream error.
-      console.error('Could not write the response to the cache:', err);
-    }
-  }
-
-  private responseFromCache(request: Request, metadata: CachedResponseMetadata, body: BodyInit): Response | null {
+  private responseFromCache(
+    request: Request,
+    metadata: Exclude<CachedResponseMetadata, { tooLarge: true }>,
+    body: BodyInit,
+  ): Response | null {
     if (metadata.notFound) {
       return null;
     }

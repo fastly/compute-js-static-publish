@@ -13,6 +13,7 @@ import {
   decodeCachedResponseMetadata,
   encodeCachedResponseMetadata,
   parseAcceptEncodingGroups,
+  readBodyUpTo,
 } from '../../build/server/server/publisher-server/response-cache.js';
 
 function requestWith(headers) {
@@ -98,8 +99,54 @@ describe('cached response metadata', () => {
     assert.deepEqual(roundTrip({ notFound: true }), { notFound: true });
   });
 
+  test('round-trips a too large result', () => {
+    assert.deepEqual(roundTrip({ tooLarge: true }), { tooLarge: true });
+  });
+
   test('gives null for data that is not valid', () => {
     assert.equal(decodeCachedResponseMetadata(new TextEncoder().encode('not json').buffer), null);
     assert.equal(decodeCachedResponseMetadata(new TextEncoder().encode('{"status":"200"}').buffer), null);
+  });
+});
+
+function streamOf(chunks, { errorAtEnd = false } = {}) {
+  return new ReadableStream({
+    pull(controller) {
+      const chunk = chunks.shift();
+      if (chunk != null) {
+        controller.enqueue(new TextEncoder().encode(chunk));
+      } else if (errorAtEnd) {
+        controller.error(new Error('read failed'));
+      } else {
+        controller.close();
+      }
+    },
+  });
+}
+
+describe('readBodyUpTo', () => {
+  test('gives the bytes of a body that is not larger than the limit', async () => {
+    const result = await readBodyUpTo(streamOf([ 'abc', 'def' ]), 6);
+    assert.equal(new TextDecoder().decode(result.bytes), 'abcdef');
+  });
+
+  test('gives no bytes for no body', async () => {
+    const result = await readBodyUpTo(null, 6);
+    assert.equal(result.bytes.byteLength, 0);
+  });
+
+  test('gives a stream with all the bytes of a body that is larger than the limit', async () => {
+    const result = await readBodyUpTo(streamOf([ 'abc', 'def', 'ghi' ]), 5);
+    assert.equal(result.bytes, undefined);
+    assert.equal(await new Response(result.body).text(), 'abcdefghi');
+  });
+
+  test('rejects if the body errors before the limit', async () => {
+    await assert.rejects(readBodyUpTo(streamOf([ 'abc' ], { errorAtEnd: true }), 6), /read failed/);
+  });
+
+  test('errors the stream if the body errors after the limit', async () => {
+    const result = await readBodyUpTo(streamOf([ 'abc', 'def' ], { errorAtEnd: true }), 2);
+    await assert.rejects(new Response(result.body).text(), /read failed/);
   });
 });
