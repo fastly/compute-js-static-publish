@@ -163,7 +163,7 @@ export async function action(actionArgs: string[]) {
         const unsupportedFeatures = getUnsupportedIndexFeatures(indexMetadata);
         if (unsupportedFeatures.length > 0) {
           console.log(`      ⚠️ This version does not support ${unsupportedFeatures.join(', ')}. An application`);
-          console.log(`         that is built with this version does not serve this collection.`);
+          console.log(`         that is built with this version will not serve this collection.`);
         }
       }
 

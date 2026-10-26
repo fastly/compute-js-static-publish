@@ -20,7 +20,7 @@ export type IndexMetadata = {
 // The features that this version of PublisherServer supports. A server does
 // not serve a collection that requires a feature that is not in this list.
 // A feature name must not contain a comma, because the metadata uses commas to
-// separate the names. Use short kebab-case names, for example 'hidden'.
+// separate the names. Use short kebab-case names, for example 'my-feature'.
 export const SUPPORTED_INDEX_FEATURES: readonly string[] = [];
 
 const KNOWN_FIELDS = [ 'publishedTime', 'expirationTime', 'requires' ];
