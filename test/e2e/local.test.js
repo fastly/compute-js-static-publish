@@ -158,3 +158,76 @@ describe('local mode with a collection that requires an unsupported feature', { 
     assert.match(output, /This version does not support future-feature/);
   });
 });
+
+// Storage can return a body that does not have the size in its metadata, for
+// example a KV Store entry whose metadata reached the POP before its body. The
+// server must not serve or cache such a body as a complete response.
+describe('local mode with a body that does not have its stored size', { skip: skipUnlessFastlyCli() }, () => {
+  let dir;
+  let computeJsDir;
+  let server;
+
+  const headers = { 'x-server-timing': '1' };
+  const cacheHeaders = { ...headers, 'x-use-cache': '1' };
+
+  // Replaces the body of the original variant of a file, and keeps its metadata.
+  function replaceBody(kvStoreJson, assetPath, body) {
+    const index = JSON.parse(fs.readFileSync(path.resolve(computeJsDir, kvStoreJson['default_index_live'].file), 'utf-8'));
+    const key = 'default_files_sha256_' + index[assetPath].key.slice('sha256:'.length);
+    const bodyFile = `static-publisher/replaced-${path.basename(assetPath)}`;
+    fs.writeFileSync(path.resolve(computeJsDir, bodyFile), body);
+    kvStoreJson[key].file = bodyFile;
+  }
+
+  before(async () => {
+    dir = makeTempDir('local-body-size');
+    writeFixtureContent(path.resolve(dir, 'public'));
+    computeJsDir = scaffoldApp(dir, [ '--kv-store-name', 'e2e-content' ]);
+    writeTestAppIndex(computeJsDir);
+    runCli([ 'publish-content', '--local' ], { cwd: computeJsDir });
+
+    const kvStoreJsonPath = path.resolve(computeJsDir, 'static-publisher/kvstore.json');
+    const kvStoreJson = JSON.parse(fs.readFileSync(kvStoreJsonPath, 'utf-8'));
+    replaceBody(kvStoreJson, '/about.html', '');
+    replaceBody(kvStoreJson, '/cached.html', '<!doctype');
+    fs.writeFileSync(kvStoreJsonPath, JSON.stringify(kvStoreJson));
+
+    server = await startServe(computeJsDir);
+  });
+
+  after(async () => {
+    await server?.stop();
+    if (dir != null) {
+      removeDir(dir);
+    }
+  });
+
+  test('answers 500 for an empty body, and logs the sizes', async () => {
+    const res = await rawRequest(server.baseUrl + '/about.html', { headers });
+    assert.equal(res.status, 500);
+    assert.match(server.getOutput(), /File sha256:\w+ \(identity\): expected \d+ bytes, got 0/);
+  });
+
+  test('stops the response for a short body, and logs the sizes', async () => {
+    await assert.rejects(rawRequest(server.baseUrl + '/cached.html', { headers }));
+    assert.match(server.getOutput(), /File sha256:\w+ \(identity\): expected \d+ bytes, got 9/);
+  });
+
+  test('does not cache an empty or a short body', async () => {
+    for (const assetPath of [ '/about.html', '/cached.html' ]) {
+      for (let i = 0; i < 2; i++) {
+        const res = await rawRequest(server.baseUrl + assetPath, { headers: cacheHeaders });
+        assert.equal(res.status, 500, `${assetPath}, request ${i + 1}`);
+      }
+    }
+  });
+
+  test('serves and caches a body that has its stored size', async () => {
+    const first = await rawRequest(server.baseUrl + '/index.html', { headers: cacheHeaders });
+    assert.equal(first.status, 200);
+    assert.match(first.headers['server-timing'] ?? '', /\bcache;dur=[\d.]+;desc="miss"/);
+    const second = await rawRequest(server.baseUrl + '/index.html', { headers: cacheHeaders });
+    assert.equal(second.status, 200);
+    assert.match(second.headers['server-timing'] ?? '', /\bcache;dur=[\d.]+;desc="hit/);
+  });
+});

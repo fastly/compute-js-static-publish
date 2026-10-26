@@ -736,6 +736,12 @@ publisherServer.setResponseCache({ maxAge: 3600 });
 
 `maxAge` is in seconds. This is off by default.
 
+`maxBodySize` sets the largest response, in bytes, to cache. The default is 8 MiB (`8 * 1024 * 1024`). A larger response is served from storage each time:
+
+```js
+publisherServer.setResponseCache({ maxAge: 3600, maxBodySize: 16 * 1024 * 1024 });
+```
+
 - A response is cached by the publish ID, the collection, the path, and the client's `Accept-Encoding`. A cache hit does not read the settings, the index, or the file.
 - A path that does not match a file is cached, too, so a missing path does not read the index again.
 - If several requests miss the same response at the same time, one request produces it, and the others wait for it.
@@ -759,7 +765,8 @@ The second argument identifies the response in the collection. If anything other
 
 Notes:
 
-- The response is streamed into the cache. The client, and other requests that wait for the same response, read it from the cache as it is written. Thus a large file is not held in memory.
+- A response is read completely before it is cached, so a request uses memory for one response, up to `maxBodySize`. Other requests that wait for the same response get it when it is cached.
+- A response is cached only if its body has the size in the file's metadata. If storage returns a different body, nothing is cached, the request gets an error, and the next request reads the file again.
 - With `--local`, `publish-content` cannot purge the local cache. Restart `fastly compute serve` to see newly published content, or leave the response cache off in local development.
 - On staging, a purge must include the `Fastly-Purge-Environment: staging` header to clear the staging cache. Without it, a purge clears only the production cache. Use `publish-content --purge-environment=production,staging` to purge both.
 

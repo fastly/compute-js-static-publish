@@ -4,7 +4,10 @@
  */
 
 // Deploys an app to a real Fastly service, and makes sure that the purge after
-// a publish clears the response cache. The app uses a real KV Store.
+// a publish clears the response cache. Then it replaces the body of a file in
+// the KV Store with an empty and a short body, and makes sure that the service
+// does not serve or cache such a body as a complete response. The app uses a
+// real KV Store.
 //
 // Set these environment variables:
 //   FASTLY_API_TOKEN             an API token that can write to the KV Store,
@@ -19,6 +22,7 @@
 // CJSP_TEST_KV_STORE_NAME. See test/README.md.
 
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { after, before, describe, test } from 'node:test';
@@ -43,6 +47,10 @@ const COLLECTION_NAME = 'e2e';
 // A long max age, so that only a purge can make the cache serve new content
 // during the test.
 const RESPONSE_CACHE_MAX_AGE = 3600;
+
+// A file for the test of bodies that do not have their stored size. The test
+// replaces its body in the KV Store.
+const BODY_SIZE_FILE = 'body-size.txt';
 
 const skip =
   skipUnlessEnv('FASTLY_API_TOKEN', 'CJSP_TEST_KV_STORE_NAME', 'CJSP_TEST_DEPLOY_SERVICE_ID', 'CJSP_TEST_DEPLOY_URL') ||
@@ -128,6 +136,7 @@ describe('deployed service', { skip }, () => {
     publicDir = path.resolve(dir, 'public');
     writeFixtureContent(publicDir);
     writeVersion(`v1 ${publishId}`);
+    fs.writeFileSync(path.resolve(publicDir, BODY_SIZE_FILE), `body size ${publishId}\n`);
     // Do not give --service-id to the scaffolder. Then fastly.toml has no
     // service_id, and publish-content purges only with --fastly-service-id.
     computeJsDir = scaffoldApp(dir, [
@@ -206,5 +215,71 @@ describe('deployed service', { skip }, () => {
       const res = await getVersion();
       return res.status === 200 && res.body.toString() === `v2 ${publishId}` ? res : undefined;
     }, { timeoutMs: 180_000, describeLast });
+  });
+
+  step('does not serve or cache a body that does not have its stored size', async () => {
+    const content = fs.readFileSync(path.resolve(publicDir, BODY_SIZE_FILE));
+    const hash = crypto.createHash('sha256').update(content).digest('hex');
+    const key = `${publishId}_files_sha256_${hash}`;
+
+    async function api(method, apiPath, { body, headers } = {}) {
+      const res = await fetch('https://api.fastly.com' + apiPath, {
+        method,
+        body,
+        headers: { 'Fastly-Key': process.env.FASTLY_API_TOKEN, ...headers },
+      });
+      assert.ok(res.ok, `${method} ${apiPath}: ${res.status}`);
+      return res;
+    }
+    const stores = await (await api('GET', '/resources/stores/kv?limit=1000')).json();
+    const storeId = stores.data.find(store => store.name === process.env.CJSP_TEST_KV_STORE_NAME).id;
+    const keyPath = `/resources/stores/kv/${storeId}/keys/${encodeURIComponent(key)}`;
+    // Keep the metadata, so that the server expects the original size.
+    const metadata = (await api('GET', keyPath)).headers.get('metadata');
+    assert.ok(metadata, 'the file has metadata');
+    const putBody = (body) => api('PUT', keyPath, { body, headers: { metadata } });
+
+    const url = `${baseUrl}/${BODY_SIZE_FILE}`;
+    const uncached = { headers: { 'x-server-timing': '1' } };
+    const cached = { headers: { 'x-server-timing': '1', 'x-use-cache': '1' } };
+    const describeRes = (res) => `Last response: ${res?.status}, body: ${res?.body?.toString().slice(0, 100)}`;
+
+    // An empty body: 500, also with the response cache, and not cached.
+    await putBody('');
+    let res;
+    await waitFor(async () => {
+      res = await rawRequest(url, uncached);
+      return res.status === 500 ? res : undefined;
+    }, { timeoutMs: 120_000, describeLast: () => describeRes(res) });
+    for (let i = 0; i < 3; i++) {
+      res = await rawRequest(url, cached);
+      assert.equal(res.status, 500, `cached request ${i + 1} for an empty body. ${describeRes(res)}`);
+    }
+
+    // A short body: the response stops with an error. With the response cache:
+    // 500, and not cached.
+    await putBody(content.subarray(0, 5));
+    await waitFor(async () => {
+      try {
+        res = await rawRequest(url, uncached);
+        return undefined;
+      } catch (err) {
+        return err;
+      }
+    }, { timeoutMs: 120_000, describeLast: () => describeRes(res) });
+    for (let i = 0; i < 3; i++) {
+      res = await rawRequest(url, cached);
+      assert.equal(res.status, 500, `cached request ${i + 1} for a short body. ${describeRes(res)}`);
+    }
+
+    // The original body: served, and cached.
+    await putBody(content);
+    await waitFor(async () => {
+      res = await rawRequest(url, cached);
+      return res.status === 200 && res.body.equals(content) ? res : undefined;
+    }, { timeoutMs: 120_000, describeLast: () => describeRes(res) });
+    res = await rawRequest(url, cached);
+    assert.match(res.headers['server-timing'] ?? '', /\bcache;dur=[\d.]+;desc="hit/, describeRes(res));
+    assert.ok(res.body.equals(content));
   });
 });

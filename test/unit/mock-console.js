@@ -10,3 +10,10 @@ export function mockConsoleLog(t) {
   const log = t.mock.method(console, 'log', () => {});
   return () => log.mock.calls.map(call => call.arguments.join(' '));
 }
+
+// The server reports problems with console.error(). Capture it for the rest of
+// test t. Returns a function that gives the messages logged so far.
+export function mockConsoleError(t) {
+  const error = t.mock.method(console, 'error', () => {});
+  return () => error.mock.calls.map(call => call.arguments.join(' '));
+}
