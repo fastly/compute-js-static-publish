@@ -8,6 +8,12 @@ import { describe, test } from 'node:test';
 
 import { decodeAssetVariantMetadata } from '../../build/cli/models/assets/index.js';
 import { parseKvStoreMetadata } from '../../build/cli/cli/storage/kv-store-provider.js';
+import {
+  decodeIndexMetadata,
+  encodeIndexMetadata,
+  getUnsupportedIndexFeatures,
+  SUPPORTED_INDEX_FEATURES,
+} from '../../build/cli/models/server/index.js';
 
 describe('decodeAssetVariantMetadata', () => {
   test('decodes the fields', () => {
@@ -49,5 +55,73 @@ describe('parseKvStoreMetadata', () => {
     assert.equal(parseKvStoreMetadata('"text"'), null);
     assert.equal(parseKvStoreMetadata('[]'), null);
     assert.equal(parseKvStoreMetadata('null'), null);
+  });
+});
+
+describe('decodeIndexMetadata and encodeIndexMetadata', () => {
+  test('decode the fields', () => {
+    assert.deepEqual(
+      decodeIndexMetadata({ publishedTime: '100', expirationTime: '200', requires: 'a, b,,c' }),
+      { publishedTime: 100, expirationTime: 200, requires: [ 'a', 'b', 'c' ], otherFields: undefined },
+    );
+  });
+
+  test('read lowercase keys (S3 metadata)', () => {
+    assert.deepEqual(
+      decodeIndexMetadata({ publishedtime: '100', expirationtime: '200', requires: 'a' }),
+      { publishedTime: 100, expirationTime: 200, requires: [ 'a' ], otherFields: undefined },
+    );
+  });
+
+  test('an empty requires is the same as no requires', () => {
+    assert.equal(decodeIndexMetadata({ requires: '' }).requires, undefined);
+    assert.deepEqual(encodeIndexMetadata({ publishedTime: 100, requires: [] }), { publishedTime: '100' });
+  });
+
+  test('keep the fields that this version does not know', () => {
+    const decoded = decodeIndexMetadata({ publishedTime: '100', requires: 'a', newField: 'x', newfield2: 'y' });
+    assert.deepEqual(decoded.otherFields, { newField: 'x', newfield2: 'y' });
+    assert.deepEqual(
+      encodeIndexMetadata(decoded),
+      { publishedTime: '100', requires: 'a', newField: 'x', newfield2: 'y' },
+    );
+  });
+
+  test('a known field replaces an unknown field with the same name', () => {
+    assert.deepEqual(
+      encodeIndexMetadata({ publishedTime: 100, otherFields: { publishedTime: '1' } }),
+      { publishedTime: '100' },
+    );
+  });
+
+  test('gives null for no metadata', () => {
+    assert.equal(decodeIndexMetadata(undefined), null);
+  });
+
+  test('encode separates the features with commas', () => {
+    assert.deepEqual(
+      encodeIndexMetadata({ requires: [ 'hidden', 'brotli-dictionary' ] }),
+      { requires: 'hidden,brotli-dictionary' },
+    );
+  });
+
+  test('encode throws if a feature name contains a comma', () => {
+    assert.throws(() => encodeIndexMetadata({ requires: [ 'a,b' ] }), /must not contain a comma/);
+  });
+});
+
+describe('getUnsupportedIndexFeatures', () => {
+  test('this version supports no features', () => {
+    assert.deepEqual(SUPPORTED_INDEX_FEATURES, []);
+    assert.deepEqual(getUnsupportedIndexFeatures({ requires: [ 'hidden' ] }), [ 'hidden' ]);
+  });
+
+  test('gives the features that are not supported', () => {
+    assert.deepEqual(getUnsupportedIndexFeatures({ requires: [ 'a', 'b' ] }, [ 'a' ]), [ 'b' ]);
+    assert.deepEqual(getUnsupportedIndexFeatures({ requires: [ 'a' ] }, [ 'a' ]), []);
+  });
+
+  test('gives an empty list if requires is not set', () => {
+    assert.deepEqual(getUnsupportedIndexFeatures({}), []);
   });
 });

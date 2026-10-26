@@ -23,7 +23,7 @@ import {
   type AssetVariantMetadata,
   decodeAssetVariantMetadata,
 } from '../../models/assets/index.js';
-import { decodeIndexMetadata, } from '../../models/server/index.js';
+import { decodeIndexMetadata, getUnsupportedIndexFeatures } from '../../models/server/index.js';
 import { isExpired } from '../../models/time/index.js';
 import {
   type StorageEntry,
@@ -228,20 +228,29 @@ export class PublisherServer {
       return null;
     }
 
+    let metadata;
+    const metadataText = indexFile.metadataText()
+    if (metadataText != null) {
+      try {
+        metadata = JSON.parse(metadataText);
+      } catch {
+      }
+      metadata = decodeIndexMetadata(metadata);
+    }
+
+    // Do not serve a collection that needs a feature that this version does not
+    // support. This check applies to all collections, also the default collection.
+    const unsupportedFeatures = metadata != null ? getUnsupportedIndexFeatures(metadata) : [];
+    if (unsupportedFeatures.length > 0) {
+      console.error(`Collection at ${indexFileKey} requires features that this version of the server does not support: ${unsupportedFeatures.join(', ')}.`);
+      console.error(`Build and deploy the application with a newer version of @fastly/compute-js-static-publish.`);
+      this.assetEntryMapCache = null;
+      return null;
+    }
+
     let collectionIsExpired = false;
-    if (this.activeCollectionName !== this.defaultCollectionName) {
-      let metadata;
-      const metadataText = indexFile.metadataText()
-      if (metadataText != null) {
-        try {
-          metadata = JSON.parse(metadataText);
-        } catch {
-        }
-        metadata = decodeIndexMetadata(metadata);
-      }
-      if (metadata != null) {
-        collectionIsExpired = metadata.expirationTime != null && isExpired(metadata.expirationTime);
-      }
+    if (this.activeCollectionName !== this.defaultCollectionName && metadata != null) {
+      collectionIsExpired = metadata.expirationTime != null && isExpired(metadata.expirationTime);
     }
 
     if (collectionIsExpired) {
