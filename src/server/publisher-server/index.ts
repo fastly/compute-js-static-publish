@@ -531,8 +531,8 @@ export class PublisherServer {
     }
 
     // If the body does not have the size in its metadata, the response must not
-    // look complete. An empty body throws here, and any other mismatch errors
-    // the body stream, so that the client gets an incomplete response.
+    // look complete. An empty body throws here, and any other mismatch causes an
+    // error in the body stream, so that the client gets an incomplete response.
     const body = await checkBodyLength(
       assetVariant.storageEntry.body,
       assetVariant.size,
@@ -623,10 +623,9 @@ export class PublisherServer {
 
     // Read the whole body before the insertion starts. After it starts, a body
     // that is not complete is not safe: the requests that read the entry get
-    // a short body that ends as if it is complete (while the development server
-    // stores the entry). If the read fails (for example, serveAsset()
-    // finds a body that does not have the size in its metadata), cancel()
-    // stores nothing, and the next request fills the entry again.
+    // a short body that ends as if it is complete. If the read fails (for example,
+    // serveAsset() finds a body that does not have the size in its metadata),
+    // cancel() stores nothing, and the next request fills the entry again.
     let readResult;
     try {
       readResult = await readBodyUpTo(response.body, this.responseCache.maxBodySize ?? DEFAULT_MAX_BODY_SIZE);
