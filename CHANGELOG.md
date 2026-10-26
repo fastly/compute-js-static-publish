@@ -9,6 +9,8 @@ This file does not list v6 releases after 6.3.0. For those, see `CHANGELOG.md` i
 
 ## [unreleased]
 
+## [7.0.9] - 2026-10-27
+
 ### Updated
 
 - v7 is an old version. The README says that the current version is v8, in `main`. The docs and the CLI help use `@7` in place of `@latest`.
@@ -386,7 +388,8 @@ This file does not list v6 releases after 6.3.0. For those, see `CHANGELOG.md` i
 - Updated generated app's webpack and webpack-cli versions
 - Use atob() and removed dependency on Buffer
 
-[unreleased]: https://github.com/fastly/compute-js-static-publish/compare/v7.0.8...HEAD
+[unreleased]: https://github.com/fastly/compute-js-static-publish/compare/v7.0.9...HEAD
+[7.0.9]: https://github.com/fastly/compute-js-static-publish/compare/v7.0.8...v7.0.9
 [7.0.8]: https://github.com/fastly/compute-js-static-publish/compare/v7.0.7...v7.0.8
 [7.0.7]: https://github.com/fastly/compute-js-static-publish/compare/v7.0.6...v7.0.7
 [7.0.6]: https://github.com/fastly/compute-js-static-publish/compare/v7.0.5...v7.0.6
