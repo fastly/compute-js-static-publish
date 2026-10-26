@@ -42,11 +42,8 @@ To upgrade an app that uses the KV Store:
   collection.
 - **`kvStoreAssetInclusionTest` has a new name.** In `publish-content.config.js`, use `assetInclusionTest`. The old
   name continues to work, but it is deprecated.
-- **Some types have new names.** `KVAssetEntry` is now `AssetEntry`, and `KVAssetEntryMap` is now `AssetEntryMap`.
-  The package did not export these types. This change has an effect only if your code imports files from `build/`.
-- **The `build/` layout changed.** The package entry is now `build/server/server/index.js`, and the CLI is
-  `build/cli/cli/index.js`. Imports of `@fastly/compute-js-static-publish` do not change. If your code imports files
-  from `build/`, change the paths.
+- **Imports of files in `build/` are not supported.** Import the named exports of
+  `@fastly/compute-js-static-publish`.
 - **`--public-dir` and `server.publicDirPrefix` are deprecated.** `publish-content` shows a warning if
   `publicDirPrefix` is not empty. See [Stop using `publicDirPrefix`](#stop-using-publicdirprefix-deprecated).
 - **The `@fastly/cli` dependency is removed** from this package. A scaffolded app continues to have `@fastly/cli` as

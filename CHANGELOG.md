@@ -11,37 +11,36 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 
 ### Breaking
 
-- Rename symbols
-   - `KVAssetEntry` renamed to `AssetEntry`
-   - `KVAssetEntryMap` renamed to `AssetEntryMap`
-
 - Fastly API token
    - The CLI no longer falls back to `fastly profile token`. Pass the token with `--fastly-api-token` or the `FASTLY_API_TOKEN` environment variable.
-   - Remove the `@fastly/cli` dependency, which was used only for that fallback.
+   - Remove the `@fastly/cli` dependency, which was used only for that fallback. A scaffolded app continues to have `@fastly/cli` as its own dependency.
+
+- Imports of files in `build/` are not supported. Import the named exports of `@fastly/compute-js-static-publish`.
 
 ### Added
 
-- Collections can now declare the features that the server must support. A later version adds a feature to the index metadata (`requires`) only if the content that it publishes uses that feature. `PublisherServer` does not serve a collection that requires a feature that it does not support, and it logs the reason. Without this check, an older server would serve such a collection incorrectly. Build and deploy your app again to serve it. `collections list` shows the features that a collection requires. This version does not add features to `requires`.
-   - `collections promote` and `collections update-expiration` now keep the fields of the index metadata that they do not know.
+- S3-compatible storage (BETA)
+   - Add support for S3-compatible storage, such as Fastly Object Storage. Items are stored with the same keys as in the KV Store, and the asset metadata is stored in the S3 object metadata.
+   - `static-publish.rc.js`: add the `s3` storage mode configuration.
+   - The server reads the S3 credentials from the Secret Store that has the resource link name `S3_CREDENTIALS` on the service. The Secret Store can have a different name. To change the resource link name or the key names, call `setSecretStoreForS3Credentials()`, `setSecretStoreKeyForS3AccessKeyId()`, or `setSecretStoreKeyForS3SecretAccessKey()`. To get the credentials in a different way, call `setS3CredentialsBuilder()`.
+   - The scaffolder adds the credentials to the `[local_server]` and `[setup]` sections of `fastly.toml`. When the first deploy creates a new service, the Fastly CLI creates the Secret Store, links it to the service, and prompts you for the credentials. The instructions shown at the end of scaffolding also tell you how to set up an existing service.
+   - The server signs requests with `@smithy/signature-v4`, and does not use the AWS SDK. The AWS SDK parses XML with `DOMParser`, which Fastly Compute does not have. Without the SDK, the Wasm binary is also much smaller.
+   - `--local` is for KV Store mode only. In S3 mode, the commands stop with an error before they connect to storage. There is no local simulation of S3 storage.
+   - Storage is factored out to `StorageProvider`, and S3 is implemented with this architecture.
+
+- Collections can declare the features that the server must support. A later version adds a feature to the index metadata (`requires`) only if the content that it publishes uses that feature. `PublisherServer` does not serve a collection that requires a feature that it does not support, and it logs the reason. Without this check, an older server would serve such a collection incorrectly. Build and deploy your app again to serve it. `collections list` shows the features that a collection requires. This version does not add features to `requires`.
+   - `collections promote` and `collections update-expiration` keep the fields of the index metadata that they do not know.
 
 - `publish-content`
-   - Add `--fastly-service-id`. The Service ID to purge after publishing now comes from `--fastly-service-id`, then the `FASTLY_SERVICE_ID` environment variable, then `service_id` in `fastly.toml`. This is the same order as the Fastly CLI's `--service-id`. Before, only `fastly.toml` was checked, so the purge was skipped in CI and other environments without a deployed app's `fastly.toml`.
-   - The purge after publishing now runs in KV Store mode too (not with `--local`). Before, it ran only in S3 mode. This matters if you use the response cache.
+   - After publishing, purge the surrogate key `<publishId>-<collectionName>` (a soft purge), in KV Store and S3 modes (not with `--local`). This clears the responses that the response cache keeps (see `setResponseCache()`).
+   - Add `--fastly-service-id`. The Service ID to purge comes from `--fastly-service-id`, then the `FASTLY_SERVICE_ID` environment variable, then `service_id` in `fastly.toml`. This is the same order as the Fastly CLI's `--service-id`. If there is no Service ID, the command does not purge.
    - Add `--purge-environment` to purge `production` (the default), `staging`, or both. A staging purge sends the `Fastly-Purge-Environment: staging` header.
    - A failed purge shows a warning on stderr. The command still completes, because the content is already published.
+   - Add `--brotli-quality=<0-11>`. It overrides `brotliQuality` in `publish-content.config.js`.
+   - Add `--s3-upload-concurrency=<1-256>`: the number of objects to upload to S3-compatible storage at the same time (default: 64).
 
 - `collections delete`
    - After the delete, purge the surrogate key of the collection, so that the service stops serving cached responses of the deleted collection. This has the same options and rules as the purge of `publish-content`: `--fastly-service-id`, `--purge-environment`, and the API token.
-
-- S3-compatible storage (BETA)
-   - Add support for S3-compatible storage, such as Fastly Object Storage
-   - Store items using same keys as KV Store
-   - Use S3 object metadata for storing asset metadata
-   - Storage factored out to StorageProvider, and S3 is implemented using this architecture
-   - Add credentials to fastly.toml in local_server and setup sections
-
-- `static-publish.rc.js`
-   - Add `s3` mode configuration
 
 - `publish-content.config.js`
    - Add `brotliQuality` (0 to 11, default 11). A lower value compresses much faster, and gives slightly larger files.
@@ -53,30 +52,22 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
    - Add `serveCached()`, to use the response cache with `getMatchingAsset()` and `serveAsset()`. `serveRequest()` uses it automatically.
    - `Server-Timing` has a `cache` entry when the response cache is on: `hit` (with the age of the cached response), `miss`, or `bypass`.
 
-- `publish-content`
-   - Add `--brotli-quality=<0-11>`. It overrides `brotliQuality` in `publish-content.config.js`.
-   - Add `--s3-upload-concurrency=<1-256>`: the number of objects to upload to S3-compatible storage at the same time. The default is now 64. It was 12.
-
 ### Changed
 
 - `publish-content.config.js`
    - `kvStoreAssetInclusionTest` renamed to `assetInclusionTest`. Previous name deprecated.
 
 - `publish-content`
-   - Lists the files in storage one time before the scan. It does not compress, hash, or upload a file that is already in storage.
-   - Uploads a compressed variant only if it is smaller than the original.
-   - Uploads KV Store entries in batches (the KV Store batch API). Entries that are larger than 8 MiB use one request each.
-   - If some entries of a KV Store batch fail, retries only these entries. The log shows the keys that failed.
-   - If a file cannot be processed, the error message shows the file path. The scan uses at most 16 files at a time.
-   - Lists KV Store keys with strong consistency.
-   - Lists the files in storage in 16 parts at the same time. In a test with 20,000 S3 objects, the list took 1.2 s in place of 7.2 s. The time saved increases with the number of objects in storage.
+   - Lists the files in storage one time before the scan, in 16 parts at the same time. The KV Store listing uses strong consistency. The command does not compress, hash, or upload a file that is already in storage. Before, it examined each file in storage with a separate request, one file at a time.
+   - Uploads a compressed variant only if it is smaller than the original. Before, it uploaded each variant, and only the index left out the variants that were not smaller.
+   - Uploads KV Store entries in batches (the KV Store batch API). Entries that are larger than 8 MiB use one request each. If some entries of a batch fail, the command retries these entries. The log shows the keys that failed. Before, it uploaded each entry with a separate request.
+   - Scans at most 16 files at the same time. Before, it scanned one file at a time. If a file cannot be processed, the error message shows the file path.
    - Compresses files in parallel on the Node.js thread pool. Before, it compressed one file at a time. The CLI sets `UV_THREADPOOL_SIZE` to the number of CPU cores (4 to 16), if it is not set.
 
 ### Updated
 
 - Scaffolded apps use `@fastly/js-compute` `^4.0.0`.
 - Update `toml` to 5. This fixes two security advisories in `toml` 4.1.2 and earlier ([GHSA-82x6-q7mm-w9cf](https://github.com/advisories/GHSA-82x6-q7mm-w9cf), [GHSA-v5mp-jgw5-2x6j](https://github.com/advisories/GHSA-v5mp-jgw5-2x6j)). Reading the Service ID also works now with a `fastly.toml` that uses dotted keys, such as `backends.origin.url = "..."`.
-- S3-compatible storage: `PublisherServer` no longer uses the AWS SDK. It signs requests with `@smithy/signature-v4`. Newer AWS SDK versions parse XML with `DOMParser`, which Fastly Compute does not have, so the SDK had been pinned to 3.888.0. The CLI now uses the current AWS SDK, which removes the security advisories of `fast-xml-parser`, `uuid`, and `@smithy/config-resolver` in the old version. Without the SDK, the server also builds to a much smaller Wasm binary.
 
 ### Deprecated
 
@@ -88,13 +79,7 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 
 - `304 Not Modified` responses now keep the `ETag`, `Vary`, `Cache-Control`, `Content-Location`, and `Expires` headers of the full response. Before, these headers were missing because of a wrong check.
 
-- KV Store: assets that are larger than 20 MiB were served truncated to the first 20 MiB. The CLI also uploaded these assets again at each publish.
-
 - `publish-content` stops with an error if an upload fails. Before, it showed the error and then saved the index. The index then referred to files that were not in storage.
-
-- Scaffolding: the default value of `--auto-ext` was lost.
-
-- Scaffolding: the generated `publish-content.config.js` set `spaFile` or `notFoundPageFile` to a file that does not exist.
 
 - `clean` stops with an error if it cannot read a collection index. Before, it continued and deleted the files of that collection.
 
@@ -103,20 +88,9 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 - `PublisherServer` in a reused sandbox (if the app turns on sandbox reuse): the settings and the index of a collection stayed in memory for the life of the sandbox. Thus, after a publish, the sandbox served the old content, and it served a collection after it expired. `beginRequest()` (which `serveRequest()` calls) now clears them.
    - `setActiveCollectionName()` accepts `null`, which selects the default collection. In a reused sandbox, the active collection stays set from the previous request, so call it for each request.
 
-- S3-compatible storage: `clean`, `collections list`, and `collections delete` stopped with "Can't query indexes in storage" when no key matched, for example after the last collection was deleted. An empty list is now a valid result.
-
 - Scaffolding: if `--public-dir` was under `--root-dir`, the generated `publish-content.config.js` set `publicDirPrefix` to an empty string. Thus the server did not find the files, and it returned 404 for all requests. `publicDirPrefix` is now the path of the public directory, relative to the root directory (for example `/public`).
 
-- Scaffolding: the instructions shown at the end referred to `npm run fastly:start`, which does not exist. They now show `npm run fastly:deploy`. For the KV Store, they show `fastly:deploy` before `fastly:publish`, because the deploy creates the KV Store.
-
-- Scaffolding with S3-compatible storage: the generated `fastly.toml` declared the keys of the `S3_CREDENTIALS` Secret Store under `items`. The Fastly CLI reads them only from `entries`. Thus, on the first deploy, the Fastly CLI created the Secret Store with no keys and did not prompt for the credentials, and the server could not read from the bucket. The instructions shown at the end of scaffolding now also tell you that the first deploy prompts for these values.
-
-- `collectionSelector.fromCookie()`: the activate and reset paths now accept only a path on the same site for `redirectTo`. Any other value redirects to `/`. The activate path returns `400` for a `collection` value with characters that a cookie value cannot have, and sets no cookie.
-
-- S3-compatible storage: `--local` stops the command with an error before it connects to storage. Before, `publish-content`, `collections list`, `collections delete`, `collections promote`, `collections update-expiration`, and `clean` ignored `--local` for storage, and changed the bucket. There is no local simulation of S3 storage. If you used `--local` in S3 mode to skip the purge after `publish-content`, remove `--local`, and do not set a Service ID. `--help` and the README now tell that `--local` is for KV Store mode only.
-
-- `publish-content` prepares each variant of the same content one time. Before, when several files had the same content, the files that were processed at the same time each compressed the content again, and each added the same keys to the upload. The uploaded content was correct, but the publish used more CPU time and more upload requests (in S3 mode, one `PutObject` for each duplicate). Each variant file in the working directory is now also written one time, so a file is not read while another file writes it.
-   - `publish-content --local` shows the number of variants to upload.
+- `collectionSelector.fromCookie()`: the activate and reset paths now accept only a path on the same site for `redirectTo`. Any other value redirects to `/`. The activate path returns `400` for a `collection` value with characters that a cookie value cannot have, and sets no cookie. (7.0.9 has the same fix.)
 
 - `PublisherServer` compares the body of each file with the size in the file's metadata. Storage can return a body that does not have this size for a short time, for example a KV Store entry whose metadata reached the POP before its body. Before, such a body was served as a complete `200` response, and a CDN or a cache in front of the service could keep it. Now an empty body makes `serveRequest()` and `serveAsset()` throw an error before the response starts, and any other mismatch stops the response with a stream error, so that the client sees an incomplete response. The server logs the file, the expected size, and the actual size.
 
