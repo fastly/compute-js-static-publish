@@ -17,7 +17,7 @@ export type LoadServiceIdParams = {
   fastlyTomlPath: string,
 };
 
-// Finds the Fastly Service ID to purge after publishing. Checks, in order:
+// Finds the Fastly Service ID to purge after a change to a collection. Checks, in order:
 //   1. The command line (--fastly-service-id)
 //   2. The FASTLY_SERVICE_ID environment variable
 //   3. service_id in fastly.toml

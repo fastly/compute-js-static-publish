@@ -26,6 +26,7 @@ KV Store Options:
   --local                          Instead of working with the Fastly KV Store, operate on
                                    local files that will be used to simulate the KV Store
                                    with the local development environment.
+                                   KV Store mode only. In S3 mode, --local is an error.
 
   --fastly-api-token=<token>       Fastly API token for KV Store access.
                                    If not set, the tool uses the FASTLY_API_TOKEN

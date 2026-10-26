@@ -137,6 +137,10 @@ export function defineStoragePublishTests({ storageMode, scaffoldArgs, serve = f
     assert.equal(summary.existing, 0);
     assert.ok(summary.toUpload > 0);
     const keys = await listKeys();
+    // Files with the same content have the same keys. Each key is uploaded one
+    // time. A chunk of a large file (`_1`, `_2`, ...) is not an upload entry.
+    const fileKeys = keys.filter(key => key.startsWith(`${publishId}_files_sha256_`) && !/_\d+$/.test(key));
+    assert.equal(summary.toUpload, fileKeys.length, 'each key is uploaded one time');
     assert.ok(keys.includes(`${publishId}_index_${COLLECTION_NAME}`), 'has the index');
     assert.ok(keys.includes(`${publishId}_settings_${COLLECTION_NAME}`), 'has the settings');
   });
