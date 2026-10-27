@@ -6,10 +6,26 @@
 
 import fs from 'node:fs';
 import { availableParallelism } from 'node:os';
+import path from 'node:path';
 
 import * as scaffoldCommand from './commands/scaffold/index.js';
 import * as manageCommands from './commands/manage/index.js';
 import { runTemplateHook } from './commands/run-template-hook.js';
+import {
+  type GlobalOptions,
+  EXIT_FAILED,
+  EXIT_USAGE,
+  JSON_SCHEMA_VERSION,
+  isJsonMode,
+  parseGlobalOptions,
+  recordError,
+  redactSecrets,
+  reportError,
+  setJsonResult,
+  setUpOutput,
+  writeJsonOutput,
+} from './util/cli-output.js';
+import { getOwnVersion } from './util/package.js';
 
 // Register storage builder providers
 import { registerStorageProviderBuilder } from './storage/storage-provider.js';
@@ -35,14 +51,80 @@ if (process.argv[2] === 'run-template-hook') {
 
   process.exitCode = runTemplateHook(process.argv[3]);
 
-} else if (!fs.existsSync('./static-publish.rc.js')) {
-
-  console.log("🧑‍💻Fastly Compute JavaScript Static Publisher (Scaffolding mode)");
-  await scaffoldCommand.action(process.argv);
-
 } else {
 
-  console.log("🧑‍💻Fastly Compute JavaScript Static Publisher (Management mode)");
-  await manageCommands.action(process.argv);
+  await main();
+
+}
+
+async function main() {
+
+  const globalOptions = parseGlobalOptions(process.argv.slice(2), process.env);
+  if ('code' in globalOptions) {
+    console.error(`❌ ${globalOptions.message}`);
+    process.exitCode = EXIT_USAGE;
+    if (process.argv.includes('--json')) {
+      process.stdout.write(JSON.stringify({ schemaVersion: JSON_SCHEMA_VERSION, error: globalOptions }, undefined, 2) + '\n');
+    }
+    return;
+  }
+  setUpOutput(globalOptions, process.env);
+
+  try {
+    await run(globalOptions);
+  } catch (err) {
+    // Log through console, so that secrets are redacted.
+    console.error(err);
+    recordError('failed', redactSecrets(String(err instanceof Error ? err.message : err)), EXIT_FAILED);
+  }
+
+  writeJsonOutput();
+
+}
+
+async function run(globalOptions: GlobalOptions) {
+
+  // --version works in any directory, before the mode is detected.
+  if (globalOptions.version) {
+    const version = getOwnVersion();
+    if (isJsonMode()) {
+      setJsonResult({ version });
+    } else {
+      process.stdout.write(version + '\n');
+    }
+    return;
+  }
+
+  if (globalOptions.projectDir != null) {
+    const projectDir = path.resolve(globalOptions.projectDir);
+    if (!fs.existsSync(projectDir) || !fs.statSync(projectDir).isDirectory()) {
+      reportError('project-dir-not-found', `--project-dir '${globalOptions.projectDir}' is not a directory.`);
+      return;
+    }
+    // All relative paths, also the paths in flags, are relative to the project dir.
+    process.chdir(projectDir);
+  }
+
+  // The commands get process.argv without the global flags. command-line-args
+  // removes the first two items (node and the script) only if it gets
+  // process.argv itself, so change it in place.
+  process.argv.splice(2, process.argv.length - 2, ...globalOptions.argv);
+  const argv = process.argv;
+
+  if (!fs.existsSync('./static-publish.rc.js')) {
+
+    console.log("🧑‍💻Fastly Compute JavaScript Static Publisher (Scaffolding mode)");
+    if (isJsonMode()) {
+      reportError('json-not-supported', `--json is not supported for scaffolding.`);
+      return;
+    }
+    await scaffoldCommand.action(argv);
+
+  } else {
+
+    console.log("🧑‍💻Fastly Compute JavaScript Static Publisher (Management mode)");
+    await manageCommands.action(argv);
+
+  }
 
 }

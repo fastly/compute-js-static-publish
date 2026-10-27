@@ -120,17 +120,26 @@ export async function purgeSurrogateKey(
 
 }
 
+export type PurgeResult = {
+  environment: PurgeEnvironment,
+  ok: boolean,
+};
+
 // Purges the cached responses of a collection in each environment of the purge
-// target. A failed purge is a warning, because the change to storage is done.
-export async function purgeCollection(purgeTarget: PurgeTarget, publishId: string, collectionName: string) {
+// target, and returns the result for each environment. A failed purge is a
+// warning, because the change to storage is done.
+export async function purgeCollection(purgeTarget: PurgeTarget, publishId: string, collectionName: string): Promise<PurgeResult[]> {
   const surrogateKey = `${publishId}-${collectionName}`;
+  const results: PurgeResult[] = [];
   for (const environment of purgeTarget.environments) {
     console.log(`Purging surrogate key [${surrogateKey}] on service [${purgeTarget.serviceId}] (${environment})...`);
     const purged = await purgeSurrogateKey(purgeTarget.fastlyApiContext, purgeTarget.serviceId, surrogateKey, true, environment);
+    results.push({ environment, ok: purged });
     if (purged) {
       console.log('Purged');
     } else {
       console.warn(`⚠️ Warning: Failed purging (${environment}). Cached copies may be served until they expire.`);
     }
   }
+  return results;
 }

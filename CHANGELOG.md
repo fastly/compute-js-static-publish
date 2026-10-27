@@ -29,7 +29,14 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 - Export the types `ServeRequestOptions` and `ServeFallbackOptions`.
 - Scaffolding: add `--default-collection-name`, the collection to serve when no collection is selected. It is written as `defaultCollectionName` in `static-publish.rc.js`. Before, it was always `live`, which is still the default.
 
+- CLI: global options `--version` (shows only the version, in any directory), `--project-dir <dir>` (run as if in that directory), `--non-interactive` (also on when `CI` is set), and `--json`.
+- CLI: `publish-content --json` and `collections list --json` write one JSON object to stdout at the end (`schemaVersion: 1`), and the log to stderr. `collections list` shows the number of files. See "Using the CLI in CI" in the README.
+- CLI: the API token and the S3 secret access key are replaced with `[REDACTED]` in the output.
+
 ### Changed
+
+- CLI exit codes: `2` for a usage or config error (the command could not start), `1` for a failed operation, `0` for success. Before, all errors were `1`. With `--json`, an error is `{ schemaVersion, error: { code, message } }` on stdout.
+- `collections delete` of a collection that does not exist says so, and succeeds. `collections promote` from a collection that does not exist is an error (`2`) with a clear message, not a stack trace.
 
 - Collection names have a rule: a DNS label (lowercase `a-z`, `0-9`, and `-`, from 1 to 63 characters, with no `-` at the start or the end). Thus a name is safe in storage keys, in the surrogate key of the purge, in a cookie, and in a hostname.
    - `publish-content` to a new collection, and `collections promote --to` a new collection, stop with an error for a name that breaks the rule.

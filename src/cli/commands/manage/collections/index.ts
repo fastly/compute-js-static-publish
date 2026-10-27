@@ -8,6 +8,7 @@ import * as deleteCommand from './delete.js';
 import * as listCommand from './list.js';
 import * as promoteCommand from './promote.js';
 import * as updateExpirationCommand from './update-expiration.js';
+import { isJsonMode, recordError, reportError } from '../../../util/cli-output.js';
 
 function help() {
   console.log(`\
@@ -66,7 +67,7 @@ export async function action(actionArgs: string[]) {
       console.error(commandAndArgs.error);
       console.error(`Specify one of the following sub-commands: ${Object.keys(modes).join(', ')}`);
       console.error();
-      process.exitCode = 1;
+      recordError('usage', commandAndArgs.error ?? 'Specify a sub-command.');
     }
 
     help();
@@ -74,6 +75,10 @@ export async function action(actionArgs: string[]) {
   }
 
   const { command, argv, } = commandAndArgs;
+  if (isJsonMode() && command !== 'list') {
+    reportError('json-not-supported', `--json is not supported for 'collections ${command}'.`);
+    return;
+  }
   await modes[command].action(argv);
 
 }

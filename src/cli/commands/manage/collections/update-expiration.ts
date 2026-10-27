@@ -13,6 +13,7 @@ import { calcExpirationTime } from '../../../../models/time/index.js';
 import { LoadConfigError, loadStaticPublisherRcFile } from '../../../util/config.js';
 import { parseCommandLine } from '../../../util/args.js';
 import { loadStorageProviderFromStaticPublishRc } from '../../../storage/storage-provider.js';
+import { errorCodeOf, recordError } from '../../../util/cli-output.js';
 
 function help() {
   console.log(`\
@@ -84,7 +85,7 @@ export async function action(actionArgs: string[]) {
     if (parsed.error != null) {
       console.error(String(parsed.error));
       console.error();
-      process.exitCode = 1;
+      recordError('usage', String(parsed.error));
     }
 
     help();
@@ -109,7 +110,7 @@ export async function action(actionArgs: string[]) {
 
   if (collectionNameValue == null) {
     console.error("❌ Required argument '--collection-name' not specified.");
-    process.exitCode = 1;
+    recordError('usage', "Required argument '--collection-name' not specified.");
     return;
   }
 
@@ -119,12 +120,12 @@ export async function action(actionArgs: string[]) {
   } catch(err: unknown) {
     console.error(`❌ Cannot process expiration time`);
     console.error(String(err));
-    process.exitCode = 1;
+    recordError('usage', `Cannot process expiration time: ${String(err)}`);
     return;
   }
   if (expirationTime === undefined) {
     console.error("❌ Exactly one of '--expires-in', '--expires-at', or '--expires-never' is required.");
-    process.exitCode = 1;
+    recordError('usage', "Exactly one of '--expires-in', '--expires-at', or '--expires-never' is required.");
     return;
   }
 
@@ -142,7 +143,7 @@ export async function action(actionArgs: string[]) {
         console.error(error);
       }
     }
-    process.exitCode = 1;
+    recordError('config-invalid', "Can't load static-publish.rc.js.");
     return;
   }
 
@@ -168,7 +169,7 @@ export async function action(actionArgs: string[]) {
   } catch (err: unknown) {
     console.error(`❌ Could not instantiate store provider`);
     console.error(String(err));
-    process.exitCode = 1;
+    recordError(errorCodeOf(err), String(err));
     return;
   }
 

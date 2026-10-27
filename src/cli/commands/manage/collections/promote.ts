@@ -14,6 +14,7 @@ import { LoadConfigError, loadStaticPublisherRcFile } from '../../../util/config
 import { parseCommandLine } from '../../../util/args.js';
 import { checkCollectionNameForWrite } from '../../../util/collection-name.js';
 import { loadStorageProviderFromStaticPublishRc } from '../../../storage/storage-provider.js';
+import { errorCodeOf, recordError, reportError } from '../../../util/cli-output.js';
 
 function help() {
   console.log(`\
@@ -90,7 +91,7 @@ export async function action(actionArgs: string[]) {
     if (parsed.error != null) {
       console.error(String(parsed.error));
       console.error();
-      process.exitCode = 1;
+      recordError('usage', String(parsed.error));
     }
 
     help();
@@ -116,13 +117,13 @@ export async function action(actionArgs: string[]) {
 
   if (collectionNameValue == null) {
     console.error("❌ Required argument '--collection-name' not specified.");
-    process.exitCode = 1;
+    recordError('usage', "Required argument '--collection-name' not specified.");
     return;
   }
 
   if (toCollectionNameValue == null) {
     console.error("❌ Required argument '--to' not specified.");
-    process.exitCode = 1;
+    recordError('usage', "Required argument '--to' not specified.");
     return;
   }
 
@@ -132,7 +133,7 @@ export async function action(actionArgs: string[]) {
   } catch(err: unknown) {
     console.error(`❌ Cannot process expiration time`);
     console.error(String(err));
-    process.exitCode = 1;
+    recordError('usage', `Cannot process expiration time: ${String(err)}`);
     return;
   }
 
@@ -150,7 +151,7 @@ export async function action(actionArgs: string[]) {
         console.error(error);
       }
     }
-    process.exitCode = 1;
+    recordError('config-invalid', "Can't load static-publish.rc.js.");
     return;
   }
 
@@ -176,7 +177,7 @@ export async function action(actionArgs: string[]) {
   } catch (err: unknown) {
     console.error(`❌ Could not instantiate store provider`);
     console.error(String(err));
-    process.exitCode = 1;
+    recordError(errorCodeOf(err), String(err));
     return;
   }
 
@@ -186,7 +187,7 @@ export async function action(actionArgs: string[]) {
   const targetCollectionName = toCollectionNameValue;
   console.log(`✔️ Collection to promote to: ${targetCollectionName}`)
   if (!await checkCollectionNameForWrite(storageProvider, publishId, targetCollectionName)) {
-    process.exitCode = 1;
+    recordError('collection-name-invalid', `'${targetCollectionName}' is not a valid collection name.`);
     return;
   }
 
@@ -211,11 +212,9 @@ export async function action(actionArgs: string[]) {
     storageProvider.getStorageEntry(sourceCollectionIndexKey),
     storageProvider.getStorageEntry(sourceCollectionSettingsKey),
   ]);
-  if (!indexEntryInfo) {
-    throw new Error(`Error querying index for '${collectionNameValue}' in storage`);
-  }
-  if (!settingsEntryInfo) {
-    throw new Error(`Error querying settings for '${collectionNameValue}' in storage`);
+  if (!indexEntryInfo || !settingsEntryInfo) {
+    reportError('collection-not-found', `Collection '${collectionNameValue}' does not exist.`);
+    return;
   }
 
   let indexMetadata = decodeIndexMetadata(indexEntryInfo.metadata) ?? {};

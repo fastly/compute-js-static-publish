@@ -333,6 +333,8 @@ Decisions:
 - **A failed purge** after a successful publish stays exit `0` (as today, a warning), because the content is published. The JSON shows it: `"purge": { "ok": false, "environment": "production", "error": "…" }`. Old content can be served from the cache until it expires, so tools that care read `purge.ok`.
 - **Errors with `--json`:** stdout still has exactly one JSON object: `{ "schemaVersion": 1, "error": { "code": "…", "message": "…" } }`. `code` is a stable string for scripts (for example `collection-name-invalid`, `missing-option`, `storage-unreachable`, `deploy-failed`); the list of codes is part of the contract. `message` is for people and can change. The error also goes to stderr, so that the CI log shows it.
 
+Decided in items 11 and 12: `--project-dir` runs `process.chdir()`, so all relative paths (also in flags, and `staticPublisherWorkingDir`) are relative to the project dir, which is where the config file is. The error codes are `usage`, `config-invalid`, `collection-name-invalid`, `collection-not-found`, `project-dir-not-found`, `json-not-supported`, `credentials-missing` (exit `2`), and `failed` (exit `1`); the README lists them. In `publish-content --json`, `files` has `total` and `hidden` (files in the index) and `uploaded` and `reused` (storage items), and `purge` is `null` or `{ ok, serviceId, environments: [{ environment, ok }] }`.
+
 Example:
 
 ```

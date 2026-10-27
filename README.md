@@ -981,6 +981,75 @@ You can stream `assetVariant.storageEntry.body` directly to a `Response`, or rea
 - `collections promote` - Copy a collection to another name
 - `collections update-expiration` - Modify expiration time for an existing collection
 
+### Global Options
+
+These options work with every command:
+
+- `--version`: Show the version of this package, and exit. It works in any directory.
+- `--project-dir <dir>`: Run as if in this directory. All relative paths, also the paths in other options, are relative to it. Thus a repository can have more than one project.
+- `--non-interactive`: Never ask for input. Missing input is an error. This is also on when the `CI` environment variable is set. (Today no command asks for input.)
+- `--json`: Write one JSON object to stdout at the end. The log lines go to stderr. Only `publish-content`, `collections list`, and `--version` support it. With other commands, it is an error (`json-not-supported`).
+
+### Using the CLI in CI
+
+**Exit codes:**
+
+| Code | Meaning |
+|------|---------|
+| `0` | Success. Also when there is nothing to do, for example when you publish the same content again, promote to a collection again, or delete a collection that does not exist. A failed purge after a successful publish is only a warning (see `purge.ok` in the JSON). |
+| `1` | The operation failed, for example storage cannot be reached. A retry can help. |
+| `2` | A usage or config error: the command could not start, for example an unknown option, a missing option, a collection name that breaks the rule, or a `static-publish.rc.js` that cannot be loaded. A retry cannot help. |
+
+**JSON output:** Each object has `schemaVersion` (now `1`). A new field keeps the version. A field is removed or changed only in a major release, with a new `schemaVersion`.
+
+`publish-content --json`:
+
+```json
+{
+  "schemaVersion": 1,
+  "collection": "pr-42",
+  "publishId": "default",
+  "files": { "total": 352, "hidden": 2, "uploaded": 12, "reused": 340 },
+  "expiresAt": "2026-11-01T00:00:00.000Z",
+  "purge": { "ok": true, "serviceId": "SERVICE_ID", "environments": [ { "environment": "production", "ok": true } ] }
+}
+```
+
+- `files.total` and `files.hidden` count the files in the index. `files.uploaded` and `files.reused` count storage items: each file, and each compressed variant that is kept.
+- `expiresAt` is `null` if the collection does not expire. `purge` is `null` if there was no purge (`--local`, or no Service ID).
+
+`collections list --json`:
+
+```json
+{
+  "schemaVersion": 1,
+  "publishId": "default",
+  "defaultCollection": "live",
+  "collections": [
+    {
+      "name": "live", "isDefault": true,
+      "publishedAt": "2026-10-18T00:00:00.000Z", "expiresAt": null, "expired": false,
+      "requires": [], "unsupported": [], "files": 352, "hidden": 2
+    }
+  ]
+}
+```
+
+**Errors:** with `--json`, stdout has one object, `{ "schemaVersion": 1, "error": { "code": "…", "message": "…" } }`. The error also goes to stderr. `message` is for people and can change. `code` is one of:
+
+| Code | Exit code | Meaning |
+|------|-----------|---------|
+| `usage` | `2` | An unknown command or option, or a missing or bad option value |
+| `config-invalid` | `2` | `static-publish.rc.js` or `publish-content.config.js` cannot be loaded, or is not valid |
+| `collection-name-invalid` | `2` | A new collection name breaks the rule |
+| `collection-not-found` | `2` | The command needs a collection that does not exist |
+| `project-dir-not-found` | `2` | `--project-dir` is not a directory |
+| `json-not-supported` | `2` | `--json` with a command that does not support it |
+| `credentials-missing` | `2` | An API token or S3 credentials are necessary, but not given |
+| `failed` | `1` | The operation failed, for example storage cannot be reached |
+
+**Secrets:** give the Fastly API token in `FASTLY_API_TOKEN`, and S3 credentials in `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY`. The CLI replaces the values of the token and the S3 secret access key with `[REDACTED]` in its output, also in errors.
+
 ### 🛠 App Scaffolding
 
 Run outside an existing Compute app directory:

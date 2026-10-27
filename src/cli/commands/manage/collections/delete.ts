@@ -11,6 +11,7 @@ import { parseCommandLine } from '../../../util/args.js';
 import { LoadConfigError, loadStaticPublisherRcFile } from '../../../util/config.js';
 import { loadStorageProviderFromStaticPublishRc } from '../../../storage/storage-provider.js';
 import { type PurgeTarget, loadPurgeTarget, purgeCollection } from '../../../util/purge.js';
+import { errorCodeOf, recordError } from '../../../util/cli-output.js';
 
 function help() {
   console.log(`\
@@ -84,7 +85,7 @@ export async function action(actionArgs: string[]) {
     if (parsed.error != null) {
       console.error(String(parsed.error));
       console.error();
-      process.exitCode = 1;
+      recordError('usage', String(parsed.error));
     }
 
     help();
@@ -108,7 +109,7 @@ export async function action(actionArgs: string[]) {
 
   if (collectionNameValue == null) {
     console.error("❌ Required argument '--collection-name' not specified.");
-    process.exitCode = 1;
+    recordError('usage', "Required argument '--collection-name' not specified.");
     return;
   }
 
@@ -126,7 +127,7 @@ export async function action(actionArgs: string[]) {
         console.error(error);
       }
     }
-    process.exitCode = 1;
+    recordError('config-invalid', "Can't load static-publish.rc.js.");
     return;
   }
 
@@ -152,14 +153,14 @@ export async function action(actionArgs: string[]) {
   } catch (err: unknown) {
     console.error(`❌ Could not instantiate store provider`);
     console.error(String(err));
-    process.exitCode = 1;
+    recordError(errorCodeOf(err), String(err));
     return;
   }
 
   const collectionName = collectionNameValue;
   if (collectionName === defaultCollectionName) {
     console.error(`❌ Cannot delete default collection: ${collectionName}`);
-    process.exitCode = 1;
+    recordError('usage', `Cannot delete default collection: ${collectionName}`);
     return;
   }
 
@@ -177,7 +178,7 @@ export async function action(actionArgs: string[]) {
     });
   } catch (err: unknown) {
     console.error(String(err));
-    process.exitCode = 1;
+    recordError(errorCodeOf(err), String(err));
     return;
   }
 
@@ -203,6 +204,11 @@ export async function action(actionArgs: string[]) {
         assetKeysToDelete.add(collection.key);
       }
     }
+  }
+
+  // Deleting a collection that does not exist is not an error.
+  if (assetKeysToDelete.size === 0) {
+    console.log(`Collection '${collectionName}' does not exist. Nothing to delete.`);
   }
 
   // ### Delete items that have been flagged

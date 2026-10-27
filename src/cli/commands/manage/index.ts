@@ -7,6 +7,7 @@ import { getCommandAndArgs } from '../../util/args.js';
 import * as cleanCommand from './clean.js';
 import * as publishContentCommand from './publish-content.js';
 import * as collectionsCommands from './collections/index.js';
+import { isJsonMode, recordError, reportError } from '../../util/cli-output.js';
 
 function help() {
   console.log(`\
@@ -72,7 +73,7 @@ export async function action(actionArgs: string[]) {
       console.error(commandAndArgs.error);
       console.error(`Specify one of the following commands: ${Object.keys(modes).join(', ')}`);
       console.error();
-      process.exitCode = 1;
+      recordError('usage', commandAndArgs.error ?? 'Specify a command.');
     }
 
     help();
@@ -80,6 +81,10 @@ export async function action(actionArgs: string[]) {
   }
 
   const { command, argv, } = commandAndArgs;
+  if (isJsonMode() && command !== 'publish-content' && command !== 'collections') {
+    reportError('json-not-supported', `--json is not supported for '${command}'.`);
+    return;
+  }
   await modes[command].action(argv);
 
 }

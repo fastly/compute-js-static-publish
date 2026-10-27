@@ -63,6 +63,10 @@ All collections share the files, because the key is the hash of the content. `cl
 
 `src/cli/CLAUDE.md` has the steps of the `publish-content` flow and its skip logic.
 
+### CLI output contract (for CI)
+
+`src/cli/CLAUDE.md` has the exit codes and the `--json` output of the CLI.
+
 ### Error handling in concurrent loops
 
 `concurrentParallel()` and `StorageProvider.doConcurrentParallel()` retry retryable errors. Then, by default, they log the failure and continue. Pass `throwOnError: true` if a later step needs all items to be successful. Examples:

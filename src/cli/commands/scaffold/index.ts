@@ -19,6 +19,7 @@ import { rootRelative } from '../../util/files.js';
 import { findComputeJsStaticPublisherVersion, getOwnVersion, type PackageJson } from '../../util/package.js';
 import { findHostnameForAwsS3RegionAndBucket } from '../../util/s3.js';
 import { COLLECTION_SELECTION_FLAGS_HELP, collectionSelectionFromFlags } from '../../util/collection-selection-flags.js';
+import { EXIT_FAILED, recordError } from '../../util/cli-output.js';
 import { generateApp } from './generate-app.js';
 import { appTemplates } from './templates/index.js';
 import { COLLECTION_NAME_RULE, isValidCollectionName } from '../../../models/collections/index.js';
@@ -529,7 +530,7 @@ export async function action(actionArgs: string[]) {
     if (parsed.error != null) {
       console.error(String(parsed.error));
       console.error();
-      process.exitCode = 1;
+      recordError('usage', String(parsed.error));
     }
 
     help();
@@ -560,14 +561,14 @@ export async function action(actionArgs: string[]) {
     for (const error of collectionSelectionErrors) {
       console.error(`❌ ${error}`);
     }
-    process.exitCode = 1;
+    recordError('usage', collectionSelectionErrors.join(' '));
     return;
   }
 
   const COMPUTE_JS_DIR = options.outputDir;
   if (COMPUTE_JS_DIR == null) {
     console.error("❌ required parameter --output not provided.");
-    process.exitCode = 1;
+    recordError('usage', '--output is required.');
     return;
   }
   const computeJsDir = path.resolve(COMPUTE_JS_DIR);
@@ -576,14 +577,14 @@ export async function action(actionArgs: string[]) {
   const ROOT_DIR = options.rootDir;
   if (ROOT_DIR == null) {
     console.error("❌ required parameter --root-dir not provided.");
-    process.exitCode = 1;
+    recordError('usage', '--root-dir is required.');
     return;
   }
   const rootDir = path.resolve(ROOT_DIR);
   if (!fs.existsSync(rootDir) || !fs.statSync(rootDir).isDirectory()) {
     console.error(`❌ Specified root directory '${ROOT_DIR}' does not exist.`);
     console.error(`  * ${rootRelative(rootDir)} must exist and be a directory.`);
-    process.exitCode = 1;
+    recordError('usage', 'The root directory does not exist.');
     return;
   }
 
@@ -598,7 +599,7 @@ export async function action(actionArgs: string[]) {
   if (!fs.existsSync(publicDir) || !fs.statSync(publicDir).isDirectory()) {
     console.error(`❌ Specified public directory '${PUBLIC_DIR}' does not exist.`);
     console.error(`  * ${rootRelative(publicDir)} must exist and be a directory.`);
-    process.exitCode = 1;
+    recordError('usage', 'The public directory does not exist.');
     return;
   }
 
@@ -606,7 +607,7 @@ export async function action(actionArgs: string[]) {
   if (!publicDir.startsWith(rootDir)) {
     console.error(`❌ Specified public directory '${PUBLIC_DIR}' is not under the asset root directory.`);
     console.error(`  * ${rootRelative(publicDir)} must be under ${rootRelative(rootDir)}`);
-    process.exitCode = 1;
+    recordError('usage', 'The public directory is not under the root directory.');
     return;
   }
 
@@ -644,7 +645,7 @@ export async function action(actionArgs: string[]) {
   ) {
     console.error(`❌ Specified static publisher working directory '${rootRelative(staticPublisherWorkingDir)}' must be under ${rootRelative(computeJsDir)}.`);
     console.error(`  It also must not be bin, pkg, src, or node_modules.`);
-    process.exitCode = 1;
+    recordError('usage', 'The static publisher working directory is not valid.');
     return;
   }
 
@@ -694,7 +695,7 @@ export async function action(actionArgs: string[]) {
     console.error(`  If you need to re-scaffold the static publisher Compute App,`);
     console.error(`  delete the following directory and then try again:`);
     console.error(`  ${rootRelative(computeJsDir)}`);
-    process.exitCode = 1;
+    recordError('usage', 'The output directory exists.');
     return;
   }
 
@@ -705,7 +706,7 @@ export async function action(actionArgs: string[]) {
   const storageMode = options.storageMode;
   if (!(storageMode === 'kv-store' || storageMode === 's3')) {
     console.error(`❌ parameter --storage-mode must be set to 'kv-store' or 's3'.`);
-    process.exitCode = 1;
+    recordError('usage', '--storage-mode must be kv-store or s3.');
     return;
   }
 
@@ -718,18 +719,18 @@ export async function action(actionArgs: string[]) {
   if (storageMode === 'kv-store') {
     if (kvStoreName == null) {
       console.error(`❌ required parameter --kv-store-name not provided.`);
-      process.exitCode = 1;
+      recordError('usage', '--kv-store-name is required.');
       return;
     }
   } else if (storageMode === 's3') {
     if (s3Region == null) {
       console.error(`❌ required parameter --s3-region not provided.`);
-      process.exitCode = 1;
+      recordError('usage', '--s3-region is required.');
       return;
     }
     if (s3Bucket == null) {
       console.error(`❌ required parameter --s3-bucket not provided.`);
-      process.exitCode = 1;
+      recordError('usage', '--s3-bucket is required.');
       return;
     }
     let s3Endpoint = options.s3Endpoint;
@@ -743,7 +744,7 @@ export async function action(actionArgs: string[]) {
         console.log('✅ S3 endpoint resolved:', s3Endpoint);
       } else {
         console.error(`❌ Unable to resolve S3 endpoint from region '${s3Region}' and bucket '${s3Bucket}.`);
-        process.exitCode = 1;
+        recordError('failed', 'Unable to resolve the S3 endpoint.', EXIT_FAILED);
         return;
       }
       s3EndpointUrl = new URL(`https://${s3Endpoint}/`);
@@ -757,7 +758,7 @@ export async function action(actionArgs: string[]) {
         s3EndpointUrl = new URL(s3Endpoint);
       } catch {
         console.error(`❌ Unable to parse '${s3Endpoint}' as a valid URL.`);
-        process.exitCode = 1;
+        recordError('usage', '--s3-endpoint is not a valid URL.');
         return;
       }
     }
@@ -771,7 +772,7 @@ export async function action(actionArgs: string[]) {
   if (!isValidCollectionName(defaultCollectionName)) {
     console.error(`❌ parameter --default-collection-name is not a valid collection name: '${defaultCollectionName}'.`);
     console.error(`  * ${COLLECTION_NAME_RULE}`);
-    process.exitCode = 1;
+    recordError('collection-name-invalid', '--default-collection-name is not a valid collection name.');
     return;
   }
 
