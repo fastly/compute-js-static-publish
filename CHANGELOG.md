@@ -9,6 +9,8 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 
 ## [unreleased]
 
+## [8.0.0] - 2026-10-27
+
 ### Breaking
 
 - Fastly API token
@@ -462,7 +464,8 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 - Updated generated app's webpack and webpack-cli versions
 - Use atob() and removed dependency on Buffer
 
-[unreleased]: https://github.com/fastly/compute-js-static-publish/compare/v7.0.8...HEAD
+[unreleased]: https://github.com/fastly/compute-js-static-publish/compare/v8.0.0...HEAD
+[8.0.0]: https://github.com/fastly/compute-js-static-publish/compare/v7.0.8...v8.0.0
 [7.0.8]: https://github.com/fastly/compute-js-static-publish/compare/v7.0.7...v7.0.8
 [7.0.7]: https://github.com/fastly/compute-js-static-publish/compare/v7.0.6...v7.0.7
 [7.0.6]: https://github.com/fastly/compute-js-static-publish/compare/v7.0.5...v7.0.6
