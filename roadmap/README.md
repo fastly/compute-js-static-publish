@@ -54,6 +54,17 @@ Each release is built as a GitHub stack of PRs against `main`, and each PR is re
 
 ## Later
 
+### Not in a stack (8.0.x or 8.1)
+
+These do not depend on the stacks. Each can be a separate PR to `main`, in a patch release or in 8.1.
+
+- **Retry an empty body** (follow-up to #116 and #52). If storage returns an empty body for a file whose size is not 0, `checkBodyLength()` throws before the response starts, and the client gets a `500`. Instead, the server could read the entry again for the same request. First, collect data from the log message `expected N bytes, got 0` to find how frequently this occurs.
+- **Run only the end-to-end tests that use real services.** Each `describe` in `test/e2e` skips with `skipUnlessFastlyCli()` or `skipUnlessEnv()`. Thus, with credentials, the local tests always run too. Idea: an environment variable such as `CJSP_TEST_SKIP_LOCAL=1` in `test/e2e/helpers.js`.
+- **End-to-end tests in CI.** `ci-test.yaml` runs only `npm test`.
+   - The local tests (`fastly compute serve`) need only the Fastly CLI, so they can run for each PR.
+   - The tests that use real services need repository secrets. `deployed.test.js` replaces the active version of the test service, so two runs must not overlap. Use a manual or a scheduled job, not a job for each PR.
+- **GitHub releases from CI.** After the npm publish, `ci-release.yaml` creates the GitHub release for the tag. The notes are the section of that version in `CHANGELOG.md`, and a link to the comparison with the previous release. For a new major version, add a link to `MIGRATING.md`. A prerelease tag gets `--prerelease`. A release from the `v7` branch gets `--latest=false`, so that it does not become the latest release (the `v7` branch needs the same workflow change). Before v8.0.0, the repository had no GitHub releases.
+
 ### After 8.2.0 is released
 
 - **Old package** `@fastly/hono-compute-js-static-publish` (its own repo): one last release whose README points to `@fastly/compute-js-static-publish/hono` and `MIGRATING.md`, then `npm deprecate` with the same pointer. It keeps working for v6 and v7 users.
