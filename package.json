@@ -1,9 +1,9 @@
 {
   "name": "@fastly/compute-js-static-publish",
   "type": "module",
-  "version": "8.0.0-beta.23",
+  "version": "8.0.0",
   "description": "Static Publisher for Fastly Compute JavaScript",
-  "main": "build/index.js",
+  "main": "build/server/server/index.js",
   "exports": {
     ".": {
       "types": "./build/server/server/index.d.ts",
@@ -46,7 +46,7 @@
     "@smithy/signature-v4": "^5.7.4",
     "command-line-args": "^5.2.1",
     "glob-to-regexp": "^0.4.1",
-    "toml": "^5.0.0"
+    "toml": "^5.0.1"
   },
   "peerDependencies": {
     "@fastly/js-compute": "^3.33.2 || ^4.0.0"

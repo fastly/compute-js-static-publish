@@ -60,19 +60,7 @@ All collections share the files, because the key is the hash of the content. `cl
 
 ### `publish-content` flow
 
-1. If `--overwrite-existing` and `--local` are not set, list the `<publishId>_files_sha256_` keys one time. The KV Store list uses `consistency=strong`. `getStorageKeysByHexPrefix()` runs 16 listings at the same time, one for each hex digit after the prefix, because a listing gets its pages one after another (about 0.36 s for each 1,000 keys on S3 in a test).
-2. Scan the files with `concurrentMap()`, at most 16 at a time. For each variant: if its key is in the list, skip the variant. Do not compress, hash, or upload it.
-   - For a chunked original, all keys `_1`, `_2`, … must be in the list.
-   - Skip a compressed variant only if the original fits in one chunk. The chunk count of a compressed variant is not known before compression.
-3. Upload a compressed variant only if it is smaller than the original. Thus, if a compressed variant is in storage, the index keeps it. Variants that are not smaller are compressed again at each publish. Most of these are very small files.
-   - Compression uses async zlib, so it runs in parallel on the libuv thread pool. `src/cli/index.ts` sets `UV_THREADPOOL_SIZE` (4 to 16, from the CPU count) if it is not set. Do not use the `*Sync` zlib functions: they block the event loop, so files are compressed one at a time.
-   - `brotliQuality` in `publish-content.config.js` sets the brotli quality (default 11, the slowest). If it is not set, the output is the same as the zlib default.
-4. `applyBatch(batch, { existingKeys })`:
-   - The KV provider splits files that are larger than 20 MiB into chunks (S3 does not use chunks). It removes the chunks that are in storage. Then it uploads NDJSON batches of at most 256 items / 8 MiB. Larger entries use one PUT each.
-   - The S3 provider uploads one `PutObject` for each entry, 64 at a time by default (`--s3-upload-concurrency`). The S3 client gets an HTTP agent with enough sockets for this; the SDK default is 50.
-5. The CLI writes the index and the settings only after all uploads are successful.
-
-`src/cli/storage/CLAUDE.md` has the measured limits of the KV batch endpoint.
+`src/cli/CLAUDE.md` has the steps of the `publish-content` flow and its skip logic.
 
 ### Error handling in concurrent loops
 
@@ -88,14 +76,7 @@ All collections share the files, because the key is the hash of the content. `cl
 
 ### PublisherServer request flow
 
-`src/server/publisher-server/index.ts`:
-
-1. Select the active collection. This is the default collection, or the collection from `setActiveCollectionName`. The helpers are in `collection-selector/` (for example host, cookie, config store).
-   `beginRequest()` resets the per-request state: the `Server-Timing` collector (`util/server-timing.ts`), which is on only if `setServerTimingRequestHeader()` names a header that the request has.
-2. If `setResponseCache()` is set, `serveCached()` (`response-cache.ts`) looks up the whole response in the Core Cache, keyed by publish ID, collection, path, and normalized `Accept-Encoding`. A hit skips steps 3 to 8. A miss uses `transactionLookup()`, so concurrent misses wait for one fill. The fill runs steps 3 to 8 with a `GET` that has no conditional headers, and caches a `200`, a `404`, or "not found". Conditional requests and `HEAD` are then answered from the cached response. The fill reads the whole body (`readBodyUpTo()`) before `insert()`, and calls `cancel()` if the read fails. A body larger than `maxBodySize` gets a "too large" marker entry, and is served from storage. Do not stream into the entry with `insertAndStreamBack()`: on a real service, a fill that is short, abandoned, or not closed is not stored, but the filler and the waiters still get a short body that ends as if complete. Viceroy is different again: it stores such a fill.
-   `serveAsset()` passes the stored body through `checkBodyLength()` (`util/body-length.ts`), which compares it with the variant's `size`. An empty body throws before the response starts. Any other mismatch errors the stream, which resets the response on a real service.
-3. Load the settings and the index for that collection, and keep them in a cache. An expired collection is the same as a collection that does not exist.
-4. to 8. Find the file, select the encoding, process the conditional headers, and set the cache headers (see the code).
+`src/server/CLAUDE.md` has the steps that `PublisherServer` does for each request, and the response cache.
 
 ## Branches and releases
 
