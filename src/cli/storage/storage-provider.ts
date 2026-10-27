@@ -45,6 +45,9 @@ export type ApplyBatchOptions = {
   // Keys that are already in storage. applyBatch() does not write entries
   // with these keys. It checks after it splits large files into chunks.
   existingKeys?: Set<string>,
+  // Verbose mode.
+  // Log a line for each entry or batch. Else, log only the progress.
+  verbose?: boolean,
 };
 
 export class StorageProviderBatch {

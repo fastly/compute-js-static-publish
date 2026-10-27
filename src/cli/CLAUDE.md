@@ -14,4 +14,6 @@
    - The S3 provider uploads one `PutObject` for each entry, 64 at a time by default (`--s3-upload-concurrency`). The S3 client gets an HTTP agent with enough sockets for this; the SDK default is 50.
 5. The CLI writes the index and the settings only after all uploads are successful.
 
+The log lines for each file (scan) and each upload go through `ProgressLog` (`util/progress.ts`). Without `--verbose`, it logs only a progress line after each 1,000 items, because a large site has tens of thousands of files.
+
 `src/cli/storage/CLAUDE.md` has the measured limits of the KV batch endpoint.
