@@ -67,7 +67,7 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 ### Updated
 
 - Scaffolded apps use `@fastly/js-compute` `^4.0.0`.
-- Update `toml` to 5. This fixes two security advisories in `toml` 4.1.2 and earlier ([GHSA-82x6-q7mm-w9cf](https://github.com/advisories/GHSA-82x6-q7mm-w9cf), [GHSA-v5mp-jgw5-2x6j](https://github.com/advisories/GHSA-v5mp-jgw5-2x6j)). Reading the Service ID also works now with a `fastly.toml` that uses dotted keys, such as `backends.origin.url = "..."`.
+- Update `toml` to 5.0.1. This fixes security advisories in `toml` 4.1.2 and earlier ([GHSA-82x6-q7mm-w9cf](https://github.com/advisories/GHSA-82x6-q7mm-w9cf), [GHSA-v5mp-jgw5-2x6j](https://github.com/advisories/GHSA-v5mp-jgw5-2x6j)), and in `toml` 5.0.0 and earlier ([GHSA-4qx8-w7c3-pj3p](https://github.com/advisories/GHSA-4qx8-w7c3-pj3p), [GHSA-9j65-hcg3-gc64](https://github.com/advisories/GHSA-9j65-hcg3-gc64), [GHSA-9qmh-m7c6-f92p](https://github.com/advisories/GHSA-9qmh-m7c6-f92p)). Reading the Service ID also works now with a `fastly.toml` that uses dotted keys, such as `backends.origin.url = "..."`.
 
 ### Deprecated
 
