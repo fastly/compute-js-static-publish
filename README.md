@@ -930,7 +930,7 @@ After this process is complete, the PublisherServer object in the Compute applic
    - `service_id` in `fastly.toml`
 
   If none is found, the command skips the purge. The purge also needs an API token (see `--fastly-api-token`). With `--local`, there is no purge. If the purge fails, the command shows a warning and completes, because the content is already published.
-- `--purge-environment`: The environments to purge: `production` (the default), `staging`, or both, as a comma-separated list (`--purge-environment=production,staging`). You can also repeat the option. Purge `staging` if you test the collection on a [staged service version](https://www.fastly.com/documentation/guides/getting-started/services/working-with-staging/), because a purge without it does not clear the staging cache.
+- `--purge-environment`: The environments to purge: `production` (the default), `staging`, or both, as a comma-separated list (`--purge-environment=production,staging`). You can also repeat the option. Purge `staging` if you test the collection on a [staged service version](https://www.fastly.com/documentation/guides/getting-started/services/working-with-staging/), because a purge without it does not clear the staging cache. If the service has no staged version, there is nothing to purge in `staging`, and the command says so.
 
 **Expiration:**
 

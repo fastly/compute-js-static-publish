@@ -9,6 +9,11 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 
 ## [unreleased]
 
+### Fixed
+
+- `publish-content` and `collections delete`: a purge of `staging` for a service with no staged version showed "Failed purging (staging)". The API gives `404` in this case, because there is nothing to purge. Now the command says that the service has no staged version, and shows no warning.
+- A failed purge, and other failed calls to the Fastly API, now show the error that the API gives, for example `404 Record not found: Cannot find service`. Before, the warning of a failed purge did not show the reason.
+
 ## [8.0.0] - 2026-10-27
 
 ### Breaking

@@ -57,12 +57,15 @@ const RETRYABLE_STATUS_CODES = [
 ];
 
 export class FetchError extends Error {
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, detail?: string) {
     super(message);
     this.name = 'FetchError';
     this.status = status;
+    this.detail = detail;
   }
   status: number;
+  // The error that the API gives in the response body, if any.
+  detail?: string;
 }
 
 function isReadableStream(data: unknown): data is ReadableStream {
@@ -110,11 +113,33 @@ export async function callFastlyApi(
     }
   }
   if (!response.ok) {
+    const detail = await readApiErrorDetail(response);
+    const status = `${response.status}${detail != null ? ` ${detail}` : ''}`;
     if (!RETRYABLE_STATUS_CODES.includes(response.status)) {
-      throw new FetchError(`${operationName} failed: ${response.status}`, response.status);
+      throw new FetchError(`${operationName} failed: ${status}`, response.status, detail);
     }
-    throw makeRetryable(new FetchError(`Retryable ${operationName} error: ${response.status}`, response.status));
+    throw makeRetryable(new FetchError(`Retryable ${operationName} error: ${status}`, response.status, detail));
   }
   return response;
 
+}
+
+// The Fastly API describes an error in the JSON fields msg and detail, for
+// example {"msg":"Record not found","detail":"Cannot find service"}.
+async function readApiErrorDetail(response: Response): Promise<string | undefined> {
+  let text;
+  try {
+    text = (await response.text()).trim();
+  } catch {
+    return undefined;
+  }
+  let json;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    // Not JSON. Use the text.
+    return text !== '' ? text.slice(0, 200) : undefined;
+  }
+  const parts = [ json?.msg, json?.detail ].filter(x => typeof x === 'string' && x !== '');
+  return parts.length > 0 ? parts.join(': ') : undefined;
 }

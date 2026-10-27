@@ -85,13 +85,20 @@ export function loadPurgeTarget(params: LoadPurgeTargetParams): PurgeTarget | nu
   };
 }
 
+// The result of one purge. A staging purge gets 404 ("Cannot find service")
+// when the service has no staged version. Then there is nothing to purge.
+export type PurgeOutcome =
+  | { result: 'purged' }
+  | { result: 'not-staged' }
+  | { result: 'failed', reason: string };
+
 export async function purgeSurrogateKey(
   fastlyApiContext: FastlyApiContext,
   fastlyServiceId: string,
   surrogateKey: string,
   softPurge: boolean = false,
   environment: PurgeEnvironment = 'production',
-) {
+): Promise<PurgeOutcome> {
 
   const endpoint = `/service/${encodeURIComponent(fastlyServiceId)}/purge`;
 
@@ -111,12 +118,15 @@ export async function purgeSurrogateKey(
 
   } catch(err) {
     if (err instanceof FetchError) {
-      return false;
+      if (environment === 'staging' && err.status === 404) {
+        return { result: 'not-staged' };
+      }
+      return { result: 'failed', reason: `${err.status}${err.detail != null ? ` ${err.detail}` : ''}` };
     }
     throw err;
   }
 
-  return true;
+  return { result: 'purged' };
 
 }
 
@@ -126,11 +136,17 @@ export async function purgeCollection(purgeTarget: PurgeTarget, publishId: strin
   const surrogateKey = `${publishId}-${collectionName}`;
   for (const environment of purgeTarget.environments) {
     console.log(`Purging surrogate key [${surrogateKey}] on service [${purgeTarget.serviceId}] (${environment})...`);
-    const purged = await purgeSurrogateKey(purgeTarget.fastlyApiContext, purgeTarget.serviceId, surrogateKey, true, environment);
-    if (purged) {
+    const outcome = await purgeSurrogateKey(purgeTarget.fastlyApiContext, purgeTarget.serviceId, surrogateKey, true, environment);
+    switch (outcome.result) {
+    case 'purged':
       console.log('Purged');
-    } else {
-      console.warn(`⚠️ Warning: Failed purging (${environment}). Cached copies may be served until they expire.`);
+      break;
+    case 'not-staged':
+      console.log(`Nothing to purge (${environment}): the service has no staged version.`);
+      break;
+    case 'failed':
+      console.warn(`⚠️ Warning: Failed purging (${environment}): ${outcome.reason}. Cached copies may be served until they expire.`);
+      break;
     }
   }
 }

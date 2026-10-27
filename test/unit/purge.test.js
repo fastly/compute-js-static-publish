@@ -208,7 +208,34 @@ describe('purgeCollection', () => {
     t.mock.method(globalThis, 'fetch', async () => new Response('{}', { status: 403 }));
     await purgeCollection({ ...purgeTarget, environments: [ 'production' ] }, 'site', 'preview');
     assert.deepEqual(warn.mock.calls.map(call => call.arguments.join(' ')), [
-      '⚠️ Warning: Failed purging (production). Cached copies may be served until they expire.',
+      '⚠️ Warning: Failed purging (production): 403. Cached copies may be served until they expire.',
     ]);
+  });
+
+  test('shows the error that the API gives', async (t) => {
+    mockConsoleLog(t);
+    const warn = t.mock.method(console, 'warn', () => {});
+    t.mock.method(globalThis, 'fetch', async () => new Response('{"msg":"Record not found","detail":"Cannot find service"}', { status: 404 }));
+    await purgeCollection({ ...purgeTarget, environments: [ 'production' ] }, 'site', 'preview');
+    assert.deepEqual(warn.mock.calls.map(call => call.arguments.join(' ')), [
+      '⚠️ Warning: Failed purging (production): 404 Record not found: Cannot find service. Cached copies may be served until they expire.',
+    ]);
+  });
+
+  test('a staging purge that gets 404 means that no version is staged, and is not a warning', async (t) => {
+    const messages = mockConsoleLog(t);
+    const warn = t.mock.method(console, 'warn', () => {});
+    t.mock.method(globalThis, 'fetch', async (request) =>
+      request.headers.get('fastly-purge-environment') === 'staging'
+        ? new Response('{"msg":"Record not found","detail":"Cannot find service"}', { status: 404 })
+        : new Response('{"status":"ok"}'));
+    await purgeCollection(purgeTarget, 'site', 'preview');
+    assert.deepEqual(messages(), [
+      'Purging surrogate key [site-preview] on service [service] (production)...',
+      'Purged',
+      'Purging surrogate key [site-preview] on service [service] (staging)...',
+      'Nothing to purge (staging): the service has no staged version.',
+    ]);
+    assert.equal(warn.mock.calls.length, 0);
   });
 });
