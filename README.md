@@ -365,6 +365,8 @@ npx @fastly/compute-js-static-publish publish-content \
 
 You can overwrite or republish any collection at any time. Old file hashes will be reused automatically where contents match.
 
+A collection name must be a DNS label: lowercase `a-z`, `0-9`, and `-`, from 1 to 63 characters, with no `-` at the start or the end (for example `live`, `staging`, `pr-42`). Thus a name is safe in storage keys, in cookies, and in hostnames. If a CI tool makes collection names from branch names, it must convert them to this form (for example `feature/Foo_bar` to `feature-foo-bar`). A collection that was published before this rule continues to work, with a warning, but new collections must follow it.
+
 ### Expiration (Auto-cleanup)
 
 Collections can expire automatically:

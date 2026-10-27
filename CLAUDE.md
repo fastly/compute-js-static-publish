@@ -50,7 +50,7 @@ Both parts use a registry of builder functions. Each entry point calls `register
 
 ### Storage key layout (shared contract)
 
-All keys start with `publishId` (default `'default'`):
+All keys start with `publishId` (default `'default'`). A collection name must be a DNS label (`isValidCollectionName()` in `models/collections/`). The CLI refuses a new collection with another name, and only warns for one that exists. The cookie selector refuses such a name, because the name goes into `Set-Cookie`. The keys:
 
 - `<publishId>_index_<collection>`: It maps each asset path to an `AssetEntry` (key `sha256:<hash>`, content type, variants, and more). The metadata of this entry has the collection metadata (`IndexMetadata`): `publishedTime`, `expirationTime`, and `requires`. `requires` lists the features that the server must support to serve the collection. A server does not serve a collection if `requires` has a feature that is not in `SUPPORTED_INDEX_FEATURES` (`models/server/index.ts`). This applies also to the default collection. When a new feature changes the index, the settings, or the key layout in a way that an older server would get wrong, add the feature to `SUPPORTED_INDEX_FEATURES` (a short kebab-case name, without a comma, because the metadata separates the names with commas), and make the CLI add it to `requires` only if the published content uses it. `decodeIndexMetadata()` keeps the fields that it does not know, so that `promote` and `update-expiration` do not remove them.
 - `<publishId>_settings_<collection>`: The normalized `server` section of `publish-content.config.js`. The CLI saves it when it publishes.

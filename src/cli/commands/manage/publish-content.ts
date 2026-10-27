@@ -15,6 +15,7 @@ import { type ContentTypeDef, type PublishContentConfigNormalized } from '../../
 import { encodeIndexMetadata, type IndexMetadata } from '../../../models/server/index.js';
 import { calcExpirationTime } from '../../../models/time/index.js';
 import { parseCommandLine } from '../../util/args.js';
+import { checkCollectionNameForWrite } from '../../util/collection-name.js';
 import { mergeContentTypes, testFileContentType } from '../../util/content-types.js';
 import { LoadConfigError, loadPublishContentConfigFile, loadStaticPublisherRcFile } from '../../util/config.js';
 import { applyDefaults } from '../../util/data.js';
@@ -337,6 +338,10 @@ export async function action(actionArgs: string[]) {
   // for example, live, staging
   const collectionName = collectionNameValue ?? process.env.PUBLISHER_COLLECTION_NAME ?? defaultCollectionName;
   console.log(`✔️ Collection Name: ${collectionName}`);
+  if (!await checkCollectionNameForWrite(storageProvider, publishId, collectionName)) {
+    process.exitCode = 1;
+    return;
+  }
 
   if (expirationTime == null) {
     // includes null and undefined
