@@ -127,7 +127,7 @@ Examples:
 export async function action(actionArgs: string[]) {
 
   const optionDefinitions: OptionDefinition[] = [
-    { name: 'verbose', type: Boolean },
+    { name: 'verbose', type: Boolean, defaultValue: false },
 
     { name: 'config', type: String },
     { name: 'collection-name', type: String, },
@@ -410,7 +410,7 @@ export async function action(actionArgs: string[]) {
   }
 
   // #### Iterate files
-  const scanProgress = new ProgressLog('Files scanned', verbose ?? false);
+  const scanProgress = new ProgressLog('Files scanned', verbose);
   const fileResults = await concurrentMap(files, async (file) => {
     // #### asset key
     const assetKey = file.slice(publicDirRoot.length)
@@ -587,7 +587,7 @@ export async function action(actionArgs: string[]) {
     console.log(`  | ${batch.storageProviderBatchEntries.length} variant(s) to upload.`);
   }
 
-  await storageProvider.applyBatch(batch, { existingKeys, verbose: verbose ?? false });
+  await storageProvider.applyBatch(batch, { existingKeys, verbose });
 
   // #### INDEX FILE
   console.log(`🗂️ Saving Index...`);
