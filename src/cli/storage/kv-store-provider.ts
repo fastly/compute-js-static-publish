@@ -19,6 +19,7 @@ import {
 import {
   rootRelative,
 } from '../util/files.js';
+import { ProgressLog } from '../util/progress.js';
 import {
   type KvStoreEntryInfo,
   getKvStoreEntry,
@@ -155,7 +156,7 @@ export class KvStoreProvider implements StorageProvider {
 
   async applyBatch(batch: StorageProviderBatch, options: ApplyBatchOptions = {}): Promise<void> {
 
-    const { existingKeys } = options;
+    const { existingKeys, verbose = false } = options;
 
     console.log(`🍪 Chunking large files...`);
     await applyKVStoreEntriesChunks(
@@ -171,13 +172,14 @@ export class KvStoreProvider implements StorageProvider {
     }
 
     console.log(`📤 Uploading ${toWrite.length} entries to KV Store.`);
-    await this.uploadEntries(toWrite);
+    await this.uploadEntries(toWrite, verbose);
     console.log(`✅  Uploaded entries to KV Store.`);
   }
 
-  async uploadEntries(entries: StorageProviderBatchEntry[]): Promise<void> {
+  async uploadEntries(entries: StorageProviderBatchEntry[], verbose: boolean = false): Promise<void> {
 
     const { batches, oversized } = packNdjsonBatches(entries);
+    const progress = new ProgressLog('Entries uploaded', verbose, entries.length);
 
     await this.doConcurrentParallel(
       oversized,
@@ -190,7 +192,7 @@ export class KvStoreProvider implements StorageProvider {
           fileBytes,
           metadataJson != null ? JSON.stringify(metadataJson) : undefined,
         );
-        console.log(` 🌐 Submitted large asset "${rootRelative(filePath)}" to KV Store with key "${key}".`)
+        progress.add(1, () => ` 🌐 Submitted large asset "${rootRelative(filePath)}" to KV Store with key "${key}".`);
       },
       12,
       true,
@@ -205,12 +207,13 @@ export class KvStoreProvider implements StorageProvider {
           // Keep only the entries that failed. The retry submits only these entries.
           const failedKeys = new Set(failures.map(f => f.key));
           const submittedCount = batch.entries.length;
+          progress.add(submittedCount - failures.length, () => ` 🌐 Submitted ${submittedCount - failures.length} of ${submittedCount} entries to KV Store ("${key}").`);
           batch.entries = batch.entries.filter(entry => failedKeys.has(entry.key));
           const shown = failures.slice(0, 5).map(f => `${f.key} (${f.code ?? 'unknown'}: ${f.reason ?? 'unknown'})`).join(', ');
           const more = failures.length > 5 ? `, and ${failures.length - 5} more` : '';
           throw makeRetryable(new Error(`${failures.length} of ${submittedCount} entries failed: ${shown}${more}`));
         }
-        console.log(` 🌐 Submitted ${batch.entries.length} entries to KV Store ("${key}").`)
+        progress.add(batch.entries.length, () => ` 🌐 Submitted ${batch.entries.length} entries to KV Store ("${key}").`);
       },
       12,
       true,

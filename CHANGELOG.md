@@ -9,6 +9,10 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 
 ## [unreleased]
 
+### Changed
+
+- `publish-content` now logs a line for each file and each upload only with `--verbose`. Without it, the command logs the progress after each 1,000 files or uploads.
+
 ## [8.0.0] - 2026-10-27
 
 ### Breaking
