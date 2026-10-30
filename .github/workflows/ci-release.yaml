@@ -4,16 +4,17 @@ on:
     tags:
       - 'v*'
 
-permissions:
-  id-token: write
-  contents: read
-  packages: write
+permissions: {}
 
 jobs:
   process-version:
+    permissions: {}
     uses: fastly/devex-reusable-workflows/.github/workflows/process-semver-v1.yml@main
   publish_npm:
     needs: process-version
+    permissions:
+      contents: read
+      id-token: write
     uses: fastly/devex-reusable-workflows/.github/workflows/publish-javascript-npmjs-v1.yml@main
     with:
       expected_pkg_name: "@fastly/compute-js-static-publish"
@@ -21,6 +22,9 @@ jobs:
       dist_tag: ${{ needs.process-version.outputs.dist_tag }}
   publish_github:
     needs: process-version
+    permissions:
+      contents: read
+      packages: write
     uses: fastly/devex-reusable-workflows/.github/workflows/publish-javascript-github-v1.yml@main
     with:
       expected_pkg_name: "@fastly/compute-js-static-publish"
