@@ -202,9 +202,29 @@ my-project/
     ├── static-publisher/                # ⚠️ Do not commit - generated content for local dev and publishing
     │   ├── kvstore.json                 # Simulates KV Store content for local preview
     │   └── kv-store-content/            # Preprocessed and compressed files for KV upload
+    ├── scripts/                         # Optional: template hooks (template_<hook>.js)
     └── src/
         └── index.js                     # Your Compute app entry point
 ```
+
+### 🪝 Template hooks
+
+The `package.json` of a scaffolded app has these scripts:
+
+```json
+"prebuild":    "compute-js-static-publish run-template-hook prebuild",
+"build":       "js-compute-runtime ./src/index.js ./bin/main.wasm",
+"postbuild":   "compute-js-static-publish run-template-hook postbuild",
+"postinstall": "compute-js-static-publish run-template-hook postinstall"
+```
+
+`run-template-hook <name>` runs `scripts/template_<name>.js` if that file exists, and otherwise does nothing. Thus, to run your own code before or after each build, or after each `npm install`, add one of these files:
+
+- `scripts/template_prebuild.js`
+- `scripts/template_postbuild.js`
+- `scripts/template_postinstall.js`
+
+The file runs with Node.js, in the directory of the app. If it fails, the build or the install fails. `fastly compute build`, `fastly compute serve`, and `fastly compute publish` run `npm run build`, so they also run the build hooks. `npm install --ignore-scripts` does not run the hooks.
 
 ## ⚙️ Configuring `static-publish.rc.js`
 
@@ -223,7 +243,8 @@ All fields are required unless specified otherwise.
 - `kvStore.kvStoreName` - The name of the KV Store used for publishing.
 - `defaultCollectionName` - Collection to serve when none is specified.
 - `publishId` - Unique prefix for all keys in the KV Store. Override only for advanced setups (e.g., multiple apps sharing the same KV Store).
-- `staticPublisherWorkingDir` - Directory to hold working files during publish.
+- `staticPublisherWorkingDir` - Directory to hold working files during publish. The path is relative to the directory of `static-publish.rc.js`.
+- `generatedFrom` - (optional) A record of how the app was made: the template, the version of this package, and the date. The scaffolder writes it. The app does not use it.
 
 #### Example: `static-publish.rc.js`
 
@@ -253,7 +274,8 @@ All fields are required unless specified otherwise.
 - `s3.endpoint` - (optional) The custom endpoint for the S3-compatible bucket.
 - `defaultCollectionName` - Collection to serve when none is specified.
 - `publishId` - Unique prefix for all keys in the bucket. Override only for advanced setups (e.g., multiple apps sharing the same bucket).
-- `staticPublisherWorkingDir` - Directory to hold working files during publish.
+- `staticPublisherWorkingDir` - Directory to hold working files during publish. The path is relative to the directory of `static-publish.rc.js`.
+- `generatedFrom` - (optional) A record of how the app was made: the template, the version of this package, and the date. The scaffolder writes it. The app does not use it.
 
 #### Example: `static-publish.rc.js`
 
@@ -850,6 +872,8 @@ npx @fastly/compute-js-static-publish@latest \
   [--output=./compute-js] \
   [--static-publisher-working-dir=<output>/static-publisher] \
   [--publish-id=<prefix>] \
+  [--default-collection-name=live] \
+  [--template=plain] \
   [--static-dir=./public/static] \
   [--spa=./public/spa.html] \
   [--not-found-page=./public/404.html] \
@@ -880,10 +904,12 @@ npx @fastly/compute-js-static-publish@latest \
 - `--description`: Application description to insert into `fastly.toml`
 - `--author`: Author to insert into `fastly.toml`
 - `--service-id`: Optional existing Fastly Compute service ID
+- `--template`: The template of the app's code (default: `plain`). `plain` is the only template.
 
 **Used in building config files:**
 - `--root-dir`: Required. Directory of static site content.
 - `--publish-id`: Optional key prefix for KV entries (default: `'default'`).
+- `--default-collection-name`: The collection to serve when no collection is selected (default: `'live'`).
 - `--public-dir`: **Deprecated.** A future version will remove it. Public files base directory, under `--root-dir` (default: same as `--root-dir`). Files that are under `--root-dir` but not under `--public-dir` are published, but requests cannot get them.
 - `--static-dir`: One or more directories to serve with long cache TTLs.
 - `--spa`: SPA fallback file path (e.g., `./public/spa.html`).
@@ -893,7 +919,19 @@ npx @fastly/compute-js-static-publish@latest \
 
 ### 🚀 Inside a Compute App Directory
 
-Once you're in the scaffolded Compute app directory (with `static-publish.rc.js` present), you can run these subcommands:
+Once you're in the scaffolded Compute app directory (with `static-publish.rc.js` present), you can run these subcommands.
+
+To run a subcommand from another directory, for example the root of your repo in CI, give the app directory with `--project-dir`:
+
+```sh
+npx @fastly/compute-js-static-publish publish-content \
+  --project-dir=./compute-js \
+  --collection-name=staging
+```
+
+With `--project-dir`, all relative paths are relative to that directory: the paths in `static-publish.rc.js` and `publish-content.config.js`, and also the paths in the other options (for example `--config` and `--root-dir`). The directory must have a `static-publish.rc.js`. To scaffold an app in another directory, use `--output`.
+
+To print the version of this package, run `npx @fastly/compute-js-static-publish --version`. It works in any directory.
 
 #### `publish-content`
 

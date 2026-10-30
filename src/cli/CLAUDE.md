@@ -20,6 +20,19 @@ The log lines for each file (scan) and each upload go through `ProgressLog` (`ut
 
 ## Generating the app
 
-`generateApp(config)` (`src/cli/commands/scaffold/generate-app.ts`) makes all files of a scaffolded app as a map from path to content. It does not use the file system or the network. `scaffold` resolves the flags into an `AppConfig` (also the S3 endpoint lookup), calls it, writes the files, and runs `npm install`.
+`generateApp(config)` (`src/cli/commands/scaffold/generate-app.ts`) makes all files of a scaffolded app as a map from path to content. It does not write files or use the network. It reads only `resources/`:
 
-`test/unit/generate-app.test.js` compares its output with the golden files in `test/golden/<case>/`, and `test/e2e/scaffold-golden.test.js` checks that `scaffold` writes the same files. A change that must not change the generated app must not change a golden file. After an intended change, run `UPDATE_GOLDEN=1 npm test` and check the diff of `test/golden/`. The golden copy of a `.gitignore` is named `_gitignore`, because git would obey a real one in the tree. The dependency on this package is the placeholder `<compute-js-static-publish>`.
+- `resources/templates/<name>/`: a template. Its files (for example `src/index.js`) are copied into the app as they are. Its `package.json` and `package-lock.json` are not app files: `generateApp()` reads the dependencies from the `package.json`. To change a dependency, edit the `package.json` and run `npm install --package-lock-only --ignore-scripts` in the template directory. The template `package.json` has no `scripts` and does not list this package, so that `npm install --package-lock-only --ignore-scripts` in the template directory runs nothing. CI checks that each lockfile matches its `package.json`. `app-template.ts` lists the valid template names.
+- `resources/app/*.njk`: `fastly.toml`, `static-publish.rc.js`, `publish-content.config.js`, and `.gitignore`, rendered with Nunjucks (`render.ts`). Autoescape is off. Each `{{ … }}` must use one of the filters `js`, `toml`, `tomlKey`, or `line`, which write the value in the syntax of the file. A unit test checks this.
+
+A template never has a file that `generateApp()` writes itself; `generateApp()` throws if it does. `scaffold` resolves the flags into an `AppConfig` (also the S3 endpoint lookup), calls it, writes the files, and runs `npm install`.
+
+`test/unit/generate-app.test.js` compares its output with the golden files in `test/golden/<case>/`, and `test/e2e/scaffold-golden.test.js` checks that `scaffold` writes the same files. A change that must not change the generated app must not change a golden file. After an intended change, run `UPDATE_GOLDEN=1 npm test` and check the diff of `test/golden/`. The golden copy of a `.gitignore` is named `_gitignore`, because git would obey a real one in the tree. The dependency on this package is the placeholder `<compute-js-static-publish>`, and the version and the date in `generatedFrom` are `<static-publish-version>` and `<generated-at>`.
+
+## Before the mode is detected
+
+`src/cli/index.ts` handles these before it detects the mode:
+
+- `run-template-hook <name>`: the template hooks call it. It prints no banner, and works in any directory.
+- `--version`: prints only the version.
+- `--project-dir`: the CLI checks that the directory has `static-publish.rc.js`, then runs `process.chdir()` into it. Thus every relative path, also the paths in the options, is relative to the project dir. `parseGlobalOptions()` removes these options from `process.argv` before the commands parse it.
