@@ -16,7 +16,7 @@ import { type CommandLineOptions, type OptionDefinition } from 'command-line-arg
 
 import { parseCommandLine } from '../../util/args.js';
 import { rootRelative } from '../../util/files.js';
-import { findComputeJsStaticPublisherVersion, type PackageJson } from '../../util/package.js';
+import { findComputeJsStaticPublisherVersion, getOwnVersion, type PackageJson } from '../../util/package.js';
 import { findHostnameForAwsS3RegionAndBucket } from '../../util/s3.js';
 import {
   APP_TEMPLATE_NAMES,
@@ -55,6 +55,7 @@ Options:
   --static-publisher-working-dir <dir>  Working directory for build artifacts (default: <output>/static-publisher)
                                         (default: ./compute-js/static-publisher)
   --publish-id <id>                     Advanced. Prefix for KV keys (default: "default")
+  --default-collection-name <name>      Collection to serve when none is selected (default: "live")
   --template <name>                     The template of the app's code (default: plain)
                                         Valid templates: ${APP_TEMPLATE_NAMES.join(', ')}
 
@@ -93,6 +94,7 @@ export type InitAppOptions = {
   description: string | undefined,
   serviceId: string | undefined,
   publishId: string | undefined,
+  defaultCollectionName: string | undefined,
   storageMode: string | undefined,
   kvStoreName: string | undefined,
   s3Region: string | undefined,
@@ -116,6 +118,7 @@ const defaultOptions: InitAppOptions = {
   description: 'Fastly Compute static site',
   serviceId: undefined,
   publishId: undefined,
+  defaultCollectionName: undefined,
   storageMode: undefined,
   kvStoreName: undefined,
   s3Region: undefined,
@@ -324,6 +327,13 @@ function buildOptions(
   }
 
   {
+    const defaultCollectionNameValue = commandLineOptions['default-collection-name'];
+    if (typeof defaultCollectionNameValue === 'string') {
+      options.defaultCollectionName = defaultCollectionNameValue;
+    }
+  }
+
+  {
     const templateValue = commandLineOptions['template'];
     if (typeof templateValue === 'string') {
       options.template = templateValue;
@@ -463,6 +473,10 @@ export async function action(actionArgs: string[]) {
 
     // The template of the app's code.
     { name: 'template', type: String, },
+
+    // The collection to serve when no collection is selected.
+    // If not provided, the default value of 'live' is used.
+    { name: 'default-collection-name', type: String, },
 
     // Required. The 'root' directory for the publishing.
     // All assets are expected to exist under this root. Required.
@@ -750,7 +764,12 @@ export async function action(actionArgs: string[]) {
     publishId = 'default';
   }
 
-  const defaultCollectionName = 'live';
+  const defaultCollectionName = options.defaultCollectionName ?? 'live';
+  if (defaultCollectionName === '') {
+    console.error("❌ parameter --default-collection-name must not be empty.");
+    process.exitCode = 1;
+    return;
+  }
 
   console.log('');
   console.log('Compute Application Settings');
@@ -821,6 +840,11 @@ export async function action(actionArgs: string[]) {
     autoExt,
     staticPublishVersionSpec: findComputeJsStaticPublisherVersion(packageJson),
     template: loadAppTemplate(options.template),
+    generatedFrom: {
+      template: options.template,
+      staticPublishVersion: getOwnVersion(),
+      generatedAt: new Date().toISOString().slice(0, 10),
+    },
   });
 
   // Write out the files

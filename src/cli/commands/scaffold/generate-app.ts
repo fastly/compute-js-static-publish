@@ -5,6 +5,7 @@
 
 import * as path from 'node:path';
 
+import { type GeneratedFrom } from '../../../models/config/static-publish-rc.js';
 import { dotRelative } from '../../util/files.js';
 import { type AppTemplate } from './app-template.js';
 import { renderAppResource } from './render.js';
@@ -34,12 +35,17 @@ export type AppConfig = {
   staticPublishVersionSpec: string,
   // What the app's code comes from.
   template: AppTemplate,
+  // Written into static-publish.rc.js.
+  generatedFrom: GeneratedFrom,
 };
 
+// The names of the template hooks. Every app has them as npm scripts. Each one
+// runs scripts/template_<name>.js if the app has that file.
+export const TEMPLATE_HOOKS = [ 'prebuild', 'postbuild', 'postinstall' ] as const;
+
 // Makes the files of the app, keyed by the path relative to the app dir.
-// It does not write files or use the network, so that scaffolding, managed
-// mode, and eject can share it, and tests can compare its output. It reads
-// only the resources/ directory of this package.
+// It does not write files or use the network, so that tests can compare its
+// output. It reads only the resources/ directory of this package.
 export function generateApp(config: AppConfig): Record<string, string> {
   const {
     appDir: computeJsDir,
@@ -60,6 +66,7 @@ export function generateApp(config: AppConfig): Record<string, string> {
     autoExt,
     staticPublishVersionSpec,
     template,
+    generatedFrom,
   } = config;
 
   const resourceFiles: Record<string, string> = {};
@@ -73,7 +80,10 @@ export function generateApp(config: AppConfig): Record<string, string> {
   const packageJsonScripts: Record<string, string> = {
     'dev:start': 'fastly compute serve',
     'fastly:deploy': 'fastly compute publish',
+    'prebuild': 'compute-js-static-publish run-template-hook prebuild',
     'build': 'js-compute-runtime ./src/index.js ./bin/main.wasm',
+    'postbuild': 'compute-js-static-publish run-template-hook postbuild',
+    'postinstall': 'compute-js-static-publish run-template-hook postinstall',
   };
   if (storage.mode === 'kv-store') {
     packageJsonScripts['dev:publish'] = 'npx @fastly/compute-js-static-publish publish-content --local';
@@ -132,6 +142,7 @@ export function generateApp(config: AppConfig): Record<string, string> {
     publishId,
     defaultCollectionName,
     staticPublisherWorkingDir: dotRelative(computeJsDir, staticPublisherWorkingDir),
+    generatedFrom,
   });
 
   // publish-content.config.js

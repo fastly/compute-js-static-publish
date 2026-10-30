@@ -18,7 +18,10 @@
   "scripts": {
     "dev:start": "fastly compute serve",
     "fastly:deploy": "fastly compute publish",
+    "prebuild": "compute-js-static-publish run-template-hook prebuild",
     "build": "js-compute-runtime ./src/index.js ./bin/main.wasm",
+    "postbuild": "compute-js-static-publish run-template-hook postbuild",
+    "postinstall": "compute-js-static-publish run-template-hook postinstall",
     "dev:publish": "npx @fastly/compute-js-static-publish publish-content --local",
     "fastly:publish": "npx @fastly/compute-js-static-publish publish-content"
   }
