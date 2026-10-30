@@ -1055,7 +1055,11 @@ To build and deploy to your Compute service:
 
   cd ${COMPUTE_JS_DIR}
   npm run fastly:deploy
-  npm run fastly:publish
+  FASTLY_API_TOKEN=xxxx npm run fastly:publish
+
+  fastly:publish reads the API token only from FASTLY_API_TOKEN or --fastly-api-token,
+  not from your Fastly CLI profile. To use the token of the Fastly CLI, type:
+    FASTLY_API_TOKEN=$(npx fastly auth token) npm run fastly:publish
 
 `);
   } else if (storageMode === 's3') {
@@ -1101,6 +1105,9 @@ To build and deploy to your Compute service:
   different name. If you leave it empty, it uses the existing Secret Store. If you give
   a different name, the Fastly CLI uses it for the resource link too. Then call
   setSecretStoreForS3Credentials() with that name in src/index.js, and deploy again.
+
+  After the deploy, fastly.toml has the service ID, so s3:publish also purges the
+  service's cache. For this purge, s3:publish needs FASTLY_API_TOKEN too.
 
 `);
   }
