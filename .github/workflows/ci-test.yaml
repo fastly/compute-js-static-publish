@@ -42,3 +42,27 @@ jobs:
 
       - name: Build and run the unit tests
         run: npm test
+
+  template-lockfiles:
+    name: The lockfile of each template matches its package.json
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+
+      # npm install --package-lock-only changes the lockfile only if it does not
+      # match package.json. The template package.json files have no scripts,
+      # and --ignore-scripts makes sure that nothing runs.
+      - name: Update each lockfile, and fail if one changed
+        run: |
+          for dir in resources/templates/*/; do
+            (cd "$dir" && npm install --package-lock-only --ignore-scripts --no-audit --no-fund)
+          done
+          git diff --exit-code -- resources/templates
