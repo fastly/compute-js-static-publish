@@ -21,6 +21,7 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 - `publish-content` (KV Store): for a file that is an exact multiple of 20 MiB, the command made the chunk files again at each publish.
 - README: the Fastly Object Storage example uses the region `us-east-1` and the endpoint `https://us-east-1.object.fastlystorage.app`. The example used `us-east`, which is a legacy region: you cannot make a new bucket in it in the Fastly control panel. The README also links to the list of regions and endpoints.
 - README: the custom app example handles its route before `serveRequest()`, and the text says when `serveRequest()` returns `null`. Before, the example handled `/api/hello` after `serveRequest()`, so a request for it got the 404 page when a 404 page was set.
+- `scaffold` now escapes the values that it writes into `fastly.toml`. Before, a `"` or a `\` in `--name`, `--description`, or `--author`, or a KV Store name with a character such as `.`, gave a `fastly.toml` that was not valid.
 
 ## [8.0.1] - 2026-11-04
 
