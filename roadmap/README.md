@@ -1,63 +1,56 @@
-# Roadmap: 8.1 and 8.2
+# Roadmap: 8.1
 
-This folder has the plan for the next two minor releases: the PRs, the design with its decisions, the tests, and the open items.
+This folder has the plan for the next minor release, 8.1: the parts and their PRs, the design with its decisions, the tests, and the open items.
 
-## Releases
+## 8.1.0
 
-| Release | Stack | Features to announce |
-|---|---|---|
-| **8.1.0** | Stack 1 | Managed mode (no `compute-js/` in your repo), previews (collection selection), hidden files, CI support (`status`, `deploy`, `--json`) |
-| **8.2.0** | Stack 2 | Templates for users (`--template`), starting with Hono, and Hono extensions (`hono-extensions/`) |
+8.1 has six parts. Each part is one PR to `main`, and each PR is reviewed.
 
-- Each release has features that users can see and that we can announce. Templates come in 8.2 together with a template that makes them useful (Hono). In 8.1, the template mechanism is internal only.
-- Betas (`8.1.0-beta.N`, `8.2.0-beta.N`) come on the way.
+| Part | Use case |
+|---|---|
+| 1. Templates | The base for the other parts. Customers see `--project-dir`, `--version`, and template hooks. |
+| 2. Previews | "Show me this branch or PR before it goes live." |
+| 3. Managed mode and eject | "I want my static site on Compute, but I do not want to maintain a Compute app." |
+| 4. Publishing: hidden files | "Publish a file that the app uses, but that a visitor cannot open directly." |
+| 5. CI: machine-readable output | Run the CLI from automation with no person present, and read the result. |
+| 6. Hono | "My site is mostly static, but I need a small amount of code: an API route, auth, or GRIP streaming." |
 
-## Stacks
+The parts, their tasks, and the order of the PRs are in [v8.1/README.md](v8.1/README.md).
 
-Each stack is one linear chain of PRs ([GitHub stacked PRs](https://docs.github.com/en/pull-requests/get-started/about-stacked-prs)). Each PR builds on the PR before it.
-
-- **Stack 1 (8.1):** groups A → B → H → D → E → F. See [v8.1/README.md](v8.1/README.md).
-- **Stack 2 (8.2):** groups C → G, on top of stack 1. See [v8.2/README.md](v8.2/README.md).
-- The work is split into numbered **items** (fixed IDs, not in build order), which the design, tests, and open items refer to. Each release's README groups the items into **PRs**, numbered in build order (decided 2026-10-18: one PR for each item only where that helps the review, for example a refactor that must change no output, or a security-relevant change).
-
-Each release is built as a GitHub stack of PRs against `main`, and each PR is reviewed.
-
-## Status marks
-
-✅ decided · ❓ open question · (blank) not discussed yet
+- All of it is an addition. Existing projects work as before.
+- Betas (`8.1.0-beta.N`) come on the way.
 
 ## Terms
 
 | Term | Meaning |
 |---|---|
-| **Project dir** | The directory that has `static-publish.project.js` in managed mode. Often the repo root, but a repo can have several projects. The CLI runs from it, or gets it with `--project-dir`. |
-| **App dir** | The Compute app: `.static-publish/app/` in managed mode (generated), `compute-js/` in ejected mode (the user's code). |
-| **Managed mode** | The project has only `static-publish.project.js`, and no app in the repo. The CLI generates the app from a template when it needs it (`dev`, `deploy`, `status`). New in 8.1. |
-| **Ejected mode** | The app is in the repo (`compute-js/`, with `static-publish.rc.js` and `publish-content.config.js`), and the user owns it. This is the layout of today. Existing projects are ejected projects. |
+| **Customer** | A developer who uses this package. |
+| **Visitor** | A person who opens the customer's site. |
+| **Project dir** | The directory that has the config file: `static-publish.rc.js` (in a scaffolded or ejected app), or `static-publish.project.js` (in managed mode). Often the repo root, but a repo can have several projects. The CLI runs from it, or gets it with `--project-dir`. |
+| **App dir** | The Compute app: `compute-js/` in a scaffolded or ejected app (the customer's code), `.static-publish/app/` in managed mode (generated). |
+| **Scaffolded app** | The app that `scaffold` makes, as in 8.0.0. Parts 1 and 2 use this term. Part 3 calls it an ejected app. |
+| **Managed mode** | The project has only `static-publish.project.js`, and no app in the repo. The CLI generates the app from a template when it needs it (`dev`, `deploy`, `status`). New in part 3. |
+| **Ejected mode** | The app is in the repo (`compute-js/`, with `static-publish.rc.js` and `publish-content.config.js`), and the customer owns it. Every scaffolded app, and every existing project, is an ejected app. The term comes in part 3. |
 | **Working dir** | `staticPublisherWorkingDir`: files that the CLI writes when it publishes (for example `kvstore.json` for `--local`). |
-| **Template** | What the app's code comes from. `plain` in 8.1 (internal). `plain` and `hono` in 8.2. |
+| **Template** | What the app's code comes from: `plain` (the app of 8.0.0) or `hono` (part 6). |
 | **Golden files** | Checked-in copies of the expected output of `generateApp()`, used by the tests. |
 
 ## Files
 
 | File | Contents |
 |---|---|
-| [v8.1/README.md](v8.1/README.md) | Stack 1: the PRs and their status |
-| [v8.1/design.md](v8.1/design.md) | The design for 8.1, with the decisions |
-| [v8.1/tests.md](v8.1/tests.md) | Test rules for both stacks, and the tests for each 8.1 PR |
-| [v8.1/open-items.md](v8.1/open-items.md) | Defaults to confirm, risks to test, and details to decide in a PR |
-| [v8.1/current-state.md](v8.1/current-state.md) | Facts about the current code that the design depends on |
-| [v8.2/README.md](v8.2/README.md) | Stack 2: the PRs and their status |
-| [v8.2/design.md](v8.2/design.md) | The design for 8.2, with the decisions |
-| [v8.2/tests.md](v8.2/tests.md) | The tests for each 8.2 PR |
-| [v8.2/open-items.md](v8.2/open-items.md) | Details to decide in a PR |
+| [v8.1/README.md](v8.1/README.md) | The six parts: use case, how 8.0.0 works, tasks; the PRs and their dependencies |
+| [v8.1/design.md](v8.1/design.md) | The design of each part, with the decisions |
+| [v8.1/tests.md](v8.1/tests.md) | Test rules, and the tests for each task |
+| [v8.1/current-state.md](v8.1/current-state.md) | Facts about the 8.0.0 code that the design depends on |
 
 ## Later
 
-### Not in a stack (8.0.x or 8.1)
+### Separate from the six parts (8.0.x or 8.1)
 
-These do not depend on the stacks. Each can be a separate PR to `main`, in a patch release or in 8.1.
+These do not depend on the six parts. Each can be a separate PR to `main`, in a patch release or in 8.1.
 
+- **Remove the Beta label of S3-compatible storage** in 8.1: in `README.md`, `README.short.md`, `MIGRATING.md`, the CLI help text, the CLI log messages, and the code comments.
 - **Retry an empty body** (follow-up to #116 and #52). If storage returns an empty body for a file whose size is not 0, `checkBodyLength()` throws before the response starts, and the client gets a `500`. Instead, the server could read the entry again for the same request. First, collect data from the log message `expected N bytes, got 0` to find how frequently this occurs.
 - **Run only the end-to-end tests that use real services.** Each `describe` in `test/e2e` skips with `skipUnlessFastlyCli()` or `skipUnlessEnv()`. Thus, with credentials, the local tests always run too. Idea: an environment variable such as `CJSP_TEST_SKIP_LOCAL=1` in `test/e2e/helpers.js`.
 - **End-to-end tests in CI.** `ci-test.yaml` runs only `npm test`.
@@ -65,11 +58,17 @@ These do not depend on the stacks. Each can be a separate PR to `main`, in a pat
    - The tests that use real services need repository secrets. `deployed.test.js` replaces the active version of the test service, so two runs must not overlap. Use a manual or a scheduled job, not a job for each PR.
 - **GitHub releases from CI.** After the npm publish, `ci-release.yaml` creates the GitHub release for the tag. The notes are the section of that version in `CHANGELOG.md`, and a link to the comparison with the previous release. For a new major version, add a link to `MIGRATING.md`. A prerelease tag gets `--prerelease`. A release from the `v7` branch gets `--latest=false`, so that it does not become the latest release (the `v7` branch needs the same workflow change). Before v8.0.0, the repository had no GitHub releases.
 
-### After 8.2.0 is released
+### After 8.1.0 is released
 
-- **Old package** `@fastly/hono-compute-js-static-publish` (its own repo): one last release whose README points to `@fastly/compute-js-static-publish/hono` and `MIGRATING.md`, then `npm deprecate` with the same pointer. It keeps working for v6 and v7 users.
+- **Old package** `@fastly/hono-compute-js-static-publish` (its own repo): one last release whose README points to `@fastly/compute-js-static-publish/hono` and `MIGRATING.md`, then `npm deprecate` with the same pointer. It keeps working for v6 and v7 customers.
 
-### Not in 8.1 or 8.2
+### v9
+
+- Remove the deprecated getters `serverTiming`, `settingsCached`, and `assetEntryMapCache` of `PublisherServer` (task 2.2).
+- Remove `--public-dir` and `server.publicDirPrefix` (deprecated in 8.0, #100). Hidden files (part 4) replace their use.
+- Decide whether `scaffold` makes a managed project by default.
+
+### Possible future features
 
 - A non-interactive first deploy with S3 storage: `deploy` would create the service, the `S3_CREDENTIALS` Secret Store with the secrets from env vars, the backend, and the links through the Fastly API.
 - Protection for previews (a token or basic auth, with the secret in a Secret Store).
@@ -80,9 +79,3 @@ These do not depend on the stacks. Each can be a separate PR to `main`, in a pat
 - File-based routes for Hono extensions (`routes/api/hello.js` → `/api/hello`).
 - Un-eject (ejected → managed).
 - Upgrade help for ejected apps: compare the ejected files with what the current template would generate (uses `generatedFrom`).
-
-### v9
-
-- Remove the deprecated getters `serverTiming`, `settingsCached`, and `assetEntryMapCache` of `PublisherServer` (item 4).
-- Remove `--public-dir` and `server.publicDirPrefix` (deprecated in 8.0, #100). Hidden files (8.1) replace their use.
-- Decide whether `scaffold` makes a managed project by default.
