@@ -12,6 +12,7 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 ### Changed
 
 - `publish-content` now logs a line for each file and each upload only with `--verbose`. Without it, the command logs the progress after each 1,000 files or uploads.
+- The npm package includes the full documentation as `DOCUMENTATION.md`, with the CLI reference for that version. The README on npm stays short, and links to it.
 
 ## [8.0.0] - 2026-10-27
 

@@ -72,7 +72,8 @@ If the app uses S3-compatible storage, your files are already in the bucket afte
 
 ## Documentation
 
-📘 Full documentation available on GitHub:  
+📘 This package includes the full documentation in [DOCUMENTATION.md](DOCUMENTATION.md), with the CLI reference for this version.
+It is also available on GitHub:  
 [https://github.com/fastly/compute-js-static-publish/tree/main](https://github.com/fastly/compute-js-static-publish/tree/main)
 
 ### Security issues
