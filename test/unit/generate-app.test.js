@@ -45,6 +45,7 @@ const base = {
   autoExt: [ '.html', '.htm' ],
   staticPublishVersionSpec: '<compute-js-static-publish>',
   template: loadAppTemplate('plain'),
+  generatedFrom: { template: 'plain', staticPublishVersion: '<static-publish-version>', generatedAt: '<generated-at>' },
 };
 
 const cases = {
@@ -66,6 +67,10 @@ const cases = {
     rootDir: '/project/site',
     publicDir: '/project/site/public',
     notFoundPageFilename: undefined,
+  },
+  'kv-default-collection': {
+    ...base,
+    defaultCollectionName: 'production',
   },
   'kv-escaping': {
     ...base,

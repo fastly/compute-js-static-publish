@@ -22,6 +22,11 @@ const rc = {
   publishId: {{ publishId | js }},
   defaultCollectionName: {{ defaultCollectionName | js }},
   staticPublisherWorkingDir: {{ staticPublisherWorkingDir | js }},
+  generatedFrom: {
+    template: {{ generatedFrom.template | js }},
+    staticPublishVersion: {{ generatedFrom.staticPublishVersion | js }},
+    generatedAt: {{ generatedFrom.generatedAt | js }},
+  },
 };
 
 export default rc;
