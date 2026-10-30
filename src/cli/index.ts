@@ -9,6 +9,7 @@ import { availableParallelism } from 'node:os';
 
 import * as scaffoldCommand from './commands/scaffold/index.js';
 import * as manageCommands from './commands/manage/index.js';
+import { runTemplateHook } from './commands/run-template-hook.js';
 
 // Register storage builder providers
 import { registerStorageProviderBuilder } from './storage/storage-provider.js';
@@ -28,7 +29,13 @@ if (process.env.UV_THREADPOOL_SIZE == null) {
   process.env.UV_THREADPOOL_SIZE = String(Math.max(4, Math.min(availableParallelism(), 16)));
 }
 
-if (!fs.existsSync('./static-publish.rc.js')) {
+// The template hooks of an app call this on each install and build. It works
+// in any directory and prints no banner.
+if (process.argv[2] === 'run-template-hook') {
+
+  process.exitCode = runTemplateHook(process.argv[3]);
+
+} else if (!fs.existsSync('./static-publish.rc.js')) {
 
   console.log("🧑‍💻Fastly Compute JavaScript Static Publisher (Scaffolding mode)");
   await scaffoldCommand.action(process.argv);

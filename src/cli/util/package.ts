@@ -14,6 +14,12 @@ export type PackageJson = {
   devDependencies?: Record<string, string>,
 };
 
+// The version of this package, from the package.json of the copy that runs.
+export function getOwnVersion(): string {
+  const packageJsonPath = path.resolve(import.meta.dirname, '../../../../package.json');
+  return JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8')).version;
+}
+
 export function findComputeJsStaticPublisherVersion(packageJson: PackageJson | null) {
 
   // Get the current compute js static publisher version.
