@@ -124,8 +124,11 @@ export async function callFastlyApi(
 
 }
 
-// The Fastly API describes an error in the JSON fields msg and detail, for
-// example {"msg":"Record not found","detail":"Cannot find service"}.
+// The Content-Type of an error response tells which fields describe the error:
+// - application/json: the Fastly API fields msg and detail, for example
+//   {"msg":"Record not found","detail":"Cannot find service"}.
+// - application/problem+json (RFC 9457): the fields title and detail.
+// - Other types, or JSON that is not valid: the start of the text.
 async function readApiErrorDetail(response: Response): Promise<string | undefined> {
   let text;
   try {
@@ -133,13 +136,22 @@ async function readApiErrorDetail(response: Response): Promise<string | undefine
   } catch {
     return undefined;
   }
-  let json;
-  try {
-    json = JSON.parse(text);
-  } catch {
-    // Not JSON. Use the text.
-    return text !== '' ? text.slice(0, 200) : undefined;
+  const mediaType = response.headers.get('content-type')?.split(';')[0].trim().toLowerCase();
+  const fields =
+    mediaType === 'application/json' ? [ 'msg', 'detail' ] :
+    mediaType === 'application/problem+json' ? [ 'title', 'detail' ] :
+    null;
+  if (fields != null) {
+    let json;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      json = undefined;
+    }
+    if (json !== undefined) {
+      const parts = fields.map(field => json?.[field]).filter(x => typeof x === 'string' && x !== '');
+      return parts.length > 0 ? parts.join(': ') : undefined;
+    }
   }
-  const parts = [ json?.msg, json?.detail ].filter(x => typeof x === 'string' && x !== '');
-  return parts.length > 0 ? parts.join(': ') : undefined;
+  return text !== '' ? text.slice(0, 200) : undefined;
 }

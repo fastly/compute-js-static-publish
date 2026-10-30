@@ -14,6 +14,9 @@ import { loadPurgeTarget, parsePurgeEnvironments, purgeCollection } from '../../
 import { loadServiceId } from '../../build/cli/cli/util/service-id.js';
 import { mockConsoleLog } from './mock-console.js';
 
+// The Content-Type of an error response from the Fastly API.
+const JSON_TYPE = { 'content-type': 'application/json' };
+
 // Saves and restores the environment variables that these tests change.
 const ENV_NAMES = [ 'FASTLY_API_TOKEN', 'FASTLY_SERVICE_ID' ];
 const savedEnv = {};
@@ -205,7 +208,7 @@ describe('purgeCollection', () => {
   test('warns, and does not throw, if a purge fails', async (t) => {
     mockConsoleLog(t);
     const warn = t.mock.method(console, 'warn', () => {});
-    t.mock.method(globalThis, 'fetch', async () => new Response('{}', { status: 403 }));
+    t.mock.method(globalThis, 'fetch', async () => new Response('{}', { status: 403, headers: JSON_TYPE }));
     await purgeCollection({ ...purgeTarget, environments: [ 'production' ] }, 'site', 'preview');
     assert.deepEqual(warn.mock.calls.map(call => call.arguments.join(' ')), [
       '⚠️ Warning: Failed purging (production): 403. Cached copies may be served until they expire.',
@@ -215,11 +218,30 @@ describe('purgeCollection', () => {
   test('shows the error that the API gives', async (t) => {
     mockConsoleLog(t);
     const warn = t.mock.method(console, 'warn', () => {});
-    t.mock.method(globalThis, 'fetch', async () => new Response('{"msg":"Record not found","detail":"Cannot find service"}', { status: 404 }));
+    t.mock.method(globalThis, 'fetch', async () => new Response('{"msg":"Record not found","detail":"Cannot find service"}', { status: 404, headers: JSON_TYPE }));
     await purgeCollection({ ...purgeTarget, environments: [ 'production' ] }, 'site', 'preview');
     assert.deepEqual(warn.mock.calls.map(call => call.arguments.join(' ')), [
       '⚠️ Warning: Failed purging (production): 404 Record not found: Cannot find service. Cached copies may be served until they expire.',
     ]);
+  });
+
+  test('shows the title and the detail of a problem+json error', async (t) => {
+    mockConsoleLog(t);
+    const warn = t.mock.method(console, 'warn', () => {});
+    t.mock.method(globalThis, 'fetch', async () => new Response('{"title":"Forbidden","detail":"Token has no purge scope","status":403}', { status: 403, headers: { 'content-type': 'application/problem+json' } }));
+    await purgeCollection({ ...purgeTarget, environments: [ 'production' ] }, 'site', 'preview');
+    assert.deepEqual(warn.mock.calls.map(call => call.arguments.join(' ')), [
+      '⚠️ Warning: Failed purging (production): 403 Forbidden: Token has no purge scope. Cached copies may be served until they expire.',
+    ]);
+  });
+
+  test('shows the start of the text of an error that is not JSON', async (t) => {
+    mockConsoleLog(t);
+    const warn = t.mock.method(console, 'warn', () => {});
+    t.mock.method(globalThis, 'fetch', async () => new Response(`<html>${'x'.repeat(300)}</html>`, { status: 400, headers: { 'content-type': 'text/html' } }));
+    await purgeCollection({ ...purgeTarget, environments: [ 'production' ] }, 'site', 'preview');
+    assert.equal(warn.mock.calls.length, 1);
+    assert.match(warn.mock.calls[0].arguments.join(' '), /: 400 <html>x{194}\. Cached copies/);
   });
 
   test('a staging purge that gets 404 means that no version is staged, and is not a warning', async (t) => {
@@ -227,7 +249,7 @@ describe('purgeCollection', () => {
     const warn = t.mock.method(console, 'warn', () => {});
     t.mock.method(globalThis, 'fetch', async (request) =>
       request.headers.get('fastly-purge-environment') === 'staging'
-        ? new Response('{"msg":"Record not found","detail":"Cannot find service"}', { status: 404 })
+        ? new Response('{"msg":"Record not found","detail":"Cannot find service"}', { status: 404, headers: JSON_TYPE })
         : new Response('{"status":"ok"}'));
     await purgeCollection(purgeTarget, 'site', 'preview');
     assert.deepEqual(messages(), [
