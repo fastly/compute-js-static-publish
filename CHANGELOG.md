@@ -13,6 +13,10 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 
 - `publish-content` now logs a line for each file and each upload only with `--verbose`. Without it, the command logs the progress after each 1,000 files or uploads.
 
+### Fixed
+
+- `scaffold` now escapes the values that it writes into `fastly.toml`. Before, a `"` or a `\` in `--name`, `--description`, or `--author`, or a KV Store name with a character such as `.`, gave a `fastly.toml` that was not valid.
+
 ## [8.0.0] - 2026-10-27
 
 ### Breaking

@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 
 import { loadAppTemplate } from '../../build/cli/cli/commands/scaffold/app-template.js';
 import { generateApp } from '../../build/cli/cli/commands/scaffold/generate-app.js';
+import toml from 'toml';
 
 const GOLDEN_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../golden');
 const UPDATE = process.env.UPDATE_GOLDEN === '1';
@@ -66,6 +67,13 @@ const cases = {
     publicDir: '/project/site/public',
     notFoundPageFilename: undefined,
   },
+  'kv-escaping': {
+    ...base,
+    name: 'my-site',
+    author: 'Me "Myself" <me@example.com>',
+    description: 'A site with \\ and "quotes"',
+    storage: { mode: 'kv-store', kvStoreName: 'site.content' },
+  },
   's3-endpoint': {
     ...base,
     storage: { mode: 's3', region: 'us-east-1', bucket: 'my-bucket', endpointUrl: 'https://s3.example.com/', endpointGenerated: false },
@@ -112,6 +120,21 @@ describe('generateApp() golden files', () => {
       assert.deepEqual(Object.keys(generated).sort(), Object.keys(golden).sort(), 'the list of files');
       for (const file of Object.keys(golden)) {
         assert.equal(generated[file], golden[file], file);
+      }
+    });
+  }
+});
+
+describe('generateApp() writes a valid fastly.toml', () => {
+  for (const [ name, config ] of Object.entries(cases)) {
+    test(name, () => {
+      const parsed = toml.parse(generateApp(config)['fastly.toml']);
+      assert.equal(parsed.name, config.name);
+      assert.equal(parsed.description, config.description);
+      assert.deepEqual(parsed.authors, [ config.author ]);
+      if (config.storage.mode === 'kv-store') {
+        assert.ok(config.storage.kvStoreName in parsed.setup.kv_stores);
+        assert.ok(config.storage.kvStoreName in parsed.local_server.kv_stores);
       }
     });
   }
