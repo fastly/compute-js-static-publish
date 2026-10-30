@@ -9,6 +9,10 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 
 ## [unreleased]
 
+### Changed
+
+- `publish-content` now logs a line for each file and each upload only with `--verbose`. Without it, the command logs the progress after each 1,000 files or uploads.
+
 ### Fixed
 
 - `publish-content` and `collections delete`: a purge of `staging` for a service with no staged version showed "Failed purging (staging)". The API gives `404` in this case, because there is nothing to purge. Now the command says that the service has no staged version, and shows no warning.

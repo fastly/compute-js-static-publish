@@ -679,7 +679,8 @@ async function handleRequest(request) {
   }
 
   // Add your custom logic here
-  if (request.url.endsWith('/api/hello')) {
+  const url = new URL(request.url);
+  if (url.pathname === '/api/hello') {
     return new Response(JSON.stringify({ greeting: "hi" }), {
       headers: { 'content-type': 'application/json' }
     });
@@ -909,7 +910,8 @@ npx @fastly/compute-js-static-publish publish-content \
   [--fastly-api-token=...] \
   [--fastly-service-id=...] \
   [--purge-environment=production,staging] \
-  [--s3-access-key-id=... --s3-secret-access-key=...]
+  [--s3-access-key-id=... --s3-secret-access-key=...] \
+  [--verbose]
 ```
 
 Publishes static files from your local root directory into a named collection, in the storage that `static-publish.rc.js` specifies: the Fastly KV Store, S3-compatible storage (BETA), or a local dev directory (`--local`, KV Store mode only).
@@ -931,6 +933,7 @@ After this process is complete, the PublisherServer object in the Compute applic
 
   If none is found, the command skips the purge. The purge also needs an API token (see `--fastly-api-token`). With `--local`, there is no purge. If the purge fails, the command shows a warning and completes, because the content is already published.
 - `--purge-environment`: The environments to purge: `production` (the default), `staging`, or both, as a comma-separated list (`--purge-environment=production,staging`). You can also repeat the option. Purge `staging` if you test the collection on a [staged service version](https://www.fastly.com/documentation/guides/getting-started/services/working-with-staging/), because a purge without it does not clear the staging cache. If the service has no staged version, there is nothing to purge in `staging`, and the command says so.
+- `--verbose`: Verbose mode. When enabled, the command logs a line for each file that the command scans, and for each upload. Without this option, the command logs the progress after each 1,000 files or uploads.
 
 **Expiration:**
 

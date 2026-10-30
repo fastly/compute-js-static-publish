@@ -1,0 +1,52 @@
+# Version updates are limited to minor and patch versions, so that each grouped
+# PR stays small. Major versions are updated by hand. The ignore conditions
+# apply to version updates only, not to security updates, so a dependency with
+# a security advisory still gets a PR.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directories:
+      - "/"
+    schedule:
+      interval: weekly
+      day: tuesday
+    groups:
+      gha-dependencies:
+        patterns:
+          - "*"
+      gha-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-major
+    cooldown:
+      default-days: 7
+
+  - package-ecosystem: npm
+    directories:
+      - "/"
+    schedule:
+      interval: weekly
+      day: tuesday
+    groups:
+      npm:
+        patterns:
+          - "*"
+      npm-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-major
+      # For a 0.x package, a minor version can have breaking changes, and the
+      # major version limit above does not include it.
+      - dependency-name: "glob-to-regexp"
+        update-types:
+          - version-update:semver-minor
+    cooldown:
+      default-days: 7

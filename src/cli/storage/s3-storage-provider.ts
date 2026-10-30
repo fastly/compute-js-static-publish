@@ -52,6 +52,7 @@ import {
 import {
   rootRelative,
 } from '../util/files.js';
+import { ProgressLog } from '../util/progress.js';
 
 type CommandOutput<C> = C extends Command<any, any, any, infer O, any> ? O : never;
 
@@ -284,7 +285,7 @@ export class S3StorageProvider implements StorageProvider {
 
   async applyBatch(batch: StorageProviderBatch, options: ApplyBatchOptions = {}): Promise<void> {
 
-    const { existingKeys } = options;
+    const { existingKeys, verbose = false } = options;
 
     let toWrite = batch.storageProviderBatchEntries;
     if (existingKeys != null) {
@@ -292,6 +293,7 @@ export class S3StorageProvider implements StorageProvider {
     }
 
     console.log(`📤 Uploading ${toWrite.length} entries to S3 storage (${this.uploadConcurrency} at a time).`);
+    const progress = new ProgressLog('Entries uploaded', verbose, toWrite.length);
     await this.doConcurrentParallel(
       toWrite,
       async ({filePath, metadataJson}, key) => {
@@ -303,7 +305,7 @@ export class S3StorageProvider implements StorageProvider {
           fileData,
           metadataJson,
         );
-        console.log(` 🌐 Submitted asset "${rootRelative(filePath)}" to S3 storage with key "${key}".`)
+        progress.add(1, () => ` 🌐 Submitted asset "${rootRelative(filePath)}" to S3 storage with key "${key}".`);
       },
       this.uploadConcurrency,
       true,

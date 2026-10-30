@@ -21,6 +21,7 @@ import { applyDefaults } from '../../util/data.js';
 import { calculateFileSizeAndHash, enumerateFiles, rootRelative } from '../../util/files.js';
 import { ensureVariantFileExists, OncePerKey, type Variants } from '../../util/variants.js';
 import { concurrentMap } from '../../util/retryable.js';
+import { ProgressLog } from '../../util/progress.js';
 import { type PurgeTarget, loadPurgeTarget, purgeCollection } from '../../util/purge.js';
 import {
   getStorageKeysByHexPrefix,
@@ -110,6 +111,9 @@ S3 Storage Options (BETA):
                                    Default: 64
 
 Global Options:
+  --verbose                        Verbose mode. Logs each file and each upload.
+                                   Without this, the log shows the progress after
+                                   each 1000 files or uploads.
   -h, --help                       Show this help message and exit.
 
 Examples:
@@ -123,7 +127,7 @@ Examples:
 export async function action(actionArgs: string[]) {
 
   const optionDefinitions: OptionDefinition[] = [
-    { name: 'verbose', type: Boolean },
+    { name: 'verbose', type: Boolean, defaultValue: false },
 
     { name: 'config', type: String },
     { name: 'collection-name', type: String, },
@@ -406,6 +410,7 @@ export async function action(actionArgs: string[]) {
   }
 
   // #### Iterate files
+  const scanProgress = new ProgressLog('Files scanned', verbose);
   const fileResults = await concurrentMap(files, async (file) => {
     // #### asset key
     const assetKey = file.slice(publicDirRoot.length)
@@ -446,7 +451,7 @@ export async function action(actionArgs: string[]) {
 
     // #### Base file size, hash, last modified time
     const { size: baseSize, hash: baseHash } = await calculateFileSizeAndHash(file);
-    console.log(`📄 File '${rootRelative(file)}' - ${baseSize} bytes, sha256: ${baseHash}`);
+    scanProgress.add(1, () => `📄 File '${rootRelative(file)}' - ${baseSize} bytes, sha256: ${baseHash}`);
     const stats = fs.statSync(file);
     const lastModifiedTime = Math.floor((stats.mtime).getTime() / 1000);
 
@@ -582,7 +587,7 @@ export async function action(actionArgs: string[]) {
     console.log(`  | ${batch.storageProviderBatchEntries.length} variant(s) to upload.`);
   }
 
-  await storageProvider.applyBatch(batch, { existingKeys });
+  await storageProvider.applyBatch(batch, { existingKeys, verbose });
 
   // #### INDEX FILE
   console.log(`🗂️ Saving Index...`);

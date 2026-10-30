@@ -1,6 +1,6 @@
 # Current state
 
-Facts about the current code that the design depends on. Read from the 8.0 code (`main` with the 8.0 PRs #99 to #103) on 2026-10-16 and 2026-10-18.
+Facts about the 8.0.0 code that the design depends on.
 
 ## CLI dispatch
 
@@ -9,15 +9,15 @@ Facts about the current code that the design depends on. Read from the 8.0 code 
 - No `./static-publish.rc.js`: **scaffolding mode** (`scaffold/index.ts`), driven only by flags (`--root-dir`, `--storage-mode`, …).
 - `./static-publish.rc.js`: **management mode**: `publish-content`, `clean`, `collections list|promote|update-expiration|delete`.
 
-Thus each management command must run from in the scaffolded app dir. Managed mode adds a third case (see [design.md §9](design.md#9-managed-mode-items-13-to-19)).
+Thus each management command must run from in the scaffolded app dir. Part 1 adds `--project-dir`, and part 3 adds a third case, managed mode (see [design.md](design.md#modes)).
 
 ### Disposable apps today
 
 Scaffolding takes every setting as a flag, and the publish and management commands take flags or env vars for what they would otherwise read from files (`--fastly-service-id` / `FASTLY_SERVICE_ID`, `--brotli-quality`, `--root-dir`, the S3 keys). Thus CI can scaffold a new app on the runner for each deploy, and publish with no config kept between builds.
 
-Scaffold flags: `--storage-mode`, `--kv-store-name`, `--s3-region`, `--s3-bucket`, `--s3-endpoint`, `--root-dir`, `--output`, `--static-publisher-working-dir`, `--publish-id`, `--name`, `--description`, `--author`, `--service-id`, `--public-dir` (deprecated in 8.0), `--static-dir`, `--spa`, `--not-found-page`, `--auto-index`, `--auto-ext`. (`--template` is on the Hono branch only.)
+Scaffold flags: `--storage-mode`, `--kv-store-name`, `--s3-region`, `--s3-bucket`, `--s3-endpoint`, `--root-dir`, `--output`, `--static-publisher-working-dir`, `--publish-id`, `--name`, `--description`, `--author`, `--service-id`, `--public-dir` (deprecated in 8.0), `--static-dir`, `--spa`, `--not-found-page`, `--auto-index`, `--auto-ext`.
 
-`defaultCollectionName` is always `live` in scaffolding (no flag). item 2 adds `--default-collection-name`.
+`defaultCollectionName` is always `live` in scaffolding (no flag). Part 1 adds `--default-collection-name`.
 
 ## What scaffolding makes (`compute-js/` by default)
 
@@ -59,12 +59,12 @@ Then scaffolding runs `npm install` in the app dir.
 
 ## Collections
 
-Publish to any `--collection-name`; expiry with `--expires-in|at|never`; `collections promote --collection-name X --to Y` copies the index and the settings; `clean --delete-expired-collections`. After a publish, the CLI purges the surrogate key `<publishId>-<collectionName>` if it has a service ID and a token. **Collection names are not checked** (item 1 adds the rule). The index metadata (after #103) has `requires` and keeps unknown fields.
+Publish to any `--collection-name`; expiry with `--expires-in|at|never`; `collections promote --collection-name X --to Y` copies the index and the settings; `clean --delete-expired-collections`. After a publish, the CLI purges the surrogate key `<publishId>-<collectionName>` if it has a service ID and a token. **Collection names are not checked** (part 2 adds the rule). The index metadata (after #103) has `requires` and keeps unknown fields.
 
-## Templates (Hono branch only)
+## Hono
 
-On `feat/v8-hono-template`, `scaffold/templates/index.ts` defines `AppTemplate = { dependencies, indexJs }`, with `plain` and `hono`. A template controls only `src/index.js` and extra dependencies. 8.1 replaces this with the file-based `AppTemplate` (see [design.md §4](design.md#4-templates-internal-item-3)).
+Hono support is in a separate package, `@fastly/hono-compute-js-static-publish`, which supports only v6 and v7. Its `serveStatic()` looks up the request path in the index directly, so it does not use `autoIndex`, `autoExt`, the response cache, or `Server-Timing`. The branch `feat/v8-hono-template` of this repo has a prototype of the `/hono` middleware and a `hono` template for v8, with the templates as code in strings. Part 6 can reuse its code, but not its template format (see [design.md](design.md#templates-as-real-files-task-12)).
 
 ## Collection selectors
 
-`src/server/collection-selector/` has `from-config-store.ts`, `from-cookie.ts`, `from-request.ts`, and `request-collection-selector.ts`. `CookieCollectionSelector` takes `cookieName` (default `publisher-collection`), `activatePath` (default `/activate`), `resetPath` (default `/reset`), and `maxAge`. It writes the `activate` value into `Set-Cookie` with no check (item 1 fixes this).
+`src/server/collection-selector/` has `from-config-store.ts`, `from-cookie.ts`, `from-request.ts`, and `request-collection-selector.ts`. `CookieCollectionSelector` takes `cookieName` (default `publisher-collection`), `activatePath` (default `/activate`), `resetPath` (default `/reset`), and `maxAge`. It writes the `activate` value into `Set-Cookie` with no check (part 2 fixes this).
