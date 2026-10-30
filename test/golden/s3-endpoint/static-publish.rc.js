@@ -13,6 +13,11 @@ const rc = {
   publishId: "default",
   defaultCollectionName: "live",
   staticPublisherWorkingDir: "./static-publisher",
+  generatedFrom: {
+    template: "plain",
+    staticPublishVersion: "<static-publish-version>",
+    generatedAt: "<generated-at>",
+  },
 };
 
 export default rc;
