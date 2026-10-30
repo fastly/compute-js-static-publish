@@ -17,3 +17,9 @@
 The log lines for each file (scan) and each upload go through `ProgressLog` (`util/progress.ts`). Without `--verbose`, it logs only a progress line after each 1,000 items, because a large site has tens of thousands of files.
 
 `src/cli/storage/CLAUDE.md` has the measured limits of the KV batch endpoint.
+
+## Generating the app
+
+`generateApp(config)` (`src/cli/commands/scaffold/generate-app.ts`) makes all files of a scaffolded app as a map from path to content. It does not use the file system or the network. `scaffold` resolves the flags into an `AppConfig` (also the S3 endpoint lookup), calls it, writes the files, and runs `npm install`.
+
+`test/unit/generate-app.test.js` compares its output with the golden files in `test/golden/<case>/`, and `test/e2e/scaffold-golden.test.js` checks that `scaffold` writes the same files. A change that must not change the generated app must not change a golden file. After an intended change, run `UPDATE_GOLDEN=1 npm test` and check the diff of `test/golden/`. The golden copy of a `.gitignore` is named `_gitignore`, because git would obey a real one in the tree. The dependency on this package is the placeholder `<compute-js-static-publish>`.
