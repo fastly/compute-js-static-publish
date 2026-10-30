@@ -44,6 +44,10 @@ S3 Storage Options (BETA):
                                    and S3_SECRET_ACCESS_KEY environment variables.
 
 Global Options:
+  --project-dir=<dir>              Run the command for the app in <dir>, the directory
+                                   that has static-publish.rc.js. Relative paths, also
+                                   in other options, are then relative to <dir>.
+  --version                        Print the version of this package and exit.
   -h, --help                       Show this help message and exit.
 
 Automatic Project Initialization:
@@ -54,6 +58,7 @@ Examples:
   npx @fastly/compute-js-static-publish publish-content --collection-name=live
   npx @fastly/compute-js-static-publish collections list
   npx @fastly/compute-js-static-publish clean --dry-run
+  npx @fastly/compute-js-static-publish publish-content --project-dir=./compute-js
 `);
 }
 

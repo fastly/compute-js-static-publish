@@ -74,6 +74,7 @@ Server Config:
   --auto-ext <ext>,<ext...>             Automatic extensions (e.g., .html,.htm)
 
 Other:
+  --version                             Print the version of this package and exit
   --verbose                             Enable verbose output
   -h, --help                            Show help
 `);
