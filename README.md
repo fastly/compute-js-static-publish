@@ -679,7 +679,8 @@ async function handleRequest(request) {
   }
 
   // Add your custom logic here
-  if (request.url.endsWith('/api/hello')) {
+  const url = new URL(request.url);
+  if (url.pathname === '/api/hello') {
     return new Response(JSON.stringify({ greeting: "hi" }), {
       headers: { 'content-type': 'application/json' }
     });
