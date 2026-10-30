@@ -9,6 +9,10 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 
 ## [unreleased]
 
+### Fixed
+
+- `scaffold` now escapes the values that it writes into `fastly.toml`. Before, a `"` or a `\` in `--name`, `--description`, or `--author`, or a KV Store name with a character such as `.`, gave a `fastly.toml` that was not valid.
+
 ## [8.0.1] - 2026-11-04
 
 ### Changed
