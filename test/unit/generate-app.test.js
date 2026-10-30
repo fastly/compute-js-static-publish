@@ -13,6 +13,7 @@ import path from 'node:path';
 import { describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
+import { loadAppTemplate } from '../../build/cli/cli/commands/scaffold/app-template.js';
 import { generateApp } from '../../build/cli/cli/commands/scaffold/generate-app.js';
 
 const GOLDEN_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../golden');
@@ -42,6 +43,7 @@ const base = {
   autoIndex: [ 'index.html', 'index.htm' ],
   autoExt: [ '.html', '.htm' ],
   staticPublishVersionSpec: '<compute-js-static-publish>',
+  template: loadAppTemplate('plain'),
 };
 
 const cases = {

@@ -18,6 +18,12 @@ import { parseCommandLine } from '../../util/args.js';
 import { rootRelative } from '../../util/files.js';
 import { findComputeJsStaticPublisherVersion, type PackageJson } from '../../util/package.js';
 import { findHostnameForAwsS3RegionAndBucket } from '../../util/s3.js';
+import {
+  APP_TEMPLATE_NAMES,
+  DEFAULT_APP_TEMPLATE_NAME,
+  isAppTemplateName,
+  loadAppTemplate,
+} from './app-template.js';
 import { generateApp } from './generate-app.js';
 
 function help() {
@@ -49,6 +55,8 @@ Options:
   --static-publisher-working-dir <dir>  Working directory for build artifacts (default: <output>/static-publisher)
                                         (default: ./compute-js/static-publisher)
   --publish-id <id>                     Advanced. Prefix for KV keys (default: "default")
+  --template <name>                     The template of the app's code (default: plain)
+                                        Valid templates: ${APP_TEMPLATE_NAMES.join(', ')}
 
 Compute Service Metadata:
   --name <name>                         App name (for fastly.toml)
@@ -90,6 +98,7 @@ export type InitAppOptions = {
   s3Region: string | undefined,
   s3Bucket: string | undefined,
   s3Endpoint: string | undefined,
+  template: string,
 };
 
 const defaultOptions: InitAppOptions = {
@@ -112,6 +121,7 @@ const defaultOptions: InitAppOptions = {
   s3Region: undefined,
   s3Bucket: undefined,
   s3Endpoint: undefined,
+  template: DEFAULT_APP_TEMPLATE_NAME,
 };
 
 function buildOptions(
@@ -314,6 +324,13 @@ function buildOptions(
   }
 
   {
+    const templateValue = commandLineOptions['template'];
+    if (typeof templateValue === 'string') {
+      options.template = templateValue;
+    }
+  }
+
+  {
     let serviceId: string | undefined;
     const serviceIdValue = commandLineOptions['service-id'];
     if (serviceIdValue == null || typeof serviceIdValue === 'string') {
@@ -444,6 +461,9 @@ export async function action(actionArgs: string[]) {
     // Fastly Service ID to be added to the fastly.toml that is generated.
     { name: 'service-id', type: String },
 
+    // The template of the app's code.
+    { name: 'template', type: String, },
+
     // Required. The 'root' directory for the publishing.
     // All assets are expected to exist under this root. Required.
     // For backwards compatibility, if this value is not provided,
@@ -519,6 +539,13 @@ export async function action(actionArgs: string[]) {
     packageJson,
     parsed.commandLineOptions,
   );
+
+  if (!isAppTemplateName(options.template)) {
+    console.error(`❌ Unknown template '${options.template}'.`);
+    console.error(`  * Valid templates: ${APP_TEMPLATE_NAMES.join(', ')}`);
+    process.exitCode = 1;
+    return;
+  }
 
   const COMPUTE_JS_DIR = options.outputDir;
   if (COMPUTE_JS_DIR == null) {
@@ -733,6 +760,7 @@ export async function action(actionArgs: string[]) {
   console.log('author                         :', author);
   console.log('description                    :', description);
   console.log('Service ID                     :', fastlyServiceId ?? '(None)');
+  console.log('Template                       :', options.template);
 
   if (storageMode === 'kv-store') {
     console.log('Storage Mode                   : Fastly KV Store');
@@ -792,6 +820,7 @@ export async function action(actionArgs: string[]) {
     autoIndex,
     autoExt,
     staticPublishVersionSpec: findComputeJsStaticPublisherVersion(packageJson),
+    template: loadAppTemplate(options.template),
   });
 
   // Write out the files

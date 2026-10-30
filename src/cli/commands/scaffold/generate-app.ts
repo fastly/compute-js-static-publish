@@ -6,6 +6,8 @@
 import * as path from 'node:path';
 
 import { dotRelative } from '../../util/files.js';
+import { type AppTemplate } from './app-template.js';
+import { renderAppResource } from './render.js';
 
 // The resolved settings of an app: everything that generateApp() needs.
 // Paths are absolute. The fields map onto the scaffold flags.
@@ -30,18 +32,21 @@ export type AppConfig = {
   autoExt: string[],
   // The version spec of this package for the app's package.json.
   staticPublishVersionSpec: string,
+  // What the app's code comes from.
+  template: AppTemplate,
 };
 
 // Makes the files of the app, keyed by the path relative to the app dir.
-// It does not use the file system or the network, so scaffolding, managed
-// mode, and eject can share it, and tests can compare its output.
+// It does not write files or use the network, so that scaffolding, managed
+// mode, and eject can share it, and tests can compare its output. It reads
+// only the resources/ directory of this package.
 export function generateApp(config: AppConfig): Record<string, string> {
   const {
     appDir: computeJsDir,
     name,
     author,
     description,
-    serviceId: fastlyServiceId,
+    serviceId,
     storage,
     publishId,
     defaultCollectionName,
@@ -53,30 +58,27 @@ export function generateApp(config: AppConfig): Record<string, string> {
     notFoundPageFilename,
     autoIndex,
     autoExt,
-    staticPublishVersionSpec: computeJsStaticPublisherVersion,
+    staticPublishVersionSpec,
+    template,
   } = config;
-  const storageMode = storage.mode;
 
   const resourceFiles: Record<string, string> = {};
 
   // .gitignore
-  resourceFiles['.gitignore'] = `\
-/node_modules
-/bin
-/pkg
-/${path.relative(computeJsDir, staticPublisherWorkingDir)}
-`;
+  resourceFiles['.gitignore'] = renderAppResource('gitignore', {
+    workingDirInApp: path.relative(computeJsDir, staticPublisherWorkingDir),
+  });
 
-  // package.json
+  // package.json: the dependencies come from the template's package.json.
   const packageJsonScripts: Record<string, string> = {
     'dev:start': 'fastly compute serve',
     'fastly:deploy': 'fastly compute publish',
     'build': 'js-compute-runtime ./src/index.js ./bin/main.wasm',
   };
-  if (storageMode === 'kv-store') {
+  if (storage.mode === 'kv-store') {
     packageJsonScripts['dev:publish'] = 'npx @fastly/compute-js-static-publish publish-content --local';
     packageJsonScripts['fastly:publish'] = 'npx @fastly/compute-js-static-publish publish-content';
-  } else if (storageMode === 's3') {
+  } else if (storage.mode === 's3') {
     packageJsonScripts['s3:publish'] = 'npx @fastly/compute-js-static-publish publish-content';
   }
   resourceFiles['package.json'] = JSON.stringify({
@@ -86,11 +88,11 @@ export function generateApp(config: AppConfig): Record<string, string> {
     author,
     type: 'module',
     devDependencies: {
-      "@fastly/cli": "^16.0.0",
-      '@fastly/compute-js-static-publish': computeJsStaticPublisherVersion,
+      ...template.devDependencies,
+      '@fastly/compute-js-static-publish': staticPublishVersionSpec,
     },
     dependencies: {
-      '@fastly/js-compute': '^4.0.0',
+      ...template.dependencies,
     },
     engines: {
       node: '>=20.11.0',
@@ -100,116 +102,37 @@ export function generateApp(config: AppConfig): Record<string, string> {
   }, undefined, 2);
 
   // fastly.toml
-  let fastlyTomlLocalServer = '';
-  let fastlyTomlSetup = '';
+  let localServerKvStorePath: string | undefined;
+  let s3EndpointUrl: string | undefined;
+  let s3EndpointHostname: string | undefined;
   if (storage.mode === 'kv-store') {
-    const kvStoreName = storage.kvStoreName;
-    const localServerKvStorePath = dotRelative(computeJsDir, path.resolve(staticPublisherWorkingDir, 'kvstore.json'));
-    fastlyTomlLocalServer = /* language=text */ `\
-[local_server]
-
-[local_server.kv_stores]
-${kvStoreName} = { file = "${localServerKvStorePath}", format = "json" }
-`;
-    fastlyTomlSetup = /* language=text */ `\
-[setup]
-
-[setup.kv_stores]
-[setup.kv_stores.${kvStoreName}]
-`;
-
+    localServerKvStorePath = dotRelative(computeJsDir, path.resolve(staticPublisherWorkingDir, 'kvstore.json'));
     // kvstore.json
     resourceFiles[localServerKvStorePath] = '{}';
   } else if (storage.mode === 's3') {
-    const s3EndpointUrl = new URL(storage.endpointUrl);
-    fastlyTomlLocalServer = /* language=text */ `\
-[local_server]
-
-[local_server.secret_stores]
-[[local_server.secret_stores.S3_CREDENTIALS]]
-key = "S3_ACCESS_KEY_ID"
-env = "S3_ACCESS_KEY_ID"
-[[local_server.secret_stores.S3_CREDENTIALS]]
-key = "S3_SECRET_ACCESS_KEY"
-env = "S3_SECRET_ACCESS_KEY"
-
-[local_server.backends]
-[local_server.backends.s3_storage]
-url = "${String(s3EndpointUrl)}"
-override_host = "${s3EndpointUrl.hostname}"
-`;
-    fastlyTomlSetup = /* language=text */ `\
-[setup]
-
-[setup.backends]
-[setup.backends.s3_storage]
-address = "${s3EndpointUrl.hostname}"
-description = "S3 API endpoint"
-port = 443
-[setup.secret_stores]
-[setup.secret_stores.S3_CREDENTIALS]
-description = "Credentials for S3 storage"
-[setup.secret_stores.S3_CREDENTIALS.entries]
-[setup.secret_stores.S3_CREDENTIALS.entries.S3_ACCESS_KEY_ID]
-description = "Access Key ID"
-[setup.secret_stores.S3_CREDENTIALS.entries.S3_SECRET_ACCESS_KEY]
-description = "Secret Access Key"
-`;
+    const url = new URL(storage.endpointUrl);
+    s3EndpointUrl = String(url);
+    s3EndpointHostname = url.hostname;
   }
-
-  resourceFiles['fastly.toml'] = /* language=text */ `\
-# This file describes a Fastly Compute package. To learn more visit:
-# https://developer.fastly.com/reference/fastly-toml/
-
-authors = [ "${author}" ]
-description = "${description}"
-language = "javascript"
-manifest_version = 3
-name = "${name}"
-${fastlyServiceId != null ? `service_id = "${fastlyServiceId}"\n` : ''}
-[scripts]
-build = "npm run build"
-
-${fastlyTomlLocalServer}
-${fastlyTomlSetup}
-`;
+  resourceFiles['fastly.toml'] = renderAppResource('fastly.toml', {
+    author,
+    description,
+    name,
+    serviceId,
+    storage,
+    localServerKvStorePath,
+    s3EndpointUrl,
+    s3EndpointHostname,
+  });
 
   // static-publish.rc.js
-  let staticPublishStorage = '';
-  if (storage.mode === 'kv-store') {
-    staticPublishStorage = `\
-  storageMode: "kv-store",
-  kvStore: {
-    kvStoreName: ${JSON.stringify(storage.kvStoreName)},
-  },\
-`;
-  } else if (storage.mode === 's3') {
-    staticPublishStorage = `\
-  storageMode: "s3",
-  s3: {
-    region: ${JSON.stringify(storage.region)},
-    bucket: ${JSON.stringify(storage.bucket)},\
-` + (!storage.endpointGenerated ? `
-    endpoint: ${JSON.stringify(String(new URL(storage.endpointUrl)))},\
-` : '') + `
-  },\
-`;
-  }
-  resourceFiles['static-publish.rc.js'] = `\
-/*
- * Generated by @fastly/compute-js-static-publish.
- */
-
-/** @type {import('@fastly/compute-js-static-publish').StaticPublishRc} */
-const rc = {
-${staticPublishStorage}
-  publishId: ${JSON.stringify(publishId)},
-  defaultCollectionName: ${JSON.stringify(defaultCollectionName)},
-  staticPublisherWorkingDir: ${JSON.stringify(dotRelative(computeJsDir, staticPublisherWorkingDir))},
-};
-
-export default rc;
-`;
+  resourceFiles['static-publish.rc.js'] = renderAppResource('static-publish.rc.js', {
+    storage,
+    s3EndpointUrl,
+    publishId,
+    defaultCollectionName,
+    staticPublisherWorkingDir: dotRelative(computeJsDir, staticPublisherWorkingDir),
+  });
 
   // publish-content.config.js
   // publicDirPrefix -- if public dir is deeper than the root dir, then
@@ -252,69 +175,25 @@ export default rc;
     notFoundPageFile = notFoundPageFilename.slice(rootDir.length);
   }
 
-  resourceFiles['publish-content.config.js'] = `\
-/*
- * Generated by @fastly/compute-js-static-publish.
- */
+  resourceFiles['publish-content.config.js'] = renderAppResource('publish-content.config.js', {
+    rootDir: dotRelative(computeJsDir, rootDir),
+    publicDirPrefix,
+    staticItems,
+    spaFile,
+    notFoundPageFile,
+    autoExt,
+    autoIndex,
+  });
 
-// Commented items are defaults, feel free to modify and experiment!
-// See README for a detailed explanation of the configuration options.
-
-/** @type {import('@fastly/compute-js-static-publish').PublishContentConfig} */
-const config = {
-  rootDir: ${JSON.stringify(dotRelative(computeJsDir, rootDir))},
-  // excludeDirs: [ './node_modules' ],
-  // excludeDotFiles: true,
-  // includeWellKnown: true,
-  // assetInclusionTest: (assetKey) => true,
-  // contentCompression: [ 'br', 'gzip' ],
-  // brotliQuality: 11,
-  // contentTypes: [
-  //   { test: /.custom$/, contentType: 'application/x-custom', text: false },
-  // ],
-  
-  // Server settings are saved to storage per collection
-  server: {${publicDirPrefix !== '' ? `
-    publicDirPrefix: ${JSON.stringify(publicDirPrefix)},` : ''}
-    staticItems: ${JSON.stringify(staticItems)},
-    allowedEncodings: [ 'br', 'gzip' ],
-    spaFile: ${JSON.stringify(spaFile)},
-    notFoundPageFile: ${JSON.stringify(notFoundPageFile)}, 
-    autoExt: ${JSON.stringify(autoExt)},
-    autoIndex: ${JSON.stringify(autoIndex)},
-  },
-};
-
-export default config;
-`;
-
-  // src/index.js
-  resourceFiles['./src/index.js'] = /* language=text */ `\
-/// <reference types="@fastly/js-compute" />
-import { env } from 'fastly:env';
-import { PublisherServer } from '@fastly/compute-js-static-publish';
-import rc from '../static-publish.rc.js';
-const publisherServer = PublisherServer.fromStaticPublishRc(rc);
-
-// eslint-disable-next-line no-restricted-globals
-addEventListener("fetch", (event) => event.respondWith(handleRequest(event)));
-async function handleRequest(event) {
-
-  console.log('FASTLY_SERVICE_VERSION', env('FASTLY_SERVICE_VERSION'));
-
-  const request = event.request;
-
-  const response = await publisherServer.serveRequest(request);
-  if (response != null) {
-    return response;
+  // The files of the template, for example src/index.js. A template never
+  // replaces a file that generateApp() writes.
+  const written = new Set(Object.keys(resourceFiles).map(file => path.posix.normalize(file)));
+  for (const [ file, content ] of Object.entries(template.files)) {
+    if (written.has(path.posix.normalize(file))) {
+      throw new Error(`The template '${template.name}' has the file '${file}', which generateApp() writes.`);
+    }
+    resourceFiles[file] = content;
   }
-
-  // Do custom things here!
-  // Handle API requests, serve non-static responses, etc.
-
-  return new Response('Not found', { status: 404 });
-}
-`;
 
   return resourceFiles;
 }
