@@ -45,6 +45,7 @@ const config = {
   autoIndex: [],
   autoExt: [],
   staticPublishVersionSpec: '^8.1.0',
+  generatedFrom: { template: 'plain', staticPublishVersion: '8.1.0', generatedAt: '2026-01-01' },
 };
 
 describe('templates', () => {
