@@ -104,6 +104,12 @@ npm run fastly:publish
 
 This command uploads your static files to the KV Store and applies the server config.  Your website is now up and live!
 
+`fastly:publish` needs a Fastly API token that can write to the KV Store. Set the `FASTLY_API_TOKEN` environment variable, or add `-- --fastly-api-token=<token>`. The command does not read the token of your Fastly CLI profile. If you are logged in with the Fastly CLI, you can give it that token:
+
+```sh
+FASTLY_API_TOKEN=$(npx fastly auth token) npm run fastly:publish
+```
+
 ### 🎁 Using S3 Compatible Storage (Beta)
 
 #### 1. Scaffold a Compute App
@@ -370,6 +376,7 @@ You can overwrite or republish any collection at any time. Old file hashes will 
 Collections can expire automatically:
 
 - Expired collections are ignored by the server and return 404s
+- A request for a collection other than the default collection that is expired or not published gets a plain-text 404 that names the collection. The response cache does not store it, so the collection is served as soon as you publish it. If the default collection is not published, the server returns a 500.
 - The default collection never expires
 - Expiration limits can be modified (shortened, extended, reenstated) using `collections update-expiration` 
 - They are cleaned up by `clean --delete-expired-collections`
@@ -514,6 +521,12 @@ Once deployed, publish content like so:
 npm run fastly:publish
 ```
 
+`fastly:publish` needs a Fastly API token that can write to the KV Store. Set the `FASTLY_API_TOKEN` environment variable, or add `-- --fastly-api-token=<token>`. The command does not read the token of your Fastly CLI profile. If you are logged in with the Fastly CLI, you can give it that token:
+
+```sh
+FASTLY_API_TOKEN=$(npx fastly auth token) npm run fastly:publish
+```
+
 This:
 
 - Uses the default collection name
@@ -584,6 +597,8 @@ Once deployed, publish content like so:
 ```sh
 npm run s3:publish
 ```
+
+After the deploy, `fastly.toml` has the service ID, so `s3:publish` also purges the service's cache. For this purge, set `FASTLY_API_TOKEN` (or add `-- --fastly-api-token=<token>`) in addition to the S3 credentials. Without it, `s3:publish` stops with an error before it uploads files.
 
 This:
 
@@ -887,8 +902,8 @@ npx @fastly/compute-js-static-publish@latest \
 - `--publish-id`: Optional key prefix for KV entries (default: `'default'`).
 - `--public-dir`: **Deprecated.** A future version will remove it. Public files base directory, under `--root-dir` (default: same as `--root-dir`). Files that are under `--root-dir` but not under `--public-dir` are published, but requests cannot get them.
 - `--static-dir`: One or more directories to serve with long cache TTLs.
-- `--spa`: SPA fallback file path (e.g., `./public/spa.html`).
-- `--not-found-page`: 404 fallback file path (e.g., `./public/404.html`).
+- `--spa`: SPA fallback file path, from the current directory (e.g., `./public/spa.html`). The file must exist under `--root-dir`.
+- `--not-found-page`: 404 fallback file path, from the current directory (e.g., `./public/404.html`). The file must exist under `--root-dir`. If you do not set it, the scaffolder uses `404.html` in `--root-dir` if that file exists.
 - `--auto-index`: List of filenames to use as index files.
 - `--auto-ext`: Extensions to try when resolving URLs.
 
