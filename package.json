@@ -46,6 +46,7 @@
     "@smithy/signature-v4": "^5.7.4",
     "command-line-args": "^5.2.1",
     "glob-to-regexp": "^0.4.1",
+    "nunjucks": "^3.2.4",
     "toml": "^5.0.1"
   },
   "peerDependencies": {
@@ -56,6 +57,7 @@
     "@types/command-line-args": "^5.2.0",
     "@types/glob-to-regexp": "^0.4.1",
     "@types/node": "^20.11.0",
+    "@types/nunjucks": "^3.2.6",
     "rimraf": "^4.3.0",
     "typescript": "^5.8.0"
   },

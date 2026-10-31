@@ -1,3 +1,4 @@
 /build/
 /node_modules/
 /test/.env
+/resources/templates/*/node_modules/

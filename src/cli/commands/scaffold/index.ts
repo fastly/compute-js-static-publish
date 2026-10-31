@@ -15,9 +15,16 @@ import * as fs from 'node:fs';
 import { type CommandLineOptions, type OptionDefinition } from 'command-line-args';
 
 import { parseCommandLine } from '../../util/args.js';
-import { dotRelative, rootRelative } from '../../util/files.js';
-import { findComputeJsStaticPublisherVersion, type PackageJson } from '../../util/package.js';
+import { rootRelative } from '../../util/files.js';
+import { findComputeJsStaticPublisherVersion, getOwnVersion, type PackageJson } from '../../util/package.js';
 import { findHostnameForAwsS3RegionAndBucket } from '../../util/s3.js';
+import {
+  APP_TEMPLATE_NAMES,
+  DEFAULT_APP_TEMPLATE_NAME,
+  isAppTemplateName,
+  loadAppTemplate,
+} from './app-template.js';
+import { generateApp } from './generate-app.js';
 
 function help() {
   console.log(`\
@@ -48,6 +55,9 @@ Options:
   --static-publisher-working-dir <dir>  Working directory for build artifacts (default: <output>/static-publisher)
                                         (default: ./compute-js/static-publisher)
   --publish-id <id>                     Advanced. Prefix for KV keys (default: "default")
+  --default-collection-name <name>      Collection to serve when none is selected (default: "live")
+  --template <name>                     The template of the app's code (default: plain)
+                                        Valid templates: ${APP_TEMPLATE_NAMES.join(', ')}
 
 Compute Service Metadata:
   --name <name>                         App name (for fastly.toml)
@@ -65,6 +75,7 @@ Server Config:
   --auto-ext <ext>,<ext...>             Automatic extensions (e.g., .html,.htm)
 
 Other:
+  --version                             Print the version of this package and exit
   --verbose                             Enable verbose output
   -h, --help                            Show help
 `);
@@ -85,11 +96,13 @@ export type InitAppOptions = {
   description: string | undefined,
   serviceId: string | undefined,
   publishId: string | undefined,
+  defaultCollectionName: string | undefined,
   storageMode: string | undefined,
   kvStoreName: string | undefined,
   s3Region: string | undefined,
   s3Bucket: string | undefined,
   s3Endpoint: string | undefined,
+  template: string,
 };
 
 const defaultOptions: InitAppOptions = {
@@ -107,11 +120,13 @@ const defaultOptions: InitAppOptions = {
   description: 'Fastly Compute static site',
   serviceId: undefined,
   publishId: undefined,
+  defaultCollectionName: undefined,
   storageMode: undefined,
   kvStoreName: undefined,
   s3Region: undefined,
   s3Bucket: undefined,
   s3Endpoint: undefined,
+  template: DEFAULT_APP_TEMPLATE_NAME,
 };
 
 function buildOptions(
@@ -314,6 +329,20 @@ function buildOptions(
   }
 
   {
+    const defaultCollectionNameValue = commandLineOptions['default-collection-name'];
+    if (typeof defaultCollectionNameValue === 'string') {
+      options.defaultCollectionName = defaultCollectionNameValue;
+    }
+  }
+
+  {
+    const templateValue = commandLineOptions['template'];
+    if (typeof templateValue === 'string') {
+      options.template = templateValue;
+    }
+  }
+
+  {
     let serviceId: string | undefined;
     const serviceIdValue = commandLineOptions['service-id'];
     if (serviceIdValue == null || typeof serviceIdValue === 'string') {
@@ -444,6 +473,13 @@ export async function action(actionArgs: string[]) {
     // Fastly Service ID to be added to the fastly.toml that is generated.
     { name: 'service-id', type: String },
 
+    // The template of the app's code.
+    { name: 'template', type: String, },
+
+    // The collection to serve when no collection is selected.
+    // If not provided, the default value of 'live' is used.
+    { name: 'default-collection-name', type: String, },
+
     // Required. The 'root' directory for the publishing.
     // All assets are expected to exist under this root. Required.
     // For backwards compatibility, if this value is not provided,
@@ -519,6 +555,13 @@ export async function action(actionArgs: string[]) {
     packageJson,
     parsed.commandLineOptions,
   );
+
+  if (!isAppTemplateName(options.template)) {
+    console.error(`❌ Unknown template '${options.template}'.`);
+    console.error(`  * Valid templates: ${APP_TEMPLATE_NAMES.join(', ')}`);
+    process.exitCode = 1;
+    return;
+  }
 
   const COMPUTE_JS_DIR = options.outputDir;
   if (COMPUTE_JS_DIR == null) {
@@ -737,7 +780,12 @@ export async function action(actionArgs: string[]) {
     publishId = 'default';
   }
 
-  const defaultCollectionName = 'live';
+  const defaultCollectionName = options.defaultCollectionName ?? 'live';
+  if (defaultCollectionName === '') {
+    console.error("❌ parameter --default-collection-name must not be empty.");
+    process.exitCode = 1;
+    return;
+  }
 
   console.log('');
   console.log('Compute Application Settings');
@@ -747,6 +795,7 @@ export async function action(actionArgs: string[]) {
   console.log('author                         :', author);
   console.log('description                    :', description);
   console.log('Service ID                     :', fastlyServiceId ?? '(None)');
+  console.log('Template                       :', options.template);
 
   if (storageMode === 'kv-store') {
     console.log('Storage Mode                   : Fastly KV Store');
@@ -786,263 +835,33 @@ export async function action(actionArgs: string[]) {
   fs.mkdirSync(computeJsDir);
   fs.mkdirSync(path.resolve(computeJsDir, './src'));
 
-  const resourceFiles: Record<string, string> = {};
-
-  // .gitignore
-  resourceFiles['.gitignore'] = `\
-/node_modules
-/bin
-/pkg
-/${path.relative(computeJsDir, staticPublisherWorkingDir)}
-`;
-
-  // package.json
-  const computeJsStaticPublisherVersion = findComputeJsStaticPublisherVersion(packageJson);
-  const packageJsonScripts: Record<string, string> = {
-    'dev:start': 'fastly compute serve',
-    'fastly:deploy': 'fastly compute publish',
-    'build': 'js-compute-runtime ./src/index.js ./bin/main.wasm',
-  };
-  if (storageMode === 'kv-store') {
-    packageJsonScripts['dev:publish'] = 'npx @fastly/compute-js-static-publish publish-content --local';
-    packageJsonScripts['fastly:publish'] = 'npx @fastly/compute-js-static-publish publish-content';
-  } else if (storageMode === 's3') {
-    packageJsonScripts['s3:publish'] = 'npx @fastly/compute-js-static-publish publish-content';
-  }
-  resourceFiles['package.json'] = JSON.stringify({
+  const resourceFiles = generateApp({
+    appDir: computeJsDir,
     name,
-    version: '0.1.0',
-    description,
     author,
-    type: 'module',
-    devDependencies: {
-      "@fastly/cli": "^16.0.0",
-      '@fastly/compute-js-static-publish': computeJsStaticPublisherVersion,
+    description,
+    serviceId: fastlyServiceId,
+    storage: storageMode === 'kv-store' ?
+      { mode: 'kv-store', kvStoreName: kvStoreName! } :
+      { mode: 's3', region: s3Region!, bucket: s3Bucket!, endpointUrl: String(s3EndpointUrl), endpointGenerated: s3EndpointGenerated },
+    publishId,
+    defaultCollectionName,
+    staticPublisherWorkingDir,
+    rootDir,
+    publicDir,
+    staticDirs,
+    spaFilename,
+    notFoundPageFilename,
+    autoIndex,
+    autoExt,
+    staticPublishVersionSpec: findComputeJsStaticPublisherVersion(packageJson),
+    template: loadAppTemplate(options.template),
+    generatedFrom: {
+      template: options.template,
+      staticPublishVersion: getOwnVersion(),
+      generatedAt: new Date().toISOString().slice(0, 10),
     },
-    dependencies: {
-      '@fastly/js-compute': '^4.0.0',
-    },
-    engines: {
-      node: '>=20.11.0',
-    },
-    private: true,
-    scripts: packageJsonScripts,
-  }, undefined, 2);
-
-  // fastly.toml
-  let fastlyTomlLocalServer = '';
-  let fastlyTomlSetup = '';
-  if (storageMode === 'kv-store') {
-    const localServerKvStorePath = dotRelative(computeJsDir, path.resolve(staticPublisherWorkingDir, 'kvstore.json'));
-    fastlyTomlLocalServer = /* language=text */ `\
-[local_server]
-
-[local_server.kv_stores]
-${kvStoreName} = { file = "${localServerKvStorePath}", format = "json" }
-`;
-    fastlyTomlSetup = /* language=text */ `\
-[setup]
-
-[setup.kv_stores]
-[setup.kv_stores.${kvStoreName}]
-`;
-
-    // kvstore.json
-    resourceFiles[localServerKvStorePath] = '{}';
-  } else if (storageMode === 's3') {
-    fastlyTomlLocalServer = /* language=text */ `\
-[local_server]
-
-[local_server.secret_stores]
-[[local_server.secret_stores.S3_CREDENTIALS]]
-key = "S3_ACCESS_KEY_ID"
-env = "S3_ACCESS_KEY_ID"
-[[local_server.secret_stores.S3_CREDENTIALS]]
-key = "S3_SECRET_ACCESS_KEY"
-env = "S3_SECRET_ACCESS_KEY"
-
-[local_server.backends]
-[local_server.backends.s3_storage]
-url = "${String(s3EndpointUrl)}"
-override_host = "${s3EndpointUrl!.hostname}"
-`;
-    fastlyTomlSetup = /* language=text */ `\
-[setup]
-
-[setup.backends]
-[setup.backends.s3_storage]
-address = "${s3EndpointUrl!.hostname}"
-description = "S3 API endpoint"
-port = 443
-[setup.secret_stores]
-[setup.secret_stores.S3_CREDENTIALS]
-description = "Credentials for S3 storage"
-[setup.secret_stores.S3_CREDENTIALS.entries]
-[setup.secret_stores.S3_CREDENTIALS.entries.S3_ACCESS_KEY_ID]
-description = "Access Key ID"
-[setup.secret_stores.S3_CREDENTIALS.entries.S3_SECRET_ACCESS_KEY]
-description = "Secret Access Key"
-`;
-  }
-
-  resourceFiles['fastly.toml'] = /* language=text */ `\
-# This file describes a Fastly Compute package. To learn more visit:
-# https://developer.fastly.com/reference/fastly-toml/
-
-authors = [ "${author}" ]
-description = "${description}"
-language = "javascript"
-manifest_version = 3
-name = "${name}"
-${fastlyServiceId != null ? `service_id = "${fastlyServiceId}"\n` : ''}
-[scripts]
-build = "npm run build"
-
-${fastlyTomlLocalServer}
-${fastlyTomlSetup}
-`;
-
-  // static-publish.rc.js
-  let staticPublishStorage = '';
-  if (storageMode === 'kv-store') {
-    staticPublishStorage = `\
-  storageMode: "kv-store",
-  kvStore: {
-    kvStoreName: ${JSON.stringify(kvStoreName)},
-  },\
-`;
-  } else if (storageMode === 's3') {
-    staticPublishStorage = `\
-  storageMode: "s3",
-  s3: {
-    region: ${JSON.stringify(s3Region)},
-    bucket: ${JSON.stringify(s3Bucket)},\
-` + (!s3EndpointGenerated ? `
-    endpoint: ${JSON.stringify(String(s3EndpointUrl))},\
-` : '') + `
-  },\
-`;
-  }
-  resourceFiles['static-publish.rc.js'] = `\
-/*
- * Generated by @fastly/compute-js-static-publish.
- */
-
-/** @type {import('@fastly/compute-js-static-publish').StaticPublishRc} */
-const rc = {
-${staticPublishStorage}
-  publishId: ${JSON.stringify(publishId)},
-  defaultCollectionName: ${JSON.stringify(defaultCollectionName)},
-  staticPublisherWorkingDir: ${JSON.stringify(dotRelative(computeJsDir, staticPublisherWorkingDir))},
-};
-
-export default rc;
-`;
-
-  // publish-content.config.js
-  // publicDirPrefix -- if public dir is deeper than the root dir, then
-  // public dir is used as a prefix to drill into asset names.
-  // e.g.,
-  // root dir   : /path/to/root
-  // public dir : /path/to/root/public
-  // then publicDirPrefix = /public
-
-  // We've already established publicDir.startsWith(rootDir)
-  let publicDirPrefix = '';
-  if (rootDir !== publicDir) {
-    publicDirPrefix = publicDir.slice(rootDir.length);
-  }
-
-  // staticItems - specified as prefixes, relative to publicDir
-  const staticItems: string[] = [];
-  for (const staticDir of staticDirs) {
-    // We've already established staticDir.startsWith(publicDir)
-    let staticItem = staticDir.slice(publicDir.length);
-    if (!staticItem.endsWith('/')) {
-      // Ending with a slash denotes that this is a directory.
-      staticItem = staticItem + '/';
-    }
-    staticItems.push(staticItem);
-  }
-
-  // spaFile - asset key of spa file
-  let spaFile: string | false = false;
-  if (spaFilename != null) {
-    // We've already established spaFilename.startsWith(rootDir)
-    // and that it exists
-    spaFile = spaFilename.slice(rootDir.length);
-  }
-
-  let notFoundPageFile: string | false = false;
-  if(notFoundPageFilename != null) {
-    // We've already established notFoundPageFilename.startsWith(rootDir)
-    // and that it exists
-    notFoundPageFile = notFoundPageFilename.slice(rootDir.length);
-  }
-
-  resourceFiles['publish-content.config.js'] = `\
-/*
- * Generated by @fastly/compute-js-static-publish.
- */
-
-// Commented items are defaults, feel free to modify and experiment!
-// See README for a detailed explanation of the configuration options.
-
-/** @type {import('@fastly/compute-js-static-publish').PublishContentConfig} */
-const config = {
-  rootDir: ${JSON.stringify(dotRelative(computeJsDir, rootDir))},
-  // excludeDirs: [ './node_modules' ],
-  // excludeDotFiles: true,
-  // includeWellKnown: true,
-  // assetInclusionTest: (assetKey) => true,
-  // contentCompression: [ 'br', 'gzip' ],
-  // brotliQuality: 11,
-  // contentTypes: [
-  //   { test: /.custom$/, contentType: 'application/x-custom', text: false },
-  // ],
-  
-  // Server settings are saved to storage per collection
-  server: {${publicDirPrefix !== '' ? `
-    publicDirPrefix: ${JSON.stringify(publicDirPrefix)},` : ''}
-    staticItems: ${JSON.stringify(staticItems)},
-    allowedEncodings: [ 'br', 'gzip' ],
-    spaFile: ${JSON.stringify(spaFile)},
-    notFoundPageFile: ${JSON.stringify(notFoundPageFile)}, 
-    autoExt: ${JSON.stringify(autoExt)},
-    autoIndex: ${JSON.stringify(autoIndex)},
-  },
-};
-
-export default config;
-`;
-
-  // src/index.js
-  resourceFiles['./src/index.js'] = /* language=text */ `\
-/// <reference types="@fastly/js-compute" />
-import { env } from 'fastly:env';
-import { PublisherServer } from '@fastly/compute-js-static-publish';
-import rc from '../static-publish.rc.js';
-const publisherServer = PublisherServer.fromStaticPublishRc(rc);
-
-// eslint-disable-next-line no-restricted-globals
-addEventListener("fetch", (event) => event.respondWith(handleRequest(event)));
-async function handleRequest(event) {
-
-  console.log('FASTLY_SERVICE_VERSION', env('FASTLY_SERVICE_VERSION'));
-
-  const request = event.request;
-
-  const response = await publisherServer.serveRequest(request);
-  if (response != null) {
-    return response;
-  }
-
-  // Do custom things here!
-  // Handle API requests, serve non-static responses, etc.
-
-  return new Response('Not found', { status: 404 });
-}
-`;
+  });
 
   // Write out the files
   for (const [filename, content] of Object.entries(resourceFiles)) {

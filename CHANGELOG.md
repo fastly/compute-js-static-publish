@@ -9,6 +9,15 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 
 ## [unreleased]
 
+### Added
+
+- `--project-dir`: run a command for the app in another directory, for example from the root of the repo in CI. All relative paths are then relative to that directory.
+- `--version`: print the version of this package. It works in any directory.
+- Template hooks: the `package.json` of a scaffolded app has `prebuild`, `postbuild`, and `postinstall` scripts. Each runs `scripts/template_<name>.js` of the app if that file exists, and otherwise does nothing.
+- `scaffold` writes `generatedFrom` into `static-publish.rc.js`: the template, the version of this package, and the date.
+- `scaffold --default-collection-name`: the collection to serve when no collection is selected. The default is `live`, as before.
+- `scaffold --template`: the template of the app's code. `plain`, the default, is the only template.
+
 ### Changed
 
 - `publish-content` now logs a line for each file and each upload only with `--verbose`. Without it, the command logs the progress after each 1,000 files or uploads.
@@ -18,6 +27,10 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 ### Fixed
 
 - Scaffolder: if the file of `--spa` or `--not-found-page` does not exist or is not under `--root-dir`, the scaffolder stops with an error. It no longer shows a warning and makes an app without the page. The examples in `--help` are now paths from the current directory, such as `./public/404.html`.
+
+### Fixed
+
+- `scaffold` now escapes the values that it writes into `fastly.toml`. Before, a `"` or a `\` in `--name`, `--description`, or `--author`, or a KV Store name with a character such as `.`, gave a `fastly.toml` that was not valid.
 
 ## [8.0.0] - 2026-10-27
 
