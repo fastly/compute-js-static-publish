@@ -887,8 +887,8 @@ npx @fastly/compute-js-static-publish@latest \
 - `--publish-id`: Optional key prefix for KV entries (default: `'default'`).
 - `--public-dir`: **Deprecated.** A future version will remove it. Public files base directory, under `--root-dir` (default: same as `--root-dir`). Files that are under `--root-dir` but not under `--public-dir` are published, but requests cannot get them.
 - `--static-dir`: One or more directories to serve with long cache TTLs.
-- `--spa`: SPA fallback file path (e.g., `./public/spa.html`).
-- `--not-found-page`: 404 fallback file path (e.g., `./public/404.html`).
+- `--spa`: SPA fallback file path, from the current directory (e.g., `./public/spa.html`). The file must exist under `--root-dir`.
+- `--not-found-page`: 404 fallback file path, from the current directory (e.g., `./public/404.html`). The file must exist under `--root-dir`. If you do not set it, the scaffolder uses `404.html` in `--root-dir` if that file exists.
 - `--auto-index`: List of filenames to use as index files.
 - `--auto-ext`: Extensions to try when resolving URLs.
 
