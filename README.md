@@ -376,6 +376,7 @@ You can overwrite or republish any collection at any time. Old file hashes will 
 Collections can expire automatically:
 
 - Expired collections are ignored by the server and return 404s
+- A request for a collection other than the default collection that is expired or not published gets a plain-text 404 that names the collection. The response cache does not store it, so the collection is served as soon as you publish it. If the default collection is not published, the server returns a 500.
 - The default collection never expires
 - Expiration limits can be modified (shortened, extended, reenstated) using `collections update-expiration` 
 - They are cleaned up by `clean --delete-expired-collections`
@@ -901,8 +902,8 @@ npx @fastly/compute-js-static-publish@latest \
 - `--publish-id`: Optional key prefix for KV entries (default: `'default'`).
 - `--public-dir`: **Deprecated.** A future version will remove it. Public files base directory, under `--root-dir` (default: same as `--root-dir`). Files that are under `--root-dir` but not under `--public-dir` are published, but requests cannot get them.
 - `--static-dir`: One or more directories to serve with long cache TTLs.
-- `--spa`: SPA fallback file path (e.g., `./public/spa.html`).
-- `--not-found-page`: 404 fallback file path (e.g., `./public/404.html`).
+- `--spa`: SPA fallback file path, from the current directory (e.g., `./public/spa.html`). The file must exist under `--root-dir`.
+- `--not-found-page`: 404 fallback file path, from the current directory (e.g., `./public/404.html`). The file must exist under `--root-dir`. If you do not set it, the scaffolder uses `404.html` in `--root-dir` if that file exists.
 - `--auto-index`: List of filenames to use as index files.
 - `--auto-ext`: Extensions to try when resolving URLs.
 

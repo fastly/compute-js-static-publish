@@ -13,6 +13,11 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 
 - `publish-content` now logs a line for each file and each upload only with `--verbose`. Without it, the command logs the progress after each 1,000 files or uploads.
 - The README and the scaffolder's closing message tell you to set `FASTLY_API_TOKEN` for `fastly:publish`, and for `s3:publish` after the deploy. The CLI does not read the token of the Fastly CLI profile.
+- `PublisherServer`: a request for a collection other than the default collection that is not published or that expired gets a plain-text 404 that names the collection. The response cache does not store this response. In 8.0.0, a collection that was not published got a 500 "Settings not found", and an expired collection was passed to the app's own handler (`serveRequest()` returned `null`).
+
+### Fixed
+
+- Scaffolder: if the file of `--spa` or `--not-found-page` does not exist or is not under `--root-dir`, the scaffolder stops with an error. It no longer shows a warning and makes an app without the page. The examples in `--help` are now paths from the current directory, such as `./public/404.html`.
 
 ## [8.0.0] - 2026-10-27
 

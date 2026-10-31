@@ -159,6 +159,46 @@ describe('local mode with a collection that requires an unsupported feature', { 
   });
 });
 
+// A request can select a collection that is not published, for example a
+// preview with a wrong name. The server gives a 404 and does not cache it.
+describe('local mode with a collection that is not published', { skip: skipUnlessFastlyCli() }, () => {
+  let dir;
+  let computeJsDir;
+  let server;
+
+  before(async () => {
+    dir = makeTempDir('local-missing');
+    writeFixtureContent(path.resolve(dir, 'public'));
+    computeJsDir = scaffoldApp(dir, [ '--kv-store-name', 'e2e-content' ]);
+    writeTestAppIndex(computeJsDir, { activeCollectionName: 'missing' });
+    runCli([ 'publish-content', '--local' ], { cwd: computeJsDir });
+    server = await startServe(computeJsDir);
+  });
+
+  after(async () => {
+    await server?.stop();
+    if (dir != null) {
+      removeDir(dir);
+    }
+  });
+
+  test('gives a 404 that names the collection', async () => {
+    const res = await rawRequest(server.baseUrl + '/', { headers: { accept: 'text/html' } });
+    assert.equal(res.status, 404);
+    assert.match(res.body.toString(), /Collection 'missing' is not available/);
+    assert.equal(res.headers['cache-control'], 'no-store');
+    assert.equal(res.headers['x-content-type-options'], 'nosniff');
+  });
+
+  test('the response cache does not store the 404', async () => {
+    const headers = { 'x-use-cache': '1', 'x-server-timing': '1' };
+    await rawRequest(server.baseUrl + '/', { headers });
+    const second = await rawRequest(server.baseUrl + '/', { headers });
+    assert.equal(second.status, 404);
+    assert.doesNotMatch(second.headers['server-timing'] ?? '', /\bcache;dur=[\d.]+;desc="hit/);
+  });
+});
+
 // Storage can return a body that does not have the size in its metadata, for
 // example a KV Store entry whose metadata reached the POP before its body. The
 // server must not serve or cache such a body as a complete response.
