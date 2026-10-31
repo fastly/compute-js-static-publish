@@ -104,6 +104,12 @@ npm run fastly:publish
 
 This command uploads your static files to the KV Store and applies the server config.  Your website is now up and live!
 
+`fastly:publish` needs a Fastly API token that can write to the KV Store. Set the `FASTLY_API_TOKEN` environment variable, or add `-- --fastly-api-token=<token>`. The command does not read the token of your Fastly CLI profile. If you are logged in with the Fastly CLI, you can give it that token:
+
+```sh
+FASTLY_API_TOKEN=$(npx fastly auth token) npm run fastly:publish
+```
+
 ### 🎁 Using S3 Compatible Storage (Beta)
 
 #### 1. Scaffold a Compute App
@@ -515,6 +521,12 @@ Once deployed, publish content like so:
 npm run fastly:publish
 ```
 
+`fastly:publish` needs a Fastly API token that can write to the KV Store. Set the `FASTLY_API_TOKEN` environment variable, or add `-- --fastly-api-token=<token>`. The command does not read the token of your Fastly CLI profile. If you are logged in with the Fastly CLI, you can give it that token:
+
+```sh
+FASTLY_API_TOKEN=$(npx fastly auth token) npm run fastly:publish
+```
+
 This:
 
 - Uses the default collection name
@@ -585,6 +597,8 @@ Once deployed, publish content like so:
 ```sh
 npm run s3:publish
 ```
+
+After the deploy, `fastly.toml` has the service ID, so `s3:publish` also purges the service's cache. For this purge, set `FASTLY_API_TOKEN` (or add `-- --fastly-api-token=<token>`) in addition to the S3 credentials. Without it, `s3:publish` stops with an error before it uploads files.
 
 This:
 
