@@ -87,6 +87,8 @@ export function loadPurgeTarget(params: LoadPurgeTargetParams): PurgeTarget | nu
 
 // The result of one purge. A staging purge gets 404 ("Cannot find service")
 // when the service has no staged version. Then there is nothing to purge.
+// The API gives the same 404 for a service ID that is not correct, so the
+// message names both causes.
 export type PurgeOutcome =
   | { result: 'purged' }
   | { result: 'not-staged' }
@@ -142,7 +144,7 @@ export async function purgeCollection(purgeTarget: PurgeTarget, publishId: strin
       console.log('Purged');
       break;
     case 'not-staged':
-      console.log(`Nothing to purge (${environment}): the service has no staged version.`);
+      console.log(`Nothing purged (${environment}): the service has no staged version, or the service ID is not correct.`);
       break;
     case 'failed':
       console.warn(`⚠️ Warning: Failed purging (${environment}): ${outcome.reason}. Cached copies may be served until they expire.`);

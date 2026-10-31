@@ -244,7 +244,7 @@ describe('purgeCollection', () => {
     assert.match(warn.mock.calls[0].arguments.join(' '), /: 400 <html>x{194}\. Cached copies/);
   });
 
-  test('a staging purge that gets 404 means that no version is staged, and is not a warning', async (t) => {
+  test('a staging purge that gets 404 is not a warning, and the message names both causes', async (t) => {
     const messages = mockConsoleLog(t);
     const warn = t.mock.method(console, 'warn', () => {});
     t.mock.method(globalThis, 'fetch', async (request) =>
@@ -256,7 +256,7 @@ describe('purgeCollection', () => {
       'Purging surrogate key [site-preview] on service [service] (production)...',
       'Purged',
       'Purging surrogate key [site-preview] on service [service] (staging)...',
-      'Nothing to purge (staging): the service has no staged version.',
+      'Nothing purged (staging): the service has no staged version, or the service ID is not correct.',
     ]);
     assert.equal(warn.mock.calls.length, 0);
   });
