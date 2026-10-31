@@ -63,6 +63,7 @@ The `plain` template has no collection selection yet. Part 2 adds it.
 - 2.4 **`resolveCollection()`**, one function for all templates, and **`previewUrl()`**, which gives the link for a collection.
 - 2.5 **`collectionSelection`** in `static-publish.rc.js`: select a collection by a hostname, a path, a query parameter, a cookie, or a header, with settings in place of code. `allow`, `sticky`, `onMissing`. Responses from previews get `noindex` and `Cache-Control: private`.
 - 2.6 **Connect it to the `plain` template**, plus the `scaffold` flags. The scaffolded app supports previews with no code.
+- 2.7 **The end of a preview.** In 8.0.0, nothing removes a preview when its branch or PR closes: `--expires-in` stops serving it, but its index stays in storage until `clean --delete-expired-collections`, and its files stay until `clean`. The README has no CI example for it. Add a CI example that, when a PR closes, runs `collections delete` for its preview, and then `clean` (see [`clean` while a publish runs](../README.md#separate-from-the-six-parts-80x-or-81) for when `clean` is safe). Decide while building: only docs, or also a command or a flag that does both steps.
 
 The `collectionSelector` helpers and custom selectors continue to work, for customers who need a rule that the config does not have.
 
