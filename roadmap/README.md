@@ -50,6 +50,11 @@ The parts, their tasks, and the order of the PRs are in [v8.1/README.md](v8.1/RE
 
 These do not depend on the six parts. Each can be a separate PR to `main`, in a patch release or in 8.1.
 
+- **`clean` while a publish runs.** `publish-content` lists the `_files_` keys that are in storage, uploads only the files that are not there, and writes the index at the end. `clean` deletes each `_files_` key that no index refers to. If `clean` runs during a publish, two things can occur:
+   - `clean` deletes files that the publish uploaded, because the new index is not written yet.
+   - `clean` deletes a file that no index used, but that the publish found in its list and did not upload again. The new index then refers to a file that does not exist.
+
+   In both cases, the published collection has files that the server cannot find. A CI job that runs `clean` on a schedule, and a job for each PR that publishes a preview, can easily run at the same time. Possible fixes, to decide while building: a warning in the README and in `clean --help` (do not run `clean` while a publish can run; in GitHub Actions, put both jobs in the same `concurrency` group); `clean` keeps the files that were uploaded in the last N minutes (S3 has `LastModified`; the KV Store has no time, so the metadata would need one); or a lock entry in storage.
 - **Remove the Beta label of S3-compatible storage** in 8.1: in `README.md`, `README.short.md`, `MIGRATING.md`, the CLI help text, the CLI log messages, and the code comments.
 - **Retry an empty body** (follow-up to #116 and #52). If storage returns an empty body for a file whose size is not 0, `checkBodyLength()` throws before the response starts, and the client gets a `500`. Instead, the server could read the entry again for the same request. First, collect data from the log message `expected N bytes, got 0` to find how frequently this occurs.
 - **Run only the end-to-end tests that use real services.** Each `describe` in `test/e2e` skips with `skipUnlessFastlyCli()` or `skipUnlessEnv()`. Thus, with credentials, the local tests always run too. Idea: an environment variable such as `CJSP_TEST_SKIP_LOCAL=1` in `test/e2e/helpers.js`.
