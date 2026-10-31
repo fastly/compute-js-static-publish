@@ -370,6 +370,7 @@ You can overwrite or republish any collection at any time. Old file hashes will 
 Collections can expire automatically:
 
 - Expired collections are ignored by the server and return 404s
+- A request for a collection other than the default collection that is expired or not published gets a plain-text 404 that names the collection. The response cache does not store it, so the collection is served as soon as you publish it. If the default collection is not published, the server returns a 500.
 - The default collection never expires
 - Expiration limits can be modified (shortened, extended, reenstated) using `collections update-expiration` 
 - They are cleaned up by `clean --delete-expired-collections`

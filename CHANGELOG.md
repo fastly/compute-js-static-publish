@@ -12,6 +12,7 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 ### Changed
 
 - `publish-content` now logs a line for each file and each upload only with `--verbose`. Without it, the command logs the progress after each 1,000 files or uploads.
+- `PublisherServer`: a request for a collection other than the default collection that is not published or that expired gets a plain-text 404 that names the collection. The response cache does not store this response. In 8.0.0, a collection that was not published got a 500 "Settings not found", and an expired collection was passed to the app's own handler (`serveRequest()` returned `null`).
 
 ### Fixed
 
