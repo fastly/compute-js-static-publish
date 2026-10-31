@@ -80,9 +80,10 @@ All collections share the files, because the key is the hash of the content. `cl
 
 ## Branches and releases
 
-- `main` is the v8 line (the latest stable major), and the default branch. Its ruleset ("Require CODEOWNERS Review") applies to the default branch. Thus each PR to `main` needs an approval. Fixes and features for v8 go to `main`.
+- `main` is the v8 line (the latest stable major), and the default branch. Its ruleset ("Require CODEOWNERS Review") applies to the default branch. Thus each PR to `main` needs an approval. Fixes for v8 go to `main`. Features go to `main` too, but the parts of 8.1 go to `dev/8.1` (see below).
 - Older major versions have their own branches (`v6`, `v7`, ...). Fixes for v7 go to the `v7` branch. There is no `v8` branch. Make it from `main` when the next major merges into `main`.
-- The next major (for example `v9`) gets a development branch. Merge PRs to it without approval. Tag its betas on that branch, after a version change commit on that branch. Merge `main` into it often. The final review is the PR that merges it into `main`. Do not make it the default branch, or each PR to it needs an approval.
+- The next major (for example `v9`), or a large minor version (for example 8.1, with the branch `dev/8.1`), gets a development branch. The ruleset does not apply to it, so GitHub does not require an approval for a PR to it. Tag its betas on that branch, after a version change commit on that branch. Merge `main` into it often (merge, not rebase), for example after each patch release. The final review is the PR that merges it into `main`. Do not make it the default branch, or each PR to it needs an approval.
+- 8.1 is in development on `dev/8.1`. The parts of 8.1 are PRs to `dev/8.1`, and each one is reviewed before it is merged (see `roadmap/`). Fixes for 8.0 go to `main`.
 - There is no `beta` branch. The npm dist-tag comes from the tag name.
 - The `release-and-port` skill has the release workflow details and the procedure to port changes between `v7` and `main`.
 - Record changes that users can see in `CHANGELOG.md`, under `[unreleased]` (Keep a Changelog format). `MIGRATING.md` has the instructions to upgrade to a new major version.

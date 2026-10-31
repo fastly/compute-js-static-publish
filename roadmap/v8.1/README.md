@@ -1,6 +1,6 @@
 # 8.1: the six parts
 
-8.1 has six parts: templates, previews, managed mode, hidden files, CI support, and Hono. Each part is one PR to `main`, in this order. The details of each part are in [design.md](design.md), and its tests in [tests.md](tests.md).
+8.1 has six parts: templates, previews, managed mode, hidden files, CI support, and Hono. Each part is one PR to the development branch `dev/8.1`, in this order. At the end, one PR merges `dev/8.1` into `main`. The details of each part are in [design.md](design.md), and its tests in [tests.md](tests.md).
 
 In these files, a **customer** is a developer who uses this package. A **visitor** is a person who opens the customer's site.
 

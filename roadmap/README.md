@@ -4,7 +4,7 @@ This folder has the plan for the next minor release, 8.1: the parts and their PR
 
 ## 8.1.0
 
-8.1 has six parts. Each part is one PR to `main`, and each PR is reviewed.
+8.1 has six parts. Each part is one PR to the development branch `dev/8.1`, and each PR is reviewed. At the end, one PR merges `dev/8.1` into `main`.
 
 | Part | Use case |
 |---|---|
@@ -18,7 +18,7 @@ This folder has the plan for the next minor release, 8.1: the parts and their PR
 The parts, their tasks, and the order of the PRs are in [v8.1/README.md](v8.1/README.md).
 
 - All of it is an addition. Existing projects work as before.
-- Betas (`8.1.0-beta.N`) come on the way.
+- Betas (`8.1.0-beta.N`) come on the way. They are tagged on `dev/8.1`.
 
 ## Terms
 
