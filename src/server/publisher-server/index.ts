@@ -132,6 +132,9 @@ export class PublisherServer {
   // Cached index
   assetEntryMapCache: AssetEntryMap | null | undefined;
 
+  // When true, serveCached() does not store the response of the current request.
+  doNotStoreResponse: boolean = false;
+
   // null selects the default collection. A sandbox can be reused for more than
   // one request, so call this for each request, also when no collection is
   // selected. Otherwise, the collection of the previous request stays active.
@@ -168,6 +171,7 @@ export class PublisherServer {
   beginRequest(request: Request) {
     this.settingsCached = undefined;
     this.assetEntryMapCache = undefined;
+    this.doNotStoreResponse = false;
     const header = this.serverTimingRequestHeader;
     this.serverTiming = header != null && request.headers.has(header) ? new ServerTiming() : null;
   }
@@ -594,6 +598,11 @@ export class PublisherServer {
       throw err;
     }
 
+    if (this.doNotStoreResponse) {
+      entry.cancel();
+      return response;
+    }
+
     const insertOptions = {
       // The Core Cache takes maxAge in milliseconds. ResponseCacheOptions.maxAge is in seconds.
       maxAge: this.responseCache.maxAge * 1000,
@@ -710,13 +719,34 @@ export class PublisherServer {
   private async serveRequestFromStorage(request: Request, pathname: string): Promise<Response | null> {
 
     const serverConfig = await this.getServerConfig();
-    if (serverConfig == null) {
+    if (serverConfig == null && this.activeCollectionName === this.defaultCollectionName) {
       return new Response(
         `Settings not found. You may need to publish your application.`,
         {
           status: 500,
           headers: {
             'content-type': 'text/plain',
+          },
+        },
+      );
+    }
+
+    // A collection other than the default collection that is not published, or
+    // that expired, gets a 404. It can be published at any time, so the
+    // response cache does not store this response.
+    if (
+      serverConfig == null ||
+      (this.activeCollectionName !== this.defaultCollectionName && await this.getAssetEntryMap() == null)
+    ) {
+      this.doNotStoreResponse = true;
+      return new Response(
+        `Collection '${this.activeCollectionName}' is not available. It is not published, or it expired.`,
+        {
+          status: 404,
+          headers: {
+            'content-type': 'text/plain',
+            'x-content-type-options': 'nosniff',
+            'cache-control': 'no-store',
           },
         },
       );
