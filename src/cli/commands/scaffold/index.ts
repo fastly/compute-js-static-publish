@@ -58,8 +58,9 @@ Compute Service Metadata:
 Server Config:
   --public-dir <path>                   Deprecated. Base dir for content (default: root-dir)
   --static-dir <path>,<path...>         Directory served with long TTL (can repeat)
-  --spa <file>                          SPA fallback file (e.g., /index.html)
-  --not-found-page <file>               404 fallback file (e.g., /404.html)
+  --spa <file>                          SPA fallback file, under --root-dir (e.g., ./public/index.html)
+  --not-found-page <file>               404 fallback file, under --root-dir (e.g., ./public/404.html)
+                                        (default: 404.html in --root-dir, if the file exists)
   --auto-index <name>,<name...>         Index filename (e.g., index.html,index.htm)
   --auto-ext <ext>,<ext...>             Automatic extensions (e.g., .html,.htm)
 
@@ -98,7 +99,7 @@ const defaultOptions: InitAppOptions = {
   staticDirs: [],
   staticPublisherWorkingDir: undefined,
   spa: undefined,
-  notFoundPage: '[public-dir]/404.html',
+  notFoundPage: undefined,
   autoIndex: [ 'index.html', 'index.htm' ],
   autoExt: [ '.html', '.htm' ],
   author: 'you@example.com',
@@ -612,13 +613,17 @@ export async function action(actionArgs: string[]) {
     spaFilename = processPublicDirToken(SPA, publicDir);
     // At any rate it must exist under the root directory
     if (!spaFilename.startsWith(rootDir)) {
-      console.log(`⚠️ Ignoring specified SPA file '${SPA}' as is not under the asset root directory.`);
-      console.log(`  * ${rootRelative(spaFilename)} is not under ${rootRelative(rootDir)}`);
-      spaFilename = undefined;
-    } else if (!fs.existsSync(spaFilename)) {
-      console.log(`⚠️ Warning: Ignoring specified SPA file '${SPA}' does not exist.`);
-      console.log(`  * ${rootRelative(spaFilename)} does not exist.`);
-      spaFilename = undefined;
+      console.error(`❌ Specified SPA file '${SPA}' is not under the asset root directory.`);
+      console.error(`  * ${rootRelative(spaFilename)} must be under ${rootRelative(rootDir)}`);
+      console.error(`  Give the path from the current directory, for example ${rootRelative(rootDir)}/index.html.`);
+      process.exitCode = 1;
+      return;
+    }
+    if (!fs.existsSync(spaFilename)) {
+      console.error(`❌ Specified SPA file '${SPA}' does not exist.`);
+      console.error(`  * ${rootRelative(spaFilename)} does not exist.`);
+      process.exitCode = 1;
+      return;
     }
   }
 
@@ -629,13 +634,23 @@ export async function action(actionArgs: string[]) {
     notFoundPageFilename = processPublicDirToken(NOT_FOUND_PAGE, publicDir);
     // At any rate it must exist under the root directory
     if (!notFoundPageFilename.startsWith(rootDir)) {
-      console.log(`⚠️ Ignoring specified Not Found file '${NOT_FOUND_PAGE}' as is not under the asset root directory.`);
-      console.log(`  * ${rootRelative(notFoundPageFilename)} is not under ${rootRelative(rootDir)}`);
-      notFoundPageFilename = undefined;
-    } else if (!fs.existsSync(notFoundPageFilename)) {
-      console.log(`⚠️ Warning: Ignoring specified Not Found file '${NOT_FOUND_PAGE}' as it does not exist.`);
-      console.log(`  * ${rootRelative(notFoundPageFilename)} does not exist.`);
-      notFoundPageFilename = undefined;
+      console.error(`❌ Specified Not Found file '${NOT_FOUND_PAGE}' is not under the asset root directory.`);
+      console.error(`  * ${rootRelative(notFoundPageFilename)} must be under ${rootRelative(rootDir)}`);
+      console.error(`  Give the path from the current directory, for example ${rootRelative(rootDir)}/404.html.`);
+      process.exitCode = 1;
+      return;
+    }
+    if (!fs.existsSync(notFoundPageFilename)) {
+      console.error(`❌ Specified Not Found file '${NOT_FOUND_PAGE}' does not exist.`);
+      console.error(`  * ${rootRelative(notFoundPageFilename)} does not exist.`);
+      process.exitCode = 1;
+      return;
+    }
+  } else {
+    // Without --not-found-page, use 404.html in the public directory if it exists.
+    const defaultNotFoundPageFilename = processPublicDirToken('[public-dir]/404.html', publicDir);
+    if (fs.existsSync(defaultNotFoundPageFilename)) {
+      notFoundPageFilename = defaultNotFoundPageFilename;
     }
   }
 
