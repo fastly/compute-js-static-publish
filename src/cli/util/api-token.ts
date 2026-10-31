@@ -57,12 +57,15 @@ const RETRYABLE_STATUS_CODES = [
 ];
 
 export class FetchError extends Error {
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, detail?: string) {
     super(message);
     this.name = 'FetchError';
     this.status = status;
+    this.detail = detail;
   }
   status: number;
+  // The error that the API gives in the response body, if any.
+  detail?: string;
 }
 
 function isReadableStream(data: unknown): data is ReadableStream {
@@ -110,11 +113,45 @@ export async function callFastlyApi(
     }
   }
   if (!response.ok) {
+    const detail = await readApiErrorDetail(response);
+    const status = `${response.status}${detail != null ? ` ${detail}` : ''}`;
     if (!RETRYABLE_STATUS_CODES.includes(response.status)) {
-      throw new FetchError(`${operationName} failed: ${response.status}`, response.status);
+      throw new FetchError(`${operationName} failed: ${status}`, response.status, detail);
     }
-    throw makeRetryable(new FetchError(`Retryable ${operationName} error: ${response.status}`, response.status));
+    throw makeRetryable(new FetchError(`Retryable ${operationName} error: ${status}`, response.status, detail));
   }
   return response;
 
+}
+
+// The Content-Type of an error response tells which fields describe the error:
+// - application/json: the Fastly API fields msg and detail, for example
+//   {"msg":"Record not found","detail":"Cannot find service"}.
+// - application/problem+json (RFC 9457): the fields title and detail.
+// - Other types, or JSON that is not valid: the start of the text.
+async function readApiErrorDetail(response: Response): Promise<string | undefined> {
+  let text;
+  try {
+    text = (await response.text()).trim();
+  } catch {
+    return undefined;
+  }
+  const mediaType = response.headers.get('content-type')?.split(';')[0].trim().toLowerCase();
+  const fields =
+    mediaType === 'application/json' ? [ 'msg', 'detail' ] :
+    mediaType === 'application/problem+json' ? [ 'title', 'detail' ] :
+    null;
+  if (fields != null) {
+    let json;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      json = undefined;
+    }
+    if (json !== undefined) {
+      const parts = fields.map(field => json?.[field]).filter(x => typeof x === 'string' && x !== '');
+      return parts.length > 0 ? parts.join(': ') : undefined;
+    }
+  }
+  return text !== '' ? text.slice(0, 200) : undefined;
 }
