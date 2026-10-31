@@ -1,3 +1,4 @@
 /build/
 /node_modules/
+/DOCUMENTATION.md
 /test/.env
