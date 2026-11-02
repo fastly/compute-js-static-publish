@@ -18,6 +18,8 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 ### Fixed
 
 - Scaffolder: if the file of `--spa` or `--not-found-page` does not exist or is not under `--root-dir`, the scaffolder stops with an error. It no longer shows a warning and makes an app without the page. The examples in `--help` are now paths from the current directory, such as `./public/404.html`.
+- `publish-content` and `collections delete`: a purge of `staging` for a service with no staged version showed "Failed purging (staging)". The API gives `404` in this case, because there is nothing to purge. Now the command shows a message that the service has no staged version or that the service ID is not correct, and no warning. The API gives the same `404` for both causes.
+- A failed purge, and other failed calls to the Fastly API, now show the error that the API gives, for example `404 Record not found: Cannot find service`. Before, the warning of a failed purge did not show the reason.
 
 ## [8.0.0] - 2026-10-27
 
