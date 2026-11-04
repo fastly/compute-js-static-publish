@@ -49,3 +49,9 @@ export function setUpOutput(options: { nonInteractive: boolean, secrets: string[
     };
   }
 }
+
+// Show an error for the customer, and make the command fail.
+export function fail(message: string) {
+  console.error(`❌ ${message}`);
+  process.exitCode = 1;
+}

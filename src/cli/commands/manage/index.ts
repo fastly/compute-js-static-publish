@@ -5,7 +5,10 @@
 
 import { getCommandAndArgs } from '../../util/args.js';
 import * as cleanCommand from './clean.js';
+import * as deployCommand from './deploy.js';
 import * as devCommand from './dev.js';
+import * as statusCommand from './status.js';
+import * as upgradeCommand from './upgrade.js';
 import * as publishContentCommand from './publish-content.js';
 import * as collectionsCommands from './collections/index.js';
 
@@ -28,6 +31,9 @@ Available Commands:
   collections promote              Copy a collection to another name
   collections update-expiration    Modify expiration time for an existing collection
   dev                              Run the app of a managed project locally
+  status                           Show the state of the app, and if a deploy is necessary
+  deploy                           Deploy the app of a managed project, if it changed
+  upgrade                          Move a managed project to the version of this CLI
 
 KV Store Options:
   --local                          Instead of working with the Fastly KV Store, operate on
@@ -71,7 +77,10 @@ export async function action(actionArgs: string[]) {
 
   const modes = {
     'clean': cleanCommand,
+    'deploy': deployCommand,
     'dev': devCommand,
+    'status': statusCommand,
+    'upgrade': upgradeCommand,
     'publish-content': publishContentCommand,
     'collections': collectionsCommands,
   };
