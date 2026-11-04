@@ -54,8 +54,8 @@ describe('CookieCollectionSelector redirectTo', () => {
 });
 
 describe('CookieCollectionSelector collection value', () => {
-  test('sets the cookie for a valid value, also an older name with "_"', () => {
-    for (const name of [ 'pr-42', 'feature_x', 'Live' ]) {
+  test('sets the cookie for a valid collection name', () => {
+    for (const name of [ 'pr-42', 'live', 'a' ]) {
       const response = activate(`collection=${encodeURIComponent(name)}`);
       assert.equal(response.status, 302, name);
       assert.match(response.headers.get('Set-Cookie'), new RegExp(`^publisher-collection=${name};`), name);
@@ -67,6 +67,14 @@ describe('CookieCollectionSelector collection value', () => {
       const response = activate(`collection=${encodeURIComponent(name)}`);
       assert.equal(response.status, 400, JSON.stringify(name));
       assert.equal(response.headers.get('Set-Cookie'), null, JSON.stringify(name));
+    }
+  });
+
+  test('sets no cookie for a value that is not a valid collection name', () => {
+    for (const name of [ 'feature_x', 'Live', '-a', 'a'.repeat(64) ]) {
+      const response = activate(`collection=${encodeURIComponent(name)}`);
+      assert.equal(response.status, 400, name);
+      assert.equal(response.headers.get('Set-Cookie'), null, name);
     }
   });
 });
