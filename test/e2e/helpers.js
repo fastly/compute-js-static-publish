@@ -182,7 +182,7 @@ async function getFreePort() {
 // Starts `fastly compute serve` (this also builds the app). Returns the base
 // URL and a function that stops the server.
 // command(addr) can give another command that starts the server, as
-// [ command, args ], for example npm run dev:watch.
+// [ command, args ], for example npm run dev:watch, or the CLI's dev command.
 export async function startServe(computeJsDir, { env, timeoutMs = 300_000, command } = {}) {
   const port = await getFreePort();
   const [ file, args ] = command != null ?
