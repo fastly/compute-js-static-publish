@@ -25,6 +25,7 @@ import {
   loadAppTemplate,
 } from './app-template.js';
 import { generateApp } from './generate-app.js';
+import { COLLECTION_NAME_RULE, isValidCollectionName } from '../../../models/collections/index.js';
 
 function help() {
   console.log(`\
@@ -782,8 +783,9 @@ export async function action(actionArgs: string[]) {
   }
 
   const defaultCollectionName = options.defaultCollectionName ?? 'live';
-  if (defaultCollectionName === '') {
-    console.error("❌ parameter --default-collection-name must not be empty.");
+  if (!isValidCollectionName(defaultCollectionName)) {
+    console.error(`❌ parameter --default-collection-name is not a valid collection name: '${defaultCollectionName}'.`);
+    console.error(`  * ${COLLECTION_NAME_RULE}`);
     process.exitCode = 1;
     return;
   }
