@@ -14,10 +14,19 @@ export type PackageJson = {
   devDependencies?: Record<string, string>,
 };
 
+// The package dir of the copy of this package that runs.
+export function getOwnPackageDir(): string {
+  return path.resolve(import.meta.dirname, '../../../..');
+}
+
+// The package.json of the copy of this package that runs.
+export function readOwnPackageJson(): Record<string, any> {
+  return JSON.parse(fs.readFileSync(path.resolve(getOwnPackageDir(), 'package.json'), 'utf-8'));
+}
+
 // The version of this package, from the package.json of the copy that runs.
 export function getOwnVersion(): string {
-  const packageJsonPath = path.resolve(import.meta.dirname, '../../../../package.json');
-  return JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8')).version;
+  return readOwnPackageJson().version;
 }
 
 export function findComputeJsStaticPublisherVersion(packageJson: PackageJson | null) {
