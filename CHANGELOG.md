@@ -40,6 +40,7 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
    - `collectionSelector.fromCookie()`: the activate path returns `400` for a name that breaks the rule, and sets no cookie. Before, it returned `400` only for a name with characters that a cookie value cannot have.
 - `PublisherServer` keeps the state of each request (the settings, the index, and the `Server-Timing` measurements) in a scope for that request and collection. A reused sandbox does not keep this state from one request to the next. A second call for the same request (for example `beginRequest()` and then `serveRequest()`) does not read the index again.
 - README: a GitHub Actions example that publishes a preview for each pull request, and deletes it when the pull request closes. The README and `clean --help` say not to run `clean` while `publish-content` can run for the same storage.
+- `staticPublisherWorkingDir` in `static-publish.rc.js` can be a path outside the directory of the file, for example `../static-publisher`. It must start with `./` or `../`, and it must not be the directory of `static-publish.rc.js` or a directory above it (for example `./`, `..`, or `../..`). Before, the value had to start with `./`. A value that breaks the rule stops the command before it writes anything.
 
 ### Deprecated
 
