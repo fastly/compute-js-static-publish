@@ -18,9 +18,21 @@ export type AppTemplate = {
   // From the template's package.json.
   dependencies: Record<string, string>,
   devDependencies: Record<string, string>,
+  supports: AppTemplateSupports,
 };
 
-export const APP_TEMPLATE_NAMES = [ 'plain' ];
+// The features that the code of a template uses.
+export type AppTemplateSupports = {
+  // src/index.js calls resolveCollection(), so collectionSelection in the rc works.
+  collectionSelection?: boolean,
+};
+
+// The templates in resources/templates/, and what each one supports.
+const APP_TEMPLATES: Record<string, AppTemplateSupports> = {
+  plain: { collectionSelection: true },
+};
+
+export const APP_TEMPLATE_NAMES = Object.keys(APP_TEMPLATES);
 
 export const DEFAULT_APP_TEMPLATE_NAME = 'plain';
 
@@ -63,5 +75,6 @@ export function loadAppTemplate(name: string): AppTemplate {
     files,
     dependencies: packageJson.dependencies ?? {},
     devDependencies: packageJson.devDependencies ?? {},
+    supports: APP_TEMPLATES[name],
   };
 }

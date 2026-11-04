@@ -12,7 +12,17 @@ async function handleRequest(event) {
 
   const request = event.request;
 
-  const response = await publisherServer.serveRequest(request);
+  // Select the collection with collectionSelection in static-publish.rc.js, for
+  // example for previews. Without it, this selects the default collection.
+  const selection = publisherServer.resolveCollection(request);
+  if (selection.response != null) {
+    return selection.response;
+  }
+
+  const response = await publisherServer.serveRequest(request, {
+    collectionName: selection.collectionName,
+    pathname: selection.pathname,
+  });
   if (response != null) {
     return response;
   }
