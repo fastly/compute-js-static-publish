@@ -523,6 +523,64 @@ previewUrl('pr-42', 'https://example.edgecompute.app', rc.collectionSelection);
 > [!WARNING]
 > A preview is public to anyone who knows its name. Use `allow` to limit the collections that can be selected, and do not publish content that must stay private.
 
+#### A preview for each pull request
+
+A CI job can publish each pull request to its own collection, and remove it when the pull request closes. `--expires-in` stops serving a preview after that time, also if the second job does not run. But its index stays in storage until `clean --delete-expired-collections`, and its files stay until `clean`.
+
+This GitHub Actions workflow publishes the collection `pr-<number>`, and, when the pull request closes, deletes the collection and runs `clean`. It needs the `FASTLY_API_TOKEN` secret (and, for the purge, the `FASTLY_SERVICE_ID` secret).
+
+```yaml
+name: Preview
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+
+# clean must not run while a publish runs, so all jobs that change the same
+# storage use one concurrency group. Use the same group in every workflow that
+# publishes or cleans, for example the workflow that publishes `live`.
+concurrency:
+  group: static-publish-storage
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: compute-js
+    env:
+      FASTLY_API_TOKEN: ${{ secrets.FASTLY_API_TOKEN }}
+      FASTLY_SERVICE_ID: ${{ secrets.FASTLY_SERVICE_ID }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - run: npm ci
+      - run: npx @fastly/compute-js-static-publish publish-content --collection-name=pr-${{ github.event.number }} --expires-in=7d
+
+  remove:
+    if: github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: compute-js
+    env:
+      FASTLY_API_TOKEN: ${{ secrets.FASTLY_API_TOKEN }}
+      FASTLY_SERVICE_ID: ${{ secrets.FASTLY_SERVICE_ID }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - run: npm ci
+      - run: npx @fastly/compute-js-static-publish collections delete --collection-name=pr-${{ github.event.number }}
+      - run: npx @fastly/compute-js-static-publish clean --delete-expired-collections
+```
+
+For a pull request that never published, `collections delete` finds no collection and deletes nothing.
+
 ### 🔀 Selecting a Collection at Runtime
 
 For previews, use [collection selection](#-previews-collection-selection). To select a collection in your own code, the `collectionSelector` module provides helpers to extract a collection name from different parts of a request:
@@ -750,6 +808,9 @@ This removes:
 - Expired collection index files (only if `--delete-expired-collections` is passed)
 - Unused content blobs (no longer referenced)
 - Orphaned server config files
+
+> [!WARNING]
+> Do not run `clean` while `publish-content` can run for the same storage. `publish-content` writes the index of a collection after it uploads the files, so `clean` can delete files that the new index then refers to. In CI, put the jobs that publish and the job that cleans in the same `concurrency` group (see [A preview for each pull request](#a-preview-for-each-pull-request)).
 
 ### 🔍 Dry Run Mode
 
