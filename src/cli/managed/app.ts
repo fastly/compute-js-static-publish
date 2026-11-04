@@ -21,7 +21,8 @@ import { buildManagedLockfile, managedPackageSpec, readTemplateLockfile } from '
 
 // The app config of a managed project, with the lockfile and the `file:` link
 // to the copy of this package that runs the CLI.
-export async function managedAppConfig(projectDir: string, project: StaticPublishProjectNormalized): Promise<AppConfig> {
+// appDir is .static-publish/app, unless eject gives another one.
+export async function managedAppConfig(projectDir: string, project: StaticPublishProjectNormalized, appDirOverride?: string): Promise<AppConfig> {
   const errors: string[] = [];
   const publishContent = normalizePublishContentConfig(project.publishContent, errors);
   if (publishContent == null || errors.length > 0) {
@@ -34,7 +35,7 @@ export async function managedAppConfig(projectDir: string, project: StaticPublis
     s3EndpointUrl = String(new URL(`https://${hostname}/`));
   }
 
-  const appDir = path.resolve(projectDir, MANAGED_APP_DIR);
+  const appDir = appDirOverride ?? path.resolve(projectDir, MANAGED_APP_DIR);
   const cliPackageDir = getOwnPackageDir();
   const templateName = project.managed.template ?? DEFAULT_APP_TEMPLATE_NAME;
   const appConfig = appConfigFromProject(project.rc, publishContent, project.managed, {

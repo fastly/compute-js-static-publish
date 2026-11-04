@@ -9,6 +9,96 @@ This is straightforward if you're using `compute-js-static-publisher` out-of-the
 > This document is under construction.
 > 
 
+## Move an existing app to managed mode (8.1)
+
+You do not have to do this. An ejected app (a `compute-js/` directory with `static-publish.rc.js`) continues to work.
+In managed mode, this package generates the app from one file, `static-publish.project.js`, and you upgrade by
+changing the version of this package. See "Managed and ejected apps" in `README.md`.
+
+> [!IMPORTANT]
+> Managed mode generates the `plain` app. If you changed `src/index.js` (or other files of the app), keep your app
+> ejected, or move your changes into options of the project file first.
+
+These steps move a project with this layout. Change the paths to match your project:
+
+```
+my-site/
+├── public/
+└── compute-js/        ← static-publish.rc.js, publish-content.config.js, fastly.toml, ...
+```
+
+1. In `my-site/`, add this package as a dev dependency at 8.1.0 or later, so that the version is pinned:
+
+   ```sh
+   npm install --save-dev @fastly/compute-js-static-publish
+   ```
+
+2. Make `my-site/static-publish.project.js`. Paths in it are relative to `my-site/`:
+
+   ```js
+   /** @type {import('@fastly/compute-js-static-publish').StaticPublishProject} */
+   const project = {
+     // From compute-js/static-publish.rc.js: the storage fields (kvStore or s3), publishId,
+     // defaultCollectionName, and collectionSelection, if you have it. Do not copy generatedFrom.
+     storageMode: "kv-store",
+     kvStore: { kvStoreName: "site-content" },
+     publishId: "default",
+     defaultCollectionName: "live",
+     // A new working directory beside the project file.
+     staticPublisherWorkingDir: "./static-publisher",
+
+     // The contents of compute-js/publish-content.config.js, with rootDir relative to my-site/
+     // ('../public' becomes './public').
+     publishContent: {
+       rootDir: "./public",
+       server: { /* ... */ },
+     },
+
+     managed: {
+       // From compute-js/fastly.toml: name, description, authors, and service_id.
+       name: "my-site",
+       description: "My site",
+       authors: [ "me@example.com" ],
+       serviceId: "SERVICE_ID",
+       // The version of this package that you installed in step 1.
+       staticPublishVersion: "8.1.0",
+     },
+   };
+
+   export default project;
+   ```
+
+   If the app has no service yet, write the line `    serviceId: undefined,` (exactly), so that the first `deploy`
+   writes the Service ID into it.
+
+3. Add these lines to `my-site/.gitignore`:
+
+   ```
+   /.static-publish/
+   /static-publisher/
+   ```
+
+4. In `my-site/`, check the project, publish to the local KV Store, and run the app:
+
+   ```sh
+   npx compute-js-static-publish status
+   npx compute-js-static-publish publish-content --local
+   npx compute-js-static-publish dev
+   ```
+
+   The CLI uses only the files of the directory where it runs, so `compute-js/` has no effect here.
+
+5. Deploy. The first `deploy` deploys the generated app to the service of `managed.serviceId`, because the active
+   version has no fingerprint yet:
+
+   ```sh
+   FASTLY_API_TOKEN=... npx compute-js-static-publish deploy
+   ```
+
+   The collections in storage do not change. Publish again only to change the content.
+
+6. When the steps above work, take `compute-js/` out of the repo, and commit `static-publish.project.js`.
+
 ## Upgrade from v7 to v8
 
 v8 can use the files that v7 published. The storage key layout did not change. v8 also accepts the v7 format of
