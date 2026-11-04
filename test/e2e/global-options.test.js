@@ -47,6 +47,21 @@ describe('global options', () => {
     assert.match(result.output, /live/);
   });
 
+  test('a token never appears in the output, also when the command fails', () => {
+    const token = 'not-a-real-token-0123456789abcdef';
+    for (const args of [
+      [ 'collections', 'list', `--fastly-api-token=${token}` ],
+      [ 'collections', 'list', '--fastly-api-token', token ],
+    ]) {
+      const result = runCli(args, { cwd: computeJsDir, allowFailure: true });
+      assert.notEqual(result.status, 0, 'the API refuses the token');
+      assert.equal(result.output.includes(token), false, args.join(' '));
+    }
+    const result = runCli([ 'collections', 'list' ], { cwd: computeJsDir, env: { FASTLY_API_TOKEN: token }, allowFailure: true });
+    assert.notEqual(result.status, 0);
+    assert.equal(result.output.includes(token), false, 'FASTLY_API_TOKEN');
+  });
+
   test('--project-dir fails for a directory with no static-publish.rc.js', () => {
     const result = runCli([ 'publish-content', '--local', '--project-dir=./public' ], { cwd: dir, allowFailure: true });
     assert.notEqual(result.status, 0);

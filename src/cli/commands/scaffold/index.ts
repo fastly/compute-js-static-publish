@@ -81,6 +81,7 @@ ${COLLECTION_SELECTION_FLAGS_HELP}
 
 Other:
   --version                             Print the version of this package and exit
+  --non-interactive                     Never ask a question (also on when CI is set)
   --verbose                             Enable verbose output
   -h, --help                            Show help
 `);
