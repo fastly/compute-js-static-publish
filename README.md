@@ -213,6 +213,28 @@ my-project/
         └── index.js                     # Your Compute app entry point
 ```
 
+### Managed projects
+
+`scaffold --managed` writes only one file, `static-publish.project.js`, in the current directory (the project dir), and adds `.static-publish/` and the working directory to the `.gitignore` there:
+
+```
+my-site/
+├── static-publish.project.js            # Commit this: the only config file
+├── public/                              # Your static site files
+├── .gitignore                           # Ignores .static-publish/ and static-publisher/
+└── static-publisher/                    # ⚠️ Do not commit - the working directory
+```
+
+The project file has the settings that an ejected app has in its two files:
+
+- The top level has the fields of `static-publish.rc.js` (`storageMode`, `kvStore` or `s3`, `publishId`, `defaultCollectionName`, `staticPublisherWorkingDir`, `collectionSelection`).
+- `publishContent` has the fields of `publish-content.config.js`. `publish-content --config <file>` replaces it for one run.
+- `managed` has the settings of the generated app (`name`, `description`, `authors`, `serviceId`, and `staticPublishVersion`, the version of this package that the project uses).
+
+Paths in the project file are relative to it. The name of the file marks the mode: a directory with `static-publish.project.js` is a managed project, and a directory with `static-publish.rc.js` is an ejected app. A directory with both is an error.
+
+`publish-content`, `collections`, and `clean` run in the project dir (or with `--project-dir`), and read the project file. `publish-content` purges the service of `managed.serviceId`, after `--fastly-service-id` and `FASTLY_SERVICE_ID`.
+
 ### 🪝 Template hooks
 
 The `package.json` of a scaffolded app has these scripts:
@@ -1115,6 +1137,7 @@ npx @fastly/compute-js-static-publish@latest \
 - `--author`: Author to insert into `fastly.toml`
 - `--service-id`: Optional existing Fastly Compute service ID
 - `--template`: The template of the app's code (default: `plain`). `plain` is the only template.
+- `--managed`: Write only `static-publish.project.js` (a [managed project](#managed-projects)) in the current directory, in place of the app. `--output` is not used.
 
 **Used in building config files:**
 - `--root-dir`: Required. Directory of static site content.
@@ -1150,7 +1173,7 @@ npx @fastly/compute-js-static-publish publish-content \
   --collection-name=staging
 ```
 
-With `--project-dir`, all relative paths are relative to that directory: the paths in `static-publish.rc.js` and `publish-content.config.js`, and also the paths in the other options (for example `--config` and `--root-dir`). The directory must have a `static-publish.rc.js`. To scaffold an app in another directory, use `--output`.
+With `--project-dir`, all relative paths are relative to that directory: the paths in `static-publish.rc.js` and `publish-content.config.js`, and also the paths in the other options (for example `--config` and `--root-dir`). The directory must have a `static-publish.rc.js` (an app) or a `static-publish.project.js` (a [managed project](#managed-projects)). To scaffold an app in another directory, use `--output`.
 
 To print the version of this package, run `npx @fastly/compute-js-static-publish --version`. It works in any directory.
 
