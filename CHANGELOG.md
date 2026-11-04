@@ -32,6 +32,7 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 - Export the types `ServeRequestOptions` and `ServeFallbackOptions`.
 - Managed projects: `scaffold --managed` writes only `static-publish.project.js` in the current directory, and adds `.static-publish/` and the working directory to `.gitignore`. The project file has the fields of `static-publish.rc.js` at the top level, the fields of `publish-content.config.js` in `publishContent`, and the settings of the generated app in `managed`. `publish-content`, `collections`, and `clean` read it. A directory with both `static-publish.project.js` and `static-publish.rc.js` is an error. The type is `StaticPublishProject`.
 - `publish-content` purges the service of `managed.serviceId` in a managed project (after `--fastly-service-id` and `FASTLY_SERVICE_ID`, before `fastly.toml`).
+- Managed projects: the `dev` command generates the app in `.static-publish/app/`, installs it with `npm ci` only when its `package.json` or lockfile changed, and runs `fastly compute serve`. The app uses the lockfile of its template (`resources/templates/<name>/package-lock.json`), and the copy of this package that runs the CLI through a `file:` link.
 
 ### Changed
 
