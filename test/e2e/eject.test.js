@@ -134,7 +134,7 @@ describe('an ejected project keeps working', { skip: skipUnlessFastlyCli() }, ()
     writeFixture(dir);
     runCli([ '--managed', '--root-dir', './public', '--kv-store-name', 'e2e-content' ], { cwd: dir });
     const projectFile = path.resolve(dir, 'static-publish.project.js');
-    fs.writeFileSync(projectFile, fs.readFileSync(projectFile, 'utf-8').replace('    // excludeDotFiles: true,', '    excludeDotFiles: true,'));
+    fs.writeFileSync(projectFile, fs.readFileSync(projectFile, 'utf-8').replace('    // hiddenItems: [],', `    hiddenItems: [ '/cached.html' ],`));
     runCli([ 'publish-content', '--local' ], { cwd: dir });
     runCli([ 'eject' ], { cwd: dir, env: EJECT_ENV });
   });
@@ -152,18 +152,18 @@ describe('an ejected project keeps working', { skip: skipUnlessFastlyCli() }, ()
     assert.match(fs.readFileSync(path.resolve(appDir, 'fastly.toml'), 'utf-8'), /file = "\.\.\/static-publisher\/kvstore\.json"/);
     const config = fs.readFileSync(path.resolve(appDir, 'publish-content.config.js'), 'utf-8');
     assert.match(config, /rootDir: "\.\.\/public"/);
-    assert.match(config, /excludeDotFiles: true/);
+    assert.match(config, /hiddenItems: \["\/cached\.html"\]/);
     assert.doesNotMatch(fs.readFileSync(path.resolve(appDir, '.gitignore'), 'utf-8'), /static-publisher/);
   });
 
   test('publish-content and the app work in the ejected app', async () => {
     const appDir = path.resolve(dir, 'compute-js');
     runCli([ 'publish-content', '--local' ], { cwd: appDir });
-    assert.match(runCli([ 'collections', 'list', '--local' ], { cwd: appDir }).output, /live \*DEFAULT\*/);
+    assert.match(runCli([ 'collections', 'list', '--local' ], { cwd: appDir }).output, /\(1 hidden\)/);
     server = await startServe(appDir);
     const res = await rawRequest(server.baseUrl + '/', { headers: { accept: 'text/html' } });
     assert.match(res.body.toString(), /<h1>Home<\/h1>/);
-    const cached = await rawRequest(server.baseUrl + '/cached.html', { headers: { accept: 'text/html' } });
-    assert.equal(cached.status, 200);
+    const hidden = await rawRequest(server.baseUrl + '/cached.html', { headers: { accept: 'text/html' } });
+    assert.equal(hidden.status, 404, 'a hidden file stays hidden after eject');
   });
 });

@@ -21,7 +21,10 @@ import {
   type AssetEntryMap,
   type AssetVariantMetadata,
   decodeAssetVariantMetadata,
+  findAssetEntry,
+  isHiddenIndexKey,
 } from '../../models/assets/index.js';
+import { parseItemPatterns, testItemPatterns } from '../../models/config/item-patterns.js';
 import {
   type CollectionSelection,
   validateCollectionSelection,
@@ -52,6 +55,14 @@ import {
   streamBytesInPieces,
 } from './response-cache.js';
 import { checkBodyLength } from '../util/body-length.js';
+
+export type GetMatchingAssetOptions = {
+  // Also try autoExt and autoIndex. The default is false.
+  applyAuto?: boolean,
+  // Also find hidden files. serveRequest() never serves a hidden file for a
+  // request path. The default is false.
+  includeHidden?: boolean,
+};
 
 type AssetVariant = {
   storageEntry: StorageEntry,
@@ -352,19 +363,9 @@ export class PublisherServer {
     if (serverConfig == null) {
       return [];
     }
-    return serverConfig.staticItems
-      .map((x, i) => {
-        if (x.startsWith('re:')) {
-          const fragments = x.slice(3).match(/\/(.*?)\/([a-z]*)?$/i);
-          if (fragments == null) {
-            console.warn(`Cannot parse staticItems item index ${i}: '${x}', skipping...`);
-            return '';
-          }
-          return new RegExp(fragments[1], fragments[2] || '');
-        }
-        return x;
-      })
-      .filter(x => Boolean(x));
+    return parseItemPatterns(serverConfig.staticItems, (i, x) => {
+      console.warn(`Cannot parse staticItems item index ${i}: '${x}', skipping...`);
+    });
   }
 
   async getAssetEntryMap() {
@@ -423,11 +424,14 @@ export class PublisherServer {
     return scope.assetEntryMap;
   }
 
-  async getMatchingAsset(assetKey: string, applyAuto: boolean = false): Promise<AssetEntry | null> {
-    return this.getMatchingAssetFor(this.currentScope, assetKey, applyAuto);
+  // Find the file for an asset key. The second argument can also be a boolean,
+  // the value of applyAuto.
+  async getMatchingAsset(assetKey: string, options: boolean | GetMatchingAssetOptions = false): Promise<AssetEntry | null> {
+    const { applyAuto = false, includeHidden = false } = typeof options === 'boolean' ? { applyAuto: options } : options;
+    return this.getMatchingAssetFor(this.currentScope, assetKey, applyAuto, includeHidden);
   }
 
-  private async getMatchingAssetFor(scope: CollectionScope, assetKey: string, applyAuto: boolean): Promise<AssetEntry | null> {
+  private async getMatchingAssetFor(scope: CollectionScope, assetKey: string, applyAuto: boolean, includeHidden: boolean): Promise<AssetEntry | null> {
 
     const serverConfig = await this.getServerConfigFor(scope);
     if (serverConfig == null) {
@@ -438,9 +442,17 @@ export class PublisherServer {
       return null;
     }
 
+    // A key that starts with 'hidden:' is never looked up, so that a request path
+    // cannot name a hidden file. (A real asset key always starts with a slash.)
+    // With includeHidden, a normal key also finds the hidden file of that key.
+    if (isHiddenIndexKey(assetKey)) {
+      return null;
+    }
+    const lookup = (key: string) => findAssetEntry(assetEntryMap, key, includeHidden);
+
     if(!assetKey.endsWith('/')) {
       // A path that does not end in a slash can match an asset directly
-      const asset = assetEntryMap[assetKey];
+      const asset = lookup(assetKey);
       if (asset != null) {
         return asset;
       }
@@ -450,7 +462,7 @@ export class PublisherServer {
         // looks for an asset that has the specified suffix (usually extension, such as .html)
         for (const extEntry of serverConfig.autoExt) {
           let assetKeyWithExt = assetKey + extEntry;
-          const asset = assetEntryMap[assetKeyWithExt];
+          const asset = lookup(assetKeyWithExt);
           if (asset != null) {
             return asset;
           }
@@ -471,7 +483,7 @@ export class PublisherServer {
         assetNameAsDir = assetNameAsDir + '/';
         for (const indexEntry of serverConfig.autoIndex) {
           let assetKeyIndex = assetNameAsDir + indexEntry;
-          const asset = assetEntryMap[assetKeyIndex];
+          const asset = lookup(assetKeyIndex);
           if (asset != null) {
             return asset;
           }
@@ -505,16 +517,7 @@ export class PublisherServer {
 
   private async testExtendedCacheFor(scope: CollectionScope, pathname: string) {
     const staticItems = await this.getStaticItemsFor(scope);
-    return staticItems
-      .some(x => {
-        if (x instanceof RegExp) {
-          return x.test(pathname);
-        }
-        if (x.endsWith('/')) {
-          return pathname.startsWith(x);
-        }
-        return x === pathname;
-      });
+    return testItemPatterns(staticItems, pathname);
   }
 
   handlePreconditions(request: Request, asset: AssetEntry, responseHeaders: Headers): Response | null {
@@ -1051,7 +1054,7 @@ export class PublisherServer {
       return collectionNotAvailableResponse(scope.collectionName);
     }
 
-    const asset = await this.getMatchingAssetFor(scope, serverConfig.publicDirPrefix + pathname, true);
+    const asset = await this.getMatchingAssetFor(scope, serverConfig.publicDirPrefix + pathname, true, false);
     if (asset != null) {
       return this.serveAssetFor(scope, request, asset, {
         cache: await this.testExtendedCacheFor(scope, pathname) ? 'extended' : null,
@@ -1073,11 +1076,12 @@ export class PublisherServer {
       return null;
     }
 
-    // These are raw asset paths, not relative to public path
+    // These are raw asset paths, not relative to public path. The SPA file and
+    // the 404 page can be hidden files.
     const { spaFile } = serverConfig;
 
     if (spaFile != null) {
-      const asset = assetEntryMap[spaFile];
+      const asset = findAssetEntry(assetEntryMap, spaFile, true);
       if (asset != null) {
         return this.serveAssetFor(scope, request, asset, {
           cache: 'never',
@@ -1087,7 +1091,7 @@ export class PublisherServer {
 
     const { notFoundPageFile } = serverConfig;
     if (notFoundPageFile != null) {
-      const asset = assetEntryMap[notFoundPageFile];
+      const asset = findAssetEntry(assetEntryMap, notFoundPageFile, true);
       if (asset != null) {
         return this.serveAssetFor(scope, request, asset, {
           status: 404,
