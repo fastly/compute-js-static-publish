@@ -33,6 +33,8 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 - `publish-content` purges the service of `managed.serviceId` in a managed project (after `--fastly-service-id` and `FASTLY_SERVICE_ID`, before `fastly.toml`).
 - Managed projects: the `dev` command generates the app in `.static-publish/app/`, installs it with `npm ci` only when its `package.json` or lockfile changed, and runs `fastly compute serve`. The app uses the lockfile of its template (`resources/templates/<name>/package-lock.json`), and the copy of this package that runs the CLI through a `file:` link.
 - Managed projects: `deploy` deploys the generated app only if its fingerprint changed (`--force` deploys anyway), records the fingerprint in the comment of the service version, and writes the Service ID of the first deploy into `managed.serviceId`. `status` shows if a deploy is necessary, and the preview URLs. `dev` and `deploy` stop if `managed.staticPublishVersion` is not the version that runs; `upgrade` (or `--auto-upgrade` with a newer CLI) moves the project to it. In an ejected app, `deploy` runs `fastly compute publish`, and `status` shows the Service ID.
+- Managed projects: `eject` converts a managed project into an ejected app in `./compute-js` (or `--dir`): the app that `deploy` would deploy, `static-publish.rc.js` (with `generatedFrom`) and `publish-content.config.js` from the project file (the paths point at the same directories), and this package pinned to the version that runs. It needs a published version, and it stops for functions or regular expressions in `publishContent`.
+- Docs: README "Managed and ejected apps", with the API token scopes for CI. `MIGRATING.md`: move an existing app to managed mode.
 
 ### Changed
 
