@@ -181,9 +181,14 @@ async function getFreePort() {
 
 // Starts `fastly compute serve` (this also builds the app). Returns the base
 // URL and a function that stops the server.
-export async function startServe(computeJsDir, { env, timeoutMs = 300_000 } = {}) {
+// command(addr) can give another command that starts the server, as
+// [ command, args ], for example the CLI's dev command.
+export async function startServe(computeJsDir, { env, timeoutMs = 300_000, command } = {}) {
   const port = await getFreePort();
-  const child = child_process.spawn('fastly', [ 'compute', 'serve', '--addr', `127.0.0.1:${port}` ], {
+  const [ file, args ] = command != null ?
+    command(`127.0.0.1:${port}`) :
+    [ 'fastly', [ 'compute', 'serve', '--addr', `127.0.0.1:${port}` ] ];
+  const child = child_process.spawn(file, args, {
     cwd: computeJsDir,
     env: { ...process.env, ...env },
     stdio: [ 'ignore', 'pipe', 'pipe' ],
