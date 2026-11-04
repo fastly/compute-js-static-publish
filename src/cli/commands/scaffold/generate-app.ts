@@ -36,8 +36,8 @@ export type AppConfig = {
   staticPublishVersionSpec: string,
   // The template of the app.
   template: AppTemplate,
-  // Written into static-publish.rc.js.
-  generatedFrom: GeneratedFrom,
+  // Written into static-publish.rc.js, if set. A managed project has none.
+  generatedFrom: GeneratedFrom | undefined,
   // Written into static-publish.rc.js, if set. The template must support it.
   collectionSelection?: CollectionSelection,
 };

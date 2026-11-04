@@ -35,4 +35,8 @@ A template never has a file that `generateApp()` writes itself; `generateApp()` 
 
 - `run-template-hook <name>`: the template hooks call it. It prints no banner, and works in any directory.
 - `--version`: prints only the version.
-- `--project-dir`: the CLI checks that the directory has `static-publish.rc.js`, then runs `process.chdir()` into it. Thus every relative path, also the paths in the options, is relative to the project dir. `parseGlobalOptions()` removes these options from `process.argv` before the commands parse it.
+- `--project-dir`: the CLI checks that the directory has `static-publish.rc.js` or `static-publish.project.js`, then runs `process.chdir()` into it. Thus every relative path, also the paths in the options, is relative to the project dir. `parseGlobalOptions()` removes these options from `process.argv` before the commands parse it.
+
+## Managed projects
+
+A managed project has one file, `static-publish.project.js` (`models/config/static-publish-project.ts`), in the project dir. The name marks the mode (`detectProjectMode()` in `cli/util/config.ts`: project file → managed, rc → ejected, neither → scaffold, both → error). `loadStaticPublisherRcFile()` returns its top level, and `loadPublishContentConfig()` its `publishContent` (unless `--config`). `scaffold --managed` builds the same `AppConfig` as an ejected scaffold and writes it with `renderProjectFile()` (`cli/managed/project-file.ts`, from `resources/app/static-publish.project.js.njk`); `appConfigFromProject()` gives the same `AppConfig` back (a unit test checks this round trip for each golden case). The generated app goes into `.static-publish/app/`, and its rc has no `generatedFrom`. The line `    serviceId: undefined,` in the `managed` section is the marked line that `deploy` replaces. `staticPublisherWorkingDir` follows `checkStaticPublisherWorkingDir()` (`./` or `../`, not the config dir or above it) in both modes.
