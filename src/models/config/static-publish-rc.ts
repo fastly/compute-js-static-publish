@@ -136,9 +136,10 @@ export type StaticPublishRc =
 
 // The rule for staticPublisherWorkingDir: a relative path that starts with
 // './' or '../'. The path is relative to the file that has it
-// (static-publish.rc.js). It must not be that file's directory or a directory
-// above it, so that publish-content never writes its files among the
-// customer's own files. Returns an error message, or null if the value is valid.
+// (static-publish.rc.js or static-publish.project.js). It must not be that
+// file's directory or a directory above it, so that publish-content never
+// writes its files among the customer's own files. Returns an error message,
+// or null if the value is valid.
 export function checkStaticPublisherWorkingDir(value: unknown): string | null {
   const message = `staticPublisherWorkingDir must be a relative path that starts with './' or '../', and that is not the directory of the config file or a directory above it.`;
   if (typeof value !== 'string' || !(value.startsWith('./') || value.startsWith('../'))) {

@@ -45,8 +45,9 @@ S3 Storage Options (BETA):
 
 Global Options:
   --project-dir=<dir>              Run the command for the app in <dir>, the directory
-                                   that has static-publish.rc.js. Relative paths, also
-                                   in other options, are then relative to <dir>.
+                                   that has static-publish.rc.js or static-publish.project.js.
+                                   Relative paths, also in other options, are then
+                                   relative to <dir>.
   --version                        Print the version of this package and exit.
   --non-interactive                Never ask a question. Missing input is an error.
                                    This is also on when the CI environment variable is set.

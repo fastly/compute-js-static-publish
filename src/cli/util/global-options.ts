@@ -6,7 +6,8 @@
 // Options that work with every command. The CLI handles them before it
 // detects the mode, and removes them from the arguments of the command.
 export type GlobalOptions = {
-  // --project-dir <dir>: the directory that has static-publish.rc.js.
+  // --project-dir <dir>: the directory that has static-publish.rc.js or
+  // static-publish.project.js.
   projectDir: string | undefined,
   // --version: print the version of this package, and do nothing else.
   version: boolean,
