@@ -13,6 +13,8 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 
 - `--project-dir`: run a command for the app in another directory, for example from the root of the repo in CI. All relative paths are then relative to that directory.
 - `--version`: print the version of this package. It works in any directory.
+- `--non-interactive`: the CLI never asks a question, and missing input is an error. It is also on when the `CI` environment variable is set (to a value that is not empty, `false`, or `0`).
+- The CLI output never shows the value of `--fastly-api-token`, `--s3-secret-access-key`, `FASTLY_API_TOKEN`, or `S3_SECRET_ACCESS_KEY`: it shows `[REDACTED]` in its place, also in error messages.
 - Template hooks: the `package.json` of a scaffolded app has `prebuild`, `postbuild`, and `postinstall` scripts. Each runs `scripts/template_<name>.js` of the app if that file exists, and otherwise does nothing.
 - `scaffold` writes `generatedFrom` into `static-publish.rc.js`: the template, the version of this package, and the date.
 - `scaffold --default-collection-name`: the collection to serve when no collection is selected. The default is `live`, as before.

@@ -11,7 +11,8 @@ import path from 'node:path';
 import * as scaffoldCommand from './commands/scaffold/index.js';
 import * as manageCommands from './commands/manage/index.js';
 import { runTemplateHook } from './commands/run-template-hook.js';
-import { parseGlobalOptions } from './util/global-options.js';
+import { type GlobalOptions, parseGlobalOptions } from './util/global-options.js';
+import { setUpOutput } from './util/output.js';
 import { getOwnVersion } from './util/package.js';
 
 // Register storage builder providers
@@ -46,12 +47,25 @@ if (process.argv[2] === 'run-template-hook') {
 
 async function main() {
 
-  const globalOptions = parseGlobalOptions(process.argv.slice(2));
+  const globalOptions = parseGlobalOptions(process.argv.slice(2), process.env);
   if ('error' in globalOptions) {
     console.error(`❌ ${globalOptions.error}`);
     process.exitCode = 1;
     return;
   }
+  setUpOutput(globalOptions, process.env);
+
+  try {
+    await run(globalOptions);
+  } catch (err) {
+    // Through console.error(), so that secrets are redacted.
+    console.error(err);
+    process.exitCode = 1;
+  }
+
+}
+
+async function run(globalOptions: GlobalOptions) {
 
   // --version works in any directory, before the mode is detected.
   if (globalOptions.version) {
