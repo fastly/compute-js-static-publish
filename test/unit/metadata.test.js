@@ -111,9 +111,14 @@ describe('decodeIndexMetadata and encodeIndexMetadata', () => {
 });
 
 describe('getUnsupportedIndexFeatures', () => {
-  test('this version supports no features', () => {
-    assert.deepEqual(SUPPORTED_INDEX_FEATURES, []);
-    assert.deepEqual(getUnsupportedIndexFeatures({ requires: [ 'hidden' ] }), [ 'hidden' ]);
+  test('this version supports hidden files', () => {
+    assert.deepEqual(SUPPORTED_INDEX_FEATURES, [ 'hidden' ]);
+    assert.deepEqual(getUnsupportedIndexFeatures({ requires: [ 'hidden' ] }), []);
+    assert.deepEqual(getUnsupportedIndexFeatures({ requires: [ 'hidden', 'future-feature' ] }), [ 'future-feature' ]);
+  });
+
+  test('a server without hidden does not serve a collection that requires it', () => {
+    assert.deepEqual(getUnsupportedIndexFeatures({ requires: [ 'hidden' ] }, []), [ 'hidden' ]);
   });
 
   test('gives the features that are not supported', () => {
