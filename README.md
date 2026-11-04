@@ -250,6 +250,29 @@ The same version of this package always generates the same app, with the same ve
 npm install --save-dev @fastly/compute-js-static-publish
 ```
 
+To deploy the app:
+
+```sh
+npx @fastly/compute-js-static-publish deploy
+```
+
+`deploy` generates the app, installs it if necessary, and runs `fastly compute build` and `fastly compute deploy`, only if the app changed. It needs a Fastly API token (`FASTLY_API_TOKEN` or `--fastly-api-token`).
+
+- **The fingerprint** is a SHA-256 of the generated app and the version of this package. It does not depend on the content, on `publishContent`, on the Service ID, or on the path of this package on your computer. `deploy` writes it into the comment of the new service version (`static-publish <version> fp:<fingerprint>`, then ` | <text>` with `--comment <text>`, for example a commit SHA). The next `deploy` reads the comment of the active version, and does nothing if the fingerprint is the same. `--force` deploys anyway.
+- **The first deploy** makes a new service (the Fastly CLI asks for its name and domain, unless `--non-interactive`), and writes its ID into `managed.serviceId`. Commit the project file then. To deploy to a service that exists, use `--fastly-service-id` or `FASTLY_SERVICE_ID`. With S3 storage, the first deploy must be done on your computer, because the Fastly CLI asks for the S3 credentials of the Secret Store; with `--non-interactive`, it is an error.
+- `status` shows the fingerprint of the app, the fingerprint of the active version, and if a deploy is necessary, and the preview URLs of [collection selection](#-previews-collection-selection). Without an API token, the deployed fingerprint is unknown.
+
+**The version of this package.** `managed.staticPublishVersion` records the version of this package that the project uses. `dev` and `deploy` compare it with the version that runs:
+
+| The CLI that runs | Result |
+|---|---|
+| The same version | Continue. |
+| A newer version | Stop. Run `upgrade` to move the project to the new version (and commit the project file), or use `--auto-upgrade`. |
+| An older version | Stop. An older version never deploys over an app that a newer version made. |
+
+Thus a new release of this package never changes your app by itself, also with `npx @fastly/compute-js-static-publish@latest`.
+
+
 ### 🪝 Template hooks
 
 The `package.json` of a scaffolded app has these scripts:
@@ -1191,6 +1214,8 @@ npx @fastly/compute-js-static-publish publish-content \
 With `--project-dir`, all relative paths are relative to that directory: the paths in `static-publish.rc.js` and `publish-content.config.js`, and also the paths in the other options (for example `--config` and `--root-dir`). The directory must have a `static-publish.rc.js` (an app) or a `static-publish.project.js` (a [managed project](#managed-projects)). To scaffold an app in another directory, use `--output`.
 
 To print the version of this package, run `npx @fastly/compute-js-static-publish --version`. It works in any directory.
+
+With `--non-interactive`, or when the `CI` environment variable is set, the CLI never asks for input: missing input is an error. `deploy` then also runs the Fastly CLI with `--non-interactive`. The output never shows the values of `--fastly-api-token`, `--s3-secret-access-key`, `FASTLY_API_TOKEN`, and `S3_SECRET_ACCESS_KEY`.
 
 #### `publish-content`
 
