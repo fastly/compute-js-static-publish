@@ -34,6 +34,7 @@ export {
   setS3CredentialsBuilder,
 } from './storage/s3-storage-provider.js';
 export {
+  type GetMatchingAssetOptions,
   type ServeFallbackOptions,
   type ServeRequestOptions,
   PublisherServer,
