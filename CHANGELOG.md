@@ -9,6 +9,8 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 
 ## [unreleased]
 
+## [8.0.1] - 2026-11-04
+
 ### Changed
 
 - `publish-content` now logs a line for each file and each upload only with `--verbose`. Without it, the command logs the progress after each 1,000 files or uploads.
@@ -21,6 +23,7 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 - Scaffolder: if the file of `--spa` or `--not-found-page` does not exist or is not under `--root-dir`, the scaffolder stops with an error. It no longer shows a warning and makes an app without the page. The examples in `--help` are now paths from the current directory, such as `./public/404.html`.
 - `publish-content` and `collections delete`: a purge of `staging` for a service with no staged version showed "Failed purging (staging)". The API gives `404` in this case, because there is nothing to purge. Now the command shows a message that the service has no staged version or that the service ID is not correct, and no warning. The API gives the same `404` for both causes.
 - A failed purge, and other failed calls to the Fastly API, now show the error that the API gives, for example `404 Record not found: Cannot find service`. Before, the warning of a failed purge did not show the reason.
+- README: the custom app example compares `url.pathname === '/api/hello'`. Before, it used `request.url.endsWith('/api/hello')`, which also matched other URLs, such as `/other/api/hello`, and did not match `/api/hello` with a query string.
 
 ## [8.0.0] - 2026-10-27
 
@@ -477,7 +480,8 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 - Updated generated app's webpack and webpack-cli versions
 - Use atob() and removed dependency on Buffer
 
-[unreleased]: https://github.com/fastly/compute-js-static-publish/compare/v8.0.0...HEAD
+[unreleased]: https://github.com/fastly/compute-js-static-publish/compare/v8.0.1...HEAD
+[8.0.1]: https://github.com/fastly/compute-js-static-publish/compare/v8.0.0...v8.0.1
 [8.0.0]: https://github.com/fastly/compute-js-static-publish/compare/v7.0.8...v8.0.0
 [7.0.8]: https://github.com/fastly/compute-js-static-publish/compare/v7.0.7...v7.0.8
 [7.0.7]: https://github.com/fastly/compute-js-static-publish/compare/v7.0.6...v7.0.7
