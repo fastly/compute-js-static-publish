@@ -24,6 +24,11 @@ Description:
   Cleans up expired or unreferenced items in storage.
   This can include expired collection indexes and orphaned content assets.
 
+  Do not run clean while publish-content can run for the same storage.
+  clean can delete files that a publish uses before the publish writes its
+  index. In CI, put the jobs that publish and the job that cleans in the same
+  concurrency group.
+
 Options:
   --delete-expired-collections     If set, expired collection index files will be deleted.
 
