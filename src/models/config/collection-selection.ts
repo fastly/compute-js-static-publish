@@ -292,3 +292,30 @@ export function previewUrl(collectionName: string, baseUrl: string, config: Coll
   }
   return null;
 }
+
+// The preview URL of each source that can make one, with the {collection}
+// placeholder in it. For example, for CI tools that show the link of a pull
+// request. baseUrl is like the one of previewUrl(), and can be a placeholder
+// such as 'https://<service domain>'.
+export function previewUrlTemplates(baseUrl: string, config: CollectionSelection): { type: CollectionSelectionSourceType, url: string }[] {
+  const base = baseUrl.replace(/\/+$/, '');
+  const protocol = /^([a-z]+:)\/\//i.exec(base)?.[1] ?? 'https:';
+  const result: { type: CollectionSelectionSourceType, url: string }[] = [];
+  for (const source of config.sources) {
+    switch (source.type) {
+    case 'host':
+      result.push({ type: 'host', url: `${protocol}//${source.pattern}/` });
+      break;
+    case 'path':
+      result.push({ type: 'path', url: `${base}${source.prefix}/` });
+      break;
+    case 'query':
+      result.push({ type: 'query', url: `${base}/?${encodeURIComponent(source.param)}=${COLLECTION_PLACEHOLDER}` });
+      break;
+    case 'cookie':
+      result.push({ type: 'cookie', url: `${base}${source.activatePath ?? COOKIE_SOURCE_DEFAULTS.activatePath}?collection=${COLLECTION_PLACEHOLDER}&redirectTo=%2F` });
+      break;
+    }
+  }
+  return result;
+}
