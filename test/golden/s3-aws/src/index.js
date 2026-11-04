@@ -12,12 +12,22 @@ async function handleRequest(event) {
 
   const request = event.request;
 
+  // Select the collection with collectionSelection in static-publish.rc.js, for
+  // example for previews. Without it, this selects the default collection.
+  const selection = publisherServer.resolveCollection(request);
+  if (selection.response != null) {
+    return selection.response;
+  }
+
   // Do custom things here!
   // Handle API requests, serve non-static responses, etc.
   // serveRequest() serves the 404 page or the SPA file for each path that
   // has no file, so code after it does not run for those requests.
 
-  const response = await publisherServer.serveRequest(request);
+  const response = await publisherServer.serveRequest(request, {
+    collectionName: selection.collectionName,
+    pathname: selection.pathname,
+  });
   if (response != null) {
     return response;
   }
