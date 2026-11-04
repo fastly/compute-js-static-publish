@@ -71,6 +71,16 @@ const cases = {
     '--service-id', 'SVC123', '--name', 'my-site', '--description', 'My site', '--author', 'me@example.com',
     '--publish-id', 'pub1', '--auto-index', 'index.htm', '--auto-ext', '.htm',
   ],
+  'kv-collection-selection': [
+    '--root-dir', './public', '--kv-store-name', 'site-content',
+    '--collection-selection', 'host:{collection}.preview.example.com',
+    '--collection-selection', 'query:collection,sticky',
+    '--collection-selection', 'cookie,maxAge=604800',
+    '--collection-selection', 'header:x-publisher-collection',
+    '--collection-allow', 'pr-*,staging',
+    '--collection-on-missing', 'not-found',
+    '--collection-noindex', 'true',
+  ],
 };
 
 describe('scaffold writes the golden files', () => {
@@ -95,4 +105,14 @@ describe('scaffold writes the golden files', () => {
       }
     });
   }
+
+  test('a --collection-selection that is not valid stops before anything is written', () => {
+    const dir = makeTempDir('scaffold-golden-bad-selection');
+    dirs.push(dir);
+    writeFixture(dir);
+    const result = runCli([ '--root-dir', './public', '--kv-store-name', 'site-content', '--collection-selection', 'query:c,sticky' ], { cwd: dir, allowFailure: true });
+    assert.notEqual(result.status, 0);
+    assert.match(result.output, /needs a 'cookie' source/);
+    assert.equal(fs.existsSync(path.resolve(dir, 'compute-js')), false);
+  });
 });

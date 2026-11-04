@@ -14,6 +14,7 @@ import {
   isKvStoreConfigRc,
   isS3StorageConfigRc,
 } from '../../models/config/static-publish-rc.js';
+import { validateCollectionSelection } from '../../models/config/collection-selection.js';
 import {
   getKvStoreConfigFromRc,
 } from '../../models/config/kv-store-config.js';
@@ -81,6 +82,7 @@ export const normalizeStaticPublisherRc = buildNormalizeFunctionForObject<Static
     publishId,
     defaultCollectionName,
     staticPublisherWorkingDir,
+    collectionSelection,
   } = config;
 
   let storage: StaticPublishPartialStorage | null = null;
@@ -134,6 +136,18 @@ export const normalizeStaticPublisherRc = buildNormalizeFunctionForObject<Static
     }
   }
 
+  if (isSpecified(config, 'collectionSelection') && collectionSelection != null) {
+    // The caller uses the result even if there are errors. Thus return null, so
+    // that a collectionSelection that is not valid stops the command.
+    const collectionSelectionErrors = validateCollectionSelection(collectionSelection);
+    if (collectionSelectionErrors.length > 0) {
+      errors.push(...collectionSelectionErrors);
+      return null;
+    }
+  } else {
+    collectionSelection = undefined;
+  }
+
   return Object.assign({},
     storage,
     {
@@ -141,6 +155,7 @@ export const normalizeStaticPublisherRc = buildNormalizeFunctionForObject<Static
       defaultCollectionName,
       staticPublisherWorkingDir,
     },
+    collectionSelection != null ? { collectionSelection } : {},
   );
 });
 
