@@ -11,7 +11,7 @@ import { type AssetEntryMap } from '../../../models/assets/index.js';
 import { decodeIndexMetadata } from '../../../models/server/index.js';
 import { isExpired } from '../../../models/time/index.js';
 import { parseCommandLine } from '../../util/args.js';
-import { LoadConfigError, loadStaticPublisherRcFile } from '../../util/config.js';
+import { LoadConfigError, configFileName, loadStaticPublisherRcFile } from '../../util/config.js';
 import { loadStorageProviderFromStaticPublishRc } from '../../storage/storage-provider.js';
 
 function help() {
@@ -103,7 +103,7 @@ export async function action(actionArgs: string[]) {
   try {
     staticPublisherRc = await loadStaticPublisherRcFile();
   } catch (err) {
-    console.error("❌ Can't load static-publish.rc.js");
+    console.error(`❌ Can't load ${configFileName()}`);
     console.error("Run this from a compute-js-static-publish compute-js directory.");
     if (err instanceof LoadConfigError) {
       for (const error of err.errors) {
