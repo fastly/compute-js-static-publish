@@ -1212,6 +1212,8 @@ async function handleRequest(event) {
 
 To build the package, run `npm run build`. To run the tests, see [test/README.md](./test/README.md).
 
+In the code, its comments, and the docs for developers of this package, a **customer** is a developer who uses this package to publish a site, and a **visitor** is a person who opens the customer's site.
+
 ## Issues
 
 If you encounter any non-security-related bug or unexpected behavior, please [file an issue][bug] using the bug report template.

@@ -11,6 +11,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `src/models` has the types and the encode/decode helpers that both parts use. Both parts use the same storage key layout. Thus a change to one part usually needs a change to the other part.
 
+## Terms
+
+- **Customer**: a developer who uses this package to publish a site, and who owns the scaffolded app.
+- **Visitor**: a person who opens the customer's site. The visitor's browser sends the requests that `PublisherServer` serves.
+
+Use these words in code comments, docs, commit messages, and PR descriptions. In new text, do not write "user", because it can mean either person. In the README, which customers read, "you" is the customer.
+
 ## Commands
 
 ```sh
