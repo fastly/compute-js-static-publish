@@ -123,7 +123,7 @@ describe('render filters', () => {
     for (const file of fs.readdirSync(dir)) {
       const text = fs.readFileSync(path.resolve(dir, file), 'utf-8');
       for (const [ , expression ] of text.matchAll(/\{\{(.*?)\}\}/gs)) {
-        const filter = expression.match(/\|\s*([A-Za-z]+)\s*$/)?.[1];
+        const filter = expression.match(/\|\s*([A-Za-z]+)\s*(?:\([^()]*\))?\s*$/)?.[1];
         assert.ok(filter != null && RENDER_FILTERS.includes(filter), `${file}: {{${expression}}}`);
       }
     }
@@ -133,8 +133,12 @@ describe('render filters', () => {
     assert.equal(jsFilter('a "b" \\ c\nd'), '"a \\"b\\" \\\\ c\\nd"');
     assert.equal(jsFilter(false), 'false');
     assert.equal(jsFilter([ '/a/', '/b/' ]), '["/a/","/b/"]');
+    assert.equal(jsFilter(null), 'null');
+    assert.equal(jsFilter({}), '{}');
+    assert.equal(jsFilter({ a: 1, 'b-c': [ 'x' ], d: undefined }, '  '), '{\n    a: 1,\n    "b-c": ["x"],\n  }');
+    assert.equal(jsFilter([ { a: 'x' } ]), '[\n  {\n    a: "x",\n  },\n]');
     assert.throws(() => jsFilter(undefined));
-    assert.throws(() => jsFilter({ a: 1 }));
+    assert.throws(() => jsFilter(() => 1));
   });
 
   test('toml', () => {

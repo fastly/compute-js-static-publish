@@ -13,12 +13,31 @@ import { resourcesDir } from '../../util/resources.js';
 // filters, so that a value can never break the syntax of the file. Autoescape
 // is off, because its escaping is for HTML.
 
-// A string, a number, a boolean, or an array of them, as a JS literal.
-export function jsFilter(value: unknown): string {
-  if (value === undefined || (typeof value === 'object' && value !== null && !Array.isArray(value))) {
+// A value as a JS literal: a string, a number, a boolean, null, an array, or a
+// plain object of these. A string is written with JSON.stringify(), so an
+// array of strings is the same as in JSON. An object is written with one key
+// on each line, and indent is the indentation of the line that has the value.
+// A key is not quoted if it is a valid identifier.
+export function jsFilter(value: unknown, indent: string = ''): string {
+  if (value === undefined || typeof value === 'function' || typeof value === 'symbol' || typeof value === 'bigint') {
     throw new Error(`The js filter cannot write this value: ${String(value)}`);
   }
-  return JSON.stringify(value);
+  if (value === null || typeof value !== 'object') {
+    return JSON.stringify(value);
+  }
+  const inner = indent + '  ';
+  if (Array.isArray(value)) {
+    if (value.every(item => item === null || typeof item !== 'object')) {
+      return JSON.stringify(value);
+    }
+    return `[\n${value.map(item => `${inner}${jsFilter(item, inner)},\n`).join('')}${indent}]`;
+  }
+  const entries = Object.entries(value).filter(([ , item ]) => item !== undefined);
+  if (entries.length === 0) {
+    return '{}';
+  }
+  const key = (name: string) => /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name) ? name : JSON.stringify(name);
+  return `{\n${entries.map(([ name, item ]) => `${inner}${key(name)}: ${jsFilter(item, inner)},\n`).join('')}${indent}}`;
 }
 
 // A string as a TOML basic string. JSON escapes the same characters as TOML,
