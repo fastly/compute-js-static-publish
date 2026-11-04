@@ -12,6 +12,7 @@ import {
   type StaticPublishRc,
   type StaticPublishPartialStorage,
   isKvStoreConfigRc,
+  checkStaticPublisherWorkingDir,
   isS3StorageConfigRc,
 } from '../../models/config/static-publish-rc.js';
 import { validateCollectionSelection } from '../../models/config/collection-selection.js';
@@ -121,14 +122,12 @@ export const normalizeStaticPublisherRc = buildNormalizeFunctionForObject<Static
   if (!isSpecified(config, 'staticPublisherWorkingDir')) {
     errors.push('staticPublisherWorkingDir must be specified.');
   } else {
-    if (
-      staticPublisherWorkingDir.startsWith('./') &&
-      staticPublisherWorkingDir !== './' &&
-      !staticPublisherWorkingDir.includes('//')
-    ) {
-      // ok
-    } else {
-      errors.push('staticPublisherWorkingDir must be a relative subdirectory.');
+    const workingDirError = checkStaticPublisherWorkingDir(staticPublisherWorkingDir);
+    if (workingDirError != null) {
+      // The caller uses the result even if there are errors. Thus return null,
+      // so that publish-content never writes into a directory that breaks the rule.
+      errors.push(workingDirError);
+      return null;
     }
 
     while (staticPublisherWorkingDir.endsWith('/')) {
