@@ -40,6 +40,8 @@ export type AppConfig = {
   generatedFrom: GeneratedFrom | undefined,
   // Written into static-publish.rc.js, if set. The template must support it.
   collectionSelection?: CollectionSelection,
+  // Written as package-lock.json, if set (a managed app).
+  packageLock?: string,
 };
 
 // The names of the template hooks. Every app has them as npm scripts. Each one
@@ -75,6 +77,7 @@ export function generateApp(config: AppConfig): Record<string, string> {
     template,
     generatedFrom,
     collectionSelection,
+    packageLock,
   } = config;
 
   if (collectionSelection != null && !template.supports.collectionSelection) {
@@ -83,9 +86,10 @@ export function generateApp(config: AppConfig): Record<string, string> {
 
   const resourceFiles: Record<string, string> = {};
 
-  // .gitignore
+  // .gitignore. The working dir only if it is in the app dir.
+  const workingDirInApp = path.relative(computeJsDir, staticPublisherWorkingDir);
   resourceFiles['.gitignore'] = renderAppResource('gitignore', {
-    workingDirInApp: path.relative(computeJsDir, staticPublisherWorkingDir),
+    workingDirInApp: !workingDirInApp.startsWith('..') ? workingDirInApp : undefined,
   });
 
   // package.json: the dependencies come from the template's package.json.
@@ -123,6 +127,10 @@ export function generateApp(config: AppConfig): Record<string, string> {
     private: true,
     scripts: packageJsonScripts,
   }, undefined, 2);
+
+  if (packageLock != null) {
+    resourceFiles['package-lock.json'] = packageLock;
+  }
 
   // fastly.toml
   let localServerKvStorePath: string | undefined;

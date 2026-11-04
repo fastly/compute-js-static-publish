@@ -235,6 +235,21 @@ Paths in the project file are relative to it. The name of the file marks the mod
 
 `publish-content`, `collections`, and `clean` run in the project dir (or with `--project-dir`), and read the project file. `publish-content` purges the service of `managed.serviceId`, after `--fastly-service-id` and `FASTLY_SERVICE_ID`.
 
+To run the app on your computer:
+
+```sh
+npx @fastly/compute-js-static-publish publish-content --local
+npx @fastly/compute-js-static-publish dev
+```
+
+`dev` generates the app in `.static-publish/app/`, installs its dependencies with `npm ci` if they changed, and runs `fastly compute serve` in it. Options after `--` go to `fastly compute serve`, for example `dev -- --addr=127.0.0.1:8080`. The app serves the content of the local KV Store, `kvstore.json` in the working directory.
+
+The same version of this package always generates the same app, with the same versions of all dependencies: this package has a lockfile for the app of each template. The app uses the copy of this package that runs the CLI, through a `file:` link. Thus, add this package as a dev dependency of your project, and run the CLI from it, so that the version is pinned:
+
+```sh
+npm install --save-dev @fastly/compute-js-static-publish
+```
+
 ### 🪝 Template hooks
 
 The `package.json` of a scaffolded app has these scripts:
