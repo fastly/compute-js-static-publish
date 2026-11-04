@@ -7,13 +7,16 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
 import {
+  BODY_PIECE_SIZE,
   acceptEncodingCacheKeyPart,
   buildCacheFillRequest,
   buildResponseCacheKey,
+  bytesInPieces,
   decodeCachedResponseMetadata,
   encodeCachedResponseMetadata,
   parseAcceptEncodingGroups,
   readBodyUpTo,
+  streamBytesInPieces,
 } from '../../build/server/server/publisher-server/response-cache.js';
 
 function requestWith(headers) {
@@ -148,5 +151,34 @@ describe('readBodyUpTo', () => {
   test('errors the stream if the body errors after the limit', async () => {
     const result = await readBodyUpTo(streamOf([ 'abc', 'def' ], { errorAtEnd: true }), 2);
     await assert.rejects(new Response(result.body).text(), /read failed/);
+  });
+});
+
+describe('bytesInPieces', () => {
+  const bytes = new Uint8Array(BODY_PIECE_SIZE * 2 + 3).map((_, i) => i % 251);
+
+  test('gives views of the bytes, each at most BODY_PIECE_SIZE bytes', () => {
+    const pieces = [ ...bytesInPieces(bytes) ];
+    assert.deepEqual(pieces.map(piece => piece.byteLength), [ BODY_PIECE_SIZE, BODY_PIECE_SIZE, 3 ]);
+    for (const piece of pieces) {
+      assert.equal(piece.buffer, bytes.buffer);
+    }
+    assert.deepEqual(Buffer.concat(pieces), Buffer.from(bytes));
+  });
+
+  test('gives no pieces for no bytes', () => {
+    assert.deepEqual([ ...bytesInPieces(new Uint8Array(0)) ], []);
+  });
+});
+
+describe('streamBytesInPieces', () => {
+  test('gives a stream with all the bytes', async () => {
+    const bytes = new Uint8Array(BODY_PIECE_SIZE + 5).map((_, i) => i % 251);
+    const result = new Uint8Array(await new Response(streamBytesInPieces(bytes)).arrayBuffer());
+    assert.deepEqual(result, bytes);
+  });
+
+  test('gives an empty stream for no bytes', async () => {
+    assert.equal(await new Response(streamBytesInPieces(new Uint8Array(0))).text(), '');
   });
 });
