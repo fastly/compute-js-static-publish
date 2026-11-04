@@ -24,6 +24,10 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 - Scaffolding: the app has `@fastly/compute-js-static-publish` in `dependencies`. It was in `devDependencies`. The code of the app imports it, and the `postinstall` script of the app runs it, so `npm ci --omit=dev` needs it.
 - `PublisherServer.setResponseCache()`: the default of `maxBodySize` is now 16 MiB. It was 8 MiB.
 - Scaffolder: in the generated `src/index.js`, the place for your own code is before `serveRequest()`. It was after `serveRequest()`, where it did not run for a path that has no file when a 404 page or an SPA file is set.
+- Collection names have a rule: a DNS label (lowercase `a-z`, `0-9`, and `-`, from 1 to 63 characters, with no `-` at the start or the end). Thus a name is safe in storage keys, in the surrogate key of the purge, in a cookie, and in a hostname.
+   - `publish-content` to a new collection, `collections promote --to` a new collection, and `scaffold --default-collection-name` stop with an error for a name that breaks the rule.
+   - A collection that exists continues to work with a name that breaks the rule. `publish-content` and `collections promote --to` show a warning for it.
+   - `collectionSelector.fromCookie()`: the activate path returns `400` for a name that breaks the rule, and sets no cookie. Before, it returned `400` only for a name with characters that a cookie value cannot have.
 
 ### Fixed
 
