@@ -3,6 +3,7 @@
  * Licensed under the MIT license. See LICENSE file for details.
  */
 
+import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -11,11 +12,17 @@ import globToRegExp from 'glob-to-regexp';
 import {
   type StaticPublishRc,
   type StaticPublishPartialStorage,
-  isKvStoreConfigRc,
   checkStaticPublisherWorkingDir,
+  isKvStoreConfigRc,
   isS3StorageConfigRc,
 } from '../../models/config/static-publish-rc.js';
+import {
+  type StaticPublishProjectManaged,
+  PROJECT_FILE_NAME,
+  RC_FILE_NAME,
+} from '../../models/config/static-publish-project.js';
 import { validateCollectionSelection } from '../../models/config/collection-selection.js';
+import { APP_TEMPLATE_NAMES, isAppTemplateName } from '../commands/scaffold/app-template.js';
 import {
   getKvStoreConfigFromRc,
 } from '../../models/config/kv-store-config.js';
@@ -43,11 +50,100 @@ export class LoadConfigError extends Error {
   }
 }
 
+// The mode of the current directory, from the names of the files in it.
+export type ProjectMode = 'managed' | 'ejected' | 'scaffold' | 'conflict';
+
+export function detectProjectMode(dir: string = '.'): ProjectMode {
+  const hasProject = fs.existsSync(path.resolve(dir, PROJECT_FILE_NAME));
+  const hasRc = fs.existsSync(path.resolve(dir, RC_FILE_NAME));
+  if (hasProject && hasRc) {
+    return 'conflict';
+  }
+  return hasProject ? 'managed' : hasRc ? 'ejected' : 'scaffold';
+}
+
+// The name of the config file of the current directory, for messages.
+export function configFileName(): string {
+  return detectProjectMode() === 'managed' ? PROJECT_FILE_NAME : RC_FILE_NAME;
+}
+
+export type StaticPublishProjectNormalized = {
+  rc: StaticPublishRc,
+  // The raw publishContent section. loadPublishContentConfig() normalizes it.
+  publishContent: unknown,
+  managed: StaticPublishProjectManaged,
+};
+
+async function importDefault(configFile: string) {
+  const configFilePath = path.resolve(configFile);
+  let configRaw;
+  try {
+    configRaw = (await import(pathToFileURL(configFilePath).href)).default;
+  } catch (ex) {
+    throw new LoadConfigError(configFile, [
+      `Unable to load ${configFilePath}`,
+      String(ex),
+    ]);
+  }
+  if (configRaw == null) {
+    throw new LoadConfigError(configFile, [
+      `Unable to load ${configFilePath}`,
+      `default export does not exist or is null.`
+    ]);
+  }
+  return configRaw;
+}
+
+export const normalizeProjectManaged = buildNormalizeFunctionForObject<StaticPublishProjectManaged>((config, errors) => {
+  const { name, description, authors, template, serviceId, staticPublishVersion } = config as Record<string, unknown>;
+  for (const [ key, value ] of Object.entries({ name, description, template, serviceId, staticPublishVersion })) {
+    if (value !== undefined && typeof value !== 'string') {
+      errors.push(`managed.${key}, if specified, must be a string.`);
+    }
+  }
+  if (authors !== undefined && !(Array.isArray(authors) && authors.every(x => typeof x === 'string'))) {
+    errors.push('managed.authors, if specified, must be an array of strings.');
+  }
+  if (typeof template === 'string' && !isAppTemplateName(template)) {
+    errors.push(`managed.template must be one of: ${APP_TEMPLATE_NAMES.join(', ')}.`);
+  }
+  if (errors.length > 0) {
+    return null;
+  }
+  return { name, description, authors, template, serviceId, staticPublishVersion } as StaticPublishProjectManaged;
+});
+
+// Loads static-publish.project.js from the current directory (the project dir).
+export async function loadProjectFile(): Promise<StaticPublishProjectNormalized> {
+  const configFile = `./${PROJECT_FILE_NAME}`;
+  const configRaw = await importDefault(configFile);
+
+  const errors: string[] = [];
+  const rc = normalizeStaticPublisherRc(configRaw, errors);
+  if (!('publishContent' in configRaw) || configRaw.publishContent == null || typeof configRaw.publishContent !== 'object') {
+    errors.push('publishContent must be specified.');
+  }
+  let managed: StaticPublishProjectManaged | null = {};
+  if ('managed' in configRaw && configRaw.managed != null) {
+    managed = normalizeProjectManaged(configRaw.managed, errors);
+  }
+  if (rc == null || managed == null || errors.length > 0) {
+    throw new LoadConfigError(configFile, errors);
+  }
+  return { rc, publishContent: configRaw.publishContent, managed };
+}
+
+// Loads the settings of the app: static-publish.rc.js in an ejected app, or the
+// top level of static-publish.project.js in a managed project.
 export async function loadStaticPublisherRcFile(): Promise<StaticPublishRc> {
+
+  if (detectProjectMode() === 'managed') {
+    return (await loadProjectFile()).rc;
+  }
 
   let configRaw;
 
-  const configFile = './static-publish.rc.js';
+  const configFile = `./${RC_FILE_NAME}`;
 
   const configFilePath = path.resolve(configFile);
   try {
@@ -157,6 +253,22 @@ export const normalizeStaticPublisherRc = buildNormalizeFunctionForObject<Static
     collectionSelection != null ? { collectionSelection } : {},
   );
 });
+
+// Loads the publish settings: the file of --config if given, else the
+// publishContent section of static-publish.project.js in a managed project,
+// else ./publish-content.config.js.
+export async function loadPublishContentConfig(configFile: string | undefined): Promise<PublishContentConfigNormalized> {
+  if (configFile == null && detectProjectMode() === 'managed') {
+    const project = await loadProjectFile();
+    const errors: string[] = [];
+    const config = normalizePublishContentConfig(project.publishContent, errors);
+    if (config == null || errors.length > 0) {
+      throw new LoadConfigError(`./${PROJECT_FILE_NAME} (publishContent)`, errors);
+    }
+    return config;
+  }
+  return loadPublishContentConfigFile(configFile ?? './publish-content.config.js');
+}
 
 export async function loadPublishContentConfigFile(configFile: string): Promise<PublishContentConfigNormalized> {
 

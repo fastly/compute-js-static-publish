@@ -36,8 +36,8 @@ export type AppConfig = {
   staticPublishVersionSpec: string,
   // The template of the app.
   template: AppTemplate,
-  // Written into static-publish.rc.js.
-  generatedFrom: GeneratedFrom,
+  // Written into static-publish.rc.js, if set. A managed project has none.
+  generatedFrom: GeneratedFrom | undefined,
   // Written into static-publish.rc.js, if set. The template must support it.
   collectionSelection?: CollectionSelection,
 };
@@ -49,6 +49,14 @@ export const TEMPLATE_HOOKS = [ 'prebuild', 'postbuild', 'postinstall' ] as cons
 // The watch script of a template, if it has one. It runs next to
 // `fastly compute serve --watch` (npm run dev:watch), until it is stopped.
 export const TEMPLATE_WATCH_SCRIPT = 'scripts/template_watch.js';
+
+// The name, author, and description of an app when the flags or the project
+// file do not give them.
+export const DEFAULT_APP_INFO = {
+  name: 'compute-js-static-site',
+  author: 'you@example.com',
+  description: 'Fastly Compute static site',
+};
 
 // Makes the files of the app, keyed by the path relative to the app dir.
 // It does not write files or use the network, so that tests can compare its

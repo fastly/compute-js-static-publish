@@ -30,6 +30,8 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 - `PublisherServer.serveRequest(request, options)`: the options `collectionName` (the collection for this call only), `pathname` (the path to look up, in place of the URL path), `fallback` (`false`: do not serve the SPA file or the 404 page), `healthCheck` (`false`: do not answer `/healthz`), and `onMissing` (with collection selection: `'not-found'` or `'default'` for this call, in place of `collectionSelection.onMissing`). Without options, the behavior does not change.
 - `PublisherServer.serveFallback(request, { collectionName, onMissing })`: serves the SPA file or the 404 page, as `serveRequest()` does when no file matches. Use it after `serveRequest()` with `fallback: false`.
 - Export the types `ServeRequestOptions` and `ServeFallbackOptions`.
+- Managed projects: `scaffold --managed` writes only `static-publish.project.js` in the current directory, and adds `.static-publish/` and the working directory to `.gitignore`. The project file has the fields of `static-publish.rc.js` at the top level, the fields of `publish-content.config.js` in `publishContent`, and the settings of the generated app in `managed`. `publish-content`, `collections`, and `clean` read it. A directory with both `static-publish.project.js` and `static-publish.rc.js` is an error. The type is `StaticPublishProject`.
+- `publish-content` purges the service of `managed.serviceId` in a managed project (after `--fastly-service-id` and `FASTLY_SERVICE_ID`, before `fastly.toml`).
 
 ### Changed
 

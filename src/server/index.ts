@@ -4,6 +4,7 @@
  */
 
 export { type StaticPublishRc } from '../models/config/static-publish-rc.js';
+export { type StaticPublishProject } from '../models/config/static-publish-project.js';
 export { type PublishContentConfig } from '../models/config/publish-content-config.js';
 export * as collectionSelector from './collection-selector/index.js';
 export {
