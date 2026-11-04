@@ -18,6 +18,9 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 - `scaffold` writes `generatedFrom` into `static-publish.rc.js`: the template, the version of this package, and the date.
 - `scaffold --default-collection-name`: the collection to serve when no collection is selected. The default is `live`, as before.
 - `scaffold --template`: the template of the app's code. `plain`, the default, is the only template.
+- `PublisherServer.serveRequest(request, options)`: the options `collectionName` (the collection for this call only), `pathname` (the path to look up, in place of the URL path), `fallback` (`false`: do not serve the SPA file or the 404 page), and `healthCheck` (`false`: do not answer `/healthz`). Without options, the behavior does not change.
+- `PublisherServer.serveFallback(request, { collectionName })`: serves the SPA file or the 404 page, as `serveRequest()` does when no file matches. Use it after `serveRequest()` with `fallback: false`.
+- Export the types `ServeRequestOptions` and `ServeFallbackOptions`.
 
 ### Changed
 
