@@ -22,11 +22,13 @@ const rc = {
   publishId: {{ publishId | js }},
   defaultCollectionName: {{ defaultCollectionName | js }},
   staticPublisherWorkingDir: {{ staticPublisherWorkingDir | js }},
+{% if generatedFrom %}
   generatedFrom: {
     template: {{ generatedFrom.template | js }},
     staticPublishVersion: {{ generatedFrom.staticPublishVersion | js }},
     generatedAt: {{ generatedFrom.generatedAt | js }},
   },
+{% endif %}
 {% if collectionSelection %}
   collectionSelection: {{ collectionSelection | js('  ') }},
 {% endif %}
