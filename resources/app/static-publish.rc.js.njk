@@ -27,6 +27,9 @@ const rc = {
     staticPublishVersion: {{ generatedFrom.staticPublishVersion | js }},
     generatedAt: {{ generatedFrom.generatedAt | js }},
   },
+{% if collectionSelection %}
+  collectionSelection: {{ collectionSelection | js('  ') }},
+{% endif %}
 };
 
 export default rc;
