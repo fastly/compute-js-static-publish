@@ -48,6 +48,8 @@ Global Options:
                                    that has static-publish.rc.js. Relative paths, also
                                    in other options, are then relative to <dir>.
   --version                        Print the version of this package and exit.
+  --non-interactive                Never ask a question. Missing input is an error.
+                                   This is also on when the CI environment variable is set.
   -h, --help                       Show this help message and exit.
 
 Automatic Project Initialization:
