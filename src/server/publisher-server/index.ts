@@ -948,13 +948,13 @@ export class PublisherServer {
     return selected.preview ? this.markPreviewResponse(response) : response;
   }
 
-  // Returns true if the collection of the scope exists, has not expired, and can
+  // Returns true if the collection is published, has not expired, and can
   // be served by this version. It reads the settings and the index into the scope.
-  async collectionExists(request: Request, collectionName: string | null): Promise<boolean> {
-    return this.collectionExistsFor(this.scopeForRequest(request, collectionName ?? this.defaultCollectionName));
+  async isCollectionAvailable(request: Request, collectionName: string | null): Promise<boolean> {
+    return this.isCollectionAvailableFor(this.scopeForRequest(request, collectionName ?? this.defaultCollectionName));
   }
 
-  private async collectionExistsFor(scope: CollectionScope): Promise<boolean> {
+  private async isCollectionAvailableFor(scope: CollectionScope): Promise<boolean> {
     return (await this.getServerConfigFor(scope)) != null && (await this.getAssetEntryMapFor(scope)) != null;
   }
 
@@ -968,7 +968,7 @@ export class PublisherServer {
     if (config == null || scope.collectionName === this.defaultCollectionName) {
       return { scope, preview: false };
     }
-    if (await this.collectionExistsFor(scope)) {
+    if (await this.isCollectionAvailableFor(scope)) {
       return { scope, preview: true };
     }
     if (config.onMissing === 'default') {
