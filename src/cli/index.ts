@@ -13,7 +13,16 @@ import * as manageCommands from './commands/manage/index.js';
 import { runDevWatch } from './commands/run-dev-watch.js';
 import { runTemplateHook } from './commands/run-template-hook.js';
 import { type GlobalOptions, parseGlobalOptions } from './util/global-options.js';
-import { setUpOutput } from './util/output.js';
+import {
+  EXIT_USAGE,
+  JSON_SCHEMA_VERSION,
+  fail,
+  isJsonMode,
+  recordFailure,
+  setJsonResult,
+  setUpOutput,
+  writeJsonOutput,
+} from './util/output.js';
 import { getOwnVersion } from './util/package.js';
 import { detectProjectMode, findProjectDirsNear } from './util/config.js';
 import { PROJECT_FILE_NAME, RC_FILE_NAME } from '../models/config/static-publish-project.js';
@@ -59,7 +68,12 @@ async function main() {
   const globalOptions = parseGlobalOptions(process.argv.slice(2), process.env);
   if ('error' in globalOptions) {
     console.error(`❌ ${globalOptions.error}`);
-    process.exitCode = 1;
+    process.exitCode = EXIT_USAGE;
+    // The output is not set up yet, so write the JSON object here.
+    if (process.argv.includes('--json')) {
+      const error = { code: 'usage', message: globalOptions.error };
+      process.stdout.write(JSON.stringify({ schemaVersion: JSON_SCHEMA_VERSION, error }, undefined, 2) + '\n');
+    }
     return;
   }
   setUpOutput(globalOptions, process.env);
@@ -69,8 +83,10 @@ async function main() {
   } catch (err) {
     // Through console.error(), so that secrets are redacted.
     console.error(err);
-    process.exitCode = 1;
+    recordFailure('failed', String(err instanceof Error ? err.message : err));
   }
+
+  writeJsonOutput();
 
 }
 
@@ -78,24 +94,26 @@ async function run(globalOptions: GlobalOptions) {
 
   // --version works in any directory, before the mode is detected.
   if (globalOptions.version) {
-    process.stdout.write(getOwnVersion() + '\n');
+    if (isJsonMode()) {
+      setJsonResult({ version: getOwnVersion() });
+    } else {
+      process.stdout.write(getOwnVersion() + '\n');
+    }
     return;
   }
 
   if (globalOptions.projectDir != null) {
     const projectDir = path.resolve(globalOptions.projectDir);
     if (!fs.existsSync(projectDir) || !fs.statSync(projectDir).isDirectory()) {
-      console.error(`❌ --project-dir '${globalOptions.projectDir}' is not a directory.`);
-      process.exitCode = 1;
+      fail('project-dir-not-found', `--project-dir '${globalOptions.projectDir}' is not a directory.`);
       return;
     }
     if (
       !fs.existsSync(path.resolve(projectDir, RC_FILE_NAME)) &&
       !fs.existsSync(path.resolve(projectDir, PROJECT_FILE_NAME))
     ) {
-      console.error(`❌ --project-dir '${globalOptions.projectDir}' has no ${RC_FILE_NAME} or ${PROJECT_FILE_NAME}.`);
+      fail('project-dir-not-found', `--project-dir '${globalOptions.projectDir}' has no ${RC_FILE_NAME} or ${PROJECT_FILE_NAME}.`);
       console.error(`  * Give the directory of the app, for example --project-dir=./compute-js. To scaffold an app in another directory, use --output.`);
-      process.exitCode = 1;
       return;
     }
     // After this, all relative paths are relative to the project dir: the paths
@@ -110,8 +128,7 @@ async function run(globalOptions: GlobalOptions) {
 
   const mode = detectProjectMode();
   if (mode === 'conflict') {
-    console.error(`❌ This directory has both ${PROJECT_FILE_NAME} (a managed project) and ${RC_FILE_NAME} (an ejected app). Remove one of them.`);
-    process.exitCode = 1;
+    fail('config-invalid', `This directory has both ${PROJECT_FILE_NAME} (a managed project) and ${RC_FILE_NAME} (an ejected app). Remove one of them.`);
     return;
   }
 
@@ -120,7 +137,7 @@ async function run(globalOptions: GlobalOptions) {
     // A command for a project or an app, in a directory that has none.
     const command = process.argv[2];
     if (command != null && manageCommands.MANAGEMENT_COMMANDS.includes(command)) {
-      console.error(`❌ '${command}' is a command for a managed project or an app, but this directory has no ${PROJECT_FILE_NAME} or ${RC_FILE_NAME}.`);
+      fail('project-dir-not-found', `'${command}' is a command for a managed project or an app, but this directory has no ${PROJECT_FILE_NAME} or ${RC_FILE_NAME}.`);
       const near = findProjectDirsNear();
       for (const { dir, mode: kind } of near.slice(0, 3)) {
         const relative = path.relative(process.cwd(), dir) || '.';
@@ -129,11 +146,14 @@ async function run(globalOptions: GlobalOptions) {
       if (near.length === 0) {
         console.error(`  * Run it in the directory of the project (with ${PROJECT_FILE_NAME}) or of the app (with ${RC_FILE_NAME}), or add --project-dir.`);
       }
-      process.exitCode = 1;
       return;
     }
 
     console.log("🧑‍💻Fastly Compute JavaScript Static Publisher (Scaffolding mode)");
+    if (isJsonMode()) {
+      fail('json-not-supported', '--json is not supported for scaffolding.');
+      return;
+    }
     await scaffoldCommand.action(process.argv);
 
   } else {

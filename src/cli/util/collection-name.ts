@@ -5,11 +5,12 @@
 
 import { COLLECTION_NAME_RULE, isValidCollectionName } from '../../models/collections/index.js';
 import { type StorageProvider } from '../storage/storage-provider.js';
+import { fail } from './output.js';
 
 // Checks a collection name that a command writes to. A new collection must
 // have a valid name. A collection that exists continues to work with a name
 // that breaks the rule, with a warning.
-// Returns false if the command must stop.
+// Returns false (and fails the command) if the command must stop.
 export async function checkCollectionNameForWrite(
   storageProvider: StorageProvider,
   publishId: string,
@@ -27,6 +28,6 @@ export async function checkCollectionNameForWrite(
     return true;
   }
 
-  console.error(`❌ Collection name '${collectionName}' is not valid. ${COLLECTION_NAME_RULE}`);
+  fail('collection-name-invalid', `Collection name '${collectionName}' is not valid. ${COLLECTION_NAME_RULE}`);
   return false;
 }

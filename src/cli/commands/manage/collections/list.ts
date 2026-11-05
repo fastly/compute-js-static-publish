@@ -10,6 +10,7 @@ import { type OptionDefinition } from 'command-line-args';
 import { decodeIndexMetadata, getUnsupportedIndexFeatures } from '../../../../models/server/index.js';
 import { isExpired } from '../../../../models/time/index.js';
 import { parseCommandLine } from '../../../util/args.js';
+import { errorCodeOf, recordFailure, setJsonResult } from '../../../util/output.js';
 import {
   LoadConfigError,
   configFileName,
@@ -65,7 +66,7 @@ export async function action(actionArgs: string[]) {
     if (parsed.error != null) {
       console.error(String(parsed.error));
       console.error();
-      process.exitCode = 1;
+      recordFailure('usage', String(parsed.error));
     }
 
     help();
@@ -98,7 +99,7 @@ export async function action(actionArgs: string[]) {
         console.error(error);
       }
     }
-    process.exitCode = 1;
+    recordFailure('config-invalid', `Can't load ${configFileName()}.`);
     return;
   }
 
@@ -124,7 +125,7 @@ export async function action(actionArgs: string[]) {
   } catch (err: unknown) {
     console.error(`❌ Could not instantiate store provider`);
     console.error(String(err));
-    process.exitCode = 1;
+    recordFailure(errorCodeOf(err), String(err));
     return;
   }
 
@@ -137,6 +138,8 @@ export async function action(actionArgs: string[]) {
 
   // ### Found collections ###
   const foundCollections = indexKeys.map(x => x.slice(indexesPrefix.length));
+  // For --json.
+  const collectionInfos: Record<string, unknown>[] = [];
   if (foundCollections.length === 0) {
     console.log('No collections found.');
   } else {
@@ -155,10 +158,32 @@ export async function action(actionArgs: string[]) {
         throw new Error(`❌ Can't load storage entry ${indexesPrefix + collection}`);
       }
       let indexMetadata = decodeIndexMetadata(indexEntryInfo.metadata);
+      const info: Record<string, unknown> = {
+        name: collection,
+        isDefault: collection === defaultCollectionName,
+        publishedAt: null,
+        expiresAt: null,
+        expired: false,
+        requires: [],
+        unsupported: [],
+        files: null,
+        hidden: null,
+      };
+      collectionInfos.push(info);
       if (indexMetadata == null) {
         console.log(`    No metadata found.`);
         continue;
       }
+      if (indexMetadata.publishedTime != null) {
+        info.publishedAt = new Date(indexMetadata.publishedTime * 1000).toISOString();
+      }
+      if (indexMetadata.expirationTime != null) {
+        info.expiresAt = new Date(indexMetadata.expirationTime * 1000).toISOString();
+        // The expiration time is not enforced for the default collection.
+        info.expired = collection !== defaultCollectionName && isExpired(indexMetadata.expirationTime);
+      }
+      info.requires = indexMetadata.requires ?? [];
+      info.unsupported = getUnsupportedIndexFeatures(indexMetadata);
       if (indexMetadata.publishedTime == null) {
         console.log('    Published  : unknown');
       } else {
@@ -166,6 +191,8 @@ export async function action(actionArgs: string[]) {
       }
       
       if (indexMetadata.fileCount != null) {
+        info.files = indexMetadata.fileCount;
+        info.hidden = indexMetadata.hiddenFileCount ?? 0;
         console.log(`    Files      : ${indexMetadata.fileCount} (${indexMetadata.hiddenFileCount ?? 0} hidden)`);
       } else {
         console.log('    Files      : unknown (published with an older version)');
@@ -195,4 +222,10 @@ export async function action(actionArgs: string[]) {
   }
 
   console.log("✅  Completed.")
+
+  setJsonResult({
+    publishId,
+    defaultCollection: defaultCollectionName,
+    collections: collectionInfos,
+  });
 }

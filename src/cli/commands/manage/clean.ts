@@ -11,6 +11,7 @@ import { type AssetEntryMap } from '../../../models/assets/index.js';
 import { decodeIndexMetadata } from '../../../models/server/index.js';
 import { isExpired } from '../../../models/time/index.js';
 import { parseCommandLine } from '../../util/args.js';
+import { errorCodeOf, recordFailure } from '../../util/output.js';
 import {
   LoadConfigError,
   configFileName,
@@ -80,7 +81,7 @@ export async function action(actionArgs: string[]) {
     if (parsed.error != null) {
       console.error(String(parsed.error));
       console.error();
-      process.exitCode = 1;
+      recordFailure('usage', String(parsed.error));
     }
 
     help();
@@ -115,7 +116,7 @@ export async function action(actionArgs: string[]) {
         console.error(error);
       }
     }
-    process.exitCode = 1;
+    recordFailure('config-invalid', `Can't load ${configFileName()}.`);
     return;
   }
 
@@ -141,7 +142,7 @@ export async function action(actionArgs: string[]) {
   } catch (err: unknown) {
     console.error(`❌ Could not instantiate store provider`);
     console.error(String(err));
-    process.exitCode = 1;
+    recordFailure(errorCodeOf(err), String(err));
     return;
   }
 

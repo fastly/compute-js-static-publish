@@ -17,6 +17,7 @@ import {
   loadStaticPublisherRcFile,
 } from '../../../util/config.js';
 import { parseCommandLine } from '../../../util/args.js';
+import { errorCodeOf, fail, recordFailure } from '../../../util/output.js';
 import { loadStorageProviderFromStaticPublishRc } from '../../../storage/storage-provider.js';
 
 function help() {
@@ -89,7 +90,7 @@ export async function action(actionArgs: string[]) {
     if (parsed.error != null) {
       console.error(String(parsed.error));
       console.error();
-      process.exitCode = 1;
+      recordFailure('usage', String(parsed.error));
     }
 
     help();
@@ -113,8 +114,7 @@ export async function action(actionArgs: string[]) {
   const computeAppDir = getComputeAppDir();
 
   if (collectionNameValue == null) {
-    console.error("❌ Required argument '--collection-name' not specified.");
-    process.exitCode = 1;
+    fail('usage', "Required argument '--collection-name' not specified.");
     return;
   }
 
@@ -124,12 +124,11 @@ export async function action(actionArgs: string[]) {
   } catch(err: unknown) {
     console.error(`❌ Cannot process expiration time`);
     console.error(String(err));
-    process.exitCode = 1;
+    recordFailure('usage', `Cannot process expiration time: ${String(err)}`);
     return;
   }
   if (expirationTime === undefined) {
-    console.error("❌ Exactly one of '--expires-in', '--expires-at', or '--expires-never' is required.");
-    process.exitCode = 1;
+    fail('usage', "Exactly one of '--expires-in', '--expires-at', or '--expires-never' is required.");
     return;
   }
 
@@ -147,7 +146,7 @@ export async function action(actionArgs: string[]) {
         console.error(error);
       }
     }
-    process.exitCode = 1;
+    recordFailure('config-invalid', `Can't load ${configFileName()}.`);
     return;
   }
 
@@ -173,7 +172,7 @@ export async function action(actionArgs: string[]) {
   } catch (err: unknown) {
     console.error(`❌ Could not instantiate store provider`);
     console.error(String(err));
-    process.exitCode = 1;
+    recordFailure(errorCodeOf(err), String(err));
     return;
   }
 

@@ -13,6 +13,8 @@ export type GlobalOptions = {
   version: boolean,
   // --non-interactive, or the CI environment variable: never ask a question.
   nonInteractive: boolean,
+  // --json: write the result as one JSON object to stdout.
+  json: boolean,
   // The values of the options that have a secret, for example
   // --fastly-api-token. These options stay in argv.
   secrets: string[],
@@ -33,6 +35,7 @@ export function parseGlobalOptions(args: string[], env: Record<string, string | 
   let projectDir: string | undefined;
   let version = false;
   let nonInteractive = isCiEnvironment(env);
+  let json = false;
   const secrets: string[] = [];
   const argv: string[] = [];
 
@@ -49,6 +52,8 @@ export function parseGlobalOptions(args: string[], env: Record<string, string | 
       version = true;
     } else if (arg === '--non-interactive') {
       nonInteractive = true;
+    } else if (arg === '--json') {
+      json = true;
     } else if (arg === '--project-dir' || arg.startsWith('--project-dir=')) {
       const value = arg === '--project-dir' ? args[++i] : arg.slice('--project-dir='.length);
       if (value == null || value === '' || value.startsWith('--')) {
@@ -63,5 +68,5 @@ export function parseGlobalOptions(args: string[], env: Record<string, string | 
     }
   }
 
-  return { projectDir, version, nonInteractive, secrets, argv };
+  return { projectDir, version, nonInteractive, json, secrets, argv };
 }

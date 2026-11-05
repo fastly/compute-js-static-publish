@@ -17,6 +17,7 @@ import {
   loadStaticPublisherRcFile,
 } from '../../../util/config.js';
 import { parseCommandLine } from '../../../util/args.js';
+import { errorCodeOf, fail, recordFailure } from '../../../util/output.js';
 import { checkCollectionNameForWrite } from '../../../util/collection-name.js';
 import { loadStorageProviderFromStaticPublishRc } from '../../../storage/storage-provider.js';
 import { type PurgeTarget, loadPurgeTarget, purgeCollection } from '../../../util/purge.js';
@@ -113,7 +114,7 @@ export async function action(actionArgs: string[]) {
     if (parsed.error != null) {
       console.error(String(parsed.error));
       console.error();
-      process.exitCode = 1;
+      recordFailure('usage', String(parsed.error));
     }
 
     help();
@@ -140,14 +141,12 @@ export async function action(actionArgs: string[]) {
   const computeAppDir = getComputeAppDir();
 
   if (collectionNameValue == null) {
-    console.error("❌ Required argument '--collection-name' not specified.");
-    process.exitCode = 1;
+    fail('usage', "Required argument '--collection-name' not specified.");
     return;
   }
 
   if (toCollectionNameValue == null) {
-    console.error("❌ Required argument '--to' not specified.");
-    process.exitCode = 1;
+    fail('usage', "Required argument '--to' not specified.");
     return;
   }
 
@@ -157,7 +156,7 @@ export async function action(actionArgs: string[]) {
   } catch(err: unknown) {
     console.error(`❌ Cannot process expiration time`);
     console.error(String(err));
-    process.exitCode = 1;
+    recordFailure('usage', `Cannot process expiration time: ${String(err)}`);
     return;
   }
 
@@ -175,7 +174,7 @@ export async function action(actionArgs: string[]) {
         console.error(error);
       }
     }
-    process.exitCode = 1;
+    recordFailure('config-invalid', `Can't load ${configFileName()}.`);
     return;
   }
 
@@ -201,7 +200,7 @@ export async function action(actionArgs: string[]) {
   } catch (err: unknown) {
     console.error(`❌ Could not instantiate store provider`);
     console.error(String(err));
-    process.exitCode = 1;
+    recordFailure(errorCodeOf(err), String(err));
     return;
   }
 
@@ -227,7 +226,6 @@ export async function action(actionArgs: string[]) {
   const targetCollectionName = toCollectionNameValue;
   console.log(`✔️ Collection to promote to: ${targetCollectionName}`)
   if (!await checkCollectionNameForWrite(storageProvider, publishId, targetCollectionName)) {
-    process.exitCode = 1;
     return;
   }
 
@@ -252,11 +250,9 @@ export async function action(actionArgs: string[]) {
     storageProvider.getStorageEntry(sourceCollectionIndexKey),
     storageProvider.getStorageEntry(sourceCollectionSettingsKey),
   ]);
-  if (!indexEntryInfo) {
-    throw new Error(`Error querying index for '${collectionNameValue}' in storage`);
-  }
-  if (!settingsEntryInfo) {
-    throw new Error(`Error querying settings for '${collectionNameValue}' in storage`);
+  if (!indexEntryInfo || !settingsEntryInfo) {
+    fail('collection-not-found', `Collection '${collectionNameValue}' does not exist.`);
+    return;
   }
 
   let indexMetadata = decodeIndexMetadata(indexEntryInfo.metadata) ?? {};
