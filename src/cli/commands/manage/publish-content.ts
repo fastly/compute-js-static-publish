@@ -744,11 +744,13 @@ export async function action(actionArgs: string[]) {
   setJsonResult({
     collection: collectionName,
     publishId,
+    // The files in the index.
     files: {
-      // The files in the index.
       total: Object.keys(assetsIndex).length,
       hidden: hiddenCount,
-      // Storage items: each file, and each compressed variant that is kept.
+    },
+    // Each file, and each compressed variant that is kept.
+    storageItems: {
       uploaded: batch.storageProviderBatchEntries.length,
       reused: existingVariantCount,
     },
