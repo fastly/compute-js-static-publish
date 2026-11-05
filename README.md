@@ -1380,8 +1380,8 @@ if (redirectResponse) {
 
    | Endpoint                           | Purpose          | Query params                                                                                   | Result                                    |
    |------------------------------------|------------------|------------------------------------------------------------------------------------------------|-------------------------------------------|
-   | activatePath (default `/activate`) | Set the cookie   | `collection` (required) - name of the collection<br /> `redirectTo` (optional, `/` by default) | `302` redirect with a `Set-Cookie` header |
-   | resetPath (default `/reset`)       | Clear the cookie | `redirectTo` (optional, `/` by default)                                                        | `302` redirect that expires the cookie    |
+   | activatePath (default `/activate`) | Set the cookie   | `collection` (required) - name of the collection<br /> `redirectTo` (optional, `/` by default) | `308` redirect with a `Set-Cookie` header |
+   | resetPath (default `/reset`)       | Clear the cookie | `redirectTo` (optional, `/` by default)                                                        | `308` redirect that expires the cookie    |
    
    If a visitor accesses `/activate?collection=blue&redirectTo=/preview`, the helper will issue a redirect and drop `publisher-collection=blue` into their cookie jar.
       - If someone forgets `?collection=?`? Then `/activate` replies with HTTP `400`.
