@@ -103,7 +103,7 @@ export class CookieCollectionSelector implements RequestCollectionNameSelector {
       headers.set("Location", redirectTo);
 
       return new Response(null, {
-        status: 302,
+        status: 308,
         headers,
       });
     }
@@ -128,7 +128,7 @@ export class CookieCollectionSelector implements RequestCollectionNameSelector {
       headers.set("Location", redirectTo);
 
       return new Response(null, {
-        status: 302,
+        status: 308,
         headers,
       });
     }
