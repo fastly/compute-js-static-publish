@@ -11,12 +11,12 @@ import { LoadConfigError, type StaticPublishProjectNormalized, detectProjectMode
 import { getOwnVersion } from '../util/package.js';
 import { writeBackStaticPublishVersion } from './project-edit.js';
 import { checkProjectVersion, versionCheckError } from './version-check.js';
-import { fail } from '../util/output.js';
+import { fail, recordFailure } from '../util/output.js';
 
 // Load the project file of a managed project, or report why not.
 export async function loadManagedProject(command: string, ejectedHint: string): Promise<StaticPublishProjectNormalized | null> {
   if (detectProjectMode() !== 'managed') {
-    fail(`'${command}' works only in a managed project (${PROJECT_FILE_NAME}). ${ejectedHint}`);
+    fail('usage', `'${command}' works only in a managed project (${PROJECT_FILE_NAME}). ${ejectedHint}`);
     return null;
   }
   try {
@@ -30,7 +30,7 @@ export async function loadManagedProject(command: string, ejectedHint: string): 
     } else {
       console.error(String(err));
     }
-    process.exitCode = 1;
+    recordFailure('config-invalid', `Can't load ${PROJECT_FILE_NAME}.`);
     return null;
   }
 }
@@ -42,7 +42,7 @@ export function checkVersionForCommand(project: StaticPublishProjectNormalized, 
   const check = checkProjectVersion(project.managed.staticPublishVersion, getOwnVersion());
   const error = versionCheckError(check, autoUpgrade);
   if (error != null) {
-    fail(error);
+    fail('version-mismatch', error);
     return false;
   }
   if (check.result === 'newer-cli' && autoUpgrade) {
@@ -61,7 +61,7 @@ export function writeProjectVersion(version: string): boolean {
   const text = fs.readFileSync(filePath, 'utf-8');
   const updated = writeBackStaticPublishVersion(text, version);
   if (updated == null) {
-    fail(`Can't find the line 'staticPublishVersion: "…",' in the managed section of ${PROJECT_FILE_NAME}. Set it by hand to "${version}".`);
+    fail('config-invalid', `Can't find the line 'staticPublishVersion: "…",' in the managed section of ${PROJECT_FILE_NAME}. Set it by hand to "${version}".`);
     return false;
   }
   if (updated !== text) {

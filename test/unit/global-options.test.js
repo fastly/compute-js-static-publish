@@ -12,16 +12,22 @@ import { addSecret, redactSecrets } from '../../build/cli/cli/util/output.js';
 describe('parseGlobalOptions()', () => {
   test('removes the global options from the arguments', () => {
     assert.deepEqual(parseGlobalOptions([ 'publish-content', '--project-dir', './app', '--local' ]), {
-      projectDir: './app', version: false, nonInteractive: false, secrets: [], argv: [ 'publish-content', '--local' ],
+      projectDir: './app', version: false, nonInteractive: false, json: false, secrets: [], argv: [ 'publish-content', '--local' ],
     });
     assert.deepEqual(parseGlobalOptions([ '--project-dir=./app', 'collections', 'list' ]), {
-      projectDir: './app', version: false, nonInteractive: false, secrets: [], argv: [ 'collections', 'list' ],
+      projectDir: './app', version: false, nonInteractive: false, json: false, secrets: [], argv: [ 'collections', 'list' ],
     });
     assert.deepEqual(parseGlobalOptions([ 'clean', '--version', '--non-interactive' ]), {
-      projectDir: undefined, version: true, nonInteractive: true, secrets: [], argv: [ 'clean' ],
+      projectDir: undefined, version: true, nonInteractive: true, json: false, secrets: [], argv: [ 'clean' ],
     });
     assert.deepEqual(parseGlobalOptions([]), {
-      projectDir: undefined, version: false, nonInteractive: false, secrets: [], argv: [],
+      projectDir: undefined, version: false, nonInteractive: false, json: false, secrets: [], argv: [],
+    });
+  });
+
+  test('--json', () => {
+    assert.deepEqual(parseGlobalOptions([ 'collections', '--json', 'list' ]), {
+      projectDir: undefined, version: false, nonInteractive: false, json: true, secrets: [], argv: [ 'collections', 'list' ],
     });
   });
 

@@ -15,6 +15,7 @@ import * as fs from 'node:fs';
 import { type CommandLineOptions, type OptionDefinition } from 'command-line-args';
 
 import { parseCommandLine } from '../../util/args.js';
+import { fail, recordFailure } from '../../util/output.js';
 import { rootRelative } from '../../util/files.js';
 import { findComputeJsStaticPublisherVersion, getOwnVersion, type PackageJson } from '../../util/package.js';
 import { findHostnameForAwsS3RegionAndBucket } from '../../util/s3.js';
@@ -559,7 +560,7 @@ export async function action(actionArgs: string[]) {
     if (parsed.error != null) {
       console.error(String(parsed.error));
       console.error();
-      process.exitCode = 1;
+      recordFailure('usage', String(parsed.error));
     }
 
     help();
@@ -581,9 +582,8 @@ export async function action(actionArgs: string[]) {
   );
 
   if (!isAppTemplateName(options.template)) {
-    console.error(`❌ Unknown template '${options.template}'.`);
+    fail('usage', `Unknown template '${options.template}'.`);
     console.error(`  * Valid templates: ${APP_TEMPLATE_NAMES.join(', ')}`);
-    process.exitCode = 1;
     return;
   }
 
@@ -597,7 +597,7 @@ export async function action(actionArgs: string[]) {
     for (const error of collectionSelectionErrors) {
       console.error(`❌ ${error}`);
     }
-    process.exitCode = 1;
+    recordFailure('usage', collectionSelectionErrors.join(' '));
     return;
   }
 
@@ -608,8 +608,7 @@ export async function action(actionArgs: string[]) {
 
   const COMPUTE_JS_DIR = managed ? MANAGED_APP_DIR : options.outputDir;
   if (COMPUTE_JS_DIR == null) {
-    console.error("❌ required parameter --output not provided.");
-    process.exitCode = 1;
+    fail('usage', "required parameter --output not provided.");
     return;
   }
   const computeJsDir = path.resolve(COMPUTE_JS_DIR);
@@ -617,15 +616,13 @@ export async function action(actionArgs: string[]) {
   // Resolve the root dir, relative to current directory, and make sure it exists.
   const ROOT_DIR = options.rootDir;
   if (ROOT_DIR == null) {
-    console.error("❌ required parameter --root-dir not provided.");
-    process.exitCode = 1;
+    fail('usage', "required parameter --root-dir not provided.");
     return;
   }
   const rootDir = path.resolve(ROOT_DIR);
   if (!fs.existsSync(rootDir) || !fs.statSync(rootDir).isDirectory()) {
-    console.error(`❌ Specified root directory '${ROOT_DIR}' does not exist.`);
+    fail('usage', `Specified root directory '${ROOT_DIR}' does not exist.`);
     console.error(`  * ${rootRelative(rootDir)} must exist and be a directory.`);
-    process.exitCode = 1;
     return;
   }
 
@@ -638,17 +635,15 @@ export async function action(actionArgs: string[]) {
   const PUBLIC_DIR = options.publicDir ?? ROOT_DIR;
   const publicDir = path.resolve(PUBLIC_DIR);
   if (!fs.existsSync(publicDir) || !fs.statSync(publicDir).isDirectory()) {
-    console.error(`❌ Specified public directory '${PUBLIC_DIR}' does not exist.`);
+    fail('usage', `Specified public directory '${PUBLIC_DIR}' does not exist.`);
     console.error(`  * ${rootRelative(publicDir)} must exist and be a directory.`);
-    process.exitCode = 1;
     return;
   }
 
   // Public dir must be inside the root dir.
   if (!publicDir.startsWith(rootDir)) {
-    console.error(`❌ Specified public directory '${PUBLIC_DIR}' is not under the asset root directory.`);
+    fail('usage', `Specified public directory '${PUBLIC_DIR}' is not under the asset root directory.`);
     console.error(`  * ${rootRelative(publicDir)} must be under ${rootRelative(rootDir)}`);
-    process.exitCode = 1;
     return;
   }
 
@@ -680,9 +675,8 @@ export async function action(actionArgs: string[]) {
     // In a managed project, the working dir is relative to the project file.
     const workingDirError = checkStaticPublisherWorkingDir(dotRelative(projectDir, staticPublisherWorkingDir).split(path.sep).join('/'));
     if (workingDirError != null || staticPublisherWorkingDir.startsWith(path.resolve(projectDir, '.static-publish') + path.sep)) {
-      console.error(`❌ Specified static publisher working directory '${rootRelative(staticPublisherWorkingDir)}' is not valid.`);
+      fail('usage', `Specified static publisher working directory '${rootRelative(staticPublisherWorkingDir)}' is not valid.`);
       console.error(`  * It must not be the project directory, a directory above it, or in .static-publish.`);
-      process.exitCode = 1;
       return;
     }
   } else if (
@@ -693,9 +687,8 @@ export async function action(actionArgs: string[]) {
     staticPublisherWorkingDir === path.resolve(computeJsDir, './src') ||
     staticPublisherWorkingDir === path.resolve(computeJsDir, './node_modules')
   ) {
-    console.error(`❌ Specified static publisher working directory '${rootRelative(staticPublisherWorkingDir)}' must be under ${rootRelative(computeJsDir)}.`);
+    fail('usage', `Specified static publisher working directory '${rootRelative(staticPublisherWorkingDir)}' must be under ${rootRelative(computeJsDir)}.`);
     console.error(`  It also must not be bin, pkg, src, or node_modules.`);
-    process.exitCode = 1;
     return;
   }
 
@@ -708,16 +701,14 @@ export async function action(actionArgs: string[]) {
     spaFilename = processPublicDirToken(SPA, publicDir);
     // At any rate it must exist under the root directory
     if (!spaFilename.startsWith(rootDir)) {
-      console.error(`❌ Specified SPA file '${SPA}' is not under the asset root directory.`);
+      fail('usage', `Specified SPA file '${SPA}' is not under the asset root directory.`);
       console.error(`  * ${rootRelative(spaFilename)} must be under ${rootRelative(rootDir)}`);
       console.error(`  Give the path from the current directory, for example ${rootRelative(rootDir)}/index.html.`);
-      process.exitCode = 1;
       return;
     }
     if (!fs.existsSync(spaFilename)) {
-      console.error(`❌ Specified SPA file '${SPA}' does not exist.`);
+      fail('usage', `Specified SPA file '${SPA}' does not exist.`);
       console.error(`  * ${rootRelative(spaFilename)} does not exist.`);
-      process.exitCode = 1;
       return;
     }
   }
@@ -729,16 +720,14 @@ export async function action(actionArgs: string[]) {
     notFoundPageFilename = processPublicDirToken(NOT_FOUND_PAGE, publicDir);
     // At any rate it must exist under the root directory
     if (!notFoundPageFilename.startsWith(rootDir)) {
-      console.error(`❌ Specified Not Found file '${NOT_FOUND_PAGE}' is not under the asset root directory.`);
+      fail('usage', `Specified Not Found file '${NOT_FOUND_PAGE}' is not under the asset root directory.`);
       console.error(`  * ${rootRelative(notFoundPageFilename)} must be under ${rootRelative(rootDir)}`);
       console.error(`  Give the path from the current directory, for example ${rootRelative(rootDir)}/404.html.`);
-      process.exitCode = 1;
       return;
     }
     if (!fs.existsSync(notFoundPageFilename)) {
-      console.error(`❌ Specified Not Found file '${NOT_FOUND_PAGE}' does not exist.`);
+      fail('usage', `Specified Not Found file '${NOT_FOUND_PAGE}' does not exist.`);
       console.error(`  * ${rootRelative(notFoundPageFilename)} does not exist.`);
-      process.exitCode = 1;
       return;
     }
   } else {
@@ -754,12 +743,11 @@ export async function action(actionArgs: string[]) {
 
   const exists = !managed && fs.existsSync(computeJsDir);
   if(exists) {
-    console.error(`❌ '${COMPUTE_JS_DIR}' directory already exists!`);
+    fail('usage', `'${COMPUTE_JS_DIR}' directory already exists!`);
     console.error(`  You should not run this command if this directory exists.`);
     console.error(`  If you need to re-scaffold the static publisher Compute App,`);
     console.error(`  delete the following directory and then try again:`);
     console.error(`  ${rootRelative(computeJsDir)}`);
-    process.exitCode = 1;
     return;
   }
 
@@ -769,8 +757,7 @@ export async function action(actionArgs: string[]) {
   const fastlyServiceId = options.serviceId;
   const storageMode = options.storageMode;
   if (!(storageMode === 'kv-store' || storageMode === 's3')) {
-    console.error(`❌ parameter --storage-mode must be set to 'kv-store' or 's3'.`);
-    process.exitCode = 1;
+    fail('usage', `parameter --storage-mode must be set to 'kv-store' or 's3'.`);
     return;
   }
 
@@ -782,19 +769,16 @@ export async function action(actionArgs: string[]) {
 
   if (storageMode === 'kv-store') {
     if (kvStoreName == null) {
-      console.error(`❌ required parameter --kv-store-name not provided.`);
-      process.exitCode = 1;
+      fail('usage', `required parameter --kv-store-name not provided.`);
       return;
     }
   } else if (storageMode === 's3') {
     if (s3Region == null) {
-      console.error(`❌ required parameter --s3-region not provided.`);
-      process.exitCode = 1;
+      fail('usage', `required parameter --s3-region not provided.`);
       return;
     }
     if (s3Bucket == null) {
-      console.error(`❌ required parameter --s3-bucket not provided.`);
-      process.exitCode = 1;
+      fail('usage', `required parameter --s3-bucket not provided.`);
       return;
     }
     let s3Endpoint = options.s3Endpoint;
@@ -807,8 +791,7 @@ export async function action(actionArgs: string[]) {
       if (s3Endpoint) {
         console.log('✅ S3 endpoint resolved:', s3Endpoint);
       } else {
-        console.error(`❌ Unable to resolve S3 endpoint from region '${s3Region}' and bucket '${s3Bucket}.`);
-        process.exitCode = 1;
+        fail('failed', `Unable to resolve S3 endpoint from region '${s3Region}' and bucket '${s3Bucket}'.`);
         return;
       }
       s3EndpointUrl = new URL(`https://${s3Endpoint}/`);
@@ -821,8 +804,7 @@ export async function action(actionArgs: string[]) {
       try {
         s3EndpointUrl = new URL(s3Endpoint);
       } catch {
-        console.error(`❌ Unable to parse '${s3Endpoint}' as a valid URL.`);
-        process.exitCode = 1;
+        fail('usage', `Unable to parse '${s3Endpoint}' as a valid URL.`);
         return;
       }
     }
@@ -834,9 +816,8 @@ export async function action(actionArgs: string[]) {
 
   const defaultCollectionName = options.defaultCollectionName ?? 'live';
   if (!isValidCollectionName(defaultCollectionName)) {
-    console.error(`❌ parameter --default-collection-name is not a valid collection name: '${defaultCollectionName}'.`);
+    fail('collection-name-invalid', `parameter --default-collection-name is not a valid collection name: '${defaultCollectionName}'.`);
     console.error(`  * ${COLLECTION_NAME_RULE}`);
-    process.exitCode = 1;
     return;
   }
 
