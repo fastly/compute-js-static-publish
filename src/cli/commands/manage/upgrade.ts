@@ -10,7 +10,7 @@ import { checkProjectVersion } from '../../managed/version-check.js';
 import { parseCommandLine } from '../../util/args.js';
 import { getOwnVersion } from '../../util/package.js';
 import { PROJECT_FILE_NAME } from '../../../models/config/static-publish-project.js';
-import { fail } from '../../util/output.js';
+import { fail, recordFailure } from '../../util/output.js';
 
 function help() {
   console.log(`\
@@ -39,7 +39,7 @@ export async function action(actionArgs: string[]) {
     if (parsed.error != null) {
       console.error(String(parsed.error));
       console.error();
-      process.exitCode = 1;
+      recordFailure('usage', String(parsed.error));
     }
     help();
     return;
@@ -57,7 +57,7 @@ export async function action(actionArgs: string[]) {
     return;
   }
   if (check.result === 'older-cli') {
-    fail(`The project uses ${check.recorded}, which is newer than the version that runs (${running}). 'upgrade' does not move a project to an older version.`);
+    fail('version-mismatch', `The project uses ${check.recorded}, which is newer than the version that runs (${running}). 'upgrade' does not move a project to an older version.`);
     return;
   }
   if (!writeProjectVersion(running)) {

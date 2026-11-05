@@ -39,6 +39,9 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 - Managed projects: `deploy` deploys the generated app only if its fingerprint changed (`--force` deploys anyway), records the fingerprint in the comment of the service version, and writes the Service ID of the first deploy into `managed.serviceId`. `status` shows if a deploy is necessary, and the preview URLs. `dev` and `deploy` stop if `managed.staticPublishVersion` is not the version that runs; `upgrade` (or `--auto-upgrade` with a newer CLI) moves the project to it. In an ejected app, `deploy` runs `fastly compute publish`, and `status` shows the Service ID.
 - Managed projects: `eject` converts a managed project into an ejected app in `./compute-js` (or `--dir`): the app that `deploy` would deploy, `static-publish.rc.js` (with `generatedFrom`) and `publish-content.config.js` from the project file (the paths point at the same directories), and this package pinned to the version that runs. It needs a published version, and it stops for functions or regular expressions in `publishContent`.
 - Docs: README "Managed and ejected apps", with the API token scopes for CI. `MIGRATING.md`: move an existing app to managed mode.
+- `--json`: `publish-content`, `collections list`, `status`, `deploy` (in a managed project), and `--version` write their result as one JSON object to stdout, with `schemaVersion: 1`. The log lines then go to stderr. With another command, `--json` is an error. The `publish-content` result shows the purge result for each environment (`purge.ok` is `false` if a purge failed).
+- Error codes: with `--json`, an error gives `{ "schemaVersion": 1, "error": { "code", "message" } }`. The README lists the codes, for example `collection-name-invalid` and `credentials-missing`.
+- README: "Using the CLI in CI", with the exit codes, the JSON output, and the error codes.
 
 ### Changed
 
@@ -49,6 +52,9 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
    - `collectionSelector.fromCookie()`: the activate path returns `400` for a name that breaks the rule, and sets no cookie. Before, it returned `400` only for a name with characters that a cookie value cannot have.
 - `PublisherServer` keeps the state of each request (the settings, the index, and the `Server-Timing` measurements) in a scope for that request and collection. A reused sandbox does not keep this state from one request to the next. A second call for the same request (for example `beginRequest()` and then `serveRequest()`) does not read the index again.
 - README: a GitHub Actions example that publishes a preview for each pull request, and deletes it when the pull request closes. The README and `clean --help` say not to run `clean` while `publish-content` can run for the same storage.
+- Exit codes: `0` success, also when there is nothing to do; `1` the operation failed, and a retry can help; `2` a usage or config error, and a retry cannot help. Before, the CLI used `1` for all errors.
+- `collections promote` from a collection that does not exist stops with the message "Collection '…' does not exist." (exit `2`). Before, it stopped with an uncaught error.
+- `collections delete` of a collection that does not exist says "Nothing to delete." It still succeeds, as before.
 - `staticPublisherWorkingDir` in `static-publish.rc.js` can be a path outside the directory of the file, for example `../static-publisher`. It must start with `./` or `../`, and it must not be the directory of `static-publish.rc.js` or a directory above it (for example `./`, `..`, or `../..`). Before, the value had to start with `./`. A value that breaks the rule stops the command before it writes anything.
 
 ### Deprecated

@@ -4,6 +4,7 @@
  */
 
 import { getCommandAndArgs } from '../../util/args.js';
+import { fail, isJsonMode, recordFailure } from '../../util/output.js';
 import * as cleanCommand from './clean.js';
 import * as deployCommand from './deploy.js';
 import * as devCommand from './dev.js';
@@ -61,6 +62,9 @@ Global Options:
   --version                        Print the version of this package and exit.
   --non-interactive                Never ask a question. Missing input is an error.
                                    This is also on when the CI environment variable is set.
+  --json                           Write the result as one JSON object to stdout, and
+                                   the log to stderr. For publish-content,
+                                   collections list, status, deploy, and --version.
   -h, --help                       Show this help message and exit.
 
 Automatic Project Initialization:
@@ -95,7 +99,7 @@ export async function action(actionArgs: string[]) {
       console.error(commandAndArgs.error);
       console.error(`Specify one of the following commands: ${Object.keys(modes).join(', ')}`);
       console.error();
-      process.exitCode = 1;
+      recordFailure('usage', commandAndArgs.error);
     }
 
     help();
@@ -103,6 +107,10 @@ export async function action(actionArgs: string[]) {
   }
 
   const { command, argv, } = commandAndArgs;
+  if (isJsonMode() && ![ 'publish-content', 'collections', 'status', 'deploy' ].includes(command)) {
+    fail('json-not-supported', `--json is not supported for '${command}'.`);
+    return;
+  }
   await modes[command].action(argv);
 
 }
