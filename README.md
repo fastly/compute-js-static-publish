@@ -491,7 +491,7 @@ const rc = {
 | `cookie` | A cookie | Also serves the activate path (`/activate?collection=<name>&redirectTo=<path>`) and the reset path. |
 | `header` | A request header | For tests, CI checks, and API clients. |
 
-- `sticky: 'cookie'` on a `path` or `query` source: when the source matches, set the cookie of the `cookie` source, and redirect to the URL without the prefix or the parameter. It needs a `cookie` source.
+- `sticky: 'cookie'` on a `path` or `query` source: when the source matches, set the cookie of the `cookie` source, and redirect (`308`) to the URL without the prefix or the parameter. It needs a `cookie` source.
 - A name must follow the [collection name rule](#-collections-publish-preview-promote) and match `allow`. Otherwise the source is skipped.
 - Redirects go only to a path on the same site. `redirectTo` with another site redirects to `/`.
 - The responses of a selected collection (not the default collection) get `Cache-Control: private`, because the same URL can serve another collection.
