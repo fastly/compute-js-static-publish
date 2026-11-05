@@ -57,7 +57,7 @@ describe('CookieCollectionSelector collection value', () => {
   test('sets the cookie for a valid collection name', () => {
     for (const name of [ 'pr-42', 'live', 'a' ]) {
       const response = activate(`collection=${encodeURIComponent(name)}`);
-      assert.equal(response.status, 302, name);
+      assert.equal(response.status, 308, name);
       assert.match(response.headers.get('Set-Cookie'), new RegExp(`^publisher-collection=${name};`), name);
     }
   });
