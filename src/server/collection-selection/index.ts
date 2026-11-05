@@ -149,7 +149,7 @@ function redirect(location: string, setCookie: string): Response {
   headers.set('Location', sameSiteLocation(location));
   // A redirect that sets a cookie must not be stored by a shared cache.
   headers.set('Cache-Control', 'no-store');
-  return new Response(null, { status: 302, headers });
+  return new Response(null, { status: 308, headers });
 }
 
 function setCookieValue(cookie: CompiledCookie, url: URL, collectionName: string) {

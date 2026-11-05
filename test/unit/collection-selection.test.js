@@ -107,7 +107,7 @@ describe('resolveCollection', () => {
       const result = resolveCollection(req('https://example.com/activate?collection=pr-1&redirectTo=/docs/'),
         { sources: [ { type: 'cookie', maxAge: 600 } ] });
       assert.equal(result.collectionName, 'pr-1');
-      assert.equal(result.response.status, 302);
+      assert.equal(result.response.status, 308);
       assert.equal(result.response.headers.get('location'), '/docs/');
       assert.equal(result.response.headers.get('cache-control'), 'no-store');
       assert.equal(result.response.headers.get('set-cookie'), 'publisher-collection=pr-1; Path=/; Max-Age=600; HttpOnly; Secure; SameSite=Lax');
@@ -134,15 +134,15 @@ describe('resolveCollection', () => {
     test('reset removes the cookie and redirects', () => {
       const result = resolveCollection(req('http://example.com/reset'), config);
       assert.equal(result.collectionName, null);
-      assert.equal(result.response.status, 302);
+      assert.equal(result.response.status, 308);
       assert.equal(result.response.headers.get('location'), '/');
       assert.equal(result.response.headers.get('set-cookie'), 'publisher-collection=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax');
     });
 
     test('custom activate and reset paths', () => {
       const custom = { sources: [ { type: 'cookie', activatePath: '/_on', resetPath: '/_off' } ] };
-      assert.equal(resolveCollection(req('https://example.com/_on?collection=pr-1'), custom).response.status, 302);
-      assert.equal(resolveCollection(req('https://example.com/_off'), custom).response.status, 302);
+      assert.equal(resolveCollection(req('https://example.com/_on?collection=pr-1'), custom).response.status, 308);
+      assert.equal(resolveCollection(req('https://example.com/_off'), custom).response.status, 308);
       assert.equal(resolveCollection(req('https://example.com/activate?collection=pr-1'), custom).response, undefined);
     });
 
@@ -188,7 +188,7 @@ describe('resolveCollection', () => {
       const result = resolveCollection(req('https://example.com/_preview/pr-42/docs/a.html?x=1'), config);
       assert.equal(result.collectionName, 'pr-42');
       assert.equal(result.pathname, '/docs/a.html');
-      assert.equal(result.response.status, 302);
+      assert.equal(result.response.status, 308);
       assert.equal(result.response.headers.get('location'), '/docs/a.html?x=1');
       assert.match(result.response.headers.get('set-cookie'), /^publisher-collection=pr-42; /);
     });
