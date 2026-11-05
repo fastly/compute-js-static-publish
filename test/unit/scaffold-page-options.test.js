@@ -46,7 +46,7 @@ describe('scaffold --spa and --not-found-page', () => {
 
   test('stops if --not-found-page is not under --root-dir', async (t) => {
     const errors = await scaffold(t, [ '--not-found-page=/404.html' ]);
-    assert.equal(process.exitCode, 1);
+    assert.equal(process.exitCode, 2);
     assert.match(errors.join('\n'), /Not Found file '\/404\.html' is not under the asset root directory/);
     assert.match(errors.join('\n'), /for example \.\/public\/404\.html/);
     assert.equal(fs.existsSync(path.resolve(dir, 'compute-js')), false);
@@ -54,14 +54,14 @@ describe('scaffold --spa and --not-found-page', () => {
 
   test('stops if --not-found-page does not exist', async (t) => {
     const errors = await scaffold(t, [ '--not-found-page=./public/missing.html' ]);
-    assert.equal(process.exitCode, 1);
+    assert.equal(process.exitCode, 2);
     assert.match(errors.join('\n'), /Not Found file '\.\/public\/missing\.html' does not exist/);
     assert.equal(fs.existsSync(path.resolve(dir, 'compute-js')), false);
   });
 
   test('stops if --spa is not under --root-dir', async (t) => {
     const errors = await scaffold(t, [ '--spa=/index.html' ]);
-    assert.equal(process.exitCode, 1);
+    assert.equal(process.exitCode, 2);
     assert.match(errors.join('\n'), /SPA file '\/index\.html' is not under the asset root directory/);
     assert.match(errors.join('\n'), /for example \.\/public\/index\.html/);
     assert.equal(fs.existsSync(path.resolve(dir, 'compute-js')), false);
@@ -69,7 +69,7 @@ describe('scaffold --spa and --not-found-page', () => {
 
   test('stops if --spa does not exist', async (t) => {
     const errors = await scaffold(t, [ '--spa=./public/spa.html' ]);
-    assert.equal(process.exitCode, 1);
+    assert.equal(process.exitCode, 2);
     assert.match(errors.join('\n'), /SPA file '\.\/public\/spa\.html' does not exist/);
     assert.equal(fs.existsSync(path.resolve(dir, 'compute-js')), false);
   });
