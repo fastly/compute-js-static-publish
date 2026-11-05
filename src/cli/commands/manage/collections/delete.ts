@@ -8,7 +8,7 @@ import path from 'node:path';
 import { type OptionDefinition } from 'command-line-args';
 
 import { parseCommandLine } from '../../../util/args.js';
-import { errorCodeOf, fail, recordFailure } from '../../../util/output.js';
+import { errorCodeOf, fail, recordFailure, setJsonResult } from '../../../util/output.js';
 import {
   LoadConfigError,
   configFileName,
@@ -16,7 +16,7 @@ import {
   loadStaticPublisherRcFile,
 } from '../../../util/config.js';
 import { loadStorageProviderFromStaticPublishRc } from '../../../storage/storage-provider.js';
-import { type PurgeTarget, loadPurgeTarget, purgeCollection } from '../../../util/purge.js';
+import { type PurgeResult, type PurgeTarget, loadPurgeTarget, purgeCollection } from '../../../util/purge.js';
 
 function help() {
   console.log(`\
@@ -227,9 +227,23 @@ export async function action(actionArgs: string[]) {
     true,
   )
 
+  const purgeResults: PurgeResult[] = [];
   if (purgeTarget != null) {
-    await purgeCollection(purgeTarget, publishId, collectionName);
+    purgeResults.push(...await purgeCollection(purgeTarget, publishId, collectionName));
   }
 
   console.log("✅  Completed.")
+
+  setJsonResult({
+    collection: collectionName,
+    publishId,
+    deleted: assetKeysToDelete.size > 0,
+    ...(assetKeysToDelete.size === 0 ? { reason: 'not-found' } : {}),
+    // null: no purge (--local, or no Service ID).
+    purge: purgeTarget != null ? {
+      ok: purgeResults.every(x => x.result !== 'failed'),
+      serviceId: purgeTarget.serviceId,
+      environments: purgeResults,
+    } : null,
+  });
 }
