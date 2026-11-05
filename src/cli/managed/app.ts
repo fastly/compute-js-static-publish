@@ -13,6 +13,7 @@ import { MANAGED_APP_DIR } from '../../models/config/static-publish-project.js';
 import { isS3StorageConfigRc } from '../../models/config/static-publish-rc.js';
 import { type AppConfig, generateApp } from '../commands/scaffold/generate-app.js';
 import { DEFAULT_APP_TEMPLATE_NAME, loadAppTemplate } from '../commands/scaffold/app-template.js';
+import { isJsonMode } from '../util/output.js';
 import { getOwnPackageDir, getOwnVersion, readOwnPackageJson } from '../util/package.js';
 import { computeFingerprint, managedAppFiles } from './fingerprint.js';
 import { findHostnameForAwsS3RegionAndBucket } from '../util/s3.js';
@@ -101,7 +102,8 @@ export function installManagedApp(appDir: string): boolean {
   console.log(`📦 Installing the dependencies of the app (npm ci)...`);
   const result = child_process.spawnSync('npm', [ 'ci', '--no-audit', '--no-fund' ], {
     cwd: appDir,
-    stdio: [ 'ignore', 'inherit', 'inherit' ],
+    // With --json, stdout is for the JSON object only.
+    stdio: [ 'ignore', isJsonMode() ? process.stderr : 'inherit', 'inherit' ],
   });
   if (result.error != null || result.status !== 0) {
     throw new Error(`npm ci failed in ${appDir}.`);

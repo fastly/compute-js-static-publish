@@ -17,7 +17,7 @@ import { THIS_PACKAGE, readTemplateLockfile } from '../../managed/lockfile.js';
 import { parseCommandLine } from '../../util/args.js';
 import { detectProjectMode } from '../../util/config.js';
 import { rootRelative } from '../../util/files.js';
-import { fail } from '../../util/output.js';
+import { fail, recordFailure } from '../../util/output.js';
 import { getOwnVersion } from '../../util/package.js';
 import { MANAGED_APP_DIR, PROJECT_FILE_NAME, RC_FILE_NAME } from '../../../models/config/static-publish-project.js';
 
@@ -73,7 +73,7 @@ export async function action(actionArgs: string[]) {
     if (parsed.error != null) {
       console.error(String(parsed.error));
       console.error();
-      process.exitCode = 1;
+      recordFailure('usage', String(parsed.error));
     }
     help();
     return;
@@ -85,7 +85,7 @@ export async function action(actionArgs: string[]) {
   } = parsed.commandLineOptions;
 
   if (detectProjectMode() === 'ejected') {
-    fail('This app is already ejected.');
+    fail('usage', 'This app is already ejected.');
     return;
   }
   const project = await loadManagedProject('eject', '');
@@ -96,17 +96,17 @@ export async function action(actionArgs: string[]) {
   const projectDir = path.resolve();
   const appDir = path.resolve(dirValue ?? './compute-js');
   if (appDir === projectDir || !appDir.startsWith(projectDir + path.sep) || appDir.startsWith(path.resolve(MANAGED_APP_DIR))) {
-    fail(`--dir must be a directory in the project dir, and not in ${MANAGED_APP_DIR}.`);
+    fail('usage', `--dir must be a directory in the project dir, and not in ${MANAGED_APP_DIR}.`);
     return;
   }
   if (fs.existsSync(appDir) && !force) {
-    fail(`${rootRelative(appDir)} exists. Use --force to write into it.`);
+    fail('usage', `${rootRelative(appDir)} exists. Use --force to write into it.`);
     return;
   }
 
   const nonData = findNonDataPaths(project.publishContent);
   if (nonData.length > 0) {
-    fail(`Eject cannot copy functions or regular expressions from publishContent: ${nonData.join(', ')}. ` +
+    fail('usage', `Eject cannot copy functions or regular expressions from publishContent: ${nonData.join(', ')}. ` +
       `Remove them from ${PROJECT_FILE_NAME}, eject, and then add them to publish-content.config.js of the ejected app by hand.`);
     return;
   }
@@ -114,7 +114,7 @@ export async function action(actionArgs: string[]) {
   const version = getOwnVersion();
   const testSpec = process.env[PACKAGE_SPEC_ENV];
   if (testSpec == null && !isPublished(version)) {
-    fail(`Eject needs a version of ${THIS_PACKAGE} that is published on npm. ${version} is not.`);
+    fail('version-not-published', `Eject needs a version of ${THIS_PACKAGE} that is published on npm. ${version} is not.`);
     return;
   }
   const packageSpec = testSpec ?? `^${version}`;
@@ -161,7 +161,7 @@ export async function action(actionArgs: string[]) {
   console.log(`npm ${installArgs.join(' ')}`);
   const install = child_process.spawnSync('npm', installArgs, { cwd: appDir, stdio: [ 'ignore', process.stderr, 'inherit' ] });
   if (install.error != null || install.status !== 0) {
-    fail(`npm install failed in ${rootRelative(appDir)}. ${PROJECT_FILE_NAME} was not changed. Fix the problem, and run eject again with --force.`);
+    fail('failed', `npm install failed in ${rootRelative(appDir)}. ${PROJECT_FILE_NAME} was not changed. Fix the problem, and run eject again with --force.`);
     return;
   }
 
