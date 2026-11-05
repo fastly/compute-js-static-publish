@@ -35,7 +35,7 @@ describe('CookieCollectionSelector', () => {
 
   test('sets the cookie for a valid name', () => {
     const response = selector.applySelector(new Request('https://example.com/activate?collection=pr-42'));
-    assert.equal(response.status, 302);
+    assert.equal(response.status, 308);
     assert.match(response.headers.get('Set-Cookie'), /^publisher-collection=pr-42;/);
   });
 
