@@ -160,6 +160,14 @@ function clearCookieValue(cookie: CompiledCookie, url: URL) {
   return [ `${cookie.cookieName}=`, ...cookieAttributes(url, 0) ].join('; ');
 }
 
+// True if the result selects the collection through the URL (a host, path, or
+// query source). Then the URL names the collection. A sticky source gives a
+// redirect in place of a file, so its result is never selected by URL.
+export function isSelectedByUrl(result: ResolveCollectionResult, collectionName: string): boolean {
+  return result.response == null && result.collectionName === collectionName &&
+    (result.matchedBy === 'host' || result.matchedBy === 'path' || result.matchedBy === 'query');
+}
+
 // Choose the collection for a request. With no sources, every request gets the
 // default collection (collectionName: null). Throws a TypeError if the config is
 // not valid.
