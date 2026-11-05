@@ -17,7 +17,7 @@ import {
   loadStaticPublisherRcFile,
 } from '../../../util/config.js';
 import { parseCommandLine } from '../../../util/args.js';
-import { errorCodeOf, fail, recordFailure } from '../../../util/output.js';
+import { errorCodeOf, fail, recordFailure, setJsonResult } from '../../../util/output.js';
 import { checkCollectionNameForWrite } from '../../../util/collection-name.js';
 import { loadStorageProviderFromStaticPublishRc } from '../../../storage/storage-provider.js';
 import { type PurgeTarget, loadPurgeTarget, purgeCollection } from '../../../util/purge.js';
@@ -297,4 +297,12 @@ export async function action(actionArgs: string[]) {
   }
 
   console.log("✅  Completed.");
+
+  setJsonResult({
+    from: sourceCollectionName,
+    to: targetCollectionName,
+    publishId,
+    // The expiration time of the target, after the promote. null: it does not expire.
+    expiresAt: indexMetadata.expirationTime != null ? new Date(indexMetadata.expirationTime * 1000).toISOString() : null,
+  });
 }

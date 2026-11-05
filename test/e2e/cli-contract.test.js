@@ -66,10 +66,9 @@ describe('CLI contract', () => {
       assert.equal(json.schemaVersion, 1);
       assert.equal(json.collection, 'live');
       assert.equal(json.publishId, 'default');
-      assert.equal(json.files.total, 12);
-      assert.equal(json.files.hidden, 0);
-      assert.equal(typeof json.files.uploaded, 'number');
-      assert.equal(typeof json.files.reused, 'number');
+      assert.deepEqual(json.files, { total: 12, hidden: 0 });
+      assert.equal(typeof json.storageItems.uploaded, 'number');
+      assert.equal(typeof json.storageItems.reused, 'number');
       assert.equal(json.expiresAt, null);
       assert.equal(json.purge, null, 'no purge with --local');
     });
@@ -105,7 +104,7 @@ describe('CLI contract', () => {
     });
 
     test('a command that does not support --json', () => {
-      for (const args of [ [ 'clean', '--local' ], [ 'collections', 'delete', '--local', '--collection-name', 'pr-1' ] ]) {
+      for (const args of [ [ 'clean', '--local' ], [ 'collections', 'update-expiration', '--local', '--collection-name', 'pr-1', '--expires-never' ] ]) {
         const { status, json } = runJson(args, { cwd: computeJsDir });
         assert.equal(status, 2, args.join(' '));
         assert.equal(json.error.code, 'json-not-supported', args.join(' '));
@@ -177,15 +176,21 @@ describe('CLI contract', () => {
   describe('operations that succeed when they run again', () => {
     test('promote to the same target', () => {
       for (let i = 0; i < 2; i++) {
-        const result = runCli([ 'collections', 'promote', '--local', '--collection-name', 'live', '--to', 'copy' ], { cwd: computeJsDir });
-        assert.equal(result.status, 0);
+        const { status, json, stderr } = runJson([ 'collections', 'promote', '--local', '--collection-name', 'live', '--to', 'copy' ], { cwd: computeJsDir });
+        assert.equal(status, 0, stderr);
+        assert.deepEqual(json, { schemaVersion: 1, from: 'live', to: 'copy', publishId: 'default', expiresAt: null });
       }
     });
 
-    test('delete a collection that does not exist', () => {
-      const result = runCli([ 'collections', 'delete', '--local', '--collection-name', 'does-not-exist' ], { cwd: computeJsDir });
-      assert.equal(result.status, 0);
-      assert.match(result.output, /Collection 'does-not-exist' does not exist\. Nothing to delete\./);
+    test('delete a collection, and delete it again', () => {
+      const first = runJson([ 'collections', 'delete', '--local', '--collection-name', 'copy' ], { cwd: computeJsDir });
+      assert.equal(first.status, 0, first.stderr);
+      assert.deepEqual(first.json, { schemaVersion: 1, collection: 'copy', publishId: 'default', deleted: true, purge: null });
+
+      const second = runJson([ 'collections', 'delete', '--local', '--collection-name', 'copy' ], { cwd: computeJsDir });
+      assert.equal(second.status, 0, second.stderr);
+      assert.deepEqual(second.json, { schemaVersion: 1, collection: 'copy', publishId: 'default', deleted: false, reason: 'not-found', purge: null });
+      assert.match(second.stderr, /Collection 'copy' does not exist\. Nothing to delete\./);
     });
   });
 });
