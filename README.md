@@ -537,6 +537,10 @@ A response gets `private` also when your code gives `serveRequest()` a `collecti
 
 **More than one site in one service:** you can serve one site from each collection. Select the collection with a `host` source, for example `{collection}.example.com`, so that a shared cache can store the responses of each site. Also set `noindex: false`, because otherwise each site that is not the default collection gets `X-Robots-Tag: noindex`. A collection that expires stops being served, so do not set an expiration time for these collections.
 
+**Without `collectionSelection`:** if your code chooses the collection, for example with `collectionSelector.fromCookie()` and `setActiveCollectionName()`, or with the `collectionName` option, `PublisherServer` does not add `Cache-Control: private` or `X-Robots-Tag: noindex`. Your code must add them when the URL does not name the collection. Otherwise a shared cache can store a preview and give it to other visitors.
+
+`serveRequest()` returns a normal `Response`. To use a different cache policy, change its headers in your code before you return it.
+
 #### A preview for each pull request
 
 A CI job can publish each pull request to its own collection, and remove it when the pull request closes. `--expires-in` stops serving a preview after that time, also if the second job does not run. But its index stays in storage until `clean --delete-expired-collections`, and its files stay until `clean`.
@@ -1395,6 +1399,9 @@ if (redirectResponse) {
       - If someone forgets `?collection=?`? Then `/activate` replies with HTTP `400`.
    
    When the visitor hits `/reset`, the cookie is deleted.
+
+   > [!NOTE]
+   > The collection that the cookie selects is not in the URL. Add `Cache-Control: private` to the responses of a preview, so that a shared cache does not store them. See [Shared caches](#shared-caches). With [`collectionSelection`](#-previews-collection-selection), `PublisherServer` does this for you.
 
 3. Safety flags are baked in
 
