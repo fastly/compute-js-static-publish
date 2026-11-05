@@ -75,7 +75,7 @@ export async function action(actionArgs: string[]) {
   }
 
   const { command, argv, } = commandAndArgs;
-  if (isJsonMode() && command !== 'list') {
+  if (isJsonMode() && ![ 'list', 'delete', 'promote' ].includes(command)) {
     fail('json-not-supported', `--json is not supported for 'collections ${command}'.`);
     return;
   }
