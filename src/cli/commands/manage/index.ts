@@ -64,7 +64,8 @@ Global Options:
                                    This is also on when the CI environment variable is set.
   --json                           Write the result as one JSON object to stdout, and
                                    the log to stderr. For publish-content,
-                                   collections list, status, deploy, and --version.
+                                   collections list/delete/promote, status, deploy,
+                                   and --version.
   -h, --help                       Show this help message and exit.
 
 Automatic Project Initialization:
