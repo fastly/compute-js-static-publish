@@ -30,6 +30,7 @@ const SELECTION_FLAGS = [
   '--collection-selection', 'query:collection,sticky',
   '--collection-selection', 'cookie,maxAge=600',
   '--collection-selection', 'header:x-publisher-collection',
+  '--collection-selection', 'path:/_preview/{collection}',
   '--collection-allow', 'pr-*,staging',
 ];
 
@@ -97,6 +98,15 @@ describe('collection selection in the plain app', { skip: skipUnlessFastlyCli() 
 
     const next = await get('/', { cookie: setCookie.split(';')[0] });
     assert.match(next.body.toString(), /<h1>Preview home<\/h1>/);
+    assert.match(next.headers['cache-control'] ?? '', /^private\b/, 'the cookie selects it, so the URL does not name it');
+  });
+
+  test('path: the URL names the collection, so the response is not private', async () => {
+    const res = await get('/_preview/pr-1/');
+    assert.equal(res.status, 200);
+    assert.match(res.body.toString(), /<h1>Preview home<\/h1>/);
+    assert.equal(res.headers['x-robots-tag'], 'noindex');
+    assert.doesNotMatch(res.headers['cache-control'] ?? '', /private/);
   });
 
   test('cookie: activate and reset', async () => {
