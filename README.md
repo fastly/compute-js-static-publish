@@ -1223,7 +1223,7 @@ These rules are for tools that run the CLI with no person present, for example a
 | `1` | The operation failed, for example storage cannot be reached, or the deploy failed. A retry can help. |
 | `2` | A usage or config error, for example an unknown option, a missing option, a collection name that breaks the rule, or a config file that cannot be loaded. A retry cannot help. |
 
-**`--json`:** `publish-content`, `collections list`, `status`, `deploy` (in a managed project), and `--version` can write their result as one JSON object to stdout, at the end. All log lines then go to stderr, so that they still show in the CI log. With another command, `--json` is an error (`json-not-supported`).
+**`--json`:** `publish-content`, `collections list`, `collections delete`, `collections promote`, `status`, `deploy` (in a managed project), and `--version` can write their result as one JSON object to stdout, at the end. All log lines then go to stderr, so that they still show in the CI log. With another command, `--json` is an error (`json-not-supported`).
 
 ```sh
 npx @fastly/compute-js-static-publish publish-content \
@@ -1239,7 +1239,8 @@ Each object has `schemaVersion` (now `1`). A new field keeps the version. A fiel
   "schemaVersion": 1,
   "collection": "pr-42",
   "publishId": "default",
-  "files": { "total": 352, "hidden": 2, "uploaded": 12, "reused": 340 },
+  "files": { "total": 352, "hidden": 2 },
+  "storageItems": { "uploaded": 12, "reused": 340 },
   "expiresAt": "2026-12-01T00:00:00.000Z",
   "purge": {
     "ok": true,
@@ -1249,7 +1250,7 @@ Each object has `schemaVersion` (now `1`). A new field keeps the version. A fiel
 }
 ```
 
-- `files.total` and `files.hidden` count the files in the index. `files.uploaded` and `files.reused` count storage items: each file, and each compressed variant that is kept.
+- `files` counts the files in the index. `storageItems` counts the items in storage: each file, and each compressed variant that is kept. Thus `storageItems.uploaded` can be larger than `files.total`.
 - `expiresAt` is `null` if the collection does not expire.
 - `purge` is `null` if there was no purge (`--local`, or no Service ID). `purge.ok` is `false` if a purge failed. Then the visitors can get the old content from the cache until it expires. Each item of `environments` has a `result`: `purged`, `not-staged` (a `staging` purge, and the service has no staged version), or `failed` (with a `reason`).
 
@@ -1268,6 +1269,18 @@ Each object has `schemaVersion` (now `1`). A new field keeps the version. A fiel
     }
   ]
 }
+```
+
+`collections delete --json`. `deleted` is `false` with `"reason": "not-found"` if the collection does not exist (also exit `0`). `purge` is as in `publish-content`:
+
+```json
+{ "schemaVersion": 1, "collection": "pr-42", "publishId": "default", "deleted": true, "purge": null }
+```
+
+`collections promote --json`. `expiresAt` is the expiration time of the target after the promote, or `null`:
+
+```json
+{ "schemaVersion": 1, "from": "staging", "to": "live", "publishId": "default", "expiresAt": null }
 ```
 
 `status --json` in a managed project. `needsDeploy` is `null` if it is not known (no API token):
