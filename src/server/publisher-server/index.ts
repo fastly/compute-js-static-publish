@@ -26,7 +26,7 @@ import {
   type CollectionSelection,
   validateCollectionSelection,
 } from '../../models/config/collection-selection.js';
-import { type ResolveCollectionResult, resolveCollection } from '../collection-selection/index.js';
+import { type ResolveCollectionResult, isSelectedByUrl, resolveCollection } from '../collection-selection/index.js';
 import { decodeIndexMetadata, getUnsupportedIndexFeatures } from '../../models/server/index.js';
 import { isExpired } from '../../models/time/index.js';
 import {
@@ -254,7 +254,9 @@ export class PublisherServer {
   // with the collectionName option of serveRequest() or serveFallback(), gets:
   // - if it does not exist or has expired: onMissing ('not-found': a 404
   //   response; 'default': the default collection).
-  // - X-Robots-Tag: noindex (unless noindex is false), and Cache-Control: private.
+  // - X-Robots-Tag: noindex (unless noindex is false).
+  // - Cache-Control: private, unless the collection comes from the URL (a host,
+  //   path, or query source). See markPreviewResponse().
   setCollectionSelection(config: CollectionSelection | null) {
     if (config != null) {
       const errors = validateCollectionSelection(config);
@@ -916,7 +918,7 @@ export class PublisherServer {
     const fallback = options.fallback !== false && requestAcceptsTextHtml(request);
     const keyPath = fallback ? pathname : `${pathname}|no-html`;
     const response = await this.serveCachedFor(scope, request, keyPath, (fillRequest) => this.serveRequestFromStorage(scope, fillRequest, pathname, fallback));
-    return selected.preview ? this.markPreviewResponse(response) : response;
+    return selected.preview ? this.markPreviewResponse(request, selected.scope, response) : response;
   }
 
   // Serve the SPA file or the 404 page, as serveRequest() does when no file
@@ -951,7 +953,7 @@ export class PublisherServer {
       }
       return this.serveFallbackFromStorage(scope, fillRequest, serverConfig);
     });
-    return selected.preview ? this.markPreviewResponse(response) : response;
+    return selected.preview ? this.markPreviewResponse(request, selected.scope, response) : response;
   }
 
   // Returns true if the collection is published, has not expired, and can
@@ -988,19 +990,24 @@ export class PublisherServer {
     return response;
   }
 
-  // A response from a collection that is not the default collection. The same
-  // URL can serve another collection (for example after the cookie is removed),
-  // so shared caches must not store it.
-  private markPreviewResponse(response: Response | null): Response | null {
+  // A response from a collection that is not the default collection. If a host,
+  // path, or query source of the request selects this collection, the URL
+  // names the collection, so a shared cache can store the response. Otherwise
+  // (a cookie or header source, or a collectionName that the app chose) the same
+  // URL can serve another collection, so the response gets Cache-Control:
+  // private, and shared caches do not store it.
+  private markPreviewResponse(request: Request, scope: CollectionScope, response: Response | null): Response | null {
     if (response == null || this.collectionSelection == null) {
       return response;
     }
     const headers = new Headers(response.headers);
-    const cacheControl = headers.get('Cache-Control');
-    if (cacheControl == null || cacheControl === '') {
-      headers.set('Cache-Control', 'private');
-    } else if (!/\b(private|no-store)\b/i.test(cacheControl)) {
-      headers.set('Cache-Control', `private, ${cacheControl}`);
+    if (!isSelectedByUrl(resolveCollection(request, this.collectionSelection), scope.collectionName)) {
+      const cacheControl = headers.get('Cache-Control');
+      if (cacheControl == null || cacheControl === '') {
+        headers.set('Cache-Control', 'private');
+      } else if (!/\b(private|no-store)\b/i.test(cacheControl)) {
+        headers.set('Cache-Control', `private, ${cacheControl}`);
+      }
     }
     if (this.collectionSelection.noindex !== false) {
       headers.set('X-Robots-Tag', 'noindex');

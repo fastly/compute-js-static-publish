@@ -494,7 +494,7 @@ const rc = {
 - `sticky: 'cookie'` on a `path` or `query` source: when the source matches, set the cookie of the `cookie` source, and redirect (`308`) to the URL without the prefix or the parameter. It needs a `cookie` source.
 - A name must follow the [collection name rule](#-collections-publish-preview-promote) and match `allow`. Otherwise the source is skipped.
 - Redirects go only to a path on the same site. `redirectTo` with another site redirects to `/`.
-- The responses of a selected collection (not the default collection) get `Cache-Control: private`, because the same URL can serve another collection.
+- The responses of a selected collection (not the default collection) get `X-Robots-Tag: noindex` (unless `noindex` is `false`). They get `Cache-Control: private` if the URL does not name the collection. See [Shared caches](#shared-caches).
 - To find out if a selected collection exists, `PublisherServer` reads its index, also when the [response cache](#️-caching-responses-with-the-core-cache) has the response.
 
 The `plain` app does this in `src/index.js`. Apps scaffolded before 8.1.0 do not. To add it to such an app, change `src/index.js`:
@@ -522,6 +522,22 @@ previewUrl('pr-42', 'https://example.edgecompute.app', rc.collectionSelection);
 
 > [!WARNING]
 > A preview is public to anyone who knows its name. Use `allow` to limit the collections that can be selected, and do not publish content that must stay private.
+
+#### Shared caches
+
+A shared cache, for example a CDN in front of your service, can store a response and give it to other visitors. The [response cache](#️-caching-responses-with-the-core-cache) of `PublisherServer` keeps the responses of each collection apart, so this section is only about shared caches. For a shared cache, the response of a collection that is not the default collection depends on how the request selects the collection:
+
+| Source | Does the URL name the collection? | `Cache-Control` |
+|--------|-----------------------------------|-----------------|
+| `host`, `path`, `query` | Yes | As for the default collection. A shared cache can store the response. |
+| `cookie`, `header` | No: the same URL can serve another collection | `private`. A shared cache does not store the response. |
+| `path` or `query` with `sticky: 'cookie'` | No: after the redirect, the cookie selects the collection | `private` |
+
+A response gets `private` also when your code gives `serveRequest()` a `collectionName` that the sources of the request do not select. For a `query` source, the shared cache must keep the query string in its cache key.
+
+**Previews with a cookie or a header:** the default collection and the preview have the same URLs. A shared cache can store a response of the default collection, and give it to a visitor who has the preview cookie. That visitor then sees the default collection in place of the preview. If a shared cache is in front of your service, select previews with a `host` or `path` source.
+
+**More than one site in one service:** you can serve one site from each collection. Select the collection with a `host` source, for example `{collection}.example.com`, so that a shared cache can store the responses of each site. Also set `noindex: false`, because otherwise each site that is not the default collection gets `X-Robots-Tag: noindex`. A collection that expires stops being served, so do not set an expiration time for these collections.
 
 #### A preview for each pull request
 
