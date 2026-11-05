@@ -90,7 +90,7 @@ describe('collection selection in the plain app', { skip: skipUnlessFastlyCli() 
 
   test('query with sticky: sets the cookie and redirects without the parameter', async () => {
     const res = await get('/about?x=1&collection=pr-1');
-    assert.equal(res.status, 302);
+    assert.equal(res.status, 308);
     assert.equal(res.headers['location'], '/about?x=1');
     const setCookie = [ res.headers['set-cookie'] ].flat()[0];
     assert.match(setCookie, /^publisher-collection=pr-1; Path=\/; Max-Age=600; HttpOnly; SameSite=Lax/);
@@ -101,18 +101,18 @@ describe('collection selection in the plain app', { skip: skipUnlessFastlyCli() 
 
   test('cookie: activate and reset', async () => {
     const activate = await get('/activate?collection=pr-1&redirectTo=/about');
-    assert.equal(activate.status, 302);
+    assert.equal(activate.status, 308);
     assert.equal(activate.headers['location'], '/about');
     assert.match([ activate.headers['set-cookie'] ].flat()[0], /^publisher-collection=pr-1;/);
 
     const reset = await get('/reset');
-    assert.equal(reset.status, 302);
+    assert.equal(reset.status, 308);
     assert.match([ reset.headers['set-cookie'] ].flat()[0], /^publisher-collection=; .*Max-Age=0/);
   });
 
   test('cookie: activate redirects only to a path on this site', async () => {
     const res = await get('/activate?collection=pr-1&redirectTo=//example.com/');
-    assert.equal(res.status, 302);
+    assert.equal(res.status, 308);
     assert.equal(res.headers['location'], '/');
   });
 
