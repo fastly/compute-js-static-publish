@@ -12,7 +12,7 @@ import {
   previewUrl,
   validateCollectionSelection,
 } from '../../build/server/models/config/collection-selection.js';
-import { resolveCollection, sameSiteLocation } from '../../build/server/server/collection-selection/index.js';
+import { isSelectedByUrl, resolveCollection, sameSiteLocation } from '../../build/server/server/collection-selection/index.js';
 
 const req = (url, { headers = {}, method = 'GET' } = {}) => new Request(url, { headers, method });
 
@@ -236,6 +236,40 @@ describe('resolveCollection', () => {
 
   test('a config that is not valid throws', () => {
     assert.throws(() => resolveCollection(req('https://example.com/'), { sources: [ { type: 'nope' } ] }), TypeError);
+  });
+});
+
+describe('isSelectedByUrl', () => {
+  const config = {
+    sources: [
+      { type: 'host', pattern: '{collection}.preview.example.com' },
+      { type: 'path', prefix: '/_preview/{collection}' },
+      { type: 'query', param: 'collection' },
+      { type: 'query', param: 'sticky', sticky: 'cookie' },
+      { type: 'cookie' },
+      { type: 'header', name: 'x-collection' },
+    ],
+  };
+  const byUrl = (url, collectionName, headers) => isSelectedByUrl(resolveCollection(req(url, { headers }), config), collectionName);
+
+  test('a host, path, or query source: the URL names the collection', () => {
+    assert.equal(byUrl('https://pr-1.preview.example.com/', 'pr-1'), true);
+    assert.equal(byUrl('https://example.com/_preview/pr-1/a.html', 'pr-1'), true);
+    assert.equal(byUrl('https://example.com/?collection=pr-1', 'pr-1'), true);
+  });
+
+  test('a cookie or header source: the same URL can serve another collection', () => {
+    assert.equal(byUrl('https://example.com/', 'pr-1', { cookie: 'publisher-collection=pr-1' }), false);
+    assert.equal(byUrl('https://example.com/', 'pr-1', { 'x-collection': 'pr-1' }), false);
+  });
+
+  test('a sticky source gives a redirect, not a file', () => {
+    assert.equal(byUrl('https://example.com/?sticky=pr-1', 'pr-1'), false);
+  });
+
+  test('a collection that the request does not select', () => {
+    assert.equal(byUrl('https://pr-1.preview.example.com/', 'pr-2'), false);
+    assert.equal(byUrl('https://example.com/', 'pr-1'), false);
   });
 });
 
