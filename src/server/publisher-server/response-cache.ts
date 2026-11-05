@@ -19,7 +19,7 @@ export type ResponseCacheOptions = {
   maxBodySize?: number,
 };
 
-export const DEFAULT_MAX_BODY_SIZE = 8 * 1024 * 1024;
+export const DEFAULT_MAX_BODY_SIZE = 16 * 1024 * 1024;
 
 // What is stored as the user metadata of a cached response. A cached "not found"
 // lets a missing path skip reading the settings and the index, too. A cached
@@ -186,6 +186,31 @@ export async function readBodyUpTo(
     offset += chunk.byteLength;
   }
   return { bytes };
+}
+
+export const BODY_PIECE_SIZE = 1024 * 1024;
+
+// Gives bytes in pieces of BODY_PIECE_SIZE bytes. The pieces are views of
+// bytes, not copies.
+export function* bytesInPieces(bytes: Uint8Array<ArrayBuffer>): Generator<Uint8Array<ArrayBuffer>> {
+  for (let offset = 0; offset < bytes.byteLength; offset += BODY_PIECE_SIZE) {
+    yield bytes.subarray(offset, offset + BODY_PIECE_SIZE);
+  }
+}
+
+// A stream of bytes in pieces of BODY_PIECE_SIZE bytes, as bytesInPieces() gives them.
+export function streamBytesInPieces(bytes: Uint8Array<ArrayBuffer>): ReadableStream<Uint8Array> {
+  const pieces = bytesInPieces(bytes);
+  return new ReadableStream<Uint8Array>({
+    pull(controller) {
+      const { done, value } = pieces.next();
+      if (done) {
+        controller.close();
+      } else {
+        controller.enqueue(value);
+      }
+    },
+  });
 }
 
 export function encodeCachedResponseMetadata(metadata: CachedResponseMetadata): string {

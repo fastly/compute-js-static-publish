@@ -752,10 +752,10 @@ publisherServer.setResponseCache({ maxAge: 3600 });
 
 `maxAge` is in seconds. This is off by default.
 
-`maxBodySize` sets the largest response, in bytes, to cache. The default is 8 MiB (`8 * 1024 * 1024`). A larger response is served from storage each time:
+`maxBodySize` sets the largest response, in bytes, to cache. The default is 16 MiB (`16 * 1024 * 1024`). A larger response is served from storage each time:
 
 ```js
-publisherServer.setResponseCache({ maxAge: 3600, maxBodySize: 16 * 1024 * 1024 });
+publisherServer.setResponseCache({ maxAge: 3600, maxBodySize: 4 * 1024 * 1024 });
 ```
 
 - A response is cached by the publish ID, the collection, the path, and the client's `Accept-Encoding`. A cache hit does not read the settings, the index, or the file.
@@ -781,7 +781,7 @@ The second argument identifies the response in the collection. If anything other
 
 Notes:
 
-- A response is read completely before it is cached, so a request uses memory for one response, up to `maxBodySize`. Other requests that wait for the same response get it when it is cached.
+- A response is read completely before it is cached. The request that caches it uses memory of about two times the body, up to two times `maxBodySize`. A Compute instance has a limit on its memory, so do not set `maxBodySize` larger than 48 MiB (`48 * 1024 * 1024`). Other requests that wait for the same response get it when it is cached.
 - A response is cached only if its body has the size in the file's metadata. If storage returns a different body, nothing is cached, the request gets an error, and the next request reads the file again.
 - With `--local`, `publish-content` cannot purge the local cache. Restart `fastly compute serve` to see newly published content, or leave the response cache off in local development.
 - On staging, a purge must include the `Fastly-Purge-Environment: staging` header to clear the staging cache. Without it, a purge clears only the production cache. Use `publish-content --purge-environment=production,staging` to purge both.

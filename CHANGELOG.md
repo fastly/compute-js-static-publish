@@ -9,6 +9,14 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 
 ## [unreleased]
 
+### Changed
+
+- `PublisherServer.setResponseCache()`: the default of `maxBodySize` is now 16 MiB. It was 8 MiB.
+
+### Fixed
+
+- `PublisherServer` response cache: the request that caches a response now uses memory of about two times the body. Before, it used about four times the body. On a Fastly service, with `maxBodySize` set larger than the default, a response of 32 MiB caused a `500` for that request. With a response of 48 MiB, other requests that waited for the same response also got a `200` with an empty body.
+
 ## [8.0.1] - 2026-11-04
 
 ### Changed
