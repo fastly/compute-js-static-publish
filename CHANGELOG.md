@@ -9,6 +9,11 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 
 ## [unreleased]
 
+### Fixed
+
+- `publish-content` (KV Store): a chunk of a file larger than 20 MiB was sometimes uploaded with only part of its bytes, without an error, because the command read the chunk file before it was completely written. The server then could not serve the file, and later publishes did not upload the chunk again, because its key was in storage. Now the command writes each chunk completely before it uploads it. Also, it compares the stored size of each chunk with the correct size, and uploads a chunk with a different size again. To repair a file that has a short chunk, publish again with this version.
+- `publish-content` (KV Store): for a file that is an exact multiple of 20 MiB, the command made the chunk files again at each publish.
+
 ## [8.0.1] - 2026-11-04
 
 ### Changed
