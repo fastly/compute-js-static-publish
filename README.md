@@ -24,6 +24,7 @@
 - [🧹 Cleaning Up](#-cleaning-up)
 - [🔄 Content Compression](#-content-compression)
 - [🧩 Using PublisherServer in Custom Apps](#-using-publisherserver-in-custom-apps)
+- [🔥 Using Hono](#-using-hono)
 - [📥 Using Published Assets in Your Code](#-using-published-assets-in-your-code)
 - [📚 CLI Reference](#-cli-reference)
 - [📕 Appendix](#-appendix)
@@ -1158,6 +1159,84 @@ Notes:
 - A response is cached only if its body has the size in the file's metadata. If storage returns a different body, nothing is cached, the request gets an error, and the next request reads the file again.
 - With `--local`, `publish-content` cannot purge the local cache. Restart `fastly compute serve` to see newly published content, or leave the response cache off in local development.
 - On staging, a purge must include the `Fastly-Purge-Environment: staging` header to clear the staging cache. Without it, a purge clears only the production cache. Use `publish-content --purge-environment=production,staging` to purge both.
+
+## 🔥 Using Hono
+
+`@fastly/compute-js-static-publish/hono` has middleware for [Hono](https://hono.dev/) apps. It serves the published files with `PublisherServer`, so a Hono app gets all the features of the server: `autoIndex`, `autoExt`, the compressed variants, `304` responses, the [response cache](#️-caching-responses-with-the-core-cache), `Server-Timing`, and [collection selection](#-previews-collection-selection).
+
+Add `hono` and `@fastly/hono-fastly-compute` to your app:
+
+```sh
+npm install hono @fastly/hono-fastly-compute
+```
+
+Then serve the files from your Hono app. Add your own routes before `serveStatic()` or after it:
+
+```js
+import { Hono } from 'hono';
+import { fire } from '@fastly/hono-fastly-compute';
+import { fromStaticPublishRc } from '@fastly/compute-js-static-publish/hono';
+import rc from '../static-publish.rc.js';
+
+const { serveStatic, serveFallback, selectCollection } = fromStaticPublishRc(rc);
+
+const app = new Hono();
+
+// Select the collection of each request with collectionSelection in
+// static-publish.rc.js, for example for previews.
+app.use('*', selectCollection());
+
+app.get('/api/hello', (c) => c.json({ hello: 'world' }));
+
+// Serve the published files. If no file matches, the request goes to the next handler.
+app.use('*', serveStatic());
+
+// When nothing matches, serve the SPA file or the 404 page.
+app.notFound(serveFallback());
+
+fire(app);
+```
+
+`fire()` from [`@fastly/hono-fastly-compute`](https://hono.dev/docs/getting-started/fastly) runs the app on Fastly Compute. Use version 0.4.0 or later with `@fastly/js-compute` v4. To use a KV Store, a Config Store, or other resources from `c.env`, use `buildFire()` with bindings. Do not use `hono/service-worker`: by default, it sends each 404 response to `fetch()`, and Compute has no default backend.
+
+`fromStaticPublishRc(rc)` returns:
+
+- `serveStatic(options?)`: middleware that serves the file that matches the request. If no file matches, or the method is not `GET` or `HEAD`, it calls the next handler, so a route after it gets the request. It does not serve the SPA file or the 404 page, and it does not answer `/healthz`.
+- `serveFallback(options?)`: for `app.notFound()`. It serves the SPA file or the 404 page. If there is neither, or the client does not accept HTML, it gives Hono's default 404 response.
+- `selectCollection()`: middleware that selects the collection of each request with the [`collectionSelection`](#-previews-collection-selection) of `static-publish.rc.js`. It returns the redirects of the selection (a `sticky` source, and the activate and reset paths of the `cookie` source), and sets `c.var.staticPublisher`. Then `serveStatic()` and `serveFallback()` use the selected collection. For a `path` source, `serveStatic()` looks up the path without the prefix.
+- `publisherServer`: the `PublisherServer`, to configure it. For example, `publisherServer.setResponseCache({ maxAge: 3600 })`.
+
+If you make the `PublisherServer` yourself, use `fromPublisherServer(publisherServer)` in place of `fromStaticPublishRc(rc)`.
+
+`serveStatic()` takes options like the `serveStatic()` of Hono:
+
+| Option | Description |
+|---|---|
+| `root` | The directory that request paths are relative to, in the published files (after `publicDirPrefix`, if it is set). The default is `./`. A path that resolves outside `root` is not served. |
+| `path` | The path to serve, in place of the request path. For example, `./favicon.ico`. |
+| `rewriteRequestPath` | `(path, c) => string`. Changes the request path before it is resolved against `root`. |
+| `collectionName` | The collection: a string, `null` for the default collection, or `(c) => string \| null \| undefined`. Without it, or if the function returns `undefined`, the collection is the one that `selectCollection()` selected, or else the active collection. |
+
+For example, to serve `/assets/*` from the `static` directory:
+
+```js
+app.use('/assets/*', serveStatic({ root: './static', rewriteRequestPath: (path) => path.replace(/^\/assets/, '') }));
+```
+
+`serveFallback()` takes the `collectionName` option, too. To give a default to all the middleware, pass it to `fromStaticPublishRc(rc, { collectionName })`. An option in a call replaces the default.
+
+In TypeScript, use `StaticPublisherVariables` for the variables of the app, so that `c.var.staticPublisher` has a type:
+
+```ts
+import { fromStaticPublishRc, type StaticPublisherVariables } from '@fastly/compute-js-static-publish/hono';
+
+const app = new Hono<{ Variables: StaticPublisherVariables }>();
+app.get('/api/collection', (c) => c.json({ collection: c.var.staticPublisher.collectionName }));
+```
+
+The middleware imports only types from `hono`, so it does not add `hono` to your bundle. `hono` (v4) is an optional peer dependency of this package.
+
+To move from `@fastly/hono-compute-js-static-publish`, see [MIGRATING.md](./MIGRATING.md).
 
 ## 📥 Using Published Assets in Your Code
 
