@@ -99,6 +99,44 @@ my-site/
 
 6. When the steps above work, take `compute-js/` out of the repo, and commit `static-publish.project.js`.
 
+## Move from `@fastly/hono-compute-js-static-publish` (8.1)
+
+`@fastly/hono-compute-js-static-publish` supports v6 and v7 of this package. From 8.1, this package has Hono support itself, as `@fastly/compute-js-static-publish/hono`. First upgrade the app to v8 (see [Upgrade from v7 to v8](#upgrade-from-v7-to-v8)). Then:
+
+1. Remove the old package, and add the packages that a Hono app uses on Compute:
+
+   ```sh
+   npm uninstall @fastly/hono-compute-js-static-publish
+   npm install hono @fastly/hono-fastly-compute
+   ```
+
+2. Change the code. `fromStaticPublishRc()` now returns an object, not the `serveStatic` function:
+
+   ```js
+   // Before
+   import { fire } from 'hono/service-worker';
+   import { fromStaticPublishRc } from '@fastly/hono-compute-js-static-publish';
+   const serveStatic = fromStaticPublishRc(rc);
+
+   // After
+   import { fire } from '@fastly/hono-fastly-compute';
+   import { fromStaticPublishRc } from '@fastly/compute-js-static-publish/hono';
+   const { serveStatic, serveFallback } = fromStaticPublishRc(rc);
+   ```
+
+   Use `fire()` from `@fastly/hono-fastly-compute`, not from `hono/service-worker`. By default, the handler of `hono/service-worker` sends each 404 response to `fetch()`, and Compute has no default backend.
+
+3. Add `app.notFound(serveFallback())`. `serveStatic()` does not serve the SPA file or the 404 page.
+
+4. Change the types in the JSDoc of your config files to the main package, for example `import('@fastly/compute-js-static-publish').StaticPublishRc`. The `/hono` export does not have these types.
+
+Differences of `serveStatic()`:
+
+- It serves files with `PublisherServer.serveRequest()`. Thus it uses `autoIndex`, `autoExt`, the compressed variants, and the response cache. The old package looked up the request path in the index directly.
+- It applies `publicDirPrefix` (deprecated). If it is set, `root` is relative to it.
+- It serves only `GET` and `HEAD`. For other methods, it calls the next handler.
+- For previews, use `selectCollection()` with `collectionSelection` in `static-publish.rc.js` (see [Using Hono](./README.md#-using-hono)).
+
 ## Upgrade from v7 to v8
 
 v8 can use the files that v7 published. The storage key layout did not change. v8 also accepts the v7 format of
