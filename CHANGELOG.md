@@ -15,6 +15,7 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 
 ### Fixed
 
+- `collections promote` now purges the target collection, as `publish-content` and `collections delete` do. Before, after a promote (for example to `live`), the service could serve the old content of the target from the cache until it expired. The new options `--fastly-service-id` and `--purge-environment` work as in `publish-content`. If a Service ID is found, the command needs an API token, also in S3 mode, and stops before it writes anything if the token is missing.
 - `PublisherServer` response cache: the request that caches a response now uses memory of about two times the body. Before, it used about four times the body. On a Fastly service, with `maxBodySize` set larger than the default, a response of 32 MiB caused a `500` for that request. With a response of 48 MiB, other requests that waited for the same response also got a `200` with an empty body.
 
 ## [8.0.1] - 2026-11-04

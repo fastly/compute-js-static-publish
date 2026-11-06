@@ -129,7 +129,8 @@ describe('local mode with a collection that requires an unsupported feature', { 
     indexEntry.metadata = JSON.stringify({ ...JSON.parse(indexEntry.metadata), requires: 'future-feature', futureField: 'x' });
     fs.writeFileSync(kvStoreJsonPath, JSON.stringify(kvStoreJson));
 
-    runCli([ 'collections', 'promote', '--collection-name', 'live', '--to', 'copy', '--local' ], { cwd: computeJsDir });
+    const promote = runCli([ 'collections', 'promote', '--collection-name', 'live', '--to', 'copy', '--local' ], { cwd: computeJsDir });
+    assert.match(promote.output, /Local mode: will skip the purge\./);
     server = await startServe(computeJsDir);
   });
 
