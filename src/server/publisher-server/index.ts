@@ -39,10 +39,12 @@ import {
   DEFAULT_MAX_BODY_SIZE,
   buildCacheFillRequest,
   buildResponseCacheKey,
+  bytesInPieces,
   decodeCachedResponseMetadata,
   encodeCachedResponseMetadata,
   parseAcceptEncodingGroups,
   readBodyUpTo,
+  streamBytesInPieces,
 } from './response-cache.js';
 import { checkBodyLength } from '../util/body-length.js';
 
@@ -661,9 +663,13 @@ export class PublisherServer {
       userMetadata: encodeCachedResponseMetadata(metadata),
       length: readResult.bytes.byteLength,
     });
-    writer.append(readResult.bytes);
+    // The body goes to the entry and to the response in pieces. A call with the
+    // whole body makes a full copy of it, which needs memory for one more body.
+    for (const piece of bytesInPieces(readResult.bytes)) {
+      writer.append(piece);
+    }
     writer.close();
-    return this.responseFromCache(request, metadata, readResult.bytes);
+    return this.responseFromCache(request, metadata, streamBytesInPieces(readResult.bytes));
   }
 
   private responseFromCache(
