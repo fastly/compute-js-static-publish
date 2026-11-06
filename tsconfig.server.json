@@ -7,6 +7,7 @@
   },
   "include": [
     "src/server",
+    "src/hono",
     "src/shared",
   ]
 }
