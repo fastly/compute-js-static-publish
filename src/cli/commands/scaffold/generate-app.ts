@@ -113,7 +113,7 @@ export function generateApp(config: AppConfig): Record<string, string> {
     'dev:watch': 'compute-js-static-publish run-dev-watch',
     'fastly:deploy': 'fastly compute publish',
     'prebuild': 'compute-js-static-publish run-template-hook prebuild',
-    'build': 'js-compute-runtime ./src/index.js ./bin/main.wasm',
+    'build': `js-compute-runtime ./${template.entry} ./bin/main.wasm`,
     'postbuild': 'compute-js-static-publish run-template-hook postbuild',
     'postinstall': 'compute-js-static-publish run-template-hook postinstall',
   };
