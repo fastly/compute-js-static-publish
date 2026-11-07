@@ -24,6 +24,7 @@ import {
 } from '../../models/config/static-publish-project.js';
 import { validateCollectionSelection } from '../../models/config/collection-selection.js';
 import { APP_TEMPLATE_NAMES, isAppTemplateName } from '../commands/scaffold/app-template.js';
+import { checkFastlyTomlSections } from '../commands/scaffold/fastly-toml-sections.js';
 import {
   getKvStoreConfigFromRc,
 } from '../../models/config/kv-store-config.js';
@@ -103,7 +104,7 @@ async function importDefault(configFile: string) {
 }
 
 export const normalizeProjectManaged = buildNormalizeFunctionForObject<StaticPublishProjectManaged>((config, errors) => {
-  const { name, description, authors, template, serviceId, staticPublishVersion } = config as Record<string, unknown>;
+  const { name, description, authors, template, serviceId, staticPublishVersion, fastlyToml } = config as Record<string, unknown>;
   for (const [ key, value ] of Object.entries({ name, description, template, serviceId, staticPublishVersion })) {
     if (value !== undefined && typeof value !== 'string') {
       errors.push(`managed.${key}, if specified, must be a string.`);
@@ -115,10 +116,13 @@ export const normalizeProjectManaged = buildNormalizeFunctionForObject<StaticPub
   if (typeof template === 'string' && !isAppTemplateName(template)) {
     errors.push(`managed.template must be one of: ${APP_TEMPLATE_NAMES.join(', ')}.`);
   }
+  if (fastlyToml !== undefined) {
+    checkFastlyTomlSections(fastlyToml, errors);
+  }
   if (errors.length > 0) {
     return null;
   }
-  return { name, description, authors, template, serviceId, staticPublishVersion } as StaticPublishProjectManaged;
+  return { name, description, authors, template, serviceId, staticPublishVersion, fastlyToml } as StaticPublishProjectManaged;
 });
 
 // Loads static-publish.project.js from the current directory (the project dir).
