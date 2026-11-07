@@ -258,7 +258,7 @@ npx @fastly/compute-js-static-publish publish-content --local
 npx @fastly/compute-js-static-publish dev
 ```
 
-`dev` generates the app in `.static-publish/app/`, installs its dependencies with `npm ci` if they changed, and runs `fastly compute serve` in it. Options after `--` go to `fastly compute serve`, for example `dev -- --addr=127.0.0.1:8080`. The app serves the content of the local KV Store, `kvstore.json` in the working directory.
+`dev` generates the app in `.static-publish/app/`, installs its dependencies with `npm ci` if they changed, and runs `fastly compute serve` in it. Options after `--` go to `fastly compute serve`, for example `dev -- --addr=127.0.0.1:8080`. With `dev -- --watch`, a change in the app builds and restarts it, and the watch script of the template (`scripts/template_watch.js`, see [Template hooks](#-template-hooks)), if it has one, runs next to `fastly compute serve`. The app serves the content of the local KV Store, `kvstore.json` in the working directory.
 
 The same version of this package always generates the same app, with the same versions of all dependencies: this package has a lockfile for the app of each template. The app uses the copy of this package that runs the CLI, through a `file:` link. Thus, add this package as a dev dependency of your project, and run the CLI from it, so that the version is pinned:
 
