@@ -24,6 +24,9 @@ updates:
           - version-update:semver-major
     cooldown:
       default-days: 7
+      # Actions that we own get updates with no cooldown.
+      exclude:
+        - "fastly/*"
 
   - package-ecosystem: npm
     directories:
@@ -50,3 +53,7 @@ updates:
           - version-update:semver-minor
     cooldown:
       default-days: 7
+      # Packages that we own get updates with no cooldown.
+      exclude:
+        - "@fastly/*"
+        - "@fanoutio/*"
