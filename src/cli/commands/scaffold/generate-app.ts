@@ -49,7 +49,8 @@ export type AppConfig = {
 export const TEMPLATE_HOOKS = [ 'prebuild', 'postbuild', 'postinstall' ] as const;
 
 // The watch script of a template, if it has one. It runs next to
-// `fastly compute serve --watch` (npm run dev:watch), until it is stopped.
+// `fastly compute serve --watch` (npm run dev:watch, or dev -- --watch), until
+// it is stopped.
 export const TEMPLATE_WATCH_SCRIPT = 'scripts/template_watch.js';
 
 // The name, author, and description of an app when the flags or the project

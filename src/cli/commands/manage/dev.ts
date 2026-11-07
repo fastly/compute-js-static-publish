@@ -3,8 +3,6 @@
  * Licensed under the MIT license. See LICENSE file for details.
  */
 
-import child_process from 'node:child_process';
-import fs from 'node:fs';
 import path from 'node:path';
 
 import { type OptionDefinition } from 'command-line-args';
@@ -13,6 +11,7 @@ import { prepareManagedApp } from '../../managed/app.js';
 import { parseCommandLine } from '../../util/args.js';
 import { checkVersionForCommand, loadManagedProject } from '../../managed/command-helpers.js';
 import { PROJECT_FILE_NAME } from '../../../models/config/static-publish-project.js';
+import { serveApp } from '../run-dev-watch.js';
 
 function help() {
   console.log(`\
@@ -28,13 +27,17 @@ Description:
   The app serves the content of the local KV Store. To publish content to it,
   run 'publish-content --local' first.
 
-  Only in a managed project. In an ejected app, run 'npm run dev:start'.
+  Only in a managed project. In an ejected app, run 'npm run dev:start', or
+  'npm run dev:watch' (fastly compute serve --watch).
 
 Options:
   --auto-upgrade                   If the CLI is newer than managed.staticPublishVersion,
                                    set it to the version that runs, and continue.
   -- <options>                     Options after -- go to 'fastly compute serve',
                                    for example: dev -- --addr=127.0.0.1:8080
+                                   With -- --watch, a change in the app builds and
+                                   restarts it. If the template has a watch script,
+                                   it runs next to 'fastly compute serve'.
 
 Global Options:
   -h, --help                       Show this help message and exit.
@@ -72,11 +75,7 @@ export async function action(actionArgs: string[]) {
 
   const { appDir } = await prepareManagedApp(path.resolve(), project);
 
-  // The Fastly CLI of the app, if it has one.
-  const appFastly = path.resolve(appDir, 'node_modules/.bin/fastly');
-  const fastly = fs.existsSync(appFastly) ? appFastly : 'fastly';
-  console.log(`▶️ fastly compute serve ${serveArgs.join(' ')}`);
-  const result = child_process.spawnSync(fastly, [ 'compute', 'serve', ...serveArgs ], { cwd: appDir, stdio: 'inherit' });
+  const result = await serveApp(appDir, serveArgs);
   if (result.error != null) {
     console.error(`❌ Could not run 'fastly compute serve': ${String(result.error)}`);
     process.exitCode = 1;
