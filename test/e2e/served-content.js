@@ -43,6 +43,13 @@ export async function checkServedContent(t, baseUrl, { autoExt = true, contentTy
     assert.match(res.body.toString(), /<h1>Not found<\/h1>/);
   });
 
+  // serveRequest() returns null, and the app makes the response.
+  await t.test('does not serve the 404 page to a request that does not accept HTML', async () => {
+    const res = await rawRequest(baseUrl + '/does-not-exist', { headers: { accept: 'application/json' } });
+    assert.equal(res.status, 404);
+    assert.doesNotMatch(res.body.toString(), /<h1>Not found<\/h1>/);
+  });
+
   await t.test('serves the brotli variant', async () => {
     const res = await rawRequest(baseUrl + '/style.css', { headers: { 'accept-encoding': 'br' } });
     assert.equal(res.status, 200);
@@ -126,4 +133,14 @@ export async function checkResponseCache(t, baseUrl) {
   const conditional = await rawRequest(baseUrl + '/cached.html', { headers: { ...headers, ...HTML, 'if-none-match': etag } });
   assert.equal(conditional.status, 304);
   assert.equal(conditional.headers['etag'], etag);
+
+  // A request that accepts HTML and a request that does not accept HTML
+  // have different cache keys for a missing path.
+  const missingHeaders = { 'x-use-cache': '1' };
+  const missingHtml = await rawRequest(baseUrl + '/cached-missing', { headers: { ...missingHeaders, ...HTML } });
+  assert.equal(missingHtml.status, 404);
+  assert.match(missingHtml.body.toString(), /<h1>Not found<\/h1>/);
+  const missingJson = await rawRequest(baseUrl + '/cached-missing', { headers: { ...missingHeaders, accept: 'application/json' } });
+  assert.equal(missingJson.status, 404);
+  assert.equal(missingJson.body.toString(), 'Not found (app)');
 }
