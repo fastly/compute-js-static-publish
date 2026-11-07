@@ -15,6 +15,9 @@ export type AppTemplate = {
   // Files of the app, keyed by the path relative to the app dir, for example
   // 'src/index.js'. They are copied as they are.
   files: Record<string, string>,
+  // The entry file of the app, relative to the app dir: "main" in the
+  // template's package.json, or src/index.js.
+  entry: string,
   // From the template's package.json.
   dependencies: Record<string, string>,
   devDependencies: Record<string, string>,
@@ -23,13 +26,15 @@ export type AppTemplate = {
 
 // The features that the code of a template uses.
 export type AppTemplateSupports = {
-  // src/index.js calls resolveCollection(), so collectionSelection in the rc works.
+  // The entry file selects the collection of each request (resolveCollection()
+  // or selectCollection()), so collectionSelection in the rc works.
   collectionSelection?: boolean,
 };
 
 // The templates in resources/templates/, and what each one supports.
 const APP_TEMPLATES: Record<string, AppTemplateSupports> = {
   plain: { collectionSelection: true },
+  hono: { collectionSelection: true },
 };
 
 export const APP_TEMPLATE_NAMES = Object.keys(APP_TEMPLATES);
@@ -73,6 +78,7 @@ export function loadAppTemplate(name: string): AppTemplate {
   return {
     name,
     files,
+    entry: packageJson.main ?? 'src/index.js',
     dependencies: packageJson.dependencies ?? {},
     devDependencies: packageJson.devDependencies ?? {},
     supports: APP_TEMPLATES[name],

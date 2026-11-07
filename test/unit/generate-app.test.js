@@ -93,6 +93,11 @@ const cases = {
       noindex: true,
     },
   },
+  'kv-hono': {
+    ...base,
+    template: loadAppTemplate('hono'),
+    generatedFrom: { ...base.generatedFrom, template: 'hono' },
+  },
   's3-endpoint': {
     ...base,
     storage: { mode: 's3', region: 'us-east-1', bucket: 'my-bucket', endpointUrl: 'https://s3.example.com/', endpointGenerated: false },
