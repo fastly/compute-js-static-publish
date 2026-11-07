@@ -833,13 +833,14 @@ fire(app);
   - `gitignore`: `.hono-extensions/` and `src/hono-extensions.generated.js` (task 6.6).
 - The template does not use `hono/service-worker`: by default, its handler sends each 404 response to `fetch()`, and Compute has no default backend.
 - The template uses `logFastlyServiceVersion()` from `@fastly/hono-fastly-compute`, in place of its own logging middleware.
-- **Values of this package on `c.var.staticPublisher`** ("things that belong to static-publisher"), set by a middleware of the template before the extensions. `/hono` exports the type.
+- **Values of this package on `c.var.staticPublisher`** ("things that belong to static-publisher"), set by `selectCollection()` before the extensions. `/hono` exports the type, `StaticPublisherVariables`.
   - `c.var.staticPublisher.publisherServer`: the app's `PublisherServer`.
-  - `c.var.staticPublisher.collectionName`: the collection that collection selection chose.
-- **Collection selection:** a middleware calls `resolveCollection()`, returns its `response` if it has one, and sets `c.var.staticPublisher.collectionName`. `fromStaticPublishRc(rc, { collectionName: (c) => c.var.staticPublisher.collectionName })`. The `path` source uses `rewriteRequestPath`. The template declares `supports.collectionSelection`.
+  - `c.var.staticPublisher.collectionName`: the collection that collection selection chose (`null` for the default collection).
+  - `c.var.staticPublisher.pathname`: for a `path` source, the request path without the prefix of the source.
+- **Collection selection:** `selectCollection()` (from `fromStaticPublishRc(rc)`) calls `resolveCollection()`, returns its `response` if it has one, and sets `c.var.staticPublisher`. `serveStatic()` and `serveFallback()` read the selection from `c.var.staticPublisher`, so the template passes no `collectionName`. For a `path` source, `serveStatic()` uses `pathname`. The template declares `supports.collectionSelection`.
 - **Managed mode:** the `hono` template's lockfile (task 3.5), and tests with `managed.template: 'hono'`, including a switch from `plain` to `hono`.
 
-**To decide in this part:** the name of the template's middleware that sets `c.var.staticPublisher` (this file uses `staticPublisherVars()` as an example), and the exported type for `c.var`.
+**Decided in this part:** the middleware that sets `c.var.staticPublisher` is `selectCollection()` (part 6a); there is no separate middleware. The exported type for `c.var` is `StaticPublisherVariables`.
 
 ### Hono extensions
 
