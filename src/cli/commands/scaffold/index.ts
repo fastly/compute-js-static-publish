@@ -980,7 +980,7 @@ To build and deploy to your Compute service:
   If a Secret Store named 'S3_CREDENTIALS' already exists, the Fastly CLI asks for a
   different name. If you leave it empty, it uses the existing Secret Store. If you give
   a different name, the Fastly CLI uses it for the resource link too. Then call
-  setSecretStoreForS3Credentials() with that name in src/index.js, and deploy again.
+  setSecretStoreForS3Credentials() with that name in ${appConfig.template.entry}, and deploy again.
 
   After the deploy, fastly.toml has the service ID, so s3:publish also purges the
   service's cache. For this purge, s3:publish needs FASTLY_API_TOKEN too.
