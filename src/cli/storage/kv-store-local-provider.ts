@@ -14,6 +14,7 @@ import {
 } from '../../models/config/kv-store-config.js';
 import {
   applyKVStoreEntriesChunks,
+  chunkSizes,
   KV_STORE_CHUNK_SIZE,
 } from '../util/kv-store-items.js';
 import {
@@ -179,5 +180,9 @@ export class KvStoreLocalProvider implements StorageProvider {
 
   calculateNumChunks(size: number): number {
     return Math.ceil(size / KV_STORE_CHUNK_SIZE);
+  }
+
+  calculateChunkSizes(size: number): number[] {
+    return chunkSizes(size, KV_STORE_CHUNK_SIZE);
   }
 }

@@ -30,6 +30,7 @@ import {
 } from '../util/kv-store.js';
 import {
   applyKVStoreEntriesChunks,
+  chunkSizes,
   packNdjsonBatches,
   ndjsonLineForBatchEntry,
   entriesToUpload,
@@ -250,6 +251,10 @@ export class KvStoreProvider implements StorageProvider {
     return Math.ceil(size / KV_STORE_CHUNK_SIZE);
   }
 
+  calculateChunkSizes(size: number): number[] {
+    return chunkSizes(size, KV_STORE_CHUNK_SIZE);
+  }
+
 }
 
 export function kvStoreEntryToStorageEntry(
@@ -266,6 +271,12 @@ export function kvStoreEntryToStorageEntry(
     if (metadata != null) {
       storageEntry.metadata = metadata;
     }
+  }
+
+  // The API gives the size of the value in this header, also for a HEAD request.
+  const storedContentLength = kvStoreEntry.response.headers.get('stored-content-length');
+  if (storedContentLength != null) {
+    storageEntry.size = Number(storedContentLength);
   }
 
   if (kvStoreEntry.generation != null) {
