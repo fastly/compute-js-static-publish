@@ -56,6 +56,7 @@ export function renderProjectFile(config: AppConfig, projectDir: string, staticP
     template: config.template.name,
     serviceId: config.serviceId,
     staticPublishVersion,
+    fastlyToml: config.fastlyToml,
   });
 }
 
@@ -125,5 +126,6 @@ export function appConfigFromProject(
     // A managed project has no generatedFrom: its generated rc must not change each day.
     generatedFrom: undefined,
     ...(rc.collectionSelection != null ? { collectionSelection: rc.collectionSelection } : {}),
+    ...(managed.fastlyToml != null ? { fastlyToml: managed.fastlyToml } : {}),
   };
 }

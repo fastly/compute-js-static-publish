@@ -6,9 +6,11 @@
 import * as path from 'node:path';
 
 import { type CollectionSelection } from '../../../models/config/collection-selection.js';
+import { type FastlyTomlSections } from '../../../models/config/static-publish-project.js';
 import { type GeneratedFrom } from '../../../models/config/static-publish-rc.js';
 import { dotRelative } from '../../util/files.js';
 import { type AppTemplate } from './app-template.js';
+import { addFastlyTomlSections } from './fastly-toml-sections.js';
 import { renderAppResource } from './render.js';
 
 // The resolved settings of an app: everything that generateApp() needs.
@@ -40,6 +42,8 @@ export type AppConfig = {
   generatedFrom: GeneratedFrom | undefined,
   // Written into static-publish.rc.js, if set. The template must support it.
   collectionSelection?: CollectionSelection,
+  // Added to fastly.toml, if set (managed.fastlyToml of a managed project).
+  fastlyToml?: FastlyTomlSections,
   // Written as package-lock.json, if set (a managed app).
   packageLock?: string,
 };
@@ -78,6 +82,7 @@ export function generateApp(config: AppConfig): Record<string, string> {
     template,
     generatedFrom,
     collectionSelection,
+    fastlyToml,
     packageLock,
   } = config;
 
@@ -146,7 +151,7 @@ export function generateApp(config: AppConfig): Record<string, string> {
     s3EndpointUrl = String(url);
     s3EndpointHostname = url.hostname;
   }
-  resourceFiles['fastly.toml'] = renderAppResource('fastly.toml', {
+  resourceFiles['fastly.toml'] = addFastlyTomlSections(renderAppResource('fastly.toml', {
     author,
     description,
     name,
@@ -155,7 +160,7 @@ export function generateApp(config: AppConfig): Record<string, string> {
     localServerKvStorePath,
     s3EndpointUrl,
     s3EndpointHostname,
-  });
+  }), fastlyToml);
 
   // static-publish.rc.js
   resourceFiles['static-publish.rc.js'] = renderAppResource('static-publish.rc.js', {

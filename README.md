@@ -245,7 +245,7 @@ The project file has the settings that an ejected app has in its two files:
 
 - The top level has the fields of `static-publish.rc.js` (`storageMode`, `kvStore` or `s3`, `publishId`, `defaultCollectionName`, `staticPublisherWorkingDir`, `collectionSelection`).
 - `publishContent` has the fields of `publish-content.config.js`. `publish-content --config <file>` replaces it for one run.
-- `managed` has the settings of the generated app (`name`, `description`, `authors`, `serviceId`, and `staticPublishVersion`, the version of this package that the project uses).
+- `managed` has the settings of the generated app (`name`, `description`, `authors`, `serviceId`, `staticPublishVersion`, the version of this package that the project uses, and `fastlyToml`, see below).
 
 Paths in the project file are relative to it. The name of the file marks the mode: a directory with `static-publish.project.js` is a managed project, and a directory with `static-publish.rc.js` is an ejected app. A directory with both is an error.
 
@@ -259,6 +259,29 @@ npx @fastly/compute-js-static-publish dev
 ```
 
 `dev` generates the app in `.static-publish/app/`, installs its dependencies with `npm ci` if they changed, and runs `fastly compute serve` in it. Options after `--` go to `fastly compute serve`, for example `dev -- --addr=127.0.0.1:8080`. With `dev -- --watch`, a change in the app builds and restarts it, and the watch script of the template (`scripts/template_watch.js`, see [Template hooks](#-template-hooks)), if it has one, runs next to `fastly compute serve`. The app serves the content of the local KV Store, `kvstore.json` in the working directory.
+
+**Local resources and setup in `fastly.toml`.** The CLI generates the `fastly.toml` of the app. To add resources for `fastly compute serve` (`[local_server]`) or for the first deploy, which makes the service (`[setup]`), add them to `managed.fastlyToml`, in the structure of [`fastly.toml`](https://www.fastly.com/documentation/reference/compute/fastly-toml/). For example, a local Secret Store and a local Config Store:
+
+```js
+managed: {
+  // ...
+  fastlyToml: {
+    local_server: {
+      secret_stores: { oauth: [ { key: 'GITHUB_CLIENT_SECRET', env: 'GITHUB_CLIENT_SECRET' } ] },
+      config_stores: { site_config: { format: 'inline-toml', contents: { greeting: 'hello' } } },
+    },
+    setup: {
+      secret_stores: { oauth: { entries: { GITHUB_CLIENT_SECRET: { description: 'The client secret' } } } },
+    },
+  },
+},
+```
+
+- Only `local_server` and `setup` can be added. The CLI writes the other parts of `fastly.toml`.
+- The CLI also writes some resources: the KV Store of the content, and in S3 mode, the `S3_CREDENTIALS` Secret Store and the `s3_storage` backend. A resource with one of these names is an error.
+- Do not put a secret in the project file: in `local_server`, read it from an environment variable (`env`) or a file (`file`) that is not committed.
+- `local_server` does not change the fingerprint, because it is only for `fastly compute serve`. `setup` changes it.
+- `eject` writes the sections into the `fastly.toml` of the ejected app.
 
 The same version of this package always generates the same app, with the same versions of all dependencies: this package has a lockfile for the app of each template. The app uses the copy of this package that runs the CLI, through a `file:` link. Thus, add this package as a dev dependency of your project, and run the CLI from it, so that the version is pinned:
 
