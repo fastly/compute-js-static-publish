@@ -11,8 +11,11 @@ import path from 'node:path';
 import * as scaffoldCommand from './commands/scaffold/index.js';
 import * as manageCommands from './commands/manage/index.js';
 import { runTemplateHook } from './commands/run-template-hook.js';
-import { parseGlobalOptions } from './util/global-options.js';
+import { type GlobalOptions, parseGlobalOptions } from './util/global-options.js';
+import { setUpOutput } from './util/output.js';
 import { getOwnVersion } from './util/package.js';
+import { detectProjectMode } from './util/config.js';
+import { PROJECT_FILE_NAME, RC_FILE_NAME } from '../models/config/static-publish-project.js';
 
 // Register storage builder providers
 import { registerStorageProviderBuilder } from './storage/storage-provider.js';
@@ -46,12 +49,25 @@ if (process.argv[2] === 'run-template-hook') {
 
 async function main() {
 
-  const globalOptions = parseGlobalOptions(process.argv.slice(2));
+  const globalOptions = parseGlobalOptions(process.argv.slice(2), process.env);
   if ('error' in globalOptions) {
     console.error(`❌ ${globalOptions.error}`);
     process.exitCode = 1;
     return;
   }
+  setUpOutput(globalOptions, process.env);
+
+  try {
+    await run(globalOptions);
+  } catch (err) {
+    // Through console.error(), so that secrets are redacted.
+    console.error(err);
+    process.exitCode = 1;
+  }
+
+}
+
+async function run(globalOptions: GlobalOptions) {
 
   // --version works in any directory, before the mode is detected.
   if (globalOptions.version) {
@@ -66,15 +82,17 @@ async function main() {
       process.exitCode = 1;
       return;
     }
-    if (!fs.existsSync(path.resolve(projectDir, 'static-publish.rc.js'))) {
-      console.error(`❌ --project-dir '${globalOptions.projectDir}' has no static-publish.rc.js.`);
+    if (
+      !fs.existsSync(path.resolve(projectDir, RC_FILE_NAME)) &&
+      !fs.existsSync(path.resolve(projectDir, PROJECT_FILE_NAME))
+    ) {
+      console.error(`❌ --project-dir '${globalOptions.projectDir}' has no ${RC_FILE_NAME} or ${PROJECT_FILE_NAME}.`);
       console.error(`  * Give the directory of the app, for example --project-dir=./compute-js. To scaffold an app in another directory, use --output.`);
       process.exitCode = 1;
       return;
     }
     // After this, all relative paths are relative to the project dir: the paths
-    // in static-publish.rc.js and publish-content.config.js, and the paths in
-    // the arguments.
+    // in the config files, and the paths in the arguments.
     process.chdir(projectDir);
   }
 
@@ -83,14 +101,21 @@ async function main() {
   // process.argv itself, so change it in place.
   process.argv.splice(2, process.argv.length - 2, ...globalOptions.argv);
 
-  if (!fs.existsSync('./static-publish.rc.js')) {
+  const mode = detectProjectMode();
+  if (mode === 'conflict') {
+    console.error(`❌ This directory has both ${PROJECT_FILE_NAME} (a managed project) and ${RC_FILE_NAME} (an ejected app). Remove one of them.`);
+    process.exitCode = 1;
+    return;
+  }
+
+  if (mode === 'scaffold') {
 
     console.log("🧑‍💻Fastly Compute JavaScript Static Publisher (Scaffolding mode)");
     await scaffoldCommand.action(process.argv);
 
   } else {
 
-    console.log("🧑‍💻Fastly Compute JavaScript Static Publisher (Management mode)");
+    console.log(`🧑‍💻Fastly Compute JavaScript Static Publisher (Management mode${mode === 'managed' ? ', managed project' : ''})`);
     if (globalOptions.projectDir != null) {
       console.log(`  | Project directory: ${process.cwd()}`);
     }

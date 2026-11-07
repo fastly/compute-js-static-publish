@@ -13,6 +13,8 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 
 - `--project-dir`: run a command for the app in another directory, for example from the root of the repo in CI. All relative paths are then relative to that directory.
 - `--version`: print the version of this package. It works in any directory.
+- `--non-interactive`: the CLI never asks a question, and missing input is an error. It is also on when the `CI` environment variable is set (to a value that is not empty, `false`, or `0`).
+- The CLI output never shows the value of `--fastly-api-token`, `--s3-secret-access-key`, `FASTLY_API_TOKEN`, or `S3_SECRET_ACCESS_KEY`: it shows `[REDACTED]` in its place, also in error messages.
 - Template hooks: the `package.json` of a scaffolded app has `prebuild`, `postbuild`, and `postinstall` scripts. Each runs `scripts/template_<name>.js` of the app if that file exists, and otherwise does nothing.
 - `scaffold` writes `generatedFrom` into `static-publish.rc.js`: the template, the version of this package, and the date.
 - `scaffold --default-collection-name`: the collection to serve when no collection is selected. The default is `live`, as before.
@@ -27,6 +29,12 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 - `PublisherServer.serveRequest(request, options)`: the options `collectionName` (the collection for this call only), `pathname` (the path to look up, in place of the URL path), `fallback` (`false`: do not serve the SPA file or the 404 page), and `healthCheck` (`false`: do not answer `/healthz`). Without options, the behavior does not change.
 - `PublisherServer.serveFallback(request, { collectionName })`: serves the SPA file or the 404 page, as `serveRequest()` does when no file matches. Use it after `serveRequest()` with `fallback: false`.
 - Export the types `ServeRequestOptions` and `ServeFallbackOptions`.
+- Managed projects: `scaffold --managed` writes only `static-publish.project.js` in the current directory, and adds `.static-publish/` and the working directory to `.gitignore`. The project file has the fields of `static-publish.rc.js` at the top level, the fields of `publish-content.config.js` in `publishContent`, and the settings of the generated app in `managed`. `publish-content`, `collections`, and `clean` read it. A directory with both `static-publish.project.js` and `static-publish.rc.js` is an error. The type is `StaticPublishProject`.
+- `publish-content` purges the service of `managed.serviceId` in a managed project (after `--fastly-service-id` and `FASTLY_SERVICE_ID`, before `fastly.toml`).
+- Managed projects: the `dev` command generates the app in `.static-publish/app/`, installs it with `npm ci` only when its `package.json` or lockfile changed, and runs `fastly compute serve`. The app uses the lockfile of its template (`resources/templates/<name>/package-lock.json`), and the copy of this package that runs the CLI through a `file:` link.
+- Managed projects: `deploy` deploys the generated app only if its fingerprint changed (`--force` deploys anyway), records the fingerprint in the comment of the service version, and writes the Service ID of the first deploy into `managed.serviceId`. `status` shows if a deploy is necessary, and the preview URLs. `dev` and `deploy` stop if `managed.staticPublishVersion` is not the version that runs; `upgrade` (or `--auto-upgrade` with a newer CLI) moves the project to it. In an ejected app, `deploy` runs `fastly compute publish`, and `status` shows the Service ID.
+- Managed projects: `eject` converts a managed project into an ejected app in `./compute-js` (or `--dir`): the app that `deploy` would deploy, `static-publish.rc.js` (with `generatedFrom`) and `publish-content.config.js` from the project file (the paths point at the same directories), and this package pinned to the version that runs. It needs a published version, and it stops for functions or regular expressions in `publishContent`.
+- Docs: README "Managed and ejected apps", with the API token scopes for CI. `MIGRATING.md`: move an existing app to managed mode.
 
 ### Changed
 
@@ -37,6 +45,7 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
    - `collectionSelector.fromCookie()`: the activate path returns `400` for a name that breaks the rule, and sets no cookie. Before, it returned `400` only for a name with characters that a cookie value cannot have.
 - `PublisherServer` keeps the state of each request (the settings, the index, and the `Server-Timing` measurements) in a scope for that request and collection. A reused sandbox does not keep this state from one request to the next. A second call for the same request (for example `beginRequest()` and then `serveRequest()`) does not read the index again.
 - README: a GitHub Actions example that publishes a preview for each pull request, and deletes it when the pull request closes. The README and `clean --help` say not to run `clean` while `publish-content` can run for the same storage.
+- `staticPublisherWorkingDir` in `static-publish.rc.js` can be a path outside the directory of the file, for example `../static-publisher`. It must start with `./` or `../`, and it must not be the directory of `static-publish.rc.js` or a directory above it (for example `./`, `..`, or `../..`). Before, the value had to start with `./`. A value that breaks the rule stops the command before it writes anything.
 
 ### Deprecated
 
