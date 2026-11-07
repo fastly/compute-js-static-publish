@@ -43,6 +43,10 @@ export type AppConfig = {
 // runs scripts/template_<name>.js if the app has that file.
 export const TEMPLATE_HOOKS = [ 'prebuild', 'postbuild', 'postinstall' ] as const;
 
+// The watch script of a template, if it has one. It runs next to
+// `fastly compute serve --watch` (npm run dev:watch), until it is stopped.
+export const TEMPLATE_WATCH_SCRIPT = 'scripts/template_watch.js';
+
 // Makes the files of the app, keyed by the path relative to the app dir.
 // It does not write files or use the network, so that tests can compare its
 // output. It reads only the resources/ directory of this package.
@@ -79,6 +83,7 @@ export function generateApp(config: AppConfig): Record<string, string> {
   // package.json: the dependencies come from the template's package.json.
   const packageJsonScripts: Record<string, string> = {
     'dev:start': 'fastly compute serve',
+    'dev:watch': 'compute-js-static-publish run-dev-watch',
     'fastly:deploy': 'fastly compute publish',
     'prebuild': 'compute-js-static-publish run-template-hook prebuild',
     'build': 'js-compute-runtime ./src/index.js ./bin/main.wasm',
