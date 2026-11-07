@@ -67,6 +67,9 @@ const project = {
     serviceId: undefined,
 {% endif %}
     staticPublishVersion: {{ staticPublishVersion | js }},
+{% if fastlyToml %}
+    fastlyToml: {{ fastlyToml | js('    ') }},
+{% endif %}
   },
 };
 

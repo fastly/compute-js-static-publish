@@ -76,7 +76,7 @@ describe('detectProjectMode', () => {
 describe('managed section', () => {
   test('accepts the fields', () => {
     const errors = [];
-    const managed = { name: 'a', description: 'b', authors: [ 'c' ], template: 'plain', serviceId: undefined, staticPublishVersion: '8.1.0' };
+    const managed = { name: 'a', description: 'b', authors: [ 'c' ], template: 'plain', serviceId: undefined, staticPublishVersion: '8.1.0', fastlyToml: { local_server: { secret_stores: { s: [ { key: 'k', env: 'E' } ] } } } };
     assert.deepEqual(normalizeProjectManaged(managed, errors), managed);
     assert.deepEqual(errors, []);
   });
@@ -151,6 +151,13 @@ describe('project file round trip', () => {
     },
     's3-endpoint': { ...base, storage: { mode: 's3', region: 'us-east-1', bucket: 'my-bucket', endpointUrl: 'https://s3.example.com/', endpointGenerated: false } },
     's3-aws': { ...base, storage: { mode: 's3', region: 'us-east-1', bucket: 'my-bucket', endpointUrl: 'https://my-bucket.s3.us-east-1.amazonaws.com/', endpointGenerated: true } },
+    'managed.fastlyToml': {
+      ...base,
+      fastlyToml: {
+        local_server: { secret_stores: { oauth: [ { key: 'GITHUB_CLIENT_SECRET', env: 'GITHUB_CLIENT_SECRET' } ] } },
+        setup: { secret_stores: { oauth: { entries: { GITHUB_CLIENT_SECRET: { description: 'The client secret' } } } } },
+      },
+    },
   };
 
   for (const [ name, config ] of Object.entries(cases)) {
@@ -185,7 +192,7 @@ describe('project file round trip', () => {
     const errors = [];
     assert.equal(normalizeProjectManaged({ template: 'hono' }, errors), null);
     assert.match(errors.join('\n'), /managed\.template must be one of: plain/);
-    assert.deepEqual(normalizeProjectManaged({}, []), { name: undefined, description: undefined, authors: undefined, template: undefined, serviceId: undefined, staticPublishVersion: undefined });
+    assert.deepEqual(normalizeProjectManaged({}, []), { name: undefined, description: undefined, authors: undefined, template: undefined, serviceId: undefined, staticPublishVersion: undefined, fastlyToml: undefined });
   });
 
   test('the service ID line is the marked line, unless a service ID is set', () => {
