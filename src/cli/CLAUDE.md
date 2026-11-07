@@ -35,7 +35,14 @@ A template never has a file that `generateApp()` writes itself; `generateApp()` 
 
 - `run-template-hook <name>`: the template hooks call it. It prints no banner, and works in any directory.
 - `--version`: prints only the version.
+- `--json`: `parseGlobalOptions()` removes it with the other global options. See "CLI output contract" below.
 - `--project-dir`: the CLI checks that the directory has `static-publish.rc.js` or `static-publish.project.js`, then runs `process.chdir()` into it. Thus every relative path, also the paths in the options, is relative to the project dir. `parseGlobalOptions()` removes these options from `process.argv` before the commands parse it.
+
+## CLI output contract (for CI)
+
+`src/cli/util/output.ts` has the contract with tools that run the CLI: the exit codes (`0` success, `1` the operation failed, `2` a usage or config error), the `--json` output (one object on stdout at the end, `schemaVersion: 1`; with `--json`, every console method writes to stderr), and the error codes (`CliErrorCode`). The exit code comes from the error code (`exitCodeOf()`). The README lists each code with its exit code, and a unit test checks that list, so a new code needs a README row. A new code can come in a minor release; to rename or remove a code, or to change its exit code, is a breaking change.
+
+A command never sets `process.exitCode` itself. It calls `fail(code, message)` (shows `❌ message` and fails), or `recordFailure(code, message)` when the log already shows the error. With `--json`, the output has the first error. `setJsonResult()` sets the result. `src/cli/index.ts` writes the JSON object after the command, and an uncaught error gives `failed` (exit `1`). `manage/index.ts` and `collections/index.ts` refuse `--json` (`json-not-supported`) for the commands that do not support it: only `publish-content`, `collections list`, `collections delete`, `collections promote`, `status`, `deploy`, and `--version` do. A child process that writes to stdout (the Fastly CLI, `npm ci`) gets stderr as its stdout with `--json`.
 
 ## Managed projects
 

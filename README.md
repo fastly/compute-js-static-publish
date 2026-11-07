@@ -1180,6 +1180,134 @@ You can stream `assetVariant.storageEntry.body` directly to a `Response`, or rea
 - `collections promote` - Copy a collection to another name
 - `collections update-expiration` - Modify expiration time for an existing collection
 
+### 🤖 Using the CLI in CI
+
+These rules are for tools that run the CLI with no person present, for example a GitHub Actions workflow. They are part of the contract of the CLI: a change that breaks them comes only in a major release.
+
+**Exit codes:**
+
+| Code | Meaning |
+|------|---------|
+| `0` | Success. Also when there is nothing to do, for example when you publish the same content again, promote to a collection again, or delete a collection that does not exist. A failed purge after a successful publish is only a warning (see `purge.ok` in the JSON). |
+| `1` | The operation failed, for example storage cannot be reached, or the deploy failed. A retry can help. |
+| `2` | A usage or config error, for example an unknown option, a missing option, a collection name that breaks the rule, or a config file that cannot be loaded. A retry cannot help. |
+
+**`--json`:** `publish-content`, `collections list`, `collections delete`, `collections promote`, `status`, `deploy` (in a managed project), and `--version` can write their result as one JSON object to stdout, at the end. All log lines then go to stderr, so that they still show in the CI log. With another command, `--json` is an error (`json-not-supported`).
+
+```sh
+npx @fastly/compute-js-static-publish publish-content \
+  --project-dir=./compute-js --collection-name=pr-42 --json > result.json
+```
+
+Each object has `schemaVersion` (now `1`). A new field keeps the version. A field is removed or changed only in a major release, with a new `schemaVersion`.
+
+`publish-content --json`:
+
+```json
+{
+  "schemaVersion": 1,
+  "collection": "pr-42",
+  "publishId": "default",
+  "files": { "total": 352, "hidden": 2 },
+  "storageItems": { "uploaded": 12, "reused": 340 },
+  "expiresAt": "2026-12-01T00:00:00.000Z",
+  "purge": {
+    "ok": true,
+    "serviceId": "SERVICE_ID",
+    "environments": [ { "environment": "production", "result": "purged" } ]
+  }
+}
+```
+
+- `files` counts the files in the index. `storageItems` counts the items in storage: each file, and each compressed variant that is kept. Thus `storageItems.uploaded` can be larger than `files.total`.
+- `expiresAt` is `null` if the collection does not expire.
+- `purge` is `null` if there was no purge (`--local`, or no Service ID). `purge.ok` is `false` if a purge failed. Then the visitors can get the old content from the cache until it expires. Each item of `environments` has a `result`: `purged`, `not-staged` (a `staging` purge, and the service has no staged version), or `failed` (with a `reason`).
+
+`collections list --json`:
+
+```json
+{
+  "schemaVersion": 1,
+  "publishId": "default",
+  "defaultCollection": "live",
+  "collections": [
+    {
+      "name": "live", "isDefault": true,
+      "publishedAt": "2026-11-01T00:00:00.000Z", "expiresAt": null, "expired": false,
+      "requires": [ "hidden" ], "unsupported": [], "files": 352, "hidden": 2
+    }
+  ]
+}
+```
+
+`collections delete --json`. `deleted` is `false` with `"reason": "not-found"` if the collection does not exist (also exit `0`). `purge` is as in `publish-content`:
+
+```json
+{ "schemaVersion": 1, "collection": "pr-42", "publishId": "default", "deleted": true, "purge": null }
+```
+
+`collections promote --json`. `expiresAt` is the expiration time of the target after the promote, or `null`:
+
+```json
+{ "schemaVersion": 1, "from": "staging", "to": "live", "publishId": "default", "expiresAt": null }
+```
+
+`status --json` in a managed project. `needsDeploy` is `null` if it is not known (no API token):
+
+```json
+{
+  "schemaVersion": 1,
+  "mode": "managed",
+  "serviceId": "SERVICE_ID",
+  "staticPublishVersion": { "recorded": "8.1.0", "running": "8.1.0", "check": "same" },
+  "fingerprint": { "current": "3f…", "deployed": "3f…", "deployedStaticPublishVersion": "8.1.0" },
+  "activeVersion": 12,
+  "domain": "example.edgecompute.app",
+  "needsDeploy": false,
+  "reasons": [],
+  "previewUrls": [ { "type": "query", "url": "https://example.edgecompute.app/?collection={collection}" } ]
+}
+```
+
+In an ejected app, `status --json` gives `{ "schemaVersion": 1, "mode": "ejected", "serviceId": "SERVICE_ID" }`.
+
+`deploy --json`. `deployed` is `false` with `"reason": "up-to-date"` if the active version already has this app:
+
+```json
+{
+  "schemaVersion": 1,
+  "deployed": true,
+  "serviceId": "SERVICE_ID",
+  "version": 13,
+  "domain": "example.edgecompute.app",
+  "fingerprint": "3f…",
+  "staticPublishVersion": "8.1.0"
+}
+```
+
+`--version --json` gives `{ "schemaVersion": 1, "version": "8.1.0" }`.
+
+**Errors:** with `--json`, stdout has one object, `{ "schemaVersion": 1, "error": { "code": "…", "message": "…" } }`. The error also goes to stderr. `message` is for people and can change. `code` is one of these values. A script can use it:
+
+| Code | Exit code | Meaning |
+|------|-----------|---------|
+| `usage` | `2` | An unknown command or option, or a missing or incorrect option value |
+| `config-invalid` | `2` | `static-publish.rc.js`, `static-publish.project.js`, or `publish-content.config.js` cannot be loaded, or is not valid |
+| `collection-name-invalid` | `2` | A collection name breaks the [rule](#-collections-publish-preview-promote) |
+| `collection-not-found` | `2` | The command needs a collection that does not exist |
+| `project-dir-not-found` | `2` | `--project-dir` is not a directory, or has no config file |
+| `json-not-supported` | `2` | `--json` with a command that does not support it |
+| `credentials-missing` | `2` | An API token or S3 credentials are necessary, but not given |
+| `version-mismatch` | `2` | `managed.staticPublishVersion` is not the version of the CLI that runs |
+| `first-deploy-manual` | `2` | The first deploy of a managed project with S3 storage, with `--non-interactive` |
+| `version-not-published` | `2` | `eject` needs a version of this package that is on npm |
+| `deploy-failed` | `1` | The build or the deploy of the app failed |
+| `failed` | `1` | The operation failed, for example storage cannot be reached |
+
+New codes can come in a minor release. Treat a code that you do not know by its exit code.
+
+**Secrets:** give the Fastly API token in `FASTLY_API_TOKEN`, and S3 credentials in `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY`. The CLI replaces the values of the token and the S3 secret access key with `[REDACTED]` in its output, also in errors and in the JSON.
+
 ### 🛠 App Scaffolding
 
 Run outside an existing Compute app directory:
@@ -1285,6 +1413,8 @@ With `--project-dir`, all relative paths are relative to that directory: the pat
 To print the version of this package, run `npx @fastly/compute-js-static-publish --version`. It works in any directory.
 
 With `--non-interactive`, or when the `CI` environment variable is set, the CLI never asks for input: missing input is an error. `deploy` then also runs the Fastly CLI with `--non-interactive`. The output never shows the values of `--fastly-api-token`, `--s3-secret-access-key`, `FASTLY_API_TOKEN`, and `S3_SECRET_ACCESS_KEY`.
+
+For `--json`, the exit codes, and the error codes, see [Using the CLI in CI](#-using-the-cli-in-ci).
 
 #### `publish-content`
 

@@ -11,6 +11,7 @@ import { type OptionDefinition } from 'command-line-args';
 
 import { prepareManagedApp } from '../../managed/app.js';
 import { parseCommandLine } from '../../util/args.js';
+import { fail, recordFailure } from '../../util/output.js';
 import { checkVersionForCommand, loadManagedProject } from '../../managed/command-helpers.js';
 import { PROJECT_FILE_NAME } from '../../../models/config/static-publish-project.js';
 
@@ -56,7 +57,7 @@ export async function action(actionArgs: string[]) {
     if (parsed.error != null) {
       console.error(String(parsed.error));
       console.error();
-      process.exitCode = 1;
+      recordFailure('usage', String(parsed.error));
     }
     help();
     return;
@@ -78,12 +79,10 @@ export async function action(actionArgs: string[]) {
   console.log(`▶️ fastly compute serve ${serveArgs.join(' ')}`);
   const result = child_process.spawnSync(fastly, [ 'compute', 'serve', ...serveArgs ], { cwd: appDir, stdio: 'inherit' });
   if (result.error != null) {
-    console.error(`❌ Could not run 'fastly compute serve': ${String(result.error)}`);
-    process.exitCode = 1;
+    fail('failed', `Could not run 'fastly compute serve': ${String(result.error)}`);
     return;
   }
   if (result.status !== 0 && result.signal == null) {
-    console.error(`❌ 'fastly compute serve' exited with ${result.status}.`);
-    process.exitCode = 1;
+    fail('failed', `'fastly compute serve' exited with ${result.status}.`);
   }
 }
