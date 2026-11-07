@@ -131,10 +131,12 @@ npx @fastly/compute-js-static-publish@latest \
 > npx @fastly/compute-js-static-publish@latest \
 >   --root-dir=./public \
 >   --storage-mode=s3 \
->   --s3-region=us-east \
+>   --s3-region=us-east-1 \
 >   --s3-bucket=my-static-content-bucket \
->   --s3-endpoint=https://us-east.object.fastlystorage.app
+>   --s3-endpoint=https://us-east-1.object.fastlystorage.app
 > ```
+>
+> For the regions of Fastly Object Storage and their endpoints, see [Working with Object Storage](https://www.fastly.com/documentation/guides/platform/object-storage/working-with-object-storage/#managing-object-storage-buckets-and-objects).
 
 You get a Compute app in `./compute-js` with:
 
