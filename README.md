@@ -210,7 +210,7 @@ my-project/
     ├── static-publisher/                # ⚠️ Do not commit - generated content for local dev and publishing
     │   ├── kvstore.json                 # Simulates KV Store content for local preview
     │   └── kv-store-content/            # Preprocessed and compressed files for KV upload
-    ├── scripts/                         # Optional: template hooks (template_<hook>.js)
+    ├── scripts/                         # Optional: template hooks (template_<hook>.js, template_watch.js)
     └── src/
         └── index.js                     # Your Compute app entry point
 ```
@@ -233,6 +233,14 @@ The `package.json` of a scaffolded app has these scripts:
 - `scripts/template_postinstall.js`
 
 The file runs with Node.js, in the directory of the app. If it fails, the build or the install fails. `fastly compute build`, `fastly compute serve`, and `fastly compute publish` run `npm run build`, so they also run the build hooks. `npm install --ignore-scripts` does not run the hooks.
+
+The app also has a `dev:watch` script:
+
+```json
+"dev:watch":   "compute-js-static-publish run-dev-watch"
+```
+
+`npm run dev:watch` runs `fastly compute serve --watch`, which builds and restarts the app when a file in the app directory changes. Options after `--` go to `fastly compute serve`, for example `npm run dev:watch -- --addr=127.0.0.1:8080`. If the app has `scripts/template_watch.js`, that file runs with Node.js next to the Fastly CLI, until the Fastly CLI stops. Use it to watch files outside the app directory: when they change, write a file in the app directory, and the Fastly CLI builds the app again.
 
 ## ⚙️ Configuring `static-publish.rc.js`
 

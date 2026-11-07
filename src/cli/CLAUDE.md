@@ -34,5 +34,6 @@ A template never has a file that `generateApp()` writes itself; `generateApp()` 
 `src/cli/index.ts` handles these before it detects the mode:
 
 - `run-template-hook <name>`: the template hooks call it. It prints no banner, and works in any directory.
+- `run-dev-watch [<options>]`: the `dev:watch` script of an app calls it. It runs `fastly compute serve --watch` with the options, and `scripts/template_watch.js` next to it if the app has that file. It prints no banner, and works in any directory.
 - `--version`: prints only the version.
 - `--project-dir`: the CLI checks that the directory has `static-publish.rc.js`, then runs `process.chdir()` into it. Thus every relative path, also the paths in the options, is relative to the project dir. `parseGlobalOptions()` removes these options from `process.argv` before the commands parse it.
