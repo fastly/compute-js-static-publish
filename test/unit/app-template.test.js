@@ -50,9 +50,10 @@ const config = {
 
 describe('templates', () => {
   test('only the names of templates are valid', () => {
-    assert.deepEqual(APP_TEMPLATE_NAMES, [ 'plain' ]);
+    assert.deepEqual(APP_TEMPLATE_NAMES, [ 'plain', 'hono' ]);
     assert.equal(isAppTemplateName('plain'), true);
-    for (const name of [ 'hono', 'constructor', '__proto__', 'toString', '' ]) {
+    assert.equal(isAppTemplateName('hono'), true);
+    for (const name of [ 'next', 'constructor', '__proto__', 'toString', '' ]) {
       assert.equal(isAppTemplateName(name), false, name);
       assert.throws(() => loadAppTemplate(name), /Unknown template/);
     }
@@ -70,6 +71,17 @@ describe('templates', () => {
     for (const name of APP_TEMPLATE_NAMES) {
       const template = loadAppTemplate(name);
       assert.doesNotThrow(() => generateApp({ ...config, template }), name);
+    }
+  });
+
+  test('the entry file comes from "main" in the template package.json, and the build script uses it', () => {
+    assert.equal(loadAppTemplate('plain').entry, 'src/index.js');
+    assert.equal(loadAppTemplate('hono').entry, 'src/index.ts');
+    for (const name of APP_TEMPLATE_NAMES) {
+      const template = loadAppTemplate(name);
+      assert.ok(template.entry in template.files, `${name}: the template has ${template.entry}`);
+      const packageJson = JSON.parse(generateApp({ ...config, template })['package.json']);
+      assert.equal(packageJson.scripts.build, `js-compute-runtime ./${template.entry} ./bin/main.wasm`, name);
     }
   });
 
@@ -111,6 +123,10 @@ describe('templates', () => {
       'resources/templates/plain/package.json',
       'resources/templates/plain/package-lock.json',
       'resources/templates/plain/src/index.js',
+      'resources/templates/hono/package.json',
+      'resources/templates/hono/package-lock.json',
+      'resources/templates/hono/src/index.ts',
+      'resources/templates/hono/tsconfig.json',
     ]) {
       assert.ok(files.includes(file), file);
     }
