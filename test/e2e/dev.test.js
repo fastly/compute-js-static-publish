@@ -110,3 +110,58 @@ describe('dev outside a managed project', () => {
     }
   });
 });
+
+describe('dev with managed.fastlyToml', { skip: skipUnlessFastlyCli() }, () => {
+  let dir;
+  let server;
+
+  before(async () => {
+    dir = makeTempDir('dev-fastly-toml');
+    writeFixtureContent(path.resolve(dir, 'public'));
+    runCli([ '--managed', '--root-dir', './public', '--kv-store-name', 'e2e-content' ], { cwd: dir });
+    // A local Secret Store that reads an environment variable, and a local
+    // Config Store.
+    const projectFile = path.resolve(dir, 'static-publish.project.js');
+    const text = fs.readFileSync(projectFile, 'utf-8');
+    const marker = '    staticPublishVersion: ';
+    assert.ok(text.includes(marker));
+    fs.writeFileSync(projectFile, text.replace(marker, `\
+    fastlyToml: {
+      local_server: {
+        secret_stores: { e2e_secrets: [ { key: 'E2E_SECRET', env: 'CJSP_E2E_SECRET' } ] },
+        config_stores: { e2e_config: { format: 'inline-toml', contents: { greeting: 'hello' } } },
+      },
+    },
+${marker}`));
+    runCli([ 'publish-content', '--local' ], { cwd: dir });
+    server = await startServe(dir, {
+      env: { CJSP_E2E_SECRET: 'not-a-real-secret' },
+      command: (addr) => [ process.execPath, [ CLI_PATH, 'dev', '--', '--addr', addr ] ],
+    });
+  });
+
+  after(async () => {
+    await server?.stop();
+    if (dir != null) {
+      removeDir(dir);
+    }
+  });
+
+  test('the generated fastly.toml has the stores, and the app serves', async () => {
+    const text = fs.readFileSync(path.resolve(dir, '.static-publish/app/fastly.toml'), 'utf-8');
+    assert.match(text, /^\[\[local_server\.secret_stores\.e2e_secrets\]\]$/m);
+    assert.match(text, /^\[local_server\.config_stores\.e2e_config\]$/m);
+    const res = await rawRequest(server.baseUrl + '/', { headers: { accept: 'text/html' } });
+    assert.equal(res.status, 200);
+  });
+
+  test('fastly compute serve reads the stores: an entry that is not valid stops it', async () => {
+    await server.stop();
+    server = undefined;
+    const projectFile = path.resolve(dir, 'static-publish.project.js');
+    fs.writeFileSync(projectFile, fs.readFileSync(projectFile, 'utf-8').replace("{ key: 'E2E_SECRET', env: 'CJSP_E2E_SECRET' }", "{ env: 'CJSP_E2E_SECRET' }"));
+    const result = runCli([ 'dev', '--', '--addr', '127.0.0.1:0' ], { cwd: dir, allowFailure: true });
+    assert.notEqual(result.status, 0);
+    assert.match(result.output, /invalid configuration for 'e2e_secrets'/);
+  });
+});
