@@ -73,3 +73,7 @@ updates:
           - version-update:semver-major
     cooldown:
       default-days: 7
+      # Packages that we own get updates with no cooldown.
+      exclude:
+        - "@fastly/*"
+        - "@fanoutio/*"
