@@ -10,6 +10,7 @@ import path from 'node:path';
 
 import * as scaffoldCommand from './commands/scaffold/index.js';
 import * as manageCommands from './commands/manage/index.js';
+import { runDevWatch } from './commands/run-dev-watch.js';
 import { runTemplateHook } from './commands/run-template-hook.js';
 import { parseGlobalOptions } from './util/global-options.js';
 import { getOwnVersion } from './util/package.js';
@@ -37,6 +38,12 @@ if (process.env.UV_THREADPOOL_SIZE == null) {
 if (process.argv[2] === 'run-template-hook') {
 
   process.exitCode = runTemplateHook(process.argv[3]);
+
+} else if (process.argv[2] === 'run-dev-watch') {
+
+  // The dev:watch script of an app calls this. It works in any directory and
+  // prints no banner.
+  process.exitCode = await runDevWatch(process.argv.slice(3));
 
 } else {
 
