@@ -219,8 +219,9 @@ describe('project file round trip', () => {
 
   test('managed.template must be the name of a template', () => {
     const errors = [];
-    assert.equal(normalizeProjectManaged({ template: 'hono' }, errors), null);
-    assert.match(errors.join('\n'), /managed\.template must be one of: plain/);
+    assert.equal(normalizeProjectManaged({ template: 'next' }, errors), null);
+    assert.match(errors.join('\n'), /managed\.template must be one of: plain, hono/);
+    assert.equal(normalizeProjectManaged({ template: 'hono' }, []).template, 'hono');
     assert.deepEqual(normalizeProjectManaged({}, []), { name: undefined, description: undefined, authors: undefined, template: undefined, serviceId: undefined, staticPublishVersion: undefined, fastlyToml: undefined });
   });
 
