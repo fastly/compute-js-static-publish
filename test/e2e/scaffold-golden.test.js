@@ -64,6 +64,7 @@ function readFiles(dir) {
 
 const cases = {
   'kv-basic': [ '--root-dir', './public', '--kv-store-name', 'site-content' ],
+  'kv-hono': [ '--root-dir', './public', '--kv-store-name', 'site-content', '--template', 'hono' ],
   'kv-default-collection': [ '--root-dir', './public', '--kv-store-name', 'site-content', '--default-collection-name', 'production' ],
   'kv-full': [
     '--root-dir', './public', '--kv-store-name', 'site-content',
