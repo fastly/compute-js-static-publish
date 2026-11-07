@@ -13,7 +13,7 @@ import path from 'node:path';
 import { describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { loadAppTemplate } from '../../build/cli/cli/commands/scaffold/app-template.js';
+import { APP_TEMPLATE_NAMES, loadAppTemplate } from '../../build/cli/cli/commands/scaffold/app-template.js';
 import { generateApp } from '../../build/cli/cli/commands/scaffold/generate-app.js';
 import toml from 'toml';
 
@@ -79,6 +79,20 @@ const cases = {
     description: 'A site with \\ and "quotes"',
     storage: { mode: 'kv-store', kvStoreName: 'site.content' },
   },
+  'kv-collection-selection': {
+    ...base,
+    collectionSelection: {
+      sources: [
+        { type: 'host', pattern: '{collection}.preview.example.com' },
+        { type: 'query', param: 'collection', sticky: 'cookie' },
+        { type: 'cookie', maxAge: 604800 },
+        { type: 'header', name: 'x-publisher-collection' },
+      ],
+      allow: [ 'pr-*', 'staging' ],
+      onMissing: 'not-found',
+      noindex: true,
+    },
+  },
   's3-endpoint': {
     ...base,
     storage: { mode: 's3', region: 'us-east-1', bucket: 'my-bucket', endpointUrl: 'https://s3.example.com/', endpointGenerated: false },
@@ -143,4 +157,22 @@ describe('generateApp() writes a valid fastly.toml', () => {
       }
     });
   }
+});
+
+describe('collectionSelection', () => {
+  const collectionSelection = { sources: [ { type: 'header', name: 'x-c' } ] };
+
+  test('a template without supports.collectionSelection fails', () => {
+    const template = { ...loadAppTemplate('plain'), name: 'test', supports: {} };
+    assert.throws(() => generateApp({ ...base, template, collectionSelection }), /does not support collectionSelection/);
+  });
+
+  test('every template that supports it can generate it', () => {
+    for (const name of APP_TEMPLATE_NAMES) {
+      const template = loadAppTemplate(name);
+      if (template.supports.collectionSelection) {
+        assert.match(generateApp({ ...base, template, collectionSelection })['static-publish.rc.js'], /collectionSelection: \{/, name);
+      }
+    }
+  });
 });

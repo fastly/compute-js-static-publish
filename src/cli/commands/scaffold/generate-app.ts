@@ -5,6 +5,7 @@
 
 import * as path from 'node:path';
 
+import { type CollectionSelection } from '../../../models/config/collection-selection.js';
 import { type GeneratedFrom } from '../../../models/config/static-publish-rc.js';
 import { dotRelative } from '../../util/files.js';
 import { type AppTemplate } from './app-template.js';
@@ -37,6 +38,8 @@ export type AppConfig = {
   template: AppTemplate,
   // Written into static-publish.rc.js.
   generatedFrom: GeneratedFrom,
+  // Written into static-publish.rc.js, if set. The template must support it.
+  collectionSelection?: CollectionSelection,
 };
 
 // The names of the template hooks. Every app has them as npm scripts. Each one
@@ -67,7 +70,12 @@ export function generateApp(config: AppConfig): Record<string, string> {
     staticPublishVersionSpec,
     template,
     generatedFrom,
+    collectionSelection,
   } = config;
+
+  if (collectionSelection != null && !template.supports.collectionSelection) {
+    throw new Error(`The template '${template.name}' does not support collectionSelection.`);
+  }
 
   const resourceFiles: Record<string, string> = {};
 
@@ -143,6 +151,7 @@ export function generateApp(config: AppConfig): Record<string, string> {
     defaultCollectionName,
     staticPublisherWorkingDir: dotRelative(computeJsDir, staticPublisherWorkingDir),
     generatedFrom,
+    collectionSelection,
   });
 
   // publish-content.config.js
