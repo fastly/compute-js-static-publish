@@ -9,8 +9,12 @@ on:
 permissions: {}
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # One group for each commit, and no cancel. Two runs for the same commit (for
+  # example after a push that changes both the base and the head of a stacked
+  # PR) run one after the other, so that both complete. A run for an older
+  # commit is in another group, and completes too.
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
 
 jobs:
   zizmor:
