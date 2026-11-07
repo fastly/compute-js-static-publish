@@ -114,8 +114,13 @@ export function installManagedApp(appDir: string): boolean {
 export async function managedAppState(projectDir: string, project: StaticPublishProjectNormalized) {
   const appConfig = await managedAppConfig(projectDir, project);
   const files = managedAppFiles(generateApp(appConfig));
+  // managed.fastlyToml.local_server is only for fastly compute serve. It does
+  // not change what deploy deploys, so the fingerprint does not include it.
+  const fingerprintFiles = appConfig.fastlyToml?.local_server != null ?
+    managedAppFiles(generateApp({ ...appConfig, fastlyToml: { ...appConfig.fastlyToml, local_server: undefined } })) :
+    files;
   const cliPackageDir = getOwnPackageDir();
-  const fingerprint = computeFingerprint(files, {
+  const fingerprint = computeFingerprint(fingerprintFiles, {
     staticPublishVersion: getOwnVersion(),
     template: appConfig.template.name,
     machinePaths: [ cliPackageDir, path.relative(appConfig.appDir, cliPackageDir).split(path.sep).join('/') ],
