@@ -13,7 +13,7 @@ import { MANAGED_APP_DIR } from '../../models/config/static-publish-project.js';
 import { isS3StorageConfigRc } from '../../models/config/static-publish-rc.js';
 import { type AppConfig, generateApp } from '../commands/scaffold/generate-app.js';
 import { DEFAULT_APP_TEMPLATE_NAME, loadAppTemplate } from '../commands/scaffold/app-template.js';
-import { isJsonMode } from '../util/output.js';
+import { ConfigError, isJsonMode } from '../util/output.js';
 import { getOwnPackageDir, getOwnVersion, readOwnPackageJson } from '../util/package.js';
 import { computeFingerprint, managedAppFiles } from './fingerprint.js';
 import { findHostnameForAwsS3RegionAndBucket } from '../util/s3.js';
@@ -27,7 +27,7 @@ export async function managedAppConfig(projectDir: string, project: StaticPublis
   const errors: string[] = [];
   const publishContent = normalizePublishContentConfig(project.publishContent, errors);
   if (publishContent == null || errors.length > 0) {
-    throw new Error(`publishContent is not valid:\n${errors.join('\n')}`);
+    throw new ConfigError(`publishContent is not valid:\n${errors.join('\n')}`);
   }
 
   let s3EndpointUrl: string | undefined;
