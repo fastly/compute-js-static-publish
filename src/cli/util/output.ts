@@ -47,6 +47,11 @@ export const CLI_ERROR_CODES: readonly CliErrorCode[] = [ ...USAGE_CODES, ...FAI
 
 export type CliError = { code: CliErrorCode, message: string };
 
+// An error in the settings that a command finds after it loads them, for
+// example a name in managed.fastlyToml that the CLI writes. The CLI gives the
+// code config-invalid (exit 2) for it.
+export class ConfigError extends Error {}
+
 export function exitCodeOf(code: CliErrorCode) {
   return (FAILED_CODES as readonly string[]).includes(code) ? EXIT_FAILED : EXIT_USAGE;
 }

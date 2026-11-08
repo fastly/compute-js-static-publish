@@ -10,6 +10,7 @@
 import toml from 'toml';
 
 import { type FastlyTomlSections } from '../../../models/config/static-publish-project.js';
+import { ConfigError } from '../../util/output.js';
 import { tomlFilter, tomlKeyFilter } from './render.js';
 
 export const FASTLY_TOML_SECTIONS = [ 'local_server', 'setup' ] as const;
@@ -121,8 +122,9 @@ function writeTables(lines: string[], keys: string[], table: Record<string, unkn
 }
 
 // Adds managed.fastlyToml to the text of a fastly.toml that the CLI made.
-// Throws if a resource has the name of one that the CLI writes (for example
-// the KV Store of the content), or if the result is not valid TOML.
+// Throws a ConfigError if a resource has the name of one that the CLI writes
+// (for example the KV Store of the content), or if the result is not valid
+// TOML.
 export function addFastlyTomlSections(fastlyToml: string, sections: FastlyTomlSections | undefined): string {
   if (sections == null) {
     return fastlyToml;
@@ -141,12 +143,12 @@ export function addFastlyTomlSections(fastlyToml: string, sections: FastlyTomlSe
       const baseType = base[section]?.[type];
       for (const name of Object.keys(tables)) {
         if (baseType?.[name] !== undefined) {
-          throw new Error(`managed.fastlyToml.${section}.${type}.${name}: the CLI writes this entry. Use another name.`);
+          throw new ConfigError(`managed.fastlyToml.${section}.${type}.${name}: the CLI writes this entry. Use another name.`);
         }
       }
       const hasValues = Object.values(tables).some(x => x !== undefined && !isPlainObject(x) && !isTableArray(x));
       if (baseType != null && hasValues) {
-        throw new Error(`managed.fastlyToml.${section}.${type}: the CLI writes this table. Add only new entries to it.`);
+        throw new ConfigError(`managed.fastlyToml.${section}.${type}: the CLI writes this table. Add only new entries to it.`);
       }
       writeTables(lines, [ section, type ], tables, '[');
     }
@@ -158,7 +160,7 @@ export function addFastlyTomlSections(fastlyToml: string, sections: FastlyTomlSe
   try {
     toml.parse(result);
   } catch (err) {
-    throw new Error(`managed.fastlyToml does not give a valid fastly.toml: ${String(err instanceof Error ? err.message : err)}`);
+    throw new ConfigError(`managed.fastlyToml does not give a valid fastly.toml: ${String(err instanceof Error ? err.message : err)}`);
   }
   return result;
 }

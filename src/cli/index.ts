@@ -14,6 +14,7 @@ import { runDevWatch } from './commands/run-dev-watch.js';
 import { runTemplateHook } from './commands/run-template-hook.js';
 import { type GlobalOptions, parseGlobalOptions } from './util/global-options.js';
 import {
+  ConfigError,
   EXIT_USAGE,
   JSON_SCHEMA_VERSION,
   fail,
@@ -81,9 +82,13 @@ async function main() {
   try {
     await run(globalOptions);
   } catch (err) {
-    // Through console.error(), so that secrets are redacted.
-    console.error(err);
-    recordFailure('failed', String(err instanceof Error ? err.message : err));
+    if (err instanceof ConfigError) {
+      fail('config-invalid', err.message);
+    } else {
+      // Through console.error(), so that secrets are redacted.
+      console.error(err);
+      recordFailure('failed', String(err instanceof Error ? err.message : err));
+    }
   }
 
   writeJsonOutput();
