@@ -61,6 +61,20 @@ describe('managed commands', () => {
       assert.equal(statusValue(output, 'Preview URL (query)'), 'https://<service domain>/?collection={collection}');
     });
 
+    test('a name in managed.fastlyToml that the CLI writes: config-invalid', () => {
+      const original = readProject();
+      try {
+        editProject(text => text.replace(/^(\s*)staticPublishVersion:/m, "$1fastlyToml: { local_server: { kv_stores: { 'e2e-content': {} } } },\n$1staticPublishVersion:"));
+        const result = runText([ 'status', '--json' ], dir);
+        assert.equal(result.status, 2, result.output);
+        const json = JSON.parse(result.stdout);
+        assert.equal(json.error.code, 'config-invalid');
+        assert.match(json.error.message, /managed\.fastlyToml\.local_server\.kv_stores\.e2e-content: the CLI writes this entry/);
+      } finally {
+        fs.writeFileSync(projectFile, original);
+      }
+    });
+
     test('with a service but no API token: unknown', () => {
       const { output } = runText([ 'status', '--fastly-service-id', 'SVC123' ], dir);
       assert.match(statusValue(output, 'Service ID'), /^SVC123 /);

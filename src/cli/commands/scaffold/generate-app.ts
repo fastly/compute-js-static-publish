@@ -9,6 +9,7 @@ import { type CollectionSelection } from '../../../models/config/collection-sele
 import { type FastlyTomlSections } from '../../../models/config/static-publish-project.js';
 import { type GeneratedFrom } from '../../../models/config/static-publish-rc.js';
 import { dotRelative } from '../../util/files.js';
+import { ConfigError } from '../../util/output.js';
 import { type AppTemplate } from './app-template.js';
 import { addFastlyTomlSections } from './fastly-toml-sections.js';
 import { renderAppResource } from './render.js';
@@ -87,7 +88,7 @@ export function generateApp(config: AppConfig): Record<string, string> {
   } = config;
 
   if (collectionSelection != null && !template.supports.collectionSelection) {
-    throw new Error(`The template '${template.name}' does not support collectionSelection.`);
+    throw new ConfigError(`The template '${template.name}' does not support collectionSelection.`);
   }
 
   const resourceFiles: Record<string, string> = {};
