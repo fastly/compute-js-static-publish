@@ -15,6 +15,7 @@ import { addFastlyTomlSections, checkFastlyTomlSections } from '../../build/cli/
 import { generateApp } from '../../build/cli/cli/commands/scaffold/generate-app.js';
 import { loadAppTemplate } from '../../build/cli/cli/commands/scaffold/app-template.js';
 import { managedAppState } from '../../build/cli/cli/managed/app.js';
+import { ConfigError } from '../../build/cli/cli/util/output.js';
 
 const tempDirs = [];
 after(() => {
@@ -95,6 +96,7 @@ describe('addFastlyTomlSections()', () => {
       /managed\.fastlyToml\.local_server\.kv_stores\.site-content: the CLI writes this entry/);
     assert.throws(() => fastlyTomlOf({ ...base, fastlyToml: { local_server: { kv_stores: { 'site-content': [] } } } }),
       /managed\.fastlyToml\.local_server\.kv_stores\.site-content: the CLI writes this entry/);
+    assert.throws(() => fastlyTomlOf({ ...base, fastlyToml: { local_server: { kv_stores: { 'site-content': {} } } } }), ConfigError);
     assert.throws(() => fastlyTomlOf({ ...s3, fastlyToml: { setup: { secret_stores: { S3_CREDENTIALS: {} } } } }),
       /managed\.fastlyToml\.setup\.secret_stores\.S3_CREDENTIALS: the CLI writes this entry/);
     assert.throws(() => fastlyTomlOf({ ...s3, fastlyToml: { local_server: { backends: { s3_storage: { url: 'https://x/' } } } } }),
