@@ -20,6 +20,7 @@ import { parseCommandLine } from '../../../util/args.js';
 import { errorCodeOf, fail, recordFailure, setJsonResult } from '../../../util/output.js';
 import { checkCollectionNameForWrite } from '../../../util/collection-name.js';
 import { loadStorageProviderFromStaticPublishRc } from '../../../storage/storage-provider.js';
+import { type PurgeTarget, loadPurgeTarget, purgeCollection } from '../../../util/purge.js';
 
 function help() {
   console.log(`\
@@ -32,6 +33,9 @@ Usage:
 
 Description:
   Copies an existing collection (content + config) to a new collection name.
+
+  If a Service ID is found, the tool then purges the cached responses of the target
+  collection from that service.
 
 Required:
   --collection-name=<name>         The name of the collection to promote
@@ -57,9 +61,20 @@ KV Store Options:
                                    with the local development environment.
                                    KV Store mode only. In S3 mode, --local is an error.
 
-  --fastly-api-token=<token>       Fastly API token for KV Store access.
+  --fastly-api-token=<token>       Fastly API token for KV Store or cache access.
                                    If not set, the tool uses the FASTLY_API_TOKEN
                                    environment variable.
+
+Purge Options:
+  --fastly-service-id=<id>         Fastly Service ID to purge after promoting (not with --local).
+                                   If not set, the tool will check:
+                                     1. FASTLY_SERVICE_ID environment variable
+                                     2. service_id in fastly.toml
+                                   If none is found, the purge is skipped.
+
+  --purge-environment=<env>        Environment to purge: production, staging, or a
+                                   comma-separated list of both. Can be repeated.
+                                   Default: production
 
 S3 Storage Options (BETA):
   --s3-access-key-id=<id>          Access Key ID and Secret Access Key used to
@@ -87,6 +102,9 @@ export async function action(actionArgs: string[]) {
     { name: 'local', type: Boolean },
     { name: 'fastly-api-token', type: String, },
 
+    { name: 'fastly-service-id', type: String, },
+    { name: 'purge-environment', type: String, multiple: true, },
+
     { name: 's3-access-key-id', type: String, },
     { name: 's3-secret-access-key', type: String, },
   ];
@@ -112,6 +130,8 @@ export async function action(actionArgs: string[]) {
     ['expires-never']: expiresNever,
     local: localMode,
     ['fastly-api-token']: fastlyApiToken,
+    ['fastly-service-id']: fastlyServiceId,
+    ['purge-environment']: purgeEnvironmentValues,
     ['s3-access-key-id']: s3AccessKeyId,
     ['s3-secret-access-key']: s3SecretAccessKey,
   } = parsed.commandLineOptions;
@@ -187,6 +207,22 @@ export async function action(actionArgs: string[]) {
   const sourceCollectionName = collectionNameValue;
   console.log(`✔️ Collection to copy: ${sourceCollectionName}`);
 
+  // Purge target: checked now, so that a missing API token fails before anything is written.
+  let purgeTarget: PurgeTarget | null;
+  try {
+    purgeTarget = loadPurgeTarget({
+      localMode: localMode ?? false,
+      computeAppDir,
+      fastlyServiceId,
+      fastlyApiToken,
+      purgeEnvironments: purgeEnvironmentValues,
+    });
+  } catch (err: unknown) {
+    console.error(String(err));
+    process.exitCode = 1;
+    return;
+  }
+
   const targetCollectionName = toCollectionNameValue;
   console.log(`✔️ Collection to promote to: ${targetCollectionName}`)
   if (!await checkCollectionNameForWrite(storageProvider, publishId, targetCollectionName)) {
@@ -236,7 +272,10 @@ export async function action(actionArgs: string[]) {
   const storageContentDir = `${staticPublisherWorkingDir}/storage-content`;
   fs.mkdirSync(storageContentDir, { recursive: true });
 
-  const indexFileName = `index_${collectionNameValue}.json`;
+  // The files have the name of the target collection, as in publish-content. In
+  // --local mode, kvstore.json refers to them, so the target must not share a
+  // file with the source.
+  const indexFileName = `index_${targetCollectionName}.json`;
   const indexFilePath = path.resolve(storageContentDir, indexFileName);
   await storageProvider.submitStorageEntry(
     targetCollectionIndexKey,
@@ -245,13 +284,17 @@ export async function action(actionArgs: string[]) {
     encodeIndexMetadata(indexMetadata),
   );
 
-  const settingsFileName = `settings_${collectionNameValue}.json`;
+  const settingsFileName = `settings_${targetCollectionName}.json`;
   const settingsFilePath = path.resolve(storageContentDir, settingsFileName);
   await storageProvider.submitStorageEntry(
     targetCollectionSettingsKey,
     settingsFilePath,
     settingsEntryInfo.data,
   );
+
+  if (purgeTarget != null) {
+    await purgeCollection(purgeTarget, publishId, targetCollectionName);
+  }
 
   console.log("✅  Completed.");
 
