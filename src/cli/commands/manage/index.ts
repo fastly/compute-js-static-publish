@@ -14,12 +14,13 @@ import * as templateCommands from './template/index.js';
 import * as upgradeCommand from './upgrade.js';
 import * as publishContentCommand from './publish-content.js';
 import * as collectionsCommands from './collections/index.js';
+import { cliCommand } from '../../util/package.js';
 
 function help() {
   console.log(`\
 
 Usage:
-  npx @fastly/compute-js-static-publish <command> [options]
+  ${cliCommand()} <command> [options]
 
 Description:
   Manage and publish static content to Fastly Compute using KV Store-backed collections.
@@ -76,10 +77,10 @@ Automatic Project Initialization:
   Compute application for you, including Fastly configuration, default routes, and publishing setup.
 
 Examples:
-  npx @fastly/compute-js-static-publish publish-content --collection-name=live
-  npx @fastly/compute-js-static-publish collections list
-  npx @fastly/compute-js-static-publish clean --dry-run
-  npx @fastly/compute-js-static-publish publish-content --project-dir=./compute-js
+  ${cliCommand()} publish-content --collection-name=live
+  ${cliCommand()} collections list
+  ${cliCommand()} clean --dry-run
+  ${cliCommand()} publish-content --project-dir=./compute-js
 `);
 }
 

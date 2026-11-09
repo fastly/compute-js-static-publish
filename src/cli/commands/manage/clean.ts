@@ -19,12 +19,13 @@ import {
   loadStaticPublisherRcFile,
 } from '../../util/config.js';
 import { loadStorageProviderFromStaticPublishRc } from '../../storage/storage-provider.js';
+import { cliCommand } from '../../util/package.js';
 
 function help() {
   console.log(`\
 
 Usage:
-  npx @fastly/compute-js-static-publish clean [options]
+  ${cliCommand()} clean [options]
 
 Description:
   Cleans up expired or unreferenced items in storage.

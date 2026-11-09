@@ -6,12 +6,13 @@
 import { getCommandAndArgs } from '../../../util/args.js';
 import { recordFailure } from '../../../util/output.js';
 import * as initCommand from './init.js';
+import { cliCommand } from '../../../util/package.js';
 
 function help() {
   console.log(`\
 
 Usage:
-  npx @fastly/compute-js-static-publish template <sub-command> [options]
+  ${cliCommand()} template <sub-command> [options]
 
 Description:
   Commands for the template of the app.

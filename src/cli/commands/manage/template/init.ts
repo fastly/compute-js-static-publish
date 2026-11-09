@@ -19,13 +19,13 @@ import { parseCommandLine } from '../../../util/args.js';
 import { LoadConfigError, detectProjectMode, loadStaticPublisherRcFile } from '../../../util/config.js';
 import { rootRelative } from '../../../util/files.js';
 import { fail, isNonInteractive, recordFailure } from '../../../util/output.js';
-import { getOwnVersion } from '../../../util/package.js';
+import { cliCommand, getOwnVersion } from '../../../util/package.js';
 
 function help() {
   console.log(`\
 
 Usage:
-  npx @fastly/compute-js-static-publish template init [options]
+  ${cliCommand()} template init [options]
 
 Description:
   Makes or updates the folder of the app's template: for the hono template,
@@ -85,7 +85,7 @@ export async function runTemplateInit(params: RunTemplateInitParams) {
 
   if (check) {
     if (plan.outOfDate.length > 0) {
-      fail('template-init-needed', `${folderName} is out of date. Run: npx @fastly/compute-js-static-publish template init`);
+      fail('template-init-needed', `${folderName} is out of date. Run: ${cliCommand()} template init`);
       for (const reason of plan.outOfDate) {
         console.error(`  * ${reason}`);
       }

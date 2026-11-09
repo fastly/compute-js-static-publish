@@ -8,7 +8,7 @@ import { type OptionDefinition } from 'command-line-args';
 import { loadManagedProject, writeProjectVersion } from '../../managed/command-helpers.js';
 import { checkProjectVersion } from '../../managed/version-check.js';
 import { parseCommandLine } from '../../util/args.js';
-import { getOwnVersion } from '../../util/package.js';
+import { cliCommand, getOwnVersion } from '../../util/package.js';
 import { PROJECT_FILE_NAME } from '../../../models/config/static-publish-project.js';
 import { fail, recordFailure } from '../../util/output.js';
 
@@ -16,7 +16,7 @@ function help() {
   console.log(`\
 
 Usage:
-  npx @fastly/compute-js-static-publish upgrade
+  ${cliCommand()} upgrade
 
 Description:
   Moves a managed project to the version of @fastly/compute-js-static-publish

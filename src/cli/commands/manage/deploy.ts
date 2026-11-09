@@ -19,7 +19,7 @@ import { parseCommandLine } from '../../util/args.js';
 import { detectProjectMode } from '../../util/config.js';
 import { findRefusedFastlyOption } from '../../util/fastly-options.js';
 import { readServiceId } from '../../util/fastly-toml.js';
-import { getOwnPackageDir, getOwnVersion } from '../../util/package.js';
+import { cliCommand, getOwnPackageDir, getOwnVersion } from '../../util/package.js';
 import { appFastlyCommand } from '../run-dev-watch.js';
 import { fail, isJsonMode, isNonInteractive, recordFailure, setJsonResult } from '../../util/output.js';
 import { loadServiceId } from '../../util/service-id.js';
@@ -30,7 +30,7 @@ function help() {
   console.log(`\
 
 Usage:
-  npx @fastly/compute-js-static-publish deploy [options] [-- <options for the Fastly CLI>]
+  ${cliCommand()} deploy [options] [-- <options for the Fastly CLI>]
 
 Description:
   Deploys the app of a managed project, only if it changed: generates the app,

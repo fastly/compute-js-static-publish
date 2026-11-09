@@ -9,12 +9,13 @@ import * as deleteCommand from './delete.js';
 import * as listCommand from './list.js';
 import * as promoteCommand from './promote.js';
 import * as updateExpirationCommand from './update-expiration.js';
+import { cliCommand } from '../../../util/package.js';
 
 function help() {
   console.log(`\
 
 Usage:
-  npx @fastly/compute-js-static-publish collections <sub-command> [options]
+  ${cliCommand()} collections <sub-command> [options]
 
 Description:
   Manage named collections within a Compute application built with @fastly/compute-js-static-publish.
@@ -46,8 +47,8 @@ Global Options:
   -h, --help                       Show this help message and exit.
 
 Examples:
-  npx @fastly/compute-js-static-publish collections list
-  npx @fastly/compute-js-static-publish collections delete --collection-name=preview-42
+  ${cliCommand()} collections list
+  ${cliCommand()} collections delete --collection-name=preview-42
 `);
 }
 
