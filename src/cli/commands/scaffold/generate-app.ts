@@ -7,7 +7,7 @@ import * as path from 'node:path';
 
 import { type CollectionSelection } from '../../../models/config/collection-selection.js';
 import { type FastlyTomlSections } from '../../../models/config/static-publish-project.js';
-import { type GeneratedFrom } from '../../../models/config/static-publish-rc.js';
+import { type GeneratedFrom, type StaticPublishTemplateOptions } from '../../../models/config/static-publish-rc.js';
 import { dotRelative } from '../../util/files.js';
 import { ConfigError } from '../../util/output.js';
 import { type AppTemplate } from './app-template.js';
@@ -45,6 +45,12 @@ export type AppConfig = {
   collectionSelection?: CollectionSelection,
   // Added to fastly.toml, if set (managed.fastlyToml of a managed project).
   fastlyToml?: FastlyTomlSections,
+  // Written into static-publish.rc.js, if set: the build settings of the
+  // template. The paths are absolute here, and relative to the rc in the file.
+  build?: { hono?: { extensionsDir: string } },
+  // Written into static-publish.rc.js, if set: templateOptions, only with the
+  // key of the app's template.
+  templateOptions?: StaticPublishTemplateOptions,
   // Written as package-lock.json, if set (a managed app).
   packageLock?: string,
 };
@@ -92,6 +98,8 @@ export function generateApp(config: AppConfig): Record<string, string> {
     generatedFrom,
     collectionSelection,
     fastlyToml,
+    build,
+    templateOptions,
     packageLock,
   } = config;
 
@@ -105,6 +113,7 @@ export function generateApp(config: AppConfig): Record<string, string> {
   const workingDirInApp = path.relative(computeJsDir, staticPublisherWorkingDir);
   resourceFiles['.gitignore'] = renderAppResource('gitignore', {
     workingDirInApp: !workingDirInApp.startsWith('..') ? workingDirInApp : undefined,
+    templateLines: template.gitignore,
   });
 
   // package.json: the dependencies come from the template's package.json.
@@ -189,6 +198,10 @@ export function generateApp(config: AppConfig): Record<string, string> {
     staticPublisherWorkingDir: dotRelative(computeJsDir, staticPublisherWorkingDir),
     generatedFrom,
     collectionSelection,
+    build: build?.hono != null ?
+      { hono: { extensionsDir: dotRelative(computeJsDir, build.hono.extensionsDir).split(path.sep).join('/') } } :
+      undefined,
+    templateOptions,
   });
 
   // publish-content.config.js

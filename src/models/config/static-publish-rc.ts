@@ -25,6 +25,39 @@ export type StaticPublishRcBase = {
   // Without it, every request gets the default collection (or the collection
   // that the app selects in its own code).
   collectionSelection?: CollectionSelection,
+
+  // Settings for the build of the app, by template. Optional.
+  build?: StaticPublishBuild,
+
+  // Options that the code of the template reads at runtime, by template.
+  // Optional. The Wasm binary contains them, so a change needs a new build.
+  templateOptions?: StaticPublishTemplateOptions,
+};
+
+export type StaticPublishBuild = {
+  hono?: {
+    // The folder of the Hono extensions, relative to this file.
+    // Default: './hono-extensions'.
+    extensionsDir?: string,
+  },
+};
+
+// Bindings for buildFire() of @fastly/hono-fastly-compute: the name on c.env,
+// and the resource, for example { config: 'ConfigStore:site_config' }.
+export type HonoBindings = Record<string, string>;
+
+export type HonoTemplateOptions = {
+  // Bindings of the app. They are merged with the bindings of the extension
+  // modules.
+  bindings?: HonoBindings,
+  // Options for each middleware module, by module name.
+  middleware?: Record<string, unknown>,
+  // Options for each routes module, by module name.
+  routes?: Record<string, unknown>,
+};
+
+export type StaticPublishTemplateOptions = {
+  hono?: HonoTemplateOptions,
 };
 
 export type GeneratedFrom = {

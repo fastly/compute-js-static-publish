@@ -23,6 +23,7 @@ import {
   RC_FILE_NAME,
 } from '../../models/config/static-publish-project.js';
 import { validateCollectionSelection } from '../../models/config/collection-selection.js';
+import { checkTemplateSettings } from '../../models/config/template-settings.js';
 import { APP_TEMPLATE_NAMES, isAppTemplateName } from '../commands/scaffold/app-template.js';
 import { checkFastlyTomlSections } from '../commands/scaffold/fastly-toml-sections.js';
 import {
@@ -229,7 +230,10 @@ export const normalizeStaticPublisherRc = buildNormalizeFunctionForObject<Static
     publishId,
     defaultCollectionName,
     staticPublisherWorkingDir,
+    generatedFrom,
     collectionSelection,
+    build,
+    templateOptions,
   } = config;
 
   let storage: StaticPublishPartialStorage | null = null;
@@ -293,6 +297,17 @@ export const normalizeStaticPublisherRc = buildNormalizeFunctionForObject<Static
     collectionSelection = undefined;
   }
 
+  // The settings of the templates. A setting that no template declares is only
+  // a warning.
+  const templateSettings = checkTemplateSettings(build, templateOptions);
+  for (const warning of templateSettings.warnings) {
+    console.warn(`⚠️ ${warning}`);
+  }
+  if (templateSettings.errors.length > 0) {
+    errors.push(...templateSettings.errors);
+    return null;
+  }
+
   return Object.assign({},
     storage,
     {
@@ -300,7 +315,10 @@ export const normalizeStaticPublisherRc = buildNormalizeFunctionForObject<Static
       defaultCollectionName,
       staticPublisherWorkingDir,
     },
+    generatedFrom != null ? { generatedFrom } : {},
     collectionSelection != null ? { collectionSelection } : {},
+    build != null ? { build } : {},
+    templateOptions != null ? { templateOptions } : {},
   );
 });
 
