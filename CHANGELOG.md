@@ -51,6 +51,7 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 
 ### Changed
 
+- The help and the hints of the CLI show the npx command with the dist-tag of a prerelease, for example `npx @fastly/compute-js-static-publish@beta dev` in 8.1.0-beta.2. Without the dist-tag, npx runs the latest stable version, which does not have the new commands. A stable version shows the command as before.
 - `collectionSelector.fromCookie()`: the activate and reset paths now redirect with `308`. Before, they used `302`.
 - Collection names have a rule: a DNS label (lowercase `a-z`, `0-9`, and `-`, from 1 to 63 characters, with no `-` at the start or the end). Thus a name is safe in storage keys, in the surrogate key of the purge, in a cookie, and in a hostname.
    - `publish-content` to a new collection, `collections promote --to` a new collection, and `scaffold --default-collection-name` stop with an error for a name that breaks the rule.

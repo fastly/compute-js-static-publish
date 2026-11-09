@@ -19,12 +19,13 @@ import {
 import { parseCommandLine } from '../../../util/args.js';
 import { errorCodeOf, fail, recordFailure } from '../../../util/output.js';
 import { loadStorageProviderFromStaticPublishRc } from '../../../storage/storage-provider.js';
+import { cliCommand } from '../../../util/package.js';
 
 function help() {
   console.log(`\
 
 Usage:
-  npx @fastly/compute-js-static-publish collections update-expiration \\
+  ${cliCommand()} collections update-expiration \\
     --collection-name=<name> \\
     [options]
 
