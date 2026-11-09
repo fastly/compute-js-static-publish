@@ -43,6 +43,8 @@ import {
 } from './helpers.js';
 
 const COLLECTION_NAME = 'e2e';
+// A second collection, to promote to COLLECTION_NAME.
+const PROMOTE_SOURCE_NAME = 'e2e-promote';
 
 // A long max age, so that only a purge can make the cache serve new content
 // during the test.
@@ -153,6 +155,7 @@ describe('deployed service', { skip }, () => {
     if (computeJsDir != null) {
       try {
         runCli([ 'collections', 'delete', '--collection-name', COLLECTION_NAME ], { cwd: computeJsDir, env: cliEnv });
+        runCli([ 'collections', 'delete', '--collection-name', PROMOTE_SOURCE_NAME ], { cwd: computeJsDir, env: cliEnv });
         runCli([ 'clean' ], { cwd: computeJsDir, env: cliEnv });
       } catch (err) {
         console.error(`Could not delete the test keys for publish ID ${publishId}:`, err);
@@ -214,6 +217,34 @@ describe('deployed service', { skip }, () => {
     await waitFor(async () => {
       const res = await getVersion();
       return res.status === 200 && res.body.toString() === `v2 ${publishId}` ? res : undefined;
+    }, { timeoutMs: 180_000, describeLast });
+  });
+
+  step('a promote with a purge makes the cache serve the promoted content', async () => {
+    // First, the cache must have the content of the step before.
+    await waitFor(async () => {
+      const res = await getVersion();
+      return isHit(res) && res.body.toString() === `v2 ${publishId}` ? res : undefined;
+    }, { timeoutMs: 60_000, describeLast });
+
+    writeVersion(`v3 ${publishId}`);
+    fs.rmSync(path.resolve(computeJsDir, 'static-publisher'), { recursive: true, force: true });
+    runCli([ 'publish-content', '--collection-name', PROMOTE_SOURCE_NAME, '--expires-in', '1d' ], { cwd: computeJsDir, env: cliEnv });
+
+    const output = runCli([
+      'collections', 'promote',
+      '--collection-name', PROMOTE_SOURCE_NAME,
+      '--to', COLLECTION_NAME,
+      '--fastly-service-id', serviceId,
+    ], { cwd: computeJsDir, env: cliEnv }).output;
+    assert.match(output, new RegExp(`Purging surrogate key \\[${publishId}-${COLLECTION_NAME}\\]`));
+    assert.match(output, /^Purged$/m);
+
+    // As above: only the purge can make the cache serve the new content before
+    // RESPONSE_CACHE_MAX_AGE ends.
+    await waitFor(async () => {
+      const res = await getVersion();
+      return res.status === 200 && res.body.toString() === `v3 ${publishId}` ? res : undefined;
     }, { timeoutMs: 180_000, describeLast });
   });
 
