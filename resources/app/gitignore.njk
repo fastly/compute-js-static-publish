@@ -4,3 +4,6 @@
 {% if workingDirInApp %}
 /{{ workingDirInApp | line }}
 {% endif %}
+{% for templateLine in templateLines %}
+{{ templateLine | line }}
+{% endfor %}

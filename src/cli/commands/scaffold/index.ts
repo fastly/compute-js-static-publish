@@ -18,6 +18,8 @@ import { parseCommandLine } from '../../util/args.js';
 import { fail, recordFailure } from '../../util/output.js';
 import { rootRelative } from '../../util/files.js';
 import { findComputeJsStaticPublisherVersion, getOwnVersion, type PackageJson } from '../../util/package.js';
+import { runTemplateInit } from '../manage/template/init.js';
+import { templateHasInit } from '../../managed/template-init.js';
 import { findHostnameForAwsS3RegionAndBucket } from '../../util/s3.js';
 import {
   APP_TEMPLATE_NAMES,
@@ -886,6 +888,9 @@ export async function action(actionArgs: string[]) {
     autoExt,
     staticPublishVersionSpec: findComputeJsStaticPublisherVersion(packageJson),
     template: loadAppTemplate(options.template),
+    // The hono template: the extensions folder is in the directory where
+    // scaffold runs (next to the app, or next to the project file).
+    ...(options.template === 'hono' ? { build: { hono: { extensionsDir: path.resolve('hono-extensions') } } } : {}),
     generatedFrom: {
       template: options.template,
       staticPublishVersion: getOwnVersion(),
@@ -896,6 +901,11 @@ export async function action(actionArgs: string[]) {
 
   if (managed) {
     writeManagedProject(appConfig, projectDir);
+    // The app is not installed yet, so template init uses the versions of the
+    // template's lockfile.
+    if (templateHasInit(options.template)) {
+      await runTemplateInit({ templateName: options.template, rc: {}, baseDir: projectDir, appNodeModulesDir: undefined });
+    }
     return;
   }
 
@@ -918,6 +928,17 @@ export async function action(actionArgs: string[]) {
   console.log(`npm --prefix ${COMPUTE_JS_DIR} install`);
   child_process.spawnSync('npm', [ '--prefix', COMPUTE_JS_DIR, 'install' ], { stdio: 'inherit' });
   console.log('');
+
+  // The folder of the template (for the hono template: hono-extensions/, next
+  // to the app). It is in the directory where scaffold runs.
+  if (templateHasInit(options.template)) {
+    await runTemplateInit({
+      templateName: options.template,
+      rc: {},
+      baseDir: path.resolve(),
+      appNodeModulesDir: path.resolve(computeJsDir, 'node_modules'),
+    });
+  }
 
   if (storageMode === 'kv-store') {
     console.log(`
