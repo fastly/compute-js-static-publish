@@ -9,6 +9,8 @@ import path from 'node:path';
 import { PROJECT_FILE_NAME } from '../../models/config/static-publish-project.js';
 import { LoadConfigError, type StaticPublishProjectNormalized, detectProjectMode, loadProjectFile } from '../util/config.js';
 import { getOwnVersion } from '../util/package.js';
+import { DEFAULT_APP_TEMPLATE_NAME } from '../commands/scaffold/app-template.js';
+import { DEFAULT_HONO_EXTENSIONS_DIR } from '../hono/build.js';
 import { writeBackStaticPublishVersion } from './project-edit.js';
 import { checkProjectVersion, versionCheckError } from './version-check.js';
 import { fail, recordFailure } from '../util/output.js';
@@ -32,6 +34,18 @@ export async function loadManagedProject(command: string, ejectedHint: string): 
     }
     recordFailure('config-invalid', `Can't load ${PROJECT_FILE_NAME}.`);
     return null;
+  }
+}
+
+// For the hono template: a hint when the extensions folder does not exist. The
+// app works without it.
+export function showTemplateFolderHint(project: StaticPublishProjectNormalized) {
+  if ((project.managed.template ?? DEFAULT_APP_TEMPLATE_NAME) !== 'hono') {
+    return;
+  }
+  const extensionsDir = project.rc.build?.hono?.extensionsDir ?? DEFAULT_HONO_EXTENSIONS_DIR;
+  if (!fs.existsSync(path.resolve(extensionsDir))) {
+    console.log(`💡 No ${extensionsDir} folder. To add your own Hono middleware and routes, run: npx @fastly/compute-js-static-publish template init`);
   }
 }
 
