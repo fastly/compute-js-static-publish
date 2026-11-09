@@ -21,7 +21,7 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 - `npm run dev:watch` in a scaffolded app: runs `fastly compute serve --watch`. If the app has `scripts/template_watch.js`, it runs that script next to the Fastly CLI, until the Fastly CLI stops.
 - `scaffold` writes `generatedFrom` into `static-publish.rc.js`: the template, the version of this package, and the date.
 - `scaffold --default-collection-name`: the collection to serve when no collection is selected. The default is `live`, as before.
-- `scaffold --template`: the template of the app's code. `plain`, the default, is the only template.
+- `scaffold --template`: the template of the app's code: `plain` (the default) or `hono`.
 - Previews with collection selection: `collectionSelection` in `static-publish.rc.js` chooses the collection of each request (see below). It is off by default. The CLI checks it when it loads `static-publish.rc.js`.
    - `PublisherServer.fromStaticPublishRc()` reads it. `setCollectionSelection()` sets it, and `resolveCollection(request)` uses it.
    - With it, a collection that `serveRequest()` or `serveFallback()` serves through the `collectionName` option, and that is not the default collection: if it is not published or has expired, `onMissing` gives the `404` response that names the collection (`'not-found'`, the default) or serves the default collection (`'default'`). Its responses get `X-Robots-Tag: noindex` (unless `noindex` is `false`), and `Cache-Control: private` unless a `host`, `path`, or `query` source of the request selects the collection (then the URL names the collection, and a shared cache can store the response).
