@@ -18,12 +18,13 @@ import {
   loadStaticPublisherRcFile,
 } from '../../../util/config.js';
 import { loadStorageProviderFromStaticPublishRc } from '../../../storage/storage-provider.js';
+import { cliCommand } from '../../../util/package.js';
 
 function help() {
   console.log(`\
 
 Usage:
-  npx @fastly/compute-js-static-publish collections list [options]
+  ${cliCommand()} collections list [options]
 
 Description:
   Lists all collections currently published in the KV Store.

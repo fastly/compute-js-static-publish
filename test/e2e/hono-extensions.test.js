@@ -505,6 +505,6 @@ describe('the hint when a managed hono project has no extensions folder', () => 
 
   test('deploy shows the hint', () => {
     const result = runCli([ 'deploy' ], { cwd: dir, env: NO_TOKEN, allowFailure: true });
-    assert.match(result.output, /No \.\/hono-extensions folder\. To add your own Hono middleware and routes, run: npx @fastly\/compute-js-static-publish template init/);
+    assert.match(result.output, /No \.\/hono-extensions folder\. To add your own Hono middleware and routes, run: npx @fastly\/compute-js-static-publish(@[a-z-]+)? template init/);
   });
 });
