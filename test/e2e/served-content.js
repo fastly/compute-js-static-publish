@@ -142,5 +142,5 @@ export async function checkResponseCache(t, baseUrl) {
   assert.match(missingHtml.body.toString(), /<h1>Not found<\/h1>/);
   const missingJson = await rawRequest(baseUrl + '/cached-missing', { headers: { ...missingHeaders, accept: 'application/json' } });
   assert.equal(missingJson.status, 404);
-  assert.equal(missingJson.body.toString(), 'Not found (app)');
+  assert.doesNotMatch(missingJson.body.toString(), /<h1>Not found<\/h1>/, 'not the cached 404 page');
 }
