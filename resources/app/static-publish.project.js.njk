@@ -30,6 +30,12 @@ const project = {
 {% if collectionSelection %}
   collectionSelection: {{ collectionSelection | js('  ') }},
 {% endif %}
+{% if build %}
+  build: {{ build | js('  ') }},
+{% endif %}
+{% if templateOptions %}
+  templateOptions: {{ templateOptions | js('  ') }},
+{% endif %}
 
   // Read by publish-content (the same fields as publish-content.config.js):
   publishContent: {

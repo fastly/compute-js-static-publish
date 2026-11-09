@@ -10,7 +10,7 @@ import path from 'node:path';
 import { type OptionDefinition } from 'command-line-args';
 
 import { managedAppState, prepareManagedApp } from '../../managed/app.js';
-import { checkVersionForCommand, loadManagedProject } from '../../managed/command-helpers.js';
+import { checkVersionForCommand, loadManagedProject, showTemplateFolderHint } from '../../managed/command-helpers.js';
 import { getActiveVersion, getVersionDomains } from '../../managed/fastly-service.js';
 import { formatVersionComment, parseVersionComment } from '../../managed/fingerprint.js';
 import { writeBackServiceId } from '../../managed/project-edit.js';
@@ -112,6 +112,7 @@ export async function action(actionArgs: string[]) {
   if (project == null) {
     return;
   }
+  showTemplateFolderHint(project);
   if (!checkVersionForCommand(project, autoUpgrade === true)) {
     return;
   }
