@@ -20,13 +20,14 @@ import { parseCommandLine } from '../../../util/args.js';
 import { errorCodeOf, fail, recordFailure, setJsonResult } from '../../../util/output.js';
 import { checkCollectionNameForWrite } from '../../../util/collection-name.js';
 import { loadStorageProviderFromStaticPublishRc } from '../../../storage/storage-provider.js';
+import { cliCommand } from '../../../util/package.js';
 import { type PurgeTarget, loadPurgeTarget, purgeCollection } from '../../../util/purge.js';
 
 function help() {
   console.log(`\
 
 Usage:
-  npx @fastly/compute-js-static-publish collections promote
+  ${cliCommand()} collections promote
     --collection-name=<name> \\
     --to=name> \\
     [options]

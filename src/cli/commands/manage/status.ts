@@ -15,7 +15,7 @@ import { loadApiToken } from '../../util/api-token.js';
 import { parseCommandLine } from '../../util/args.js';
 import { recordFailure, setJsonResult } from '../../util/output.js';
 import { detectProjectMode } from '../../util/config.js';
-import { getOwnVersion } from '../../util/package.js';
+import { cliCommand, getOwnVersion } from '../../util/package.js';
 import { loadServiceId } from '../../util/service-id.js';
 import { previewUrlTemplates } from '../../../models/config/collection-selection.js';
 import { MANAGED_APP_DIR } from '../../../models/config/static-publish-project.js';
@@ -26,7 +26,7 @@ function help() {
   console.log(`\
 
 Usage:
-  npx @fastly/compute-js-static-publish status [options]
+  ${cliCommand()} status [options]
 
 Description:
   Shows the state of the app. In a managed project: the fingerprint of the app

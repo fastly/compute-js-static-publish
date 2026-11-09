@@ -48,6 +48,7 @@ import {
   StorageProviderBatch,
   type StorageProviderBatchEntry,
 } from '../../storage/storage-provider.js';
+import { cliCommand } from '../../util/package.js';
 
 // Storage key format:
 // <publishId>_index_<preview_id>.json
@@ -58,7 +59,7 @@ function help() {
   console.log(`\
 
 Usage:
-  npx @fastly/compute-js-static-publish publish-content [--collection-name=<name>] [options]
+  ${cliCommand()} publish-content [--collection-name=<name>] [options]
 
 Description:
   Publishes static files from your local root directory into a named collection,
@@ -135,9 +136,9 @@ Global Options:
   -h, --help                       Show this help message and exit.
 
 Examples:
-  npx @fastly/compute-js-static-publish publish-content --collection-name=preview-456
-  npx @fastly/compute-js-static-publish publish-content --expires-in=7d --kv-overwrite
-  npx @fastly/compute-js-static-publish publish-content --expires-never --local
+  ${cliCommand()} publish-content --collection-name=preview-456
+  ${cliCommand()} publish-content --expires-in=7d --kv-overwrite
+  ${cliCommand()} publish-content --expires-never --local
 
 `);
 }

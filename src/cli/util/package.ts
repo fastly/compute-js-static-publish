@@ -29,6 +29,18 @@ export function getOwnVersion(): string {
   return readOwnPackageJson().version;
 }
 
+// The npx command of this package, for the messages of the CLI. The version of
+// a prerelease (for example 8.1.0-beta.1) gives the dist-tag of the prerelease
+// (@beta), because npx without a dist-tag runs the latest stable version, which
+// does not have the features of the prerelease. A stable version gives no
+// dist-tag, or @latest with { latest: true } (the command that makes a new
+// app).
+export function cliCommand(options: { latest?: boolean } = {}, version: string = getOwnVersion()): string {
+  const prerelease = /^\d+\.\d+\.\d+-([a-z][a-z0-9-]*)/.exec(version)?.[1];
+  const distTag = prerelease ?? (options.latest ? 'latest' : undefined);
+  return `npx @fastly/compute-js-static-publish${distTag != null ? `@${distTag}` : ''}`;
+}
+
 export function findComputeJsStaticPublisherVersion(packageJson: PackageJson | null) {
 
   // Get the current compute js static publisher version.

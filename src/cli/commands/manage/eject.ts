@@ -18,7 +18,7 @@ import { parseCommandLine } from '../../util/args.js';
 import { detectProjectMode } from '../../util/config.js';
 import { rootRelative } from '../../util/files.js';
 import { fail, recordFailure } from '../../util/output.js';
-import { getOwnVersion } from '../../util/package.js';
+import { cliCommand, getOwnVersion } from '../../util/package.js';
 import { MANAGED_APP_DIR, PROJECT_FILE_NAME, RC_FILE_NAME } from '../../../models/config/static-publish-project.js';
 
 // An environment variable for the tests of this package only. The tests run a
@@ -30,7 +30,7 @@ function help() {
   console.log(`\
 
 Usage:
-  npx @fastly/compute-js-static-publish eject [options]
+  ${cliCommand()} eject [options]
 
 Description:
   Converts a managed project into an ejected app, which you own and change:
