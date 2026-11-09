@@ -131,10 +131,12 @@ npx @fastly/compute-js-static-publish@latest \
 > npx @fastly/compute-js-static-publish@latest \
 >   --root-dir=./public \
 >   --storage-mode=s3 \
->   --s3-region=us-east \
+>   --s3-region=us-east-1 \
 >   --s3-bucket=my-static-content-bucket \
->   --s3-endpoint=https://us-east.object.fastlystorage.app
+>   --s3-endpoint=https://us-east-1.object.fastlystorage.app
 > ```
+>
+> For the regions of Fastly Object Storage and their endpoints, see [Working with Object Storage](https://www.fastly.com/documentation/guides/platform/object-storage/working-with-object-storage/#managing-object-storage-buckets-and-objects).
 
 You get a Compute app in `./compute-js` with:
 
@@ -752,10 +754,10 @@ publisherServer.setResponseCache({ maxAge: 3600 });
 
 `maxAge` is in seconds. This is off by default.
 
-`maxBodySize` sets the largest response, in bytes, to cache. The default is 8 MiB (`8 * 1024 * 1024`). A larger response is served from storage each time:
+`maxBodySize` sets the largest response, in bytes, to cache. The default is 16 MiB (`16 * 1024 * 1024`). A larger response is served from storage each time:
 
 ```js
-publisherServer.setResponseCache({ maxAge: 3600, maxBodySize: 16 * 1024 * 1024 });
+publisherServer.setResponseCache({ maxAge: 3600, maxBodySize: 4 * 1024 * 1024 });
 ```
 
 - A response is cached by the publish ID, the collection, the path, and the client's `Accept-Encoding`. A cache hit does not read the settings, the index, or the file.
@@ -781,7 +783,7 @@ The second argument identifies the response in the collection. If anything other
 
 Notes:
 
-- A response is read completely before it is cached, so a request uses memory for one response, up to `maxBodySize`. Other requests that wait for the same response get it when it is cached.
+- A response is read completely before it is cached. The request that caches it uses memory of about two times the body, up to two times `maxBodySize`. A Compute instance has a limit on its memory, so do not set `maxBodySize` larger than 48 MiB (`48 * 1024 * 1024`). Other requests that wait for the same response get it when it is cached.
 - A response is cached only if its body has the size in the file's metadata. If storage returns a different body, nothing is cached, the request gets an error, and the next request reads the file again.
 - With `--local`, `publish-content` cannot purge the local cache. Restart `fastly compute serve` to see newly published content, or leave the response cache off in local development.
 - On staging, a purge must include the `Fastly-Purge-Environment: staging` header to clear the staging cache. Without it, a purge clears only the production cache. Use `publish-content --purge-environment=production,staging` to purge both.
@@ -931,7 +933,7 @@ npx @fastly/compute-js-static-publish publish-content \
 
 Publishes static files from your local root directory into a named collection, in the storage that `static-publish.rc.js` specifies: the Fastly KV Store, S3-compatible storage (BETA), or a local dev directory (`--local`, KV Store mode only).
 
-Before it scans your files, the command lists the files that are already in storage. Files that already exist with the same hash are not compressed or uploaded again. With the KV Store, the command uploads the remaining files in batches.
+Before it scans your files, the command lists the files that are already in storage. Files that already exist with the same hash are not compressed or uploaded again. With the KV Store, a file larger than 20 MiB is stored in chunks, and the command uploads a chunk again if the chunk in storage does not have the correct size. Then the command uploads the remaining files in batches.
 
 After this process is complete, the PublisherServer object in the Compute application will see the updated index of files and updated server settings from the `publish-content.config.js` file.
 
@@ -1211,6 +1213,8 @@ async function handleRequest(event) {
 ## Development
 
 To build the package, run `npm run build`. To run the tests, see [test/README.md](./test/README.md).
+
+In the code, its comments, and the docs for developers of this package, a **customer** is a developer who uses this package to publish a site, and a **visitor** is a person who opens the customer's site.
 
 ## Issues
 
