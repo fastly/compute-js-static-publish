@@ -17,18 +17,19 @@ import {
 } from '../../../util/config.js';
 import { loadStorageProviderFromStaticPublishRc } from '../../../storage/storage-provider.js';
 import { type PurgeResult, type PurgeTarget, loadPurgeTarget, purgeCollection } from '../../../util/purge.js';
+import { cliCommand } from '../../../util/package.js';
 
 function help() {
   console.log(`\
 
 Usage:
-  npx @fastly/compute-js-static-publish collections delete --collection-name=<name> [options]
+  ${cliCommand()} collections delete --collection-name=<name> [options]
 
 Description:
   Deletes a collection index from storage. The content files will remain as they may still
   be referenced by other collection indexes.
 
-  Use the 'npx @fastly/compute-js-static-publish clean' command afterward to remove content
+  Use the '${cliCommand()} clean' command afterward to remove content
   files that are no longer referenced by any collection.  
 
   If a Service ID is found, the tool then purges the cached responses of the collection
