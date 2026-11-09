@@ -69,6 +69,16 @@ npm run fastly:publish       # upload your static files
 
 If the app uses S3-compatible storage, your files are already in the bucket after `npm run s3:publish`. Run `npm run fastly:deploy` to deploy the app, and use `npm run s3:publish` to upload updates. After the deploy, `fastly.toml` has the service ID, so `s3:publish` also purges the service's cache. For this purge, set `FASTLY_API_TOKEN` too. Without it, `s3:publish` stops with an error before it uploads files.
 
+## New in 8.1
+
+- **Managed projects:** keep only `static-publish.project.js` in your repo. The CLI generates the app, and `dev`, `deploy`, `status`, `upgrade`, and `eject` work with it. ([Managed and ejected apps](https://github.com/fastly/compute-js-static-publish/blob/main/README.md#managed-and-ejected-apps))
+- **Previews:** serve another collection for a request, selected by host, path, query, cookie, or header. ([Previews](https://github.com/fastly/compute-js-static-publish/blob/main/README.md#-previews-collection-selection))
+- **Hidden files:** publish files that the server does not serve for a request, for your own code to read. ([Hidden files](https://github.com/fastly/compute-js-static-publish/blob/main/README.md#hidden-files))
+- **Hono:** the `hono` template, with your own middleware and routes in `hono-extensions/`, and examples for GRIP streaming and OAuth login. For your own Hono app, `@fastly/compute-js-static-publish/hono` replaces `@fastly/hono-compute-js-static-publish`. ([Using Hono](https://github.com/fastly/compute-js-static-publish/blob/main/README.md#-using-hono))
+- **CI:** `--json` output, exit codes, error codes, `--project-dir`, and `--non-interactive`. ([Using the CLI in CI](https://github.com/fastly/compute-js-static-publish/blob/main/README.md#-using-the-cli-in-ci))
+
+Before you upgrade, read [CHANGELOG.md](https://github.com/fastly/compute-js-static-publish/blob/main/CHANGELOG.md): collection names now must be DNS labels (lowercase letters, digits, and `-`), and a usage or config error now exits with `2`.
+
 ## Features
 
 - Named collections for previews, staging, production
