@@ -11,7 +11,7 @@ The steps:
 1. Make a new managed project with the `hono` template. Run this command in the directory of your project. In this example, the files of your site are in `./public`:
 
    ```sh
-   npx @fastly/compute-js-static-publish@latest --managed --template hono --root-dir=./public --kv-store-name=site-content
+   npx @fastly/compute-js-static-publish@beta --managed --template hono --root-dir=./public --kv-store-name=site-content
    ```
 
    This writes `static-publish.project.js` and the folder `hono-extensions/`. To add the example to a project that exists, see [Adding to an existing project](#adding-to-an-existing-project).

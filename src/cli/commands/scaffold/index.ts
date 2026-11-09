@@ -39,7 +39,7 @@ function help() {
   console.log(`\
 
 Usage:
-  npx @fastly/compute-js-static-publish@latest [options]
+  npx @fastly/compute-js-static-publish@beta [options]
 
 Description:
   Scaffold a new Compute app configured for static publishing.

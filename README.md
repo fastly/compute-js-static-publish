@@ -57,7 +57,7 @@ Serve static websites and web apps at the edge &mdash; no backends and no CDN in
 Create a directory for your project, place your static files in `./public`, then type:
 
 ```sh
-npx @fastly/compute-js-static-publish@latest \
+npx @fastly/compute-js-static-publish@beta \
   --root-dir=./public \
   --kv-store-name=site-content
 ```
@@ -118,7 +118,7 @@ FASTLY_API_TOKEN=$(npx fastly auth token) npm run fastly:publish
 Create a directory for your project, place your static files in `./public`, then type:
 
 ```sh
-npx @fastly/compute-js-static-publish@latest \
+npx @fastly/compute-js-static-publish@beta \
   --root-dir=./public \
   --storage-mode=s3 \
   --s3-region=<s3 region> \
@@ -129,7 +129,7 @@ npx @fastly/compute-js-static-publish@latest \
 > If the storage requires a custom endpoint, such as is the case with Fastly Object Storage, specify it using `--s3-endpoint=<endpoint>`. For example:
 >
 > ```sh
-> npx @fastly/compute-js-static-publish@latest \
+> npx @fastly/compute-js-static-publish@beta \
 >   --root-dir=./public \
 >   --storage-mode=s3 \
 >   --s3-region=us-east-1 \
@@ -1168,7 +1168,7 @@ Notes:
 To scaffold a Hono app, add `--template hono` (in a managed project: `managed.template: 'hono'`):
 
 ```sh
-npx @fastly/compute-js-static-publish@latest --template hono --root-dir=./public --kv-store-name=site-content
+npx @fastly/compute-js-static-publish@beta --template hono --root-dir=./public --kv-store-name=site-content
 ```
 
 The app is TypeScript: `src/index.ts`, with code like the example below, and `tsconfig.json`. Add your own routes in `src/index.ts`. The build (`js-compute-runtime ./src/index.ts`) removes the types, but does not check them. To check the types, run `npx tsc` in the app. The app has `typescript` as a dev dependency.
@@ -1398,7 +1398,7 @@ You can stream `assetVariant.storageEntry.body` directly to a `Response`, or rea
 ### Available Commands
 
 #### Outside a Compute App Directory
-- `npx @fastly/compute-js-static-publish@latest [options]` - Scaffold a new Compute app
+- `npx @fastly/compute-js-static-publish@beta [options]` - Scaffold a new Compute app
 
 #### Inside a Compute App Directory
 - `publish-content` - Publish static files to storage (KV Store or S3-compatible storage) under a named collection
@@ -1556,12 +1556,12 @@ Run outside an existing Compute app directory:
 
 ```sh
 # Using KV store storage
-npx @fastly/compute-js-static-publish@latest \
+npx @fastly/compute-js-static-publish@beta \
   --root-dir=./public \
   --kv-store-name=<site-content>
 
 # Using S3 storage (BETA)
-npx @fastly/compute-js-static-publish@latest \
+npx @fastly/compute-js-static-publish@beta \
   --root-dir=./public \
   --storage-mode=s3 \
   --s3-region=<s3 region> \
@@ -1572,7 +1572,7 @@ npx @fastly/compute-js-static-publish@latest \
 #### Full options list
 
 ```sh
-npx @fastly/compute-js-static-publish@latest \
+npx @fastly/compute-js-static-publish@beta \
   --root-dir=./public \
   { [--storage-mode=kv-store] --kv-store-name=<site-content> | \
     --storage-mode=s3 --s3-region=<s3 region> --s3-bucket=<bucket name> [--s3-endpoint=<endpoint>] } \
