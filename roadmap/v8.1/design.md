@@ -1060,6 +1060,15 @@ Nothing about the extensions changes at eject:
 
 **Tested in this part (tasks 3.9 and 6.8):** `eject` writes `build.hono.extensionsDir` again relative to the rc's new location (for example `../hono-extensions`), and the ejected app builds with the extensions (e2e).
 
+### Examples (part 6d)
+
+**Decided in this part:**
+
+- The examples are folders in `examples/hono/<name>/`, in the repository only (not in the npm package; `files` in `package.json` does not list `examples/`). Other examples of this package go to `examples/` too. Each folder has a README and a `hono-extensions/` folder: the modules, and a `package.json` with the `dependencies` of the example. For a new project, the customer copies this `hono-extensions/` folder into the project, and runs `template init` (which adds the peer dependencies and the starter files) and `npm install`. For a project that exists, the README shows how to copy the files and install the packages. The README says that there is no way to scaffold an app with an example. The local e2e tests use the steps for a new project, one example in each project. The deployed test puts both examples in one project with the steps for a project that exists.
+- `grip`: the pattern of the Fastly starter kit `fanout` (the app hands off one path to Fanout through the backend `self`, and answers the requests from Fanout itself), not of `fanout-forward`. One module, `grip.ts`: in the `middleware` phase, the handoff and `serveGrip()` on `${path}/*` (default `/events`); in the `beforeFiles` phase, `GET ${path}/stream/:channel` (HTTP stream), `GET ${path}/sse/:channel` (Server-Sent Events), and `POST ${publishPath}/:channel` (default `/publish`) with `Authorization: Bearer <PUBLISH_KEY>`. No long-poll and no WebSocket. Secret Store `grip`: `PUBLISH_KEY` and `FANOUT_API_TOKEN` on Fastly (the publish URL and the verify key come from `buildFanoutGripConfig()`); `GRIP_URL` and `GRIP_VERIFY_KEY` locally (Pushpin).
+- `oauth`: `@hono/oauth-providers` for GitHub and Google. One module, `10-oauth.ts`, all in the `middleware` phase: a login check on `protect` (default `/*`; `/auth/*` never needs a session) with `login` and `allowedUsers` (`github:<login>`, `google:<verified email>`), and the routes `/auth/github`, `/auth/google`, `/auth/logout`. The session is a cookie signed with `SESSION_KEY` (HMAC-SHA256), with an expiry time (`sessionMaxAge`). The client secrets are read for each request (a secret cannot be read at the top level). Protected responses get `Cache-Control: private`.
+- Local secrets come from environment variables, through `managed.fastlyToml.local_server.secret_stores` (`env`).
+
 ### What this needs from the template mechanism (task 6.4)
 
 The `AppTemplate` of task 1.2 gets:

@@ -31,6 +31,7 @@ checkout through a `file:` dependency. The tests need network access for `npm in
 | `kv-store.test.js`       | Publishes to a real KV Store two times, and makes sure that the second publish uploads nothing. Then deletes the collection and cleans.          | The environment variables below           |
 | `s3.test.js`             | The same test with an S3-compatible bucket. It also serves the content from the bucket with `fastly compute serve`.                               | The Fastly CLI, and the variables below   |
 | `deployed.test.js`       | Deploys an app to a real service. Makes sure that, without a purge, the response cache serves the old content, and that a publish with a purge makes it serve the new content. Then replaces the KV Store body of a file, and makes sure that the service does not serve or cache an empty or a short body. | The Fastly CLI, and the variables below   |
+| `hono-examples.test.js`  | Copies the examples of `examples/hono/` into a managed project, and serves it with `dev`. The GRIP test needs Pushpin on the `PATH`. Then deploys both examples to the service of `deployed.test.js`, and examines a stream through Fanout and a login callback. | The Fastly CLI. For the deployed test, the variables below |
 
 If a test does not have what it needs, it is skipped, and the output tells which environment variables to set.
 
@@ -58,6 +59,9 @@ npm run test:e2e
 | `CJSP_TEST_SERVICE_ID`    | `kv-store.test.js`, `s3.test.js` (optional) | A Service ID to purge after publishing. You can use the service of `deployed.test.js` |
 | `CJSP_TEST_DEPLOY_SERVICE_ID` | `deployed.test.js`         | A Compute service for tests. **The test replaces the active version of this service.** |
 | `CJSP_TEST_DEPLOY_URL`    | `deployed.test.js`              | The URL of that service, for example `https://<name>.edgecompute.app`    |
+| `CJSP_TEST_PUBLISH_API_TOKEN` | `hono-examples.test.js`    | An API token that can publish to Fanout on that service. Only the Secret Store uses it (see below) |
+| `CJSP_TEST_GRIP_PUBLISH_KEY`  | `hono-examples.test.js`    | A random value: `PUBLISH_KEY` of the Secret Store                        |
+| `CJSP_TEST_OAUTH_SESSION_KEY` | `hono-examples.test.js`    | A random value: `SESSION_KEY` of the Secret Store                        |
 | `KEEP_E2E_DIRS`           | all (optional)                  | Set to keep the temporary directories, to examine them after a test     |
 
 The KV Store and S3 tests use a new publish ID for each run (for example `e2e-mf3k2a-1b2c3d`) and the collection
@@ -121,3 +125,37 @@ stay. If you use a service that already has an active version, add `--autoclone`
 
 The test takes approximately 3 to 10 minutes. It waits for the deployment, and for the KV Store to have the new index.
 After the test, the app stays on the service, but the test deletes its content.
+
+### Fanout and a Secret Store for `hono-examples.test.js`
+
+The deployed test of the examples uses the service of `deployed.test.js`. Turn on Fanout, and add the backend `self`
+with the domain of the service. Then make one Secret Store, and link it to the service two times, with the names `grip`
+and `oauth`. One store is enough, because the keys of the two examples are different.
+
+```sh
+fastly products --service-id="$CJSP_TEST_DEPLOY_SERVICE_ID" --enable=fanout
+
+CJSP_TEST_GRIP_PUBLISH_KEY=$(openssl rand -base64 32)
+CJSP_TEST_OAUTH_SESSION_KEY=$(openssl rand -base64 32)
+# Also put these two values in test/.env.
+
+STORE=$(fastly secret-store create --name=cjsp-e2e-secrets --json | jq -r .id)
+printf %s "$CJSP_TEST_GRIP_PUBLISH_KEY"  | fastly secret-store-entry create --store-id="$STORE" --name=PUBLISH_KEY --stdin
+printf %s "$CJSP_TEST_PUBLISH_API_TOKEN" | fastly secret-store-entry create --store-id="$STORE" --name=FANOUT_API_TOKEN --stdin
+printf %s "$CJSP_TEST_OAUTH_SESSION_KEY" | fastly secret-store-entry create --store-id="$STORE" --name=SESSION_KEY --stdin
+printf %s "not-a-real-secret"            | fastly secret-store-entry create --store-id="$STORE" --name=GITHUB_CLIENT_SECRET --stdin
+
+fastly service version clone --service-id="$CJSP_TEST_DEPLOY_SERVICE_ID" --version=active
+# The command shows the new version. Use it below.
+fastly service backend create --service-id="$CJSP_TEST_DEPLOY_SERVICE_ID" --version=<version> --name=self \
+  --address=<unique name>.edgecompute.app --port=443 --use-ssl \
+  --override-host=<unique name>.edgecompute.app --ssl-cert-hostname=<unique name>.edgecompute.app \
+  --ssl-sni-hostname=<unique name>.edgecompute.app
+fastly service resource-link create --service-id="$CJSP_TEST_DEPLOY_SERVICE_ID" --version=<version> \
+  --resource-id="$STORE" --name=grip
+fastly service resource-link create --service-id="$CJSP_TEST_DEPLOY_SERVICE_ID" --version=<version> \
+  --resource-id="$STORE" --name=oauth
+fastly service version activate --service-id="$CJSP_TEST_DEPLOY_SERVICE_ID" --version=<version>
+```
+
+The fake `GITHUB_CLIENT_SECRET` is correct: the test sends a fake code, and makes sure that GitHub refuses it.
