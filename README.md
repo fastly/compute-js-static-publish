@@ -1264,6 +1264,13 @@ templateOptions: {
 
 **Watch:** `dev -- --watch` (managed) and `npm run dev:watch` (ejected) also watch the extensions folder, also if it does not exist yet. A change in the folder bundles the modules again, and then the Fastly CLI builds and restarts the app. If a module has an error, the watcher shows it and the app keeps the last modules that built.
 
+**Examples** in [`examples/hono/`](https://github.com/fastly/compute-js-static-publish/tree/main/examples/hono) show complete extensions. They are not part of the npm package, and you cannot scaffold an app with them: for a new project, copy the `hono-extensions/` folder of an example into your project, and set it up as the README of the example shows. The README also shows how to add an example to a project that exists.
+
+- [`grip`](https://github.com/fastly/compute-js-static-publish/tree/main/examples/hono/grip): realtime streams and Server-Sent Events with Fastly Fanout, and a publish endpoint with a shared key. One module with two phases: the `middleware` phase hands off only `/events/*` to Fanout, and the `beforeFiles` phase has the endpoints.
+- [`oauth`](https://github.com/fastly/compute-js-static-publish/tree/main/examples/hono/oauth): a login with GitHub or Google in front of some paths of the site (`protect`), with a signed session cookie.
+
+Each example takes its secrets from a Secret Store. For `dev`, `managed.fastlyToml` adds a local Secret Store that reads environment variables.
+
 ### Hono in your own app
 
 Add `hono` and `@fastly/hono-fastly-compute` to your app:
