@@ -13,12 +13,13 @@ import { fail, recordFailure } from '../../util/output.js';
 import { checkVersionForCommand, loadManagedProject, showTemplateFolderHint } from '../../managed/command-helpers.js';
 import { PROJECT_FILE_NAME } from '../../../models/config/static-publish-project.js';
 import { serveApp } from '../run-dev-watch.js';
+import { cliCommand } from '../../util/package.js';
 
 function help() {
   console.log(`\
 
 Usage:
-  npx @fastly/compute-js-static-publish dev [-- <options of fastly compute serve>]
+  ${cliCommand()} dev [-- <options of fastly compute serve>]
 
 Description:
   Runs the app of a managed project on your computer. Generates the app in
