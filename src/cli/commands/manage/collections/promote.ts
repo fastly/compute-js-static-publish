@@ -266,7 +266,10 @@ export async function action(actionArgs: string[]) {
   const storageContentDir = `${staticPublisherWorkingDir}/storage-content`;
   fs.mkdirSync(storageContentDir, { recursive: true });
 
-  const indexFileName = `index_${collectionNameValue}.json`;
+  // The files have the name of the target collection, as in publish-content. In
+  // --local mode, kvstore.json refers to them, so the target must not share a
+  // file with the source.
+  const indexFileName = `index_${targetCollectionName}.json`;
   const indexFilePath = path.resolve(storageContentDir, indexFileName);
   await storageProvider.submitStorageEntry(
     targetCollectionIndexKey,
@@ -275,7 +278,7 @@ export async function action(actionArgs: string[]) {
     encodeIndexMetadata(indexMetadata),
   );
 
-  const settingsFileName = `settings_${collectionNameValue}.json`;
+  const settingsFileName = `settings_${targetCollectionName}.json`;
   const settingsFilePath = path.resolve(storageContentDir, settingsFileName);
   await storageProvider.submitStorageEntry(
     targetCollectionSettingsKey,

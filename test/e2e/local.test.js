@@ -272,3 +272,38 @@ describe('local mode with a body that does not have its stored size', { skip: sk
     assert.match(second.headers['server-timing'] ?? '', /\bcache;dur=[\d.]+;desc="hit/);
   });
 });
+
+describe('collections promote in local mode', () => {
+  let dir;
+  let computeJsDir;
+
+  const kvStoreJson = () => JSON.parse(fs.readFileSync(path.resolve(computeJsDir, 'static-publisher/kvstore.json'), 'utf-8'));
+  const entryData = (key) => fs.readFileSync(path.resolve(computeJsDir, kvStoreJson()[key].file), 'utf-8');
+
+  before(() => {
+    dir = makeTempDir('local-promote');
+    writeFixtureContent(path.resolve(dir, 'public'));
+    computeJsDir = scaffoldApp(dir, [ '--kv-store-name', 'e2e-content' ]);
+  });
+
+  after(() => {
+    if (dir != null) {
+      removeDir(dir);
+    }
+  });
+
+  test('a publish to the source after a promote does not change the target', () => {
+    runCli([ 'publish-content', '--local', '--collection-name', 'staging' ], { cwd: computeJsDir });
+    runCli([ 'collections', 'promote', '--local', '--collection-name', 'staging', '--to', 'live' ], { cwd: computeJsDir });
+    const json = kvStoreJson();
+    assert.notEqual(json['default_index_live'].file, json['default_index_staging'].file);
+    assert.notEqual(json['default_settings_live'].file, json['default_settings_staging'].file);
+    const liveIndex = entryData('default_index_live');
+    assert.equal(liveIndex, entryData('default_index_staging'));
+
+    fs.writeFileSync(path.resolve(dir, 'public/index.html'), '<h1>Changed</h1>\n');
+    runCli([ 'publish-content', '--local', '--collection-name', 'staging' ], { cwd: computeJsDir });
+    assert.notEqual(entryData('default_index_staging'), liveIndex, 'the source has the new index');
+    assert.equal(entryData('default_index_live'), liveIndex, 'the target keeps the promoted index');
+  });
+});
