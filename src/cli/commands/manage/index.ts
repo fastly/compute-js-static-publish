@@ -10,6 +10,7 @@ import * as deployCommand from './deploy.js';
 import * as devCommand from './dev.js';
 import * as ejectCommand from './eject.js';
 import * as statusCommand from './status.js';
+import * as templateCommands from './template/index.js';
 import * as upgradeCommand from './upgrade.js';
 import * as publishContentCommand from './publish-content.js';
 import * as collectionsCommands from './collections/index.js';
@@ -37,6 +38,8 @@ Available Commands:
   deploy                           Deploy the app of a managed project, if it changed
   upgrade                          Move a managed project to the version of this CLI
   eject                            Convert a managed project into an ejected app
+  template init                    Make or update the folder of the app's template
+                                   (for the hono template: hono-extensions/)
 
 KV Store Options:
   --local                          Instead of working with the Fastly KV Store, operate on
@@ -89,6 +92,7 @@ const modes = {
   'upgrade': upgradeCommand,
   'publish-content': publishContentCommand,
   'collections': collectionsCommands,
+  'template': templateCommands,
 };
 
 // The commands for a project or an app. Scaffolding mode does not have them.

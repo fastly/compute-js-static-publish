@@ -8,7 +8,8 @@ import * as path from 'node:path';
 import { type PublisherServerConfigNormalized } from '../../models/config/publisher-server-config.js';
 import { type PublishContentConfigNormalized } from '../../models/config/publish-content-config.js';
 import { type StaticPublishProjectManaged } from '../../models/config/static-publish-project.js';
-import { type StaticPublishRc, isS3StorageConfigRc } from '../../models/config/static-publish-rc.js';
+import { type StaticPublishRc, type StaticPublishTemplateOptions, isS3StorageConfigRc } from '../../models/config/static-publish-rc.js';
+import { DEFAULT_HONO_EXTENSIONS_DIR } from '../hono/build.js';
 import { getKvStoreConfigFromRc } from '../../models/config/kv-store-config.js';
 import { type AppTemplate } from '../commands/scaffold/app-template.js';
 import { type AppConfig, DEFAULT_APP_INFO } from '../commands/scaffold/generate-app.js';
@@ -43,6 +44,11 @@ export function renderProjectFile(config: AppConfig, projectDir: string, staticP
     defaultCollectionName: config.defaultCollectionName,
     staticPublisherWorkingDir: relative(config.staticPublisherWorkingDir),
     collectionSelection: config.collectionSelection,
+    // The extensions folder only if it is not the default, next to this file.
+    build: config.build?.hono != null && config.build.hono.extensionsDir !== path.resolve(projectDir, DEFAULT_HONO_EXTENSIONS_DIR) ?
+      { hono: { extensionsDir: relative(config.build.hono.extensionsDir) } } :
+      undefined,
+    templateOptions: config.templateOptions,
     rootDir: relative(config.rootDir),
     publicDirPrefix,
     staticItems,
@@ -135,5 +141,15 @@ export function appConfigFromProject(
     generatedFrom: undefined,
     ...(rc.collectionSelection != null ? { collectionSelection: rc.collectionSelection } : {}),
     ...(managed.fastlyToml != null ? { fastlyToml: managed.fastlyToml } : {}),
+    // The hono template: the extensions folder, relative to the project file
+    // (default: next to it). The generated rc gets it relative to the app dir.
+    ...(options.template.name === 'hono' ?
+      { build: { hono: { extensionsDir: path.resolve(projectDir, rc.build?.hono?.extensionsDir ?? DEFAULT_HONO_EXTENSIONS_DIR) } } } :
+      {}),
+    // Only the options of the app's template, so that a change to the options
+    // of another template does not change the app.
+    ...(rc.templateOptions?.[options.template.name as keyof StaticPublishTemplateOptions] != null ?
+      { templateOptions: { [options.template.name]: rc.templateOptions[options.template.name as keyof StaticPublishTemplateOptions] } } :
+      {}),
   };
 }

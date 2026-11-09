@@ -16,6 +16,11 @@ const rc = {
     staticPublishVersion: "<static-publish-version>",
     generatedAt: "<generated-at>",
   },
+  build: {
+    hono: {
+      extensionsDir: "../hono-extensions",
+    },
+  },
 };
 
 export default rc;
