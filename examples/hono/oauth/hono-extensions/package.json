@@ -1,0 +1,9 @@
+{
+  "name": "hono-extensions-example-oauth",
+  "private": true,
+  "type": "module",
+  "description": "The OAuth example of @fastly/compute-js-static-publish. See README.md.",
+  "dependencies": {
+    "@hono/oauth-providers": "^0.9.1"
+  }
+}
