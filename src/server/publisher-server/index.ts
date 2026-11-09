@@ -40,6 +40,7 @@ import {
 import { checkIfModifiedSince, getIfModifiedSinceHeader } from './serve-preconditions/if-modified-since.js';
 import { checkIfNoneMatch, getIfNoneMatchHeader } from './serve-preconditions/if-none-match.js';
 import { ServerTiming } from '../util/server-timing.js';
+import { requestAcceptsTextHtml } from './accept-html.js';
 import {
   type CachedResponseMetadata,
   type ResponseCacheOptions,
@@ -87,16 +88,6 @@ export function buildHeadersSubset(responseHeaders: Headers, keys: Readonly<stri
 // * Content-Location, Date, ETag, and Vary
 // * Cache-Control and Expires
 const headersToPreserveForUnmodified = ['Content-Location', 'ETag', 'Vary', 'Cache-Control', 'Expires'] as const;
-
-function requestAcceptsTextHtml(req: Request) {
-  const accept = (req.headers.get('Accept') ?? '')
-    .split(',')
-    .map(x => x.split(';')[0]);
-  if(!accept.includes('text/html') && !accept.includes('*/*') && accept.includes('*')) {
-    return false;
-  }
-  return true;
-}
 
 type AssetInit = {
   status?: number,
