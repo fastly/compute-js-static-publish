@@ -14,6 +14,21 @@ import type { Context, MiddlewareHandler, NotFoundHandler } from 'hono';
 import { PublisherServer, type StaticPublishRc } from '../server/index.js';
 import { type ServeStaticPathOptions, resolveServeStaticPathname } from './path.js';
 
+export {
+  type BindingResource,
+  type DefineExtensionOptions,
+  EXTENSION_PHASES,
+  type Extension,
+  type ExtensionBindings,
+  type ExtensionEntry,
+  type ExtensionEnv,
+  type ExtensionPhase,
+  type ExtensionPhaseFunction,
+  type ExtensionPhases,
+  defineExtension,
+  mergeBindings,
+} from './extensions.js';
+
 // The values that selectCollection() sets on c.var. Use this type in the
 // Variables of the Hono app: new Hono<{ Variables: StaticPublisherVariables }>().
 export type StaticPublisherVariables = {

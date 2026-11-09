@@ -14,7 +14,7 @@ import {
   buildManagedLockfile,
   pinnedVersion,
 } from '../../build/cli/cli/managed/lockfile.js';
-import { needsInstall, writeManagedAppFiles } from '../../build/cli/cli/managed/app.js';
+import { folderFilesForFingerprint, needsInstall, writeManagedAppFiles } from '../../build/cli/cli/managed/app.js';
 
 const tempDirs = [];
 function makeTempDir() {
@@ -117,5 +117,34 @@ describe('needsInstall', () => {
     const stamp = path.join(appDir, 'node_modules/.compute-js-static-publish-install');
     fs.writeFileSync(stamp, 'x');
     assert.equal(needsInstall(appDir), true, 'another hash');
+  });
+});
+
+describe('folderFilesForFingerprint()', () => {
+  test('the files and the lockfile of the folder, without node_modules', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cjsp-fingerprint-'));
+    try {
+      for (const [ file, content ] of Object.entries({
+        'package.json': '{}',
+        'package-lock.json': '{}',
+        'middleware/10-auth.ts': 'export default 1;',
+        'lib/sign.ts': 'export const x = 1;',
+        'node_modules/hono/index.js': 'ignored',
+      })) {
+        fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
+        fs.writeFileSync(path.join(dir, file), content);
+      }
+      const files = folderFilesForFingerprint(dir, '<ext>');
+      assert.deepEqual(Object.keys(files).sort(), [
+        '<ext>/lib/sign.ts', '<ext>/middleware/10-auth.ts', '<ext>/package-lock.json', '<ext>/package.json',
+      ]);
+      assert.equal(Buffer.from(files['<ext>/middleware/10-auth.ts'], 'base64').toString(), 'export default 1;');
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('a folder that does not exist has no files', () => {
+    assert.deepEqual(folderFilesForFingerprint(path.join(os.tmpdir(), 'cjsp-does-not-exist'), '<ext>'), {});
   });
 });

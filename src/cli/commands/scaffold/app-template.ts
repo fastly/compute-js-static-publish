@@ -22,6 +22,9 @@ export type AppTemplate = {
   dependencies: Record<string, string>,
   devDependencies: Record<string, string>,
   supports: AppTemplateSupports,
+  // Lines that the template adds to the .gitignore of the app, for files that
+  // its scripts make, for example '/src/hono-extensions.generated.js'.
+  gitignore: string[],
 };
 
 // The features that the code of a template uses.
@@ -31,10 +34,11 @@ export type AppTemplateSupports = {
   collectionSelection?: boolean,
 };
 
-// The templates in resources/templates/, and what each one supports.
-const APP_TEMPLATES: Record<string, AppTemplateSupports> = {
-  plain: { collectionSelection: true },
-  hono: { collectionSelection: true },
+// The templates in resources/templates/: what each one supports, and the lines
+// that it adds to the .gitignore of the app.
+const APP_TEMPLATES: Record<string, { supports: AppTemplateSupports, gitignore: string[] }> = {
+  plain: { supports: { collectionSelection: true }, gitignore: [] },
+  hono: { supports: { collectionSelection: true }, gitignore: [ '/src/hono-extensions.generated.js' ] },
 };
 
 export const APP_TEMPLATE_NAMES = Object.keys(APP_TEMPLATES);
@@ -81,6 +85,7 @@ export function loadAppTemplate(name: string): AppTemplate {
     entry: packageJson.main ?? 'src/index.js',
     dependencies: packageJson.dependencies ?? {},
     devDependencies: packageJson.devDependencies ?? {},
-    supports: APP_TEMPLATES[name],
+    supports: APP_TEMPLATES[name].supports,
+    gitignore: APP_TEMPLATES[name].gitignore,
   };
 }

@@ -113,15 +113,45 @@ export function installManagedApp(appDir: string): boolean {
 }
 
 // The files and the fingerprint of the app of a managed project, in memory.
+// The files of a folder that the app's build reads, keyed by a path that starts
+// with prefix, for the fingerprint: all files, also the lockfile, but not
+// node_modules (the lockfile pins it). Binary files are read as base64.
+export function folderFilesForFingerprint(dir: string, prefix: string): Record<string, string> {
+  const result: Record<string, string> = {};
+  if (!fs.existsSync(dir)) {
+    return result;
+  }
+  const walk = (sub: string) => {
+    for (const entry of fs.readdirSync(path.resolve(dir, sub), { withFileTypes: true })) {
+      const rel = sub === '' ? entry.name : `${sub}/${entry.name}`;
+      if (entry.isDirectory()) {
+        if (entry.name !== 'node_modules' && entry.name !== '.git') {
+          walk(rel);
+        }
+      } else if (entry.isFile()) {
+        result[`${prefix}/${rel}`] = fs.readFileSync(path.resolve(dir, rel)).toString('base64');
+      }
+    }
+  };
+  walk('');
+  return result;
+}
+
 export async function managedAppState(projectDir: string, project: StaticPublishProjectNormalized) {
   const appConfig = await managedAppConfig(projectDir, project);
   const files = managedAppFiles(generateApp(appConfig));
   // managed.fastlyToml.local_server is only for fastly compute serve. It does
   // not change what deploy deploys, so the fingerprint does not include it.
-  const fingerprintFiles = appConfig.fastlyToml?.local_server != null ?
+  const deployedFiles = appConfig.fastlyToml?.local_server != null ?
     managedAppFiles(generateApp({ ...appConfig, fastlyToml: { ...appConfig.fastlyToml, local_server: undefined } })) :
     files;
   const cliPackageDir = getOwnPackageDir();
+  // The extensions folder of the hono template is part of the app that deploy
+  // deploys, so a change to it changes the fingerprint.
+  const extensionsDir = appConfig.build?.hono?.extensionsDir;
+  const fingerprintFiles = extensionsDir != null ?
+    { ...deployedFiles, ...folderFilesForFingerprint(extensionsDir, '<hono-extensions>') } :
+    deployedFiles;
   const fingerprint = computeFingerprint(fingerprintFiles, {
     staticPublishVersion: getOwnVersion(),
     template: appConfig.template.name,

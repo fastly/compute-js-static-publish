@@ -246,7 +246,7 @@ my-site/
 
 The project file has the settings that an ejected app has in its two files:
 
-- The top level has the fields of `static-publish.rc.js` (`storageMode`, `kvStore` or `s3`, `publishId`, `defaultCollectionName`, `staticPublisherWorkingDir`, `collectionSelection`).
+- The top level has the fields of `static-publish.rc.js` (`storageMode`, `kvStore` or `s3`, `publishId`, `defaultCollectionName`, `staticPublisherWorkingDir`, `collectionSelection`), and the settings of the template (`build` and `templateOptions`, see [Hono extensions](#hono-extensions)).
 - `publishContent` has the fields of `publish-content.config.js`. `publish-content --config <file>` replaces it for one run.
 - `managed` has the settings of the generated app (`name`, `description`, `authors`, `serviceId`, `staticPublishVersion`, the version of this package that the project uses, and `fastlyToml`, see below).
 
@@ -1172,6 +1172,98 @@ npx @fastly/compute-js-static-publish@latest --template hono --root-dir=./public
 
 The app is TypeScript: `src/index.ts`, with code like the example below, and `tsconfig.json`. Add your own routes in `src/index.ts`. The build (`js-compute-runtime ./src/index.ts`) removes the types, but does not check them. To check the types, run `npx tsc` in the app. The app has `typescript` as a dev dependency.
 
+### Hono extensions
+
+To add your own middleware and routes to the `hono` template, put modules in the extensions folder, `hono-extensions/`. In a managed project, this is the only way to add code, because the CLI generates the app. In an ejected app, you can also edit `src/index.ts`.
+
+`scaffold --template hono` makes the folder next to the project file (managed) or next to `compute-js/` (ejected). To make it later, or to update it, run:
+
+```sh
+npx @fastly/compute-js-static-publish template init
+```
+
+```
+hono-extensions/
+├── package.json        # Your dependencies, and the peer dependencies on the packages that the app provides
+├── tsconfig.json       # For your editor
+├── 10-auth.ts          # A module
+├── api.ts              # A module
+├── _example.ts         # An example, not a module (the name starts with _)
+└── lib/                # Your helpers (not modules)
+```
+
+- **Modules** are the files directly in the folder, with the extension `.ts`, `.mts`, `.js`, or `.mjs`. Files that start with `_` or `.`, and `.d.ts` files, are not modules. The build does not look in subfolders, so use them, for example `lib/`, for your helpers.
+- **The name** of a module is the file name without the number prefix and the extension: `10-auth.ts` is `auth`. Two modules with the same name are an error.
+- **The phases:** a module adds its handlers to the app in one or more phases. The app runs the phases in this order, and in each phase the modules in the order of the file names (add a number prefix to set the order):
+
+  ```
+  selectCollection() → middleware → beforeFiles → serveStatic() → afterFiles → serveFallback()
+  ```
+
+  - `middleware`: before all other phases. All modules add their middleware before any module adds its routes, so a middleware such as a login check also applies to the routes of the other modules.
+  - `beforeFiles`: before the published files.
+  - `afterFiles`: after the published files. These handlers get only the requests that no published file matches, for example to make a page for a path that has no file, before the 404 page. The published files are served only for `GET` and `HEAD`, so these handlers also get all other methods.
+
+A module default-exports `defineExtension()`. Give it a function for each phase that the module uses. Each function gets the Hono app and the options of the module, and adds handlers with `app.use()`, `app.get()`, `app.post()`, and the other methods of Hono. With only a function in place of the object, the function is the `middleware` phase:
+
+```ts
+// hono-extensions/10-header.ts
+import { defineExtension } from '@fastly/compute-js-static-publish/hono';
+
+export default defineExtension((app, options?: { value?: string }) => {
+  app.use('*', async (c, next) => {
+    await next();
+    c.header('x-site', options?.value ?? 'default');
+  });
+});
+```
+
+```ts
+// hono-extensions/api.ts
+import { defineExtension } from '@fastly/compute-js-static-publish/hono';
+
+export default defineExtension({ bindings: { config: 'ConfigStore:site_config' } }, {
+  middleware: (app) => {
+    app.use('/api/*', async (c, next) => {
+      await next();
+      c.header('cache-control', 'no-store');
+    });
+  },
+  beforeFiles: (app) => {
+    app.get('/api/greeting', async (c) => c.json({ greeting: await c.env.config?.get('greeting') }));
+  },
+  afterFiles: (app) => {
+    app.get('/blog/:slug', (c) => c.redirect(`/archive/${c.req.param('slug')}/`, 301));
+  },
+});
+```
+
+**Options** come from `templateOptions.hono.extensions` in the project file (or in `static-publish.rc.js`), with the name of the module as the key. Each phase of a module gets the same options. The build shows a warning for options of a module that does not exist:
+
+```js
+templateOptions: {
+  hono: {
+    bindings: { config: 'ConfigStore:site_config' },
+    extensions: { header: { value: 'my-site' } },
+  },
+},
+```
+
+**Bindings** put Fastly resources on `c.env`, as `buildFire()` of `@fastly/hono-fastly-compute` does. A module declares the bindings that it uses in the first argument of `defineExtension()`, and `c.env` in its handlers has their types, for example `ConfigStore | undefined` for `'ConfigStore:site_config'` (`undefined` if the resource does not exist or is not linked to the service). `templateOptions.hono.bindings` adds bindings for the app. The same name with the same resource in two places is allowed. The same name with two different resources stops the build, and the message names both places. `c.var` is not typed in a module, so that a module can set its own variables.
+
+**Errors** in a module stop the build, and the message names the file: a default export that is not `defineExtension()`, an object with no phase, a key that is not a phase, or a phase that is not a function.
+
+**The build** bundles the modules into `src/hono-extensions.generated.js` of the app (the `prebuild` [template hook](#-template-hooks)). The packages that the app provides stay imports, so that the app has one copy of each: the dependencies of the app (for example `hono` and `@fastly/hono-fastly-compute`), this package, and `fastly:*`. Thus, do not install them in the folder. `template init` writes them as peer dependencies in `hono-extensions/package.json`, with the versions that the app has. Install other packages in the folder (`npm install` in `hono-extensions/`), and the build bundles them.
+
+- `build.hono.extensionsDir` sets another folder, relative to the project file (or to `static-publish.rc.js`). The default is `./hono-extensions`.
+- Without the folder, or without modules, the app has no extensions. `dev` and `deploy` of a managed project then show how to make the folder.
+- In a managed project, the files of the folder (without `node_modules/`) are part of the fingerprint, so a change to a module makes `deploy` deploy again.
+- Keep the code of the extensions in the folder. A module can import a file from outside the folder, and the build bundles it, but a change to that file does not change the fingerprint, and the watcher does not see it.
+
+**`template init`** makes the folder with `package.json`, `tsconfig.json`, and the example. In a folder that exists, it updates only the peer dependencies, and adds the starter files that are missing. It never changes your modules. `--reset` writes the starter files again (it asks first, or needs `--force` with `--non-interactive`). `--check` changes nothing, and fails with `template-init-needed` if the folder is out of date, for example after an upgrade of this package; use it in CI.
+
+**Watch:** `dev -- --watch` (managed) and `npm run dev:watch` (ejected) also watch the extensions folder, also if it does not exist yet. A change in the folder bundles the modules again, and then the Fastly CLI builds and restarts the app. If a module has an error, the watcher shows it and the app keeps the last modules that built.
+
 ### Hono in your own app
 
 Add `hono` and `@fastly/hono-fastly-compute` to your app:
@@ -1393,9 +1485,20 @@ Each object has `schemaVersion` (now `1`). A new field keeps the version. A fiel
   "domain": "example.edgecompute.app",
   "needsDeploy": false,
   "reasons": [],
-  "previewUrls": [ { "type": "query", "url": "https://example.edgecompute.app/?collection={collection}" } ]
+  "previewUrls": [ { "type": "query", "url": "https://example.edgecompute.app/?collection={collection}" } ],
+  "template": {
+    "name": "hono",
+    "provides": {
+      "@fastly/hono-fastly-compute": "0.4.0",
+      "@fastly/js-compute": "4.0.0",
+      "hono": "4.13.14",
+      "@fastly/compute-js-static-publish": "8.1.0"
+    }
+  }
 }
 ```
+
+`template.provides` lists the packages that the app of the template provides to the folder of the template (for example `hono-extensions/`), with their versions.
 
 In an ejected app, `status --json` gives `{ "schemaVersion": 1, "mode": "ejected", "serviceId": "SERVICE_ID" }`.
 
@@ -1429,6 +1532,7 @@ In an ejected app, `status --json` gives `{ "schemaVersion": 1, "mode": "ejected
 | `version-mismatch` | `2` | `managed.staticPublishVersion` is not the version of the CLI that runs |
 | `first-deploy-manual` | `2` | The first deploy of a managed project with S3 storage, with `--non-interactive` |
 | `version-not-published` | `2` | `eject` needs a version of this package that is on npm |
+| `template-init-needed` | `2` | `template init --check`: the folder of the template (for example `hono-extensions/`) is out of date. Run `template init` |
 | `deploy-failed` | `1` | The build or the deploy of the app failed |
 | `failed` | `1` | The operation failed, for example storage cannot be reached |
 

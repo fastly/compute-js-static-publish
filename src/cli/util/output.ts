@@ -39,6 +39,7 @@ const USAGE_CODES = [
   'version-mismatch',           // managed.staticPublishVersion is not the version that runs
   'first-deploy-manual',        // a first deploy that must be done by hand (S3 storage, non-interactive)
   'version-not-published',      // eject needs a version of this package that is on npm
+  'template-init-needed',       // template init --check: the template's folder is out of date
 ] as const;
 
 export type CliErrorCode = typeof FAILED_CODES[number] | typeof USAGE_CODES[number];
