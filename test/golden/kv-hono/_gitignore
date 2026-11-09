@@ -1,0 +1,5 @@
+/node_modules
+/bin
+/pkg
+/static-publisher
+/src/hono-extensions.generated.js

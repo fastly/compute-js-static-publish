@@ -50,3 +50,30 @@ updates:
           - version-update:semver-minor
     cooldown:
       default-days: 7
+
+  # The dependencies of the templates of the scaffolded app. Each template
+  # directory has a package.json and a package-lock.json.
+  - package-ecosystem: npm
+    directories:
+      - "/resources/templates/*"
+    schedule:
+      interval: weekly
+      day: tuesday
+    groups:
+      templates:
+        patterns:
+          - "*"
+      templates-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-major
+    cooldown:
+      default-days: 7
+      # Packages that we own get updates with no cooldown.
+      exclude:
+        - "@fastly/*"
+        - "@fanoutio/*"

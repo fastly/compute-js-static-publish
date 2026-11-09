@@ -15,9 +15,25 @@ import * as fs from 'node:fs';
 import { type CommandLineOptions, type OptionDefinition } from 'command-line-args';
 
 import { parseCommandLine } from '../../util/args.js';
-import { dotRelative, rootRelative } from '../../util/files.js';
-import { findComputeJsStaticPublisherVersion, type PackageJson } from '../../util/package.js';
+import { fail, recordFailure } from '../../util/output.js';
+import { rootRelative } from '../../util/files.js';
+import { findComputeJsStaticPublisherVersion, getOwnVersion, type PackageJson } from '../../util/package.js';
+import { runTemplateInit } from '../manage/template/init.js';
+import { templateHasInit } from '../../managed/template-init.js';
 import { findHostnameForAwsS3RegionAndBucket } from '../../util/s3.js';
+import {
+  APP_TEMPLATE_NAMES,
+  DEFAULT_APP_TEMPLATE_NAME,
+  isAppTemplateName,
+  loadAppTemplate,
+} from './app-template.js';
+import { COLLECTION_SELECTION_FLAGS_HELP, collectionSelectionFromFlags } from '../../util/collection-selection-flags.js';
+import { type AppConfig, generateApp } from './generate-app.js';
+import { renderProjectFile } from '../../managed/project-file.js';
+import { dotRelative } from '../../util/files.js';
+import { checkStaticPublisherWorkingDir } from '../../../models/config/static-publish-rc.js';
+import { MANAGED_APP_DIR, PROJECT_FILE_NAME } from '../../../models/config/static-publish-project.js';
+import { COLLECTION_NAME_RULE, isValidCollectionName } from '../../../models/collections/index.js';
 
 function help() {
   console.log(`\
@@ -48,6 +64,13 @@ Options:
   --static-publisher-working-dir <dir>  Working directory for build artifacts (default: <output>/static-publisher)
                                         (default: ./compute-js/static-publisher)
   --publish-id <id>                     Advanced. Prefix for KV keys (default: "default")
+  --default-collection-name <name>      Collection to serve when none is selected (default: "live")
+  --template <name>                     The template of the app's code (default: "plain")
+                                        Valid templates: ${APP_TEMPLATE_NAMES.join(', ')}
+
+  --managed                             Write only static-publish.project.js (a managed project) in the
+                                        current directory, and add .static-publish/ and the working
+                                        directory to .gitignore. The CLI generates the app when it needs it.
 
 Compute Service Metadata:
   --name <name>                         App name (for fastly.toml)
@@ -64,7 +87,12 @@ Server Config:
   --auto-index <name>,<name...>         Index filename (e.g., index.html,index.htm)
   --auto-ext <ext>,<ext...>             Automatic extensions (e.g., .html,.htm)
 
+Collection Selection (previews):
+${COLLECTION_SELECTION_FLAGS_HELP}
+
 Other:
+  --version                             Print the version of this package and exit
+  --non-interactive                     Never ask a question (also on when CI is set)
   --verbose                             Enable verbose output
   -h, --help                            Show help
 `);
@@ -85,11 +113,13 @@ export type InitAppOptions = {
   description: string | undefined,
   serviceId: string | undefined,
   publishId: string | undefined,
+  defaultCollectionName: string | undefined,
   storageMode: string | undefined,
   kvStoreName: string | undefined,
   s3Region: string | undefined,
   s3Bucket: string | undefined,
   s3Endpoint: string | undefined,
+  template: string,
 };
 
 const defaultOptions: InitAppOptions = {
@@ -107,11 +137,13 @@ const defaultOptions: InitAppOptions = {
   description: 'Fastly Compute static site',
   serviceId: undefined,
   publishId: undefined,
+  defaultCollectionName: undefined,
   storageMode: undefined,
   kvStoreName: undefined,
   s3Region: undefined,
   s3Bucket: undefined,
   s3Endpoint: undefined,
+  template: DEFAULT_APP_TEMPLATE_NAME,
 };
 
 function buildOptions(
@@ -314,6 +346,20 @@ function buildOptions(
   }
 
   {
+    const defaultCollectionNameValue = commandLineOptions['default-collection-name'];
+    if (typeof defaultCollectionNameValue === 'string') {
+      options.defaultCollectionName = defaultCollectionNameValue;
+    }
+  }
+
+  {
+    const templateValue = commandLineOptions['template'];
+    if (typeof templateValue === 'string') {
+      options.template = templateValue;
+    }
+  }
+
+  {
     let serviceId: string | undefined;
     const serviceIdValue = commandLineOptions['service-id'];
     if (serviceIdValue == null || typeof serviceIdValue === 'string') {
@@ -444,6 +490,13 @@ export async function action(actionArgs: string[]) {
     // Fastly Service ID to be added to the fastly.toml that is generated.
     { name: 'service-id', type: String },
 
+    // The template of the app's code.
+    { name: 'template', type: String, },
+
+    // The collection to serve when no collection is selected.
+    // If not provided, the default value of 'live' is used.
+    { name: 'default-collection-name', type: String, },
+
     // Required. The 'root' directory for the publishing.
     // All assets are expected to exist under this root. Required.
     // For backwards compatibility, if this value is not provided,
@@ -492,6 +545,15 @@ export async function action(actionArgs: string[]) {
     // List of extensions to apply to a path name, for example, if
     // http://example.com/about is requested, we can respond with http://example.com/about.html
     { name: 'auto-ext', type: String, multiple: true, },
+
+    // Collection selection. See util/collection-selection-flags.ts.
+    { name: 'collection-selection', type: String, multiple: true, },
+    { name: 'collection-allow', type: String, multiple: true, },
+    { name: 'collection-on-missing', type: String, },
+    { name: 'collection-noindex', type: String, },
+
+    // Write static-publish.project.js (a managed project) in place of the app.
+    { name: 'managed', type: Boolean, },
   ];
 
   const parsed = parseCommandLine(actionArgs, optionDefinitions);
@@ -499,7 +561,7 @@ export async function action(actionArgs: string[]) {
     if (parsed.error != null) {
       console.error(String(parsed.error));
       console.error();
-      process.exitCode = 1;
+      recordFailure('usage', String(parsed.error));
     }
 
     help();
@@ -520,10 +582,34 @@ export async function action(actionArgs: string[]) {
     parsed.commandLineOptions,
   );
 
-  const COMPUTE_JS_DIR = options.outputDir;
+  if (!isAppTemplateName(options.template)) {
+    fail('usage', `Unknown template '${options.template}'.`);
+    console.error(`  * Valid templates: ${APP_TEMPLATE_NAMES.join(', ')}`);
+    return;
+  }
+
+  const { collectionSelection, errors: collectionSelectionErrors } = collectionSelectionFromFlags({
+    sources: parsed.commandLineOptions['collection-selection'],
+    allow: parsed.commandLineOptions['collection-allow'],
+    onMissing: parsed.commandLineOptions['collection-on-missing'],
+    noindex: parsed.commandLineOptions['collection-noindex'],
+  });
+  if (collectionSelectionErrors.length > 0) {
+    for (const error of collectionSelectionErrors) {
+      console.error(`❌ ${error}`);
+    }
+    recordFailure('usage', collectionSelectionErrors.join(' '));
+    return;
+  }
+
+  // A managed project: the project dir is the current directory. The CLI
+  // generates the app in .static-publish/app when it needs it.
+  const managed = parsed.commandLineOptions['managed'] === true;
+  const projectDir = path.resolve();
+
+  const COMPUTE_JS_DIR = managed ? MANAGED_APP_DIR : options.outputDir;
   if (COMPUTE_JS_DIR == null) {
-    console.error("❌ required parameter --output not provided.");
-    process.exitCode = 1;
+    fail('usage', "required parameter --output not provided.");
     return;
   }
   const computeJsDir = path.resolve(COMPUTE_JS_DIR);
@@ -531,15 +617,13 @@ export async function action(actionArgs: string[]) {
   // Resolve the root dir, relative to current directory, and make sure it exists.
   const ROOT_DIR = options.rootDir;
   if (ROOT_DIR == null) {
-    console.error("❌ required parameter --root-dir not provided.");
-    process.exitCode = 1;
+    fail('usage', "required parameter --root-dir not provided.");
     return;
   }
   const rootDir = path.resolve(ROOT_DIR);
   if (!fs.existsSync(rootDir) || !fs.statSync(rootDir).isDirectory()) {
-    console.error(`❌ Specified root directory '${ROOT_DIR}' does not exist.`);
+    fail('usage', `Specified root directory '${ROOT_DIR}' does not exist.`);
     console.error(`  * ${rootRelative(rootDir)} must exist and be a directory.`);
-    process.exitCode = 1;
     return;
   }
 
@@ -552,17 +636,15 @@ export async function action(actionArgs: string[]) {
   const PUBLIC_DIR = options.publicDir ?? ROOT_DIR;
   const publicDir = path.resolve(PUBLIC_DIR);
   if (!fs.existsSync(publicDir) || !fs.statSync(publicDir).isDirectory()) {
-    console.error(`❌ Specified public directory '${PUBLIC_DIR}' does not exist.`);
+    fail('usage', `Specified public directory '${PUBLIC_DIR}' does not exist.`);
     console.error(`  * ${rootRelative(publicDir)} must exist and be a directory.`);
-    process.exitCode = 1;
     return;
   }
 
   // Public dir must be inside the root dir.
   if (!publicDir.startsWith(rootDir)) {
-    console.error(`❌ Specified public directory '${PUBLIC_DIR}' is not under the asset root directory.`);
+    fail('usage', `Specified public directory '${PUBLIC_DIR}' is not under the asset root directory.`);
     console.error(`  * ${rootRelative(publicDir)} must be under ${rootRelative(rootDir)}`);
-    process.exitCode = 1;
     return;
   }
 
@@ -588,9 +670,17 @@ export async function action(actionArgs: string[]) {
   // Static Publisher Working Root Dir must be under the current dir
   // This comes in relative to cwd.
   const STATIC_PUBLISHER_WORKING_DIR = options.staticPublisherWorkingDir ??
-    path.resolve(computeJsDir, './static-publisher');
+    path.resolve(managed ? projectDir : computeJsDir, './static-publisher');
   const staticPublisherWorkingDir = path.resolve(STATIC_PUBLISHER_WORKING_DIR);
-  if (
+  if (managed) {
+    // In a managed project, the working dir is relative to the project file.
+    const workingDirError = checkStaticPublisherWorkingDir(dotRelative(projectDir, staticPublisherWorkingDir).split(path.sep).join('/'));
+    if (workingDirError != null || staticPublisherWorkingDir.startsWith(path.resolve(projectDir, '.static-publish') + path.sep)) {
+      fail('usage', `Specified static publisher working directory '${rootRelative(staticPublisherWorkingDir)}' is not valid.`);
+      console.error(`  * It must not be the project directory, a directory above it, or in .static-publish.`);
+      return;
+    }
+  } else if (
     !staticPublisherWorkingDir.startsWith(computeJsDir) ||
     staticPublisherWorkingDir === computeJsDir ||
     staticPublisherWorkingDir === path.resolve(computeJsDir, './bin') ||
@@ -598,9 +688,8 @@ export async function action(actionArgs: string[]) {
     staticPublisherWorkingDir === path.resolve(computeJsDir, './src') ||
     staticPublisherWorkingDir === path.resolve(computeJsDir, './node_modules')
   ) {
-    console.error(`❌ Specified static publisher working directory '${rootRelative(staticPublisherWorkingDir)}' must be under ${rootRelative(computeJsDir)}.`);
+    fail('usage', `Specified static publisher working directory '${rootRelative(staticPublisherWorkingDir)}' must be under ${rootRelative(computeJsDir)}.`);
     console.error(`  It also must not be bin, pkg, src, or node_modules.`);
-    process.exitCode = 1;
     return;
   }
 
@@ -613,16 +702,14 @@ export async function action(actionArgs: string[]) {
     spaFilename = processPublicDirToken(SPA, publicDir);
     // At any rate it must exist under the root directory
     if (!spaFilename.startsWith(rootDir)) {
-      console.error(`❌ Specified SPA file '${SPA}' is not under the asset root directory.`);
+      fail('usage', `Specified SPA file '${SPA}' is not under the asset root directory.`);
       console.error(`  * ${rootRelative(spaFilename)} must be under ${rootRelative(rootDir)}`);
       console.error(`  Give the path from the current directory, for example ${rootRelative(rootDir)}/index.html.`);
-      process.exitCode = 1;
       return;
     }
     if (!fs.existsSync(spaFilename)) {
-      console.error(`❌ Specified SPA file '${SPA}' does not exist.`);
+      fail('usage', `Specified SPA file '${SPA}' does not exist.`);
       console.error(`  * ${rootRelative(spaFilename)} does not exist.`);
-      process.exitCode = 1;
       return;
     }
   }
@@ -634,16 +721,14 @@ export async function action(actionArgs: string[]) {
     notFoundPageFilename = processPublicDirToken(NOT_FOUND_PAGE, publicDir);
     // At any rate it must exist under the root directory
     if (!notFoundPageFilename.startsWith(rootDir)) {
-      console.error(`❌ Specified Not Found file '${NOT_FOUND_PAGE}' is not under the asset root directory.`);
+      fail('usage', `Specified Not Found file '${NOT_FOUND_PAGE}' is not under the asset root directory.`);
       console.error(`  * ${rootRelative(notFoundPageFilename)} must be under ${rootRelative(rootDir)}`);
       console.error(`  Give the path from the current directory, for example ${rootRelative(rootDir)}/404.html.`);
-      process.exitCode = 1;
       return;
     }
     if (!fs.existsSync(notFoundPageFilename)) {
-      console.error(`❌ Specified Not Found file '${NOT_FOUND_PAGE}' does not exist.`);
+      fail('usage', `Specified Not Found file '${NOT_FOUND_PAGE}' does not exist.`);
       console.error(`  * ${rootRelative(notFoundPageFilename)} does not exist.`);
-      process.exitCode = 1;
       return;
     }
   } else {
@@ -657,14 +742,13 @@ export async function action(actionArgs: string[]) {
   const autoIndex = options.autoIndex;
   const autoExt = options.autoExt;
 
-  const exists = fs.existsSync(computeJsDir);
+  const exists = !managed && fs.existsSync(computeJsDir);
   if(exists) {
-    console.error(`❌ '${COMPUTE_JS_DIR}' directory already exists!`);
+    fail('usage', `'${COMPUTE_JS_DIR}' directory already exists!`);
     console.error(`  You should not run this command if this directory exists.`);
     console.error(`  If you need to re-scaffold the static publisher Compute App,`);
     console.error(`  delete the following directory and then try again:`);
     console.error(`  ${rootRelative(computeJsDir)}`);
-    process.exitCode = 1;
     return;
   }
 
@@ -674,8 +758,7 @@ export async function action(actionArgs: string[]) {
   const fastlyServiceId = options.serviceId;
   const storageMode = options.storageMode;
   if (!(storageMode === 'kv-store' || storageMode === 's3')) {
-    console.error(`❌ parameter --storage-mode must be set to 'kv-store' or 's3'.`);
-    process.exitCode = 1;
+    fail('usage', `parameter --storage-mode must be set to 'kv-store' or 's3'.`);
     return;
   }
 
@@ -687,19 +770,16 @@ export async function action(actionArgs: string[]) {
 
   if (storageMode === 'kv-store') {
     if (kvStoreName == null) {
-      console.error(`❌ required parameter --kv-store-name not provided.`);
-      process.exitCode = 1;
+      fail('usage', `required parameter --kv-store-name not provided.`);
       return;
     }
   } else if (storageMode === 's3') {
     if (s3Region == null) {
-      console.error(`❌ required parameter --s3-region not provided.`);
-      process.exitCode = 1;
+      fail('usage', `required parameter --s3-region not provided.`);
       return;
     }
     if (s3Bucket == null) {
-      console.error(`❌ required parameter --s3-bucket not provided.`);
-      process.exitCode = 1;
+      fail('usage', `required parameter --s3-bucket not provided.`);
       return;
     }
     let s3Endpoint = options.s3Endpoint;
@@ -712,8 +792,7 @@ export async function action(actionArgs: string[]) {
       if (s3Endpoint) {
         console.log('✅ S3 endpoint resolved:', s3Endpoint);
       } else {
-        console.error(`❌ Unable to resolve S3 endpoint from region '${s3Region}' and bucket '${s3Bucket}.`);
-        process.exitCode = 1;
+        fail('failed', `Unable to resolve S3 endpoint from region '${s3Region}' and bucket '${s3Bucket}'.`);
         return;
       }
       s3EndpointUrl = new URL(`https://${s3Endpoint}/`);
@@ -726,8 +805,7 @@ export async function action(actionArgs: string[]) {
       try {
         s3EndpointUrl = new URL(s3Endpoint);
       } catch {
-        console.error(`❌ Unable to parse '${s3Endpoint}' as a valid URL.`);
-        process.exitCode = 1;
+        fail('usage', `Unable to parse '${s3Endpoint}' as a valid URL.`);
         return;
       }
     }
@@ -737,7 +815,12 @@ export async function action(actionArgs: string[]) {
     publishId = 'default';
   }
 
-  const defaultCollectionName = 'live';
+  const defaultCollectionName = options.defaultCollectionName ?? 'live';
+  if (!isValidCollectionName(defaultCollectionName)) {
+    fail('collection-name-invalid', `parameter --default-collection-name is not a valid collection name: '${defaultCollectionName}'.`);
+    console.error(`  * ${COLLECTION_NAME_RULE}`);
+    return;
+  }
 
   console.log('');
   console.log('Compute Application Settings');
@@ -747,6 +830,7 @@ export async function action(actionArgs: string[]) {
   console.log('author                         :', author);
   console.log('description                    :', description);
   console.log('Service ID                     :', fastlyServiceId ?? '(None)');
+  console.log('Template                       :', options.template);
 
   if (storageMode === 'kv-store') {
     console.log('Storage Mode                   : Fastly KV Store');
@@ -779,270 +863,57 @@ export async function action(actionArgs: string[]) {
   console.log('Auto-Index                     :', autoIndex.length > 0 ? autoIndex : '(None)')
   console.log('Auto-Ext                       :', autoExt.length > 0 ? autoExt : '(None)')
   console.log('Static Files Dir               :', staticDirs.length > 0 ? staticDirs.map(rootRelative) : '(None)');
+  console.log('Collection Selection           :', collectionSelection != null ? collectionSelection.sources.map(x => x.type).join(', ') : '(None)');
 
   console.log('');
+
+  const appConfig: AppConfig = {
+    appDir: computeJsDir,
+    name,
+    author,
+    description,
+    serviceId: fastlyServiceId,
+    storage: storageMode === 'kv-store' ?
+      { mode: 'kv-store', kvStoreName: kvStoreName! } :
+      { mode: 's3', region: s3Region!, bucket: s3Bucket!, endpointUrl: String(s3EndpointUrl), endpointGenerated: s3EndpointGenerated },
+    publishId,
+    defaultCollectionName,
+    staticPublisherWorkingDir,
+    rootDir,
+    publicDir,
+    staticDirs,
+    spaFilename,
+    notFoundPageFilename,
+    autoIndex,
+    autoExt,
+    staticPublishVersionSpec: findComputeJsStaticPublisherVersion(packageJson),
+    template: loadAppTemplate(options.template),
+    // The hono template: the extensions folder is in the directory where
+    // scaffold runs (next to the app, or next to the project file).
+    ...(options.template === 'hono' ? { build: { hono: { extensionsDir: path.resolve('hono-extensions') } } } : {}),
+    generatedFrom: {
+      template: options.template,
+      staticPublishVersion: getOwnVersion(),
+      generatedAt: new Date().toISOString().slice(0, 10),
+    },
+    collectionSelection,
+  };
+
+  if (managed) {
+    writeManagedProject(appConfig, projectDir);
+    // The app is not installed yet, so template init uses the versions of the
+    // template's lockfile.
+    if (templateHasInit(options.template)) {
+      await runTemplateInit({ templateName: options.template, rc: {}, baseDir: projectDir, appNodeModulesDir: undefined });
+    }
+    return;
+  }
 
   console.log("Initializing Compute Application in " + computeJsDir + "...");
   fs.mkdirSync(computeJsDir);
   fs.mkdirSync(path.resolve(computeJsDir, './src'));
 
-  const resourceFiles: Record<string, string> = {};
-
-  // .gitignore
-  resourceFiles['.gitignore'] = `\
-/node_modules
-/bin
-/pkg
-/${path.relative(computeJsDir, staticPublisherWorkingDir)}
-`;
-
-  // package.json
-  const computeJsStaticPublisherVersion = findComputeJsStaticPublisherVersion(packageJson);
-  const packageJsonScripts: Record<string, string> = {
-    'dev:start': 'fastly compute serve',
-    'fastly:deploy': 'fastly compute publish',
-    'build': 'js-compute-runtime ./src/index.js ./bin/main.wasm',
-  };
-  if (storageMode === 'kv-store') {
-    packageJsonScripts['dev:publish'] = 'npx @fastly/compute-js-static-publish publish-content --local';
-    packageJsonScripts['fastly:publish'] = 'npx @fastly/compute-js-static-publish publish-content';
-  } else if (storageMode === 's3') {
-    packageJsonScripts['s3:publish'] = 'npx @fastly/compute-js-static-publish publish-content';
-  }
-  resourceFiles['package.json'] = JSON.stringify({
-    name,
-    version: '0.1.0',
-    description,
-    author,
-    type: 'module',
-    devDependencies: {
-      "@fastly/cli": "^16.0.0",
-      '@fastly/compute-js-static-publish': computeJsStaticPublisherVersion,
-    },
-    dependencies: {
-      '@fastly/js-compute': '^4.0.0',
-    },
-    engines: {
-      node: '>=20.11.0',
-    },
-    private: true,
-    scripts: packageJsonScripts,
-  }, undefined, 2);
-
-  // fastly.toml
-  let fastlyTomlLocalServer = '';
-  let fastlyTomlSetup = '';
-  if (storageMode === 'kv-store') {
-    const localServerKvStorePath = dotRelative(computeJsDir, path.resolve(staticPublisherWorkingDir, 'kvstore.json'));
-    fastlyTomlLocalServer = /* language=text */ `\
-[local_server]
-
-[local_server.kv_stores]
-${kvStoreName} = { file = "${localServerKvStorePath}", format = "json" }
-`;
-    fastlyTomlSetup = /* language=text */ `\
-[setup]
-
-[setup.kv_stores]
-[setup.kv_stores.${kvStoreName}]
-`;
-
-    // kvstore.json
-    resourceFiles[localServerKvStorePath] = '{}';
-  } else if (storageMode === 's3') {
-    fastlyTomlLocalServer = /* language=text */ `\
-[local_server]
-
-[local_server.secret_stores]
-[[local_server.secret_stores.S3_CREDENTIALS]]
-key = "S3_ACCESS_KEY_ID"
-env = "S3_ACCESS_KEY_ID"
-[[local_server.secret_stores.S3_CREDENTIALS]]
-key = "S3_SECRET_ACCESS_KEY"
-env = "S3_SECRET_ACCESS_KEY"
-
-[local_server.backends]
-[local_server.backends.s3_storage]
-url = "${String(s3EndpointUrl)}"
-override_host = "${s3EndpointUrl!.hostname}"
-`;
-    fastlyTomlSetup = /* language=text */ `\
-[setup]
-
-[setup.backends]
-[setup.backends.s3_storage]
-address = "${s3EndpointUrl!.hostname}"
-description = "S3 API endpoint"
-port = 443
-[setup.secret_stores]
-[setup.secret_stores.S3_CREDENTIALS]
-description = "Credentials for S3 storage"
-[setup.secret_stores.S3_CREDENTIALS.entries]
-[setup.secret_stores.S3_CREDENTIALS.entries.S3_ACCESS_KEY_ID]
-description = "Access Key ID"
-[setup.secret_stores.S3_CREDENTIALS.entries.S3_SECRET_ACCESS_KEY]
-description = "Secret Access Key"
-`;
-  }
-
-  resourceFiles['fastly.toml'] = /* language=text */ `\
-# This file describes a Fastly Compute package. To learn more visit:
-# https://developer.fastly.com/reference/fastly-toml/
-
-authors = [ "${author}" ]
-description = "${description}"
-language = "javascript"
-manifest_version = 3
-name = "${name}"
-${fastlyServiceId != null ? `service_id = "${fastlyServiceId}"\n` : ''}
-[scripts]
-build = "npm run build"
-
-${fastlyTomlLocalServer}
-${fastlyTomlSetup}
-`;
-
-  // static-publish.rc.js
-  let staticPublishStorage = '';
-  if (storageMode === 'kv-store') {
-    staticPublishStorage = `\
-  storageMode: "kv-store",
-  kvStore: {
-    kvStoreName: ${JSON.stringify(kvStoreName)},
-  },\
-`;
-  } else if (storageMode === 's3') {
-    staticPublishStorage = `\
-  storageMode: "s3",
-  s3: {
-    region: ${JSON.stringify(s3Region)},
-    bucket: ${JSON.stringify(s3Bucket)},\
-` + (!s3EndpointGenerated ? `
-    endpoint: ${JSON.stringify(String(s3EndpointUrl))},\
-` : '') + `
-  },\
-`;
-  }
-  resourceFiles['static-publish.rc.js'] = `\
-/*
- * Generated by @fastly/compute-js-static-publish.
- */
-
-/** @type {import('@fastly/compute-js-static-publish').StaticPublishRc} */
-const rc = {
-${staticPublishStorage}
-  publishId: ${JSON.stringify(publishId)},
-  defaultCollectionName: ${JSON.stringify(defaultCollectionName)},
-  staticPublisherWorkingDir: ${JSON.stringify(dotRelative(computeJsDir, staticPublisherWorkingDir))},
-};
-
-export default rc;
-`;
-
-  // publish-content.config.js
-  // publicDirPrefix -- if public dir is deeper than the root dir, then
-  // public dir is used as a prefix to drill into asset names.
-  // e.g.,
-  // root dir   : /path/to/root
-  // public dir : /path/to/root/public
-  // then publicDirPrefix = /public
-
-  // We've already established publicDir.startsWith(rootDir)
-  let publicDirPrefix = '';
-  if (rootDir !== publicDir) {
-    publicDirPrefix = publicDir.slice(rootDir.length);
-  }
-
-  // staticItems - specified as prefixes, relative to publicDir
-  const staticItems: string[] = [];
-  for (const staticDir of staticDirs) {
-    // We've already established staticDir.startsWith(publicDir)
-    let staticItem = staticDir.slice(publicDir.length);
-    if (!staticItem.endsWith('/')) {
-      // Ending with a slash denotes that this is a directory.
-      staticItem = staticItem + '/';
-    }
-    staticItems.push(staticItem);
-  }
-
-  // spaFile - asset key of spa file
-  let spaFile: string | false = false;
-  if (spaFilename != null) {
-    // We've already established spaFilename.startsWith(rootDir)
-    // and that it exists
-    spaFile = spaFilename.slice(rootDir.length);
-  }
-
-  let notFoundPageFile: string | false = false;
-  if(notFoundPageFilename != null) {
-    // We've already established notFoundPageFilename.startsWith(rootDir)
-    // and that it exists
-    notFoundPageFile = notFoundPageFilename.slice(rootDir.length);
-  }
-
-  resourceFiles['publish-content.config.js'] = `\
-/*
- * Generated by @fastly/compute-js-static-publish.
- */
-
-// Commented items are defaults, feel free to modify and experiment!
-// See README for a detailed explanation of the configuration options.
-
-/** @type {import('@fastly/compute-js-static-publish').PublishContentConfig} */
-const config = {
-  rootDir: ${JSON.stringify(dotRelative(computeJsDir, rootDir))},
-  // excludeDirs: [ './node_modules' ],
-  // excludeDotFiles: true,
-  // includeWellKnown: true,
-  // assetInclusionTest: (assetKey) => true,
-  // contentCompression: [ 'br', 'gzip' ],
-  // brotliQuality: 11,
-  // contentTypes: [
-  //   { test: /.custom$/, contentType: 'application/x-custom', text: false },
-  // ],
-  
-  // Server settings are saved to storage per collection
-  server: {${publicDirPrefix !== '' ? `
-    publicDirPrefix: ${JSON.stringify(publicDirPrefix)},` : ''}
-    staticItems: ${JSON.stringify(staticItems)},
-    allowedEncodings: [ 'br', 'gzip' ],
-    spaFile: ${JSON.stringify(spaFile)},
-    notFoundPageFile: ${JSON.stringify(notFoundPageFile)}, 
-    autoExt: ${JSON.stringify(autoExt)},
-    autoIndex: ${JSON.stringify(autoIndex)},
-  },
-};
-
-export default config;
-`;
-
-  // src/index.js
-  resourceFiles['./src/index.js'] = /* language=text */ `\
-/// <reference types="@fastly/js-compute" />
-import { env } from 'fastly:env';
-import { PublisherServer } from '@fastly/compute-js-static-publish';
-import rc from '../static-publish.rc.js';
-const publisherServer = PublisherServer.fromStaticPublishRc(rc);
-
-// eslint-disable-next-line no-restricted-globals
-addEventListener("fetch", (event) => event.respondWith(handleRequest(event)));
-async function handleRequest(event) {
-
-  console.log('FASTLY_SERVICE_VERSION', env('FASTLY_SERVICE_VERSION'));
-
-  const request = event.request;
-
-  const response = await publisherServer.serveRequest(request);
-  if (response != null) {
-    return response;
-  }
-
-  // Do custom things here!
-  // Handle API requests, serve non-static responses, etc.
-
-  return new Response('Not found', { status: 404 });
-}
-`;
+  const resourceFiles = generateApp(appConfig);
 
   // Write out the files
   for (const [filename, content] of Object.entries(resourceFiles)) {
@@ -1057,6 +928,17 @@ async function handleRequest(event) {
   console.log(`npm --prefix ${COMPUTE_JS_DIR} install`);
   child_process.spawnSync('npm', [ '--prefix', COMPUTE_JS_DIR, 'install' ], { stdio: 'inherit' });
   console.log('');
+
+  // The folder of the template (for the hono template: hono-extensions/, next
+  // to the app). It is in the directory where scaffold runs.
+  if (templateHasInit(options.template)) {
+    await runTemplateInit({
+      templateName: options.template,
+      rc: {},
+      baseDir: path.resolve(),
+      appNodeModulesDir: path.resolve(computeJsDir, 'node_modules'),
+    });
+  }
 
   if (storageMode === 'kv-store') {
     console.log(`
@@ -1119,11 +1001,60 @@ To build and deploy to your Compute service:
   If a Secret Store named 'S3_CREDENTIALS' already exists, the Fastly CLI asks for a
   different name. If you leave it empty, it uses the existing Secret Store. If you give
   a different name, the Fastly CLI uses it for the resource link too. Then call
-  setSecretStoreForS3Credentials() with that name in src/index.js, and deploy again.
+  setSecretStoreForS3Credentials() with that name in ${appConfig.template.entry}, and deploy again.
 
   After the deploy, fastly.toml has the service ID, so s3:publish also purges the
   service's cache. For this purge, s3:publish needs FASTLY_API_TOKEN too.
 
 `);
   }
+}
+
+// The lines that scaffold --managed adds to the .gitignore of the project dir.
+const GITIGNORE_COMMENT = '# @fastly/compute-js-static-publish';
+
+export function addGitignoreLines(existing: string | null, lines: string[]): { content: string, added: string[] } {
+  const present = new Set((existing ?? '').split(/\r?\n/).map(x => x.trim()));
+  const added = lines.filter(line => !present.has(line));
+  if (added.length === 0) {
+    return { content: existing ?? '', added };
+  }
+  let content = existing ?? '';
+  if (content !== '' && !content.endsWith('\n')) {
+    content += '\n';
+  }
+  if (content !== '') {
+    content += '\n';
+  }
+  content += [ GITIGNORE_COMMENT, ...added ].join('\n') + '\n';
+  return { content, added };
+}
+
+function writeManagedProject(appConfig: AppConfig, projectDir: string) {
+  const projectFilePath = path.resolve(projectDir, PROJECT_FILE_NAME);
+  fs.writeFileSync(projectFilePath, renderProjectFile(appConfig, projectDir, getOwnVersion()), 'utf-8');
+  console.log(`🚀 Managed project created: ${rootRelative(projectFilePath)}`);
+
+  // Ignore the generated app and the working dir. Never change the customer's lines.
+  const gitignorePath = path.resolve(projectDir, '.gitignore');
+  const existing = fs.existsSync(gitignorePath) ? fs.readFileSync(gitignorePath, 'utf-8') : null;
+  const workingDir = path.relative(projectDir, appConfig.staticPublisherWorkingDir).split(path.sep).join('/');
+  const lines = [ '/.static-publish/' ];
+  if (!workingDir.startsWith('..')) {
+    lines.push(`/${workingDir}/`);
+  }
+  const { content, added } = addGitignoreLines(existing, lines);
+  if (added.length > 0) {
+    fs.writeFileSync(gitignorePath, content, 'utf-8');
+    console.log(`✔️ Added to ${existing == null ? 'a new ' : ''}.gitignore: ${added.join(', ')}`);
+  }
+
+  console.log(`
+The CLI generates the Compute app from ${PROJECT_FILE_NAME}.
+Commit ${PROJECT_FILE_NAME}. Do not commit .static-publish/.
+
+To publish your content from this directory:
+
+  npx @fastly/compute-js-static-publish publish-content --local
+`);
 }

@@ -4,6 +4,7 @@
  */
 
 import { getCommandAndArgs } from '../../../util/args.js';
+import { fail, isJsonMode, recordFailure } from '../../../util/output.js';
 import * as deleteCommand from './delete.js';
 import * as listCommand from './list.js';
 import * as promoteCommand from './promote.js';
@@ -66,7 +67,7 @@ export async function action(actionArgs: string[]) {
       console.error(commandAndArgs.error);
       console.error(`Specify one of the following sub-commands: ${Object.keys(modes).join(', ')}`);
       console.error();
-      process.exitCode = 1;
+      recordFailure('usage', commandAndArgs.error);
     }
 
     help();
@@ -74,6 +75,10 @@ export async function action(actionArgs: string[]) {
   }
 
   const { command, argv, } = commandAndArgs;
+  if (isJsonMode() && ![ 'list', 'delete', 'promote' ].includes(command)) {
+    fail('json-not-supported', `--json is not supported for 'collections ${command}'.`);
+    return;
+  }
   await modes[command].action(argv);
 
 }

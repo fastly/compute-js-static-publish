@@ -128,7 +128,7 @@ This part defines the terms **managed app** (the package generates the app when 
 - 6.4 **Template settings:** `build.<template>`, `templateOptions.<template>`, and the settings that each template declares.
 - 6.5 **A public helper API** for the scripts that a template ships.
 - 6.6 **Hono extensions, build:** the `hono` template's hooks copy `hono-extensions/` into the app and write the manifest.
-- 6.7 **Hono extensions, modules:** `defineMiddleware()` and `defineRoutes()`, with bindings.
+- 6.7 **Hono extensions, modules:** `defineExtension()`, with phases and bindings.
 - 6.8 **`template init [--reset [--force]] [--check]`**.
 
 After 8.1.0 is released, the old package gets one last release with a pointer to `@fastly/compute-js-static-publish/hono`, and is deprecated (see [../README.md](../README.md#after-810-is-released)).
