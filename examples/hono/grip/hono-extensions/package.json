@@ -1,0 +1,10 @@
+{
+  "name": "hono-extensions-example-grip",
+  "private": true,
+  "type": "module",
+  "description": "The GRIP example of @fastly/compute-js-static-publish. See README.md.",
+  "dependencies": {
+    "@fanoutio/grip": "^4.4.0",
+    "@fanoutio/serve-grip": "^4.3.0"
+  }
+}
