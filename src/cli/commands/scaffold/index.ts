@@ -17,7 +17,7 @@ import { type CommandLineOptions, type OptionDefinition } from 'command-line-arg
 import { parseCommandLine } from '../../util/args.js';
 import { fail, recordFailure } from '../../util/output.js';
 import { rootRelative } from '../../util/files.js';
-import { findComputeJsStaticPublisherVersion, getOwnVersion, type PackageJson } from '../../util/package.js';
+import { cliCommand, findComputeJsStaticPublisherVersion, getOwnVersion, type PackageJson } from '../../util/package.js';
 import { runTemplateInit } from '../manage/template/init.js';
 import { templateHasInit } from '../../managed/template-init.js';
 import { findHostnameForAwsS3RegionAndBucket } from '../../util/s3.js';
@@ -39,7 +39,7 @@ function help() {
   console.log(`\
 
 Usage:
-  npx @fastly/compute-js-static-publish@latest [options]
+  ${cliCommand({ latest: true })} [options]
 
 Description:
   Scaffold a new Compute app configured for static publishing.
@@ -1062,6 +1062,6 @@ Commit ${PROJECT_FILE_NAME}. Do not commit .static-publish/.
 
 To publish your content from this directory:
 
-  npx @fastly/compute-js-static-publish publish-content --local
+  ${cliCommand()} publish-content --local
 `);
 }

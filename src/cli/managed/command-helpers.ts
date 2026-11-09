@@ -8,7 +8,7 @@ import path from 'node:path';
 
 import { PROJECT_FILE_NAME } from '../../models/config/static-publish-project.js';
 import { LoadConfigError, type StaticPublishProjectNormalized, detectProjectMode, loadProjectFile } from '../util/config.js';
-import { getOwnVersion } from '../util/package.js';
+import { cliCommand, getOwnVersion } from '../util/package.js';
 import { DEFAULT_APP_TEMPLATE_NAME } from '../commands/scaffold/app-template.js';
 import { DEFAULT_HONO_EXTENSIONS_DIR } from '../hono/build.js';
 import { writeBackStaticPublishVersion } from './project-edit.js';
@@ -45,7 +45,7 @@ export function showTemplateFolderHint(project: StaticPublishProjectNormalized) 
   }
   const extensionsDir = project.rc.build?.hono?.extensionsDir ?? DEFAULT_HONO_EXTENSIONS_DIR;
   if (!fs.existsSync(path.resolve(extensionsDir))) {
-    console.log(`💡 No ${extensionsDir} folder. To add your own Hono middleware and routes, run: npx @fastly/compute-js-static-publish template init`);
+    console.log(`💡 No ${extensionsDir} folder. To add your own Hono middleware and routes, run: ${cliCommand()} template init`);
   }
 }
 
