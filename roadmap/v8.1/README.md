@@ -1,6 +1,6 @@
-# 8.1: the six parts
+# 8.1: the seven parts
 
-8.1 has six parts: templates, previews, managed mode, hidden files, CI support, and Hono. Each part is one PR to the development branch `dev/8.1`, in this order. At the end, one PR merges `dev/8.1` into `main`. The details of each part are in [design.md](design.md), and its tests in [tests.md](tests.md).
+8.1 has seven parts: templates, previews, managed mode, hidden files, CI support, Hono, and the npx command of a prerelease. Each part is one PR to the development branch `dev/8.1`, in this order. At the end, one PR merges `dev/8.1` into `main`. The details of each part are in [design.md](design.md), and its tests in [tests.md](tests.md).
 
 In these files, a **customer** is a developer who uses this package. A **visitor** is a person who opens the customer's site.
 
@@ -14,11 +14,12 @@ In these files, a **customer** is a developer who uses this package. A **visitor
 | 4 | Publishing: hidden files | – | 2: the same server code |
 | 5 | CI: machine-readable output | 3: `--json` for `status` and `deploy` | 4: the count of hidden files in the JSON |
 | 6 | Hono | 1: templates, the template option; 2: `serveRequest()` options, `resolveCollection()`; 3: managed mode, `managed.template` | 5: `status --json` lists the packages of the template |
+| 7 | The npx command of a prerelease | 1: `getOwnVersion()` | 3, 6: the messages of the new commands |
 
 A hard dependency means that the code is built on the earlier PR. A soft dependency means that the two PRs change the same code or output, so the later PR adapts to the earlier one.
 
 ```
-1 Templates ─► 2 Previews ─► 3 Managed ─┬─► 5 CI ─► 6 Hono
+1 Templates ─► 2 Previews ─► 3 Managed ─┬─► 5 CI ─► 6 Hono ─► 7 npx command
                    ┆                    │
                    ┆┄┄► 4 Hidden files ┄┘
 ```
@@ -128,7 +129,18 @@ This part defines the terms **managed app** (the package generates the app when 
 - 6.4 **Template settings:** `build.<template>`, `templateOptions.<template>`, and the settings that each template declares.
 - 6.5 **A public helper API** for the scripts that a template ships.
 - 6.6 **Hono extensions, build:** the `hono` template's hooks copy `hono-extensions/` into the app and write the manifest.
-- 6.7 **Hono extensions, modules:** `defineMiddleware()` and `defineRoutes()`, with bindings.
+- 6.7 **Hono extensions, modules:** `defineExtension()`, with phases and bindings.
 - 6.8 **`template init [--reset [--force]] [--check]`**.
 
 After 8.1.0 is released, the old package gets one last release with a pointer to `@fastly/compute-js-static-publish/hono`, and is deprecated (see [../README.md](../README.md#after-810-is-released)).
+
+## 7. The npx command of a prerelease
+
+**Use case:** "I try a beta of 8.1 in a managed project. I copy a command from `--help` or from a hint, and it runs."
+
+**Before part 7:** the messages of the CLI show `npx @fastly/compute-js-static-publish <command>`. A managed project has no local install of this package, so npx runs the latest stable version, which does not have the new commands. This was found in 8.1.0-beta.1.
+
+**Tasks** ([design](design.md#part-7-the-npx-command-of-a-prerelease)):
+
+- 7.1 **`cliCommand()`**: the npx command with the dist-tag of a prerelease (`@beta`, `@rc`), from the version of the CLI. All messages, help texts, and hints use it.
+- 7.2 **The docs of a prerelease:** `scripts/prerelease-docs.mjs` (a separate PR to `dev/8.1`, #175) gives the npx commands of the docs the dist-tag, in the version commit of each prerelease.

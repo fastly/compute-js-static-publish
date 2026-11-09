@@ -2,3 +2,4 @@
 /node_modules/
 /DOCUMENTATION.md
 /test/.env
+/resources/templates/*/node_modules/

@@ -7,17 +7,25 @@ import path from 'node:path';
 
 import { type OptionDefinition } from 'command-line-args';
 
+import { type AssetEntryMap, countHiddenEntries } from '../../../../models/assets/index.js';
 import { decodeIndexMetadata, getUnsupportedIndexFeatures } from '../../../../models/server/index.js';
 import { isExpired } from '../../../../models/time/index.js';
 import { parseCommandLine } from '../../../util/args.js';
-import { LoadConfigError, loadStaticPublisherRcFile } from '../../../util/config.js';
+import { errorCodeOf, recordFailure, setJsonResult } from '../../../util/output.js';
+import {
+  LoadConfigError,
+  configFileName,
+  getComputeAppDir,
+  loadStaticPublisherRcFile,
+} from '../../../util/config.js';
 import { loadStorageProviderFromStaticPublishRc } from '../../../storage/storage-provider.js';
+import { cliCommand } from '../../../util/package.js';
 
 function help() {
   console.log(`\
 
 Usage:
-  npx @fastly/compute-js-static-publish collections list [options]
+  ${cliCommand()} collections list [options]
 
 Description:
   Lists all collections currently published in the KV Store.
@@ -60,7 +68,7 @@ export async function action(actionArgs: string[]) {
     if (parsed.error != null) {
       console.error(String(parsed.error));
       console.error();
-      process.exitCode = 1;
+      recordFailure('usage', String(parsed.error));
     }
 
     help();
@@ -77,7 +85,7 @@ export async function action(actionArgs: string[]) {
 
   // compute-js-static-publisher cli is always run from the Compute application directory
   // in other words, the directory that contains `fastly.toml`.
-  const computeAppDir = path.resolve();
+  const computeAppDir = getComputeAppDir();
 
   console.log(`📃 Listing collections...`);
 
@@ -86,14 +94,14 @@ export async function action(actionArgs: string[]) {
   try {
     staticPublisherRc = await loadStaticPublisherRcFile();
   } catch (err) {
-    console.error("❌ Can't load static-publish.rc.js");
+    console.error(`❌ Can't load ${configFileName()}`);
     console.error("Run this from a compute-js-static-publish compute-js directory.");
     if (err instanceof LoadConfigError) {
       for (const error of err.errors) {
         console.error(error);
       }
     }
-    process.exitCode = 1;
+    recordFailure('config-invalid', `Can't load ${configFileName()}.`);
     return;
   }
 
@@ -119,7 +127,7 @@ export async function action(actionArgs: string[]) {
   } catch (err: unknown) {
     console.error(`❌ Could not instantiate store provider`);
     console.error(String(err));
-    process.exitCode = 1;
+    recordFailure(errorCodeOf(err), String(err));
     return;
   }
 
@@ -132,6 +140,8 @@ export async function action(actionArgs: string[]) {
 
   // ### Found collections ###
   const foundCollections = indexKeys.map(x => x.slice(indexesPrefix.length));
+  // For --json.
+  const collectionInfos: Record<string, unknown>[] = [];
   if (foundCollections.length === 0) {
     console.log('No collections found.');
   } else {
@@ -149,16 +159,48 @@ export async function action(actionArgs: string[]) {
         throw new Error(`❌ Can't load storage entry ${indexesPrefix + collection}`);
       }
       let indexMetadata = decodeIndexMetadata(indexEntryInfo.metadata);
+      const info: Record<string, unknown> = {
+        name: collection,
+        isDefault: collection === defaultCollectionName,
+        publishedAt: null,
+        expiresAt: null,
+        expired: false,
+        requires: [],
+        unsupported: [],
+        files: null,
+        hidden: null,
+      };
+      collectionInfos.push(info);
       if (indexMetadata == null) {
         console.log(`    No metadata found.`);
         continue;
       }
+      if (indexMetadata.publishedTime != null) {
+        info.publishedAt = new Date(indexMetadata.publishedTime * 1000).toISOString();
+      }
+      if (indexMetadata.expirationTime != null) {
+        info.expiresAt = new Date(indexMetadata.expirationTime * 1000).toISOString();
+        // The expiration time is not enforced for the default collection.
+        info.expired = collection !== defaultCollectionName && isExpired(indexMetadata.expirationTime);
+      }
+      info.requires = indexMetadata.requires ?? [];
+      info.unsupported = getUnsupportedIndexFeatures(indexMetadata);
       if (indexMetadata.publishedTime == null) {
         console.log('    Published  : unknown');
       } else {
         console.log(`    Published  : ${new Date(indexMetadata.publishedTime * 1000)}`);
       }
       
+      try {
+        const assetEntryMap = (await new Response(indexEntryInfo.data).json()) as AssetEntryMap;
+        const fileCount = Object.keys(assetEntryMap).length;
+        info.files = fileCount;
+        info.hidden = countHiddenEntries(assetEntryMap);
+        console.log(`    Files      : ${fileCount} (${countHiddenEntries(assetEntryMap)} hidden)`);
+      } catch {
+        console.log('    Files      : unknown (cannot read the index)');
+      }
+
       if (indexMetadata.requires != null) {
         console.log(`    Requires   : ${indexMetadata.requires.join(', ')}`);
         const unsupportedFeatures = getUnsupportedIndexFeatures(indexMetadata);
@@ -183,4 +225,10 @@ export async function action(actionArgs: string[]) {
   }
 
   console.log("✅  Completed.")
+
+  setJsonResult({
+    publishId,
+    defaultCollection: defaultCollectionName,
+    collections: collectionInfos,
+  });
 }
