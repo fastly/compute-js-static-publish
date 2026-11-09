@@ -500,7 +500,10 @@ You can override this file for a single `publish-content` command by specifying 
      `'../site/public'`, set it to `'/public'`. The value starts with `/` and does not
      end with `/` (default: `''`). The scaffolder sets it from `--root-dir` and `--public-dir`.
    - `spaFile` - Path to a file to be used to serve in a SPA application.
-   - `notFoundPageFile` - Path to a file to be used to serve as a 404 not found page.
+   - `notFoundPageFile` - Path to a file to be used to serve as a 404 not found page.  
+     The server serves `spaFile` or `notFoundPageFile` only to a request that accepts HTML: its `Accept`
+     header is missing or empty, or has `text/html`, `text/*`, or `*/*` with a q-value that is not 0.
+     For other requests, `serveRequest()` returns `null`.
    - `autoIndex` - List of files to automatically use as index.
    - `autoExt` - List of extensions to automatically apply to a path and retry when
      the requested path is not found.
