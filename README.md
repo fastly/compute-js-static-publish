@@ -57,7 +57,7 @@ Serve static websites and web apps at the edge &mdash; no backends and no CDN in
 Create a directory for your project, place your static files in `./public`, then type:
 
 ```sh
-npx @fastly/compute-js-static-publish@latest \
+npx @fastly/compute-js-static-publish@beta \
   --root-dir=./public \
   --kv-store-name=site-content
 ```
@@ -118,7 +118,7 @@ FASTLY_API_TOKEN=$(npx fastly auth token) npm run fastly:publish
 Create a directory for your project, place your static files in `./public`, then type:
 
 ```sh
-npx @fastly/compute-js-static-publish@latest \
+npx @fastly/compute-js-static-publish@beta \
   --root-dir=./public \
   --storage-mode=s3 \
   --s3-region=<s3 region> \
@@ -129,7 +129,7 @@ npx @fastly/compute-js-static-publish@latest \
 > If the storage requires a custom endpoint, such as is the case with Fastly Object Storage, specify it using `--s3-endpoint=<endpoint>`. For example:
 >
 > ```sh
-> npx @fastly/compute-js-static-publish@latest \
+> npx @fastly/compute-js-static-publish@beta \
 >   --root-dir=./public \
 >   --storage-mode=s3 \
 >   --s3-region=us-east-1 \
@@ -257,8 +257,8 @@ Paths in the project file are relative to it. The name of the file marks the mod
 To run the app on your computer:
 
 ```sh
-npx @fastly/compute-js-static-publish publish-content --local
-npx @fastly/compute-js-static-publish dev
+npx @fastly/compute-js-static-publish@beta publish-content --local
+npx @fastly/compute-js-static-publish@beta dev
 ```
 
 `dev` generates the app in `.static-publish/app/`, installs its dependencies with `npm ci` if they changed, and runs `fastly compute serve` in it. Options after `--` go to `fastly compute serve`, for example `dev -- --addr=127.0.0.1:8080`. With `dev -- --watch`, a change in the app builds and restarts it, and the watch script of the template (`scripts/template_watch.js`, see [Template hooks](#-template-hooks)), if it has one, runs next to `fastly compute serve`. The app serves the content of the local KV Store, `kvstore.json` in the working directory.
@@ -297,7 +297,7 @@ npm install --save-dev @fastly/compute-js-static-publish
 To deploy the app:
 
 ```sh
-npx @fastly/compute-js-static-publish deploy
+npx @fastly/compute-js-static-publish@beta deploy
 ```
 
 `deploy` generates the app, installs it if necessary, and runs `fastly compute build` and `fastly compute deploy`, only if the app changed. It needs a Fastly API token (`FASTLY_API_TOKEN` or `--fastly-api-token`).
@@ -550,7 +550,7 @@ Collections are a powerful feature that allow you to publish and manage multiple
 Collections are published using a `--collection-name`, and can be reused, updated, or deleted independently. For example, you can create a staging version of your site using:
 
 ```sh
-npx @fastly/compute-js-static-publish publish-content \
+npx @fastly/compute-js-static-publish@beta publish-content \
   --collection-name=staging \
   --expires-in=7d \
   --config=./publish-content.config.js
@@ -733,7 +733,7 @@ jobs:
         with:
           node-version: 24
       - run: npm ci
-      - run: npx @fastly/compute-js-static-publish publish-content --collection-name=pr-${{ github.event.number }} --expires-in=7d
+      - run: npx @fastly/compute-js-static-publish@beta publish-content --collection-name=pr-${{ github.event.number }} --expires-in=7d
 
   remove:
     if: github.event.action == 'closed'
@@ -750,8 +750,8 @@ jobs:
         with:
           node-version: 24
       - run: npm ci
-      - run: npx @fastly/compute-js-static-publish collections delete --collection-name=pr-${{ github.event.number }}
-      - run: npx @fastly/compute-js-static-publish clean --delete-expired-collections
+      - run: npx @fastly/compute-js-static-publish@beta collections delete --collection-name=pr-${{ github.event.number }}
+      - run: npx @fastly/compute-js-static-publish@beta clean --delete-expired-collections
 ```
 
 For a pull request that never published, `collections delete` finds no collection and deletes nothing.
@@ -795,7 +795,7 @@ collectionSelector.fromConfigStore('my-config-store', 'collection-key');
 If you're happy with a preview or staging collection and want to make it live, use the `collections promote` command:
 
 ```sh
-npx @fastly/compute-js-static-publish collections promote \
+npx @fastly/compute-js-static-publish@beta collections promote \
   --collection-name=staging
   --to=live
 ```
@@ -805,7 +805,7 @@ This copies all content and server settings from the `staging` collection to `li
 You can also specify a new expiration:
 
 ```sh
-npx @fastly/compute-js-static-publish collections promote \
+npx @fastly/compute-js-static-publish@beta collections promote \
   --collection-name=preview-42 \
   --to=staging \
   --expires-in=7d
@@ -975,7 +975,7 @@ npm run fastly:clean
 
 These scripts run against the local and Fastly KV Stores respectively, and run the following command:
 ```
-npx @fastly/compute-js-static-publish clean --delete-expired-collections
+npx @fastly/compute-js-static-publish@beta clean --delete-expired-collections
 ```
 
 This removes:
@@ -992,7 +992,7 @@ This removes:
 Preview what will be deleted without making changes:
 
 ```sh
-npx @fastly/compute-js-static-publish clean --dry-run
+npx @fastly/compute-js-static-publish@beta clean --dry-run
 ```
 
 > ⚠️ Cleanup never deletes the default collection and never deletes content that’s still in use.
@@ -1168,7 +1168,7 @@ Notes:
 To scaffold a Hono app, add `--template hono` (in a managed project: `managed.template: 'hono'`):
 
 ```sh
-npx @fastly/compute-js-static-publish@latest --template hono --root-dir=./public --kv-store-name=site-content
+npx @fastly/compute-js-static-publish@beta --template hono --root-dir=./public --kv-store-name=site-content
 ```
 
 The app is TypeScript: `src/index.ts`, with code like the example below, and `tsconfig.json`. Add your own routes in `src/index.ts`. The build (`js-compute-runtime ./src/index.ts`) removes the types, but does not check them. To check the types, run `npx tsc` in the app. The app has `typescript` as a dev dependency.
@@ -1180,7 +1180,7 @@ To add your own middleware and routes to the `hono` template, put modules in the
 `scaffold --template hono` makes the folder next to the project file (managed) or next to `compute-js/` (ejected). To make it later, or to update it, run:
 
 ```sh
-npx @fastly/compute-js-static-publish template init
+npx @fastly/compute-js-static-publish@beta template init
 ```
 
 ```
@@ -1265,10 +1265,10 @@ templateOptions: {
 
 **Watch:** `dev -- --watch` (managed) and `npm run dev:watch` (ejected) also watch the extensions folder, also if it does not exist yet. A change in the folder bundles the modules again, and then the Fastly CLI builds and restarts the app. If a module has an error, the watcher shows it and the app keeps the last modules that built.
 
-**Examples** in [`examples/hono/`](https://github.com/fastly/compute-js-static-publish/tree/main/examples/hono) show complete extensions. They are not part of the npm package, and you cannot scaffold an app with them: for a new project, copy the `hono-extensions/` folder of an example into your project, and set it up as the README of the example shows. The README also shows how to add an example to a project that exists.
+**Examples** in [`examples/hono/`](https://github.com/fastly/compute-js-static-publish/tree/beta/8.1/examples/hono) show complete extensions. They are not part of the npm package, and you cannot scaffold an app with them: for a new project, copy the `hono-extensions/` folder of an example into your project, and set it up as the README of the example shows. The README also shows how to add an example to a project that exists.
 
-- [`grip`](https://github.com/fastly/compute-js-static-publish/tree/main/examples/hono/grip): realtime streams and Server-Sent Events with Fastly Fanout, and a publish endpoint with a shared key. One module with two phases: the `middleware` phase hands off only `/events/*` to Fanout, and the `beforeFiles` phase has the endpoints.
-- [`oauth`](https://github.com/fastly/compute-js-static-publish/tree/main/examples/hono/oauth): a login with GitHub or Google in front of some paths of the site (`protect`), with a signed session cookie.
+- [`grip`](https://github.com/fastly/compute-js-static-publish/tree/beta/8.1/examples/hono/grip): realtime streams and Server-Sent Events with Fastly Fanout, and a publish endpoint with a shared key. One module with two phases: the `middleware` phase hands off only `/events/*` to Fanout, and the `beforeFiles` phase has the endpoints.
+- [`oauth`](https://github.com/fastly/compute-js-static-publish/tree/beta/8.1/examples/hono/oauth): a login with GitHub or Google in front of some paths of the site (`protect`), with a signed session cookie.
 
 Each example takes its secrets from a Secret Store. For `dev`, `managed.fastlyToml` adds a local Secret Store that reads environment variables.
 
@@ -1398,7 +1398,7 @@ You can stream `assetVariant.storageEntry.body` directly to a `Response`, or rea
 ### Available Commands
 
 #### Outside a Compute App Directory
-- `npx @fastly/compute-js-static-publish@latest [options]` - Scaffold a new Compute app
+- `npx @fastly/compute-js-static-publish@beta [options]` - Scaffold a new Compute app
 
 #### Inside a Compute App Directory
 - `publish-content` - Publish static files to storage (KV Store or S3-compatible storage) under a named collection
@@ -1423,7 +1423,7 @@ These rules are for tools that run the CLI with no person present, for example a
 **`--json`:** `publish-content`, `collections list`, `collections delete`, `collections promote`, `status`, `deploy` (in a managed project), and `--version` can write their result as one JSON object to stdout, at the end. All log lines then go to stderr, so that they still show in the CI log. With another command, `--json` is an error (`json-not-supported`).
 
 ```sh
-npx @fastly/compute-js-static-publish publish-content \
+npx @fastly/compute-js-static-publish@beta publish-content \
   --project-dir=./compute-js --collection-name=pr-42 --json > result.json
 ```
 
@@ -1556,12 +1556,12 @@ Run outside an existing Compute app directory:
 
 ```sh
 # Using KV store storage
-npx @fastly/compute-js-static-publish@latest \
+npx @fastly/compute-js-static-publish@beta \
   --root-dir=./public \
   --kv-store-name=<site-content>
 
 # Using S3 storage (BETA)
-npx @fastly/compute-js-static-publish@latest \
+npx @fastly/compute-js-static-publish@beta \
   --root-dir=./public \
   --storage-mode=s3 \
   --s3-region=<s3 region> \
@@ -1572,7 +1572,7 @@ npx @fastly/compute-js-static-publish@latest \
 #### Full options list
 
 ```sh
-npx @fastly/compute-js-static-publish@latest \
+npx @fastly/compute-js-static-publish@beta \
   --root-dir=./public \
   { [--storage-mode=kv-store] --kv-store-name=<site-content> | \
     --storage-mode=s3 --s3-region=<s3 region> --s3-bucket=<bucket name> [--s3-endpoint=<endpoint>] } \
@@ -1643,14 +1643,14 @@ Once you're in the scaffolded Compute app directory (with `static-publish.rc.js`
 To run a subcommand from another directory, for example the root of your repo in CI, give the app directory with `--project-dir`:
 
 ```sh
-npx @fastly/compute-js-static-publish publish-content \
+npx @fastly/compute-js-static-publish@beta publish-content \
   --project-dir=./compute-js \
   --collection-name=staging
 ```
 
 With `--project-dir`, all relative paths are relative to that directory: the paths in `static-publish.rc.js` and `publish-content.config.js`, and also the paths in the other options (for example `--config` and `--root-dir`). The directory must have a `static-publish.rc.js` (an app) or a `static-publish.project.js` (a [managed project](#managed-projects)). To scaffold an app in another directory, use `--output`.
 
-To print the version of this package, run `npx @fastly/compute-js-static-publish --version`. It works in any directory.
+To print the version of this package, run `npx @fastly/compute-js-static-publish@beta --version`. It works in any directory.
 
 With `--non-interactive`, or when the `CI` environment variable is set, the CLI never asks for input: missing input is an error. `deploy` then also runs the Fastly CLI with `--non-interactive`. The output never shows the values of `--fastly-api-token`, `--s3-secret-access-key`, `FASTLY_API_TOKEN`, and `S3_SECRET_ACCESS_KEY`.
 
@@ -1659,7 +1659,7 @@ For `--json`, the exit codes, and the error codes, see [Using the CLI in CI](#-u
 #### `publish-content`
 
 ```sh
-npx @fastly/compute-js-static-publish publish-content \
+npx @fastly/compute-js-static-publish@beta publish-content \
   [--root-dir=./public] \
   [--collection-name=preview-42] \
   [--config=./publish-content.config.js] \
@@ -1717,7 +1717,7 @@ After this process is complete, the PublisherServer object in the Compute applic
 #### `clean`
 
 ```sh
-npx @fastly/compute-js-static-publish clean \
+npx @fastly/compute-js-static-publish@beta clean \
   [--delete-expired-collections] \
   [--dry-run]
 ```
@@ -1743,7 +1743,7 @@ This can include expired collection indexes and orphaned content assets.
 #### `collections list`
 
 ```sh
-npx @fastly/compute-js-static-publish collections list
+npx @fastly/compute-js-static-publish@beta collections list
 ```
 Lists all collections currently published in storage.
 
@@ -1762,7 +1762,7 @@ Lists all collections currently published in storage.
 #### `collections promote`
 
 ```sh
-npx @fastly/compute-js-static-publish collections promote \
+npx @fastly/compute-js-static-publish@beta collections promote \
   --collection-name=preview-42 \
   --to=live \
   [--expires-in=7d | --expires-at=2025-06-01T00:00Z | --expires-never]
@@ -1802,7 +1802,7 @@ If a Service ID is found, the command then purges the surrogate key `<publishId>
 #### `collections update-expiration`
 
 ```sh
-npx @fastly/compute-js-static-publish collections update-expiration \
+npx @fastly/compute-js-static-publish@beta collections update-expiration \
   --collection-name=preview-42 \
   --expires-in=3d | --expires-at=2025-06-01T00:00Z | --expires-never
 ```
@@ -1832,13 +1832,13 @@ Sets or updates the expiration time of an existing collection.
 #### `collections delete`
 
 ```sh
-npx @fastly/compute-js-static-publish collections delete \
+npx @fastly/compute-js-static-publish@beta collections delete \
   --collection-name=preview-42
 ```
 
 Deletes a collection index from storage. The content files will remain as they may still be referenced by other collection indexes.
 
-Use the `npx @fastly/compute-js-static-publish clean` command afterward to remove content files that are no longer referenced by any collection.
+Use the `npx @fastly/compute-js-static-publish@beta clean` command afterward to remove content files that are no longer referenced by any collection.
 
 If a Service ID is found, the command then purges the surrogate key `<publishId>-<collectionName>`, so that the service stops serving cached responses of the deleted collection. This uses the same options as [`publish-content`](#publish-content).
 
@@ -1959,7 +1959,7 @@ async function handleRequest(event) {
 
 ## 📚 Next Steps
 
-- View CLI command help: `npx @fastly/compute-js-static-publish --help`
+- View CLI command help: `npx @fastly/compute-js-static-publish@beta --help`
 - Use in CI to automate branch previews
 - Visit [https://developer.fastly.com](https://developer.fastly.com) for Compute platform docs
 
