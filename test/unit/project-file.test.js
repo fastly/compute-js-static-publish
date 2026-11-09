@@ -147,6 +147,13 @@ describe('project file round trip', () => {
     },
     'kv-public-dir': { ...base, rootDir: '/project/site', publicDir: '/project/site/public', notFoundPageFilename: undefined },
     'working dir outside the app': { ...base, staticPublisherWorkingDir: '/project/static-publisher' },
+    'hono': { ...base, template: loadAppTemplate('hono'), build: { hono: { extensionsDir: '/project/hono-extensions' } } },
+    'hono with a custom extensions folder and options': {
+      ...base,
+      template: loadAppTemplate('hono'),
+      build: { hono: { extensionsDir: '/project/src/extensions' } },
+      templateOptions: { hono: { bindings: { config: 'ConfigStore:site' }, middleware: { auth: { realm: 'site' } } } },
+    },
     'kv-collection-selection': {
       ...base,
       collectionSelection: {
@@ -182,7 +189,7 @@ describe('project file round trip', () => {
       const managed = normalizeProjectManaged(raw.managed, errors);
       assert.deepEqual(errors, []);
       assert.equal(raw.managed.staticPublishVersion, '8.1.0');
-      assert.equal(raw.managed.template, 'plain');
+      assert.equal(raw.managed.template, config.template.name);
 
       const back = appConfigFromProject(rc, publishContent, managed, {
         projectDir: '/project',
