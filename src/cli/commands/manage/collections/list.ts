@@ -7,7 +7,6 @@ import path from 'node:path';
 
 import { type OptionDefinition } from 'command-line-args';
 
-import { type AssetEntryMap, countHiddenEntries } from '../../../../models/assets/index.js';
 import { decodeIndexMetadata, getUnsupportedIndexFeatures } from '../../../../models/server/index.js';
 import { isExpired } from '../../../../models/time/index.js';
 import { parseCommandLine } from '../../../util/args.js';
@@ -150,7 +149,8 @@ export async function action(actionArgs: string[]) {
       }
       const indexKey = indexesPrefix + collection;
 
-      const indexEntryInfo = await storageProvider.getStorageEntry(indexKey);
+      // Only the metadata: the index itself can be large.
+      const indexEntryInfo = await storageProvider.getStorageEntryInfo(indexKey);
       if (indexEntryInfo == null) {
         throw new Error(`❌ Can't load storage entry ${indexesPrefix + collection}`);
       }
@@ -165,12 +165,10 @@ export async function action(actionArgs: string[]) {
         console.log(`    Published  : ${new Date(indexMetadata.publishedTime * 1000)}`);
       }
       
-      try {
-        const assetEntryMap = (await new Response(indexEntryInfo.data).json()) as AssetEntryMap;
-        const fileCount = Object.keys(assetEntryMap).length;
-        console.log(`    Files      : ${fileCount} (${countHiddenEntries(assetEntryMap)} hidden)`);
-      } catch {
-        console.log('    Files      : unknown (cannot read the index)');
+      if (indexMetadata.fileCount != null) {
+        console.log(`    Files      : ${indexMetadata.fileCount} (${indexMetadata.hiddenFileCount ?? 0} hidden)`);
+      } else {
+        console.log('    Files      : unknown (published with an older version)');
       }
 
       if (indexMetadata.requires != null) {

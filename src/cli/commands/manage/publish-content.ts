@@ -633,6 +633,9 @@ export async function action(actionArgs: string[]) {
     expirationTime: expirationTime ?? undefined,
     // A server that does not support hidden files must not serve this collection.
     requires: hiddenCount > 0 ? [ HIDDEN_INDEX_FEATURE ] : undefined,
+    // For collections list, which then reads only the metadata.
+    fileCount: Object.keys(assetsIndex).length,
+    hiddenFileCount: hiddenCount,
   };
 
   const indexFileName = `index_${collectionName}.json`;
