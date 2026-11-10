@@ -23,8 +23,8 @@ import { MANAGED_APP_DIR, PROJECT_FILE_NAME, RC_FILE_NAME } from '../../../model
 
 // An environment variable for the tests of this package only. The tests run a
 // version that is not on npm, so they give here the spec of this package for
-// the ejected app.
-const PACKAGE_SPEC_ENV = 'CJSP_TEST_EJECT_PACKAGE_SPEC';
+// the ejected app. eject shows a warning when it is set.
+const PACKAGE_SPEC_ENV = 'CJSP_TEST_ONLY_EJECT_PACKAGE_SPEC';
 
 function help() {
   console.log(`\
@@ -131,6 +131,9 @@ export async function action(actionArgs: string[]) {
   if (testSpec == null && !isPublished(version)) {
     fail(`Eject needs a version of ${THIS_PACKAGE} that is published on npm. ${version} is not.`);
     return;
+  }
+  if (testSpec != null) {
+    console.warn(`⚠️ ${PACKAGE_SPEC_ENV} is set (for the tests of this package only): the ejected app gets ${THIS_PACKAGE} ${testSpec}, and the check that ${version} is on npm is skipped.`);
   }
   const packageSpec = testSpec ?? `^${version}`;
 
