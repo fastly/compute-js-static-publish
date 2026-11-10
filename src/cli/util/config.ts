@@ -134,6 +134,11 @@ export async function loadProjectFile(): Promise<StaticPublishProjectNormalized>
   const rc = normalizeStaticPublisherRc(configRaw, errors);
   if (!('publishContent' in configRaw) || configRaw.publishContent == null || typeof configRaw.publishContent !== 'object') {
     errors.push('publishContent must be specified.');
+  } else {
+    // Checked here, so that each command shows the errors in the same way.
+    const publishContentErrors: string[] = [];
+    normalizePublishContentConfig(configRaw.publishContent, publishContentErrors);
+    errors.push(...publishContentErrors.map(error => `publishContent: ${error}`));
   }
   let managed: StaticPublishProjectManaged | null = {};
   if ('managed' in configRaw && configRaw.managed != null) {

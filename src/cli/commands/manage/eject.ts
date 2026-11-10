@@ -56,6 +56,16 @@ Global Options:
 `);
 }
 
+// True if dir is a directory in parent (not parent itself).
+function isInside(dir: string, parent: string): boolean {
+  const relative = path.relative(parent, dir);
+  return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative);
+}
+
+function isSameOrInside(dir: string, parent: string): boolean {
+  return dir === parent || isInside(dir, parent);
+}
+
 function isPublished(version: string): boolean {
   const result = child_process.spawnSync('npm', [ 'view', `${THIS_PACKAGE}@${version}`, 'version' ], { encoding: 'utf-8' });
   return result.status === 0 && result.stdout.trim() === version;
@@ -95,8 +105,13 @@ export async function action(actionArgs: string[]) {
 
   const projectDir = path.resolve();
   const appDir = path.resolve(dirValue ?? './compute-js');
-  if (appDir === projectDir || !appDir.startsWith(projectDir + path.sep) || appDir.startsWith(path.resolve(MANAGED_APP_DIR))) {
+  const workingDir = path.resolve(project.rc.staticPublisherWorkingDir);
+  if (!isInside(appDir, projectDir) || isSameOrInside(appDir, path.resolve(MANAGED_APP_DIR))) {
     fail(`--dir must be a directory in the project dir, and not in ${MANAGED_APP_DIR}.`);
+    return;
+  }
+  if (isSameOrInside(appDir, workingDir)) {
+    fail(`--dir must not be the working directory (${rootRelative(workingDir)}) or a directory in it. Use another --dir, or change staticPublisherWorkingDir.`);
     return;
   }
   if (fs.existsSync(appDir) && !force) {
