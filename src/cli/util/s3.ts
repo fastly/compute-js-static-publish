@@ -3,51 +3,20 @@
  * Licensed under the MIT license. See LICENSE file for details.
  */
 
-import { S3Client, HeadObjectCommand } from '@aws-sdk/client-s3';
-import type { BuildMiddleware, BuildHandlerArguments } from '@smithy/types';
-
-const DUMMY_KEY = 'dummy.dat'; // placeholder, never sent over the network
-
 /**
- * Resolve the AWS S3 hostname for a given region and bucket.
- * - Uses client-s3's own endpoint resolution logic (so it's always accurate).
- * - No network calls; intercepts at the build step.
+ * The AWS S3 host name of a bucket, for the backend of the app:
+ * <bucket>.s3.<region>.amazonaws.com. The server uses the same host name for a
+ * bucket without an endpoint (see objectUrl() in
+ * src/server/storage/s3-storage-provider.ts). It needs no credentials and no
+ * network.
+ *
+ * Returns null for a bucket name with a dot: under HTTPS, such a name does not
+ * match the certificate of *.s3.<region>.amazonaws.com. Such a bucket needs
+ * an endpoint, so that the bucket is in the path of the URL.
  */
-export async function findHostnameForAwsS3RegionAndBucket(region: string, bucket: string): Promise<string> {
-  const client = new S3Client({ region });
-  let hostname = '';
-
-  const captureHostname: BuildMiddleware<any, any> =
-    (_next) => async (args: BuildHandlerArguments<any>) => {
-      if (typeof args.request === 'object' &&
-        args.request != null &&
-        'hostname' in args.request &&
-        typeof args.request['hostname'] === 'string'
-      ) {
-        hostname = args.request['hostname'];
-      }
-      const err: any = new Error('SHORT_CIRCUIT');
-      err.name = 'SHORT_CIRCUIT';
-      throw err; // short-circuit before auth/send
-    };
-
-  client.middlewareStack.add(captureHostname, {
-    name: 'captureS3Hostname',
-    step: 'build',
-    priority: 'high', // run early in build
-  });
-
-  try {
-    await client.send(new HeadObjectCommand({ Bucket: bucket, Key: DUMMY_KEY }));
-  } catch (e: unknown) {
-    if (
-      typeof e !== 'object' ||
-      e == null ||
-      !('name' in e) ||
-      e.name !== 'SHORT_CIRCUIT'
-    ) {
-      throw e;
-    }
+export function findHostnameForAwsS3RegionAndBucket(region: string, bucket: string): string | null {
+  if (bucket.includes('.')) {
+    return null;
   }
-  return hostname;
+  return `${bucket}.s3.${region}.amazonaws.com`;
 }
