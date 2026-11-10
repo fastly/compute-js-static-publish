@@ -221,7 +221,7 @@ export async function startServe(computeJsDir, { env, timeoutMs = 300_000, comma
     }
     try {
       await fetch(baseUrl + '/', { signal: AbortSignal.timeout(2000) });
-      return { baseUrl, stop, getOutput: () => output };
+      return { baseUrl, pid: child.pid, stop, getOutput: () => output };
     } catch {
       await sleep(1000);
     }
