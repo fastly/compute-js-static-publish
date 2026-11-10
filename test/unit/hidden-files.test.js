@@ -109,6 +109,7 @@ describe('hiddenItems in publish-content.config.js', () => {
   test('changes a glob pattern into a regex', () => {
     const { result } = normalize({ hiddenItems: [ '/drafts/**/*.html' ] });
     assert.match(result.hiddenItems[0], /^re:\//);
+    assert.deepEqual(result.hiddenItemsAsWritten, [ '/drafts/**/*.html' ], 'the items as written, for the output');
     const patterns = parseItemPatterns(result.hiddenItems);
     assert.equal(testItemPatterns(patterns, '/drafts/a/b.html'), true);
     assert.equal(testItemPatterns(patterns, '/public/a.html'), false);

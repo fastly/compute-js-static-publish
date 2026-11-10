@@ -12,6 +12,7 @@ const config = {
   // excludeDotFiles: true,
   // includeWellKnown: true,
   // assetInclusionTest: (assetKey) => true,
+  // hiddenItems: [],
   // contentCompression: [ 'br', 'gzip' ],
   // brotliQuality: 11,
   // contentTypes: [

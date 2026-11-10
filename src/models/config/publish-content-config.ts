@@ -103,6 +103,9 @@ export type PublishContentConfigNormalized = {
   includeWellKnown: boolean,
   assetInclusionTest: AssetInclusionTest | null,
   hiddenItems: string[],
+  // hiddenItems as the config file has them (globs not converted), for the
+  // output of publish-content.
+  hiddenItemsAsWritten: string[],
   contentCompression: ContentCompressionTypes[],
   brotliQuality: number | undefined,
   contentTypes: ContentTypeDef[],

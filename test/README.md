@@ -36,6 +36,7 @@ checkout through a `file:` dependency. The tests need network access for `npm in
 | `dev.test.js`            | Runs `dev` in a managed project: it generates the app in `.static-publish/app`, installs it with `npm ci`, and serves it. | The Fastly CLI                            |
 | `eject.test.js`          | Ejects managed projects, and compares the result with an ejected scaffold of the same flags.                   | The Fastly CLI, for the serve test        |
 | `managed-deploy.test.js` | Deploys a managed project two times. The second deploy does nothing, because the fingerprint did not change. **It replaces the active version of the service.** | The Fastly CLI, and the variables below   |
+| `hidden-files.test.js`   | Publishes hidden files with `--local`, and checks that the server does not serve them for a request, but serves a hidden fallback page. | The Fastly CLI                            |
 | `scaffold-golden.test.js` | Scaffolds apps with the CLI, and checks that the files are exactly the golden files of `test/golden/`.           | Nothing                                   |
 | `global-options.test.js` | Checks `--version` and `--project-dir`.                                                                          | Nothing                                   |
 | `template-hooks.test.js` | Checks the template hooks (`run-template-hook` and the npm scripts that call it), and `npm run dev:watch` with its watch script. | The Fastly CLI, for `dev:watch`           |
