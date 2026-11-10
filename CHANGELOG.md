@@ -31,6 +31,7 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 
 ### Changed
 
+- Scaffolding: the `src/index.js` of the `plain` app calls `serveRequest()` with `fallback: false`, then has the place for your own code, and then calls `serveFallback()` for the SPA file or the 404 page. Thus your code runs for each request that no published file matches, also when the collection has a fallback page. Code that must run before the published files goes before `serveRequest()`.
 - Scaffolding: the app has `@fastly/compute-js-static-publish` in `dependencies`. It was in `devDependencies`. The code of the app imports it, and the `postinstall` script of the app runs it, so `npm ci --omit=dev` needs it.
 - `collectionSelector.fromCookie()`: the activate and reset paths now redirect with `308`. Before, they used `302`.
 - Collection names have a rule: a DNS label (lowercase `a-z`, `0-9`, and `-`, from 1 to 63 characters, with no `-` at the start or the end). Thus a name is safe in storage keys, in the surrogate key of the purge, in a cookie, and in a hostname.
