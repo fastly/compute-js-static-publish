@@ -13,6 +13,10 @@ export type IndexMetadata = {
   // A newer CLI adds a feature only if the published content uses it.
   // The metadata keeps them as one string, separated by commas.
   requires?: string[],
+  // The number of files in the index, and how many of them are hidden, for
+  // collections list. A collection published by an older version has none.
+  fileCount?: number,
+  hiddenFileCount?: number,
   // Fields that this version does not know. They are kept, so that a command
   // that writes the metadata again (for example promote) does not remove them.
   otherFields?: Record<string, string>,
@@ -27,7 +31,7 @@ export const SUPPORTED_INDEX_FEATURES: readonly string[] = [
   HIDDEN_INDEX_FEATURE,
 ];
 
-const KNOWN_FIELDS = [ 'publishedTime', 'expirationTime', 'requires' ];
+const KNOWN_FIELDS = [ 'publishedTime', 'expirationTime', 'requires', 'fileCount', 'hiddenFileCount' ];
 
 export function encodeIndexMetadata(indexMetadata: IndexMetadata): Record<string, string> {
   const result: Record<string, string> = { ...indexMetadata.otherFields };
@@ -47,6 +51,13 @@ export function encodeIndexMetadata(indexMetadata: IndexMetadata): Record<string
       }
     }
     result['requires'] = indexMetadata.requires.join(',');
+  }
+
+  for (const field of [ 'fileCount', 'hiddenFileCount' ] as const) {
+    const value = indexMetadata[field];
+    if (value != null && Number.isInteger(value) && value >= 0) {
+      result[field] = String(value);
+    }
   }
 
   return result;
@@ -73,10 +84,17 @@ export function decodeIndexMetadata(obj: Record<string, string> | undefined): In
     }
   }
 
+  const count = (field: string) => {
+    const value = getMetadataFieldValue(obj, field);
+    return value != null && /^\d+$/.test(String(value)) ? Number(value) : undefined;
+  };
+
   return {
     publishedTime: !isNaN(publishedTime) ? publishedTime : undefined,
     expirationTime: !isNaN(expirationTime) ? expirationTime : undefined,
     requires: requires.length > 0 ? requires : undefined,
+    fileCount: count('fileCount'),
+    hiddenFileCount: count('hiddenFileCount'),
     otherFields,
   };
 }
