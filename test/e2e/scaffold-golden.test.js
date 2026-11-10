@@ -23,6 +23,9 @@ function writeFixture(dir) {
   fs.writeFileSync(path.resolve(dir, 'public/spa.html'), '<h1>SPA</h1>\n');
   fs.writeFileSync(path.resolve(dir, 'public/404.html'), '<h1>Not found</h1>\n');
   fs.writeFileSync(path.resolve(dir, 'public/static/app.js'), 'x\n');
+  // For kv-public-dir: a root dir with a public dir in it, and no 404 page.
+  fs.mkdirSync(path.resolve(dir, 'site/public'), { recursive: true });
+  fs.writeFileSync(path.resolve(dir, 'site/public/index.html'), '<h1>Home</h1>\n');
   fs.writeFileSync(path.resolve(dir, 'package.json'), JSON.stringify({
     name: 'golden',
     private: true,
@@ -71,7 +74,19 @@ const cases = {
     '--service-id', 'SVC123', '--name', 'my-site', '--description', 'My site', '--author', 'me@example.com',
     '--publish-id', 'pub1', '--auto-index', 'index.htm', '--auto-ext', '.htm',
   ],
+  'kv-escaping': [
+    '--root-dir', './public', '--kv-store-name', 'site.content',
+    '--name', 'my-site', '--author', 'Me "Myself" <me@example.com>', '--description', 'A site with \\ and "quotes"',
+  ],
+  'kv-public-dir': [ '--root-dir', './site', '--public-dir', './site/public', '--kv-store-name', 'site-content' ],
+  's3-endpoint': [
+    '--root-dir', './public', '--storage-mode', 's3', '--s3-region', 'us-east-1', '--s3-bucket', 'my-bucket',
+    '--s3-endpoint', 'https://s3.example.com/',
+  ],
 };
+// s3-aws is only in the unit test of generateApp(): without --s3-endpoint,
+// scaffold gets the hostname of the bucket from AWS, which needs AWS
+// credentials and a real bucket.
 
 describe('scaffold writes the golden files', () => {
   const dirs = [];
