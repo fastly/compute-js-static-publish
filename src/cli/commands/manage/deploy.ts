@@ -19,6 +19,7 @@ import { parseCommandLine } from '../../util/args.js';
 import { detectProjectMode } from '../../util/config.js';
 import { readServiceId } from '../../util/fastly-toml.js';
 import { getOwnPackageDir, getOwnVersion } from '../../util/package.js';
+import { appFastlyCommand } from '../run-dev-watch.js';
 import { fail, isNonInteractive } from '../../util/output.js';
 import { loadServiceId } from '../../util/service-id.js';
 import { isS3StorageConfigRc } from '../../../models/config/static-publish-rc.js';
@@ -58,8 +59,7 @@ Global Options:
 }
 
 function runFastly(appDir: string, args: string[], apiToken: string) {
-  const appFastly = path.resolve(appDir, 'node_modules/.bin/fastly');
-  const fastly = fs.existsSync(appFastly) ? appFastly : 'fastly';
+  const fastly = appFastlyCommand(appDir);
   console.log(`▶️ fastly ${args.join(' ')}`);
   return child_process.spawnSync(fastly, args, {
     cwd: appDir,
@@ -141,7 +141,8 @@ export async function action(actionArgs: string[]) {
     console.warn(`  * Add @fastly/compute-js-static-publish as a dev dependency of the project, and run it from there.`);
   }
 
-  const { fingerprint } = await managedAppState(path.resolve(), project);
+  const state = await managedAppState(path.resolve(), project);
+  const { fingerprint } = state;
   const staticPublishVersion = getOwnVersion();
 
   if (serviceId != null && !force) {
@@ -153,7 +154,7 @@ export async function action(actionArgs: string[]) {
     }
   }
 
-  const { appDir } = await prepareManagedApp(path.resolve(), project);
+  const { appDir } = await prepareManagedApp(path.resolve(), project, state);
 
   const build = runFastly(appDir, [ 'compute', 'build' ], apiToken.apiToken);
   if (build.error != null || build.status !== 0) {
