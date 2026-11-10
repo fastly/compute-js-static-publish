@@ -19,6 +19,10 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 - `scaffold --default-collection-name`: the collection to serve when no collection is selected. The default is `live`, as before.
 - `scaffold --template`: the template of the app's code. `plain`, the default, is the only template.
 
+### Changed
+
+- Scaffolding: the app has `@fastly/compute-js-static-publish` in `dependencies`. It was in `devDependencies`. The code of the app imports it, and the `postinstall` script of the app runs it, so `npm ci --omit=dev` needs it.
+
 ### Fixed
 
 - `scaffold` now escapes the values that it writes into `fastly.toml`. Before, a `"` or a `\` in `--name`, `--description`, or `--author`, or a KV Store name with a character such as `.`, gave a `fastly.toml` that was not valid.
