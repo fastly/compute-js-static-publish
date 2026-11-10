@@ -9,6 +9,13 @@ import * as path from 'node:path';
 
 import { TEMPLATE_WATCH_SCRIPT } from './scaffold/generate-app.js';
 
+// The Fastly CLI of the app (its node_modules/.bin/fastly) if it has one, or
+// else fastly from the PATH.
+export function appFastlyCommand(appDir: string): string {
+  const appFastly = path.resolve(appDir, 'node_modules/.bin/fastly');
+  return fs.existsSync(appFastly) ? appFastly : 'fastly';
+}
+
 export type ServeResult = {
   status: number | null,
   signal: NodeJS.Signals | null,
@@ -21,8 +28,7 @@ export type ServeResult = {
 // the app dir, and then the Fastly CLI builds the app again. The Fastly CLI of
 // the app is used, if it has one.
 export async function serveApp(appDir: string, serveArgs: string[]): Promise<ServeResult> {
-  const appFastly = path.resolve(appDir, 'node_modules/.bin/fastly');
-  const fastly = fs.existsSync(appFastly) ? appFastly : 'fastly';
+  const fastly = appFastlyCommand(appDir);
 
   const watchScript = path.resolve(appDir, TEMPLATE_WATCH_SCRIPT);
   const watcher = serveArgs.includes('--watch') && fs.existsSync(watchScript) ?

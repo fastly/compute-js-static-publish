@@ -129,9 +129,15 @@ export async function managedAppState(projectDir: string, project: StaticPublish
 }
 
 // Generate the app of a managed project in .static-publish/app, and install
-// its dependencies if necessary.
-export async function prepareManagedApp(projectDir: string, project: StaticPublishProjectNormalized) {
-  const { appConfig, files, fingerprint } = await managedAppState(projectDir, project);
+// its dependencies if necessary. A command that already has the result of
+// managedAppState() passes it, so that it is not computed again (in S3 mode
+// without s3.endpoint, that is a network lookup).
+export async function prepareManagedApp(
+  projectDir: string,
+  project: StaticPublishProjectNormalized,
+  state?: Awaited<ReturnType<typeof managedAppState>>,
+) {
+  const { appConfig, files, fingerprint } = state ?? await managedAppState(projectDir, project);
   console.log(`🛠️ Generating the app in ${MANAGED_APP_DIR}...`);
   const written = writeManagedAppFiles(appConfig.appDir, files);
   if (written.length > 0) {
