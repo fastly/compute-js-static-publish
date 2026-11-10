@@ -123,6 +123,11 @@ export async function action(actionArgs: string[]) {
           reasons.push(deployed.staticPublishVersion !== running ?
             `The version of this package changed: ${deployed.staticPublishVersion} → ${running}.` :
             'The generated app changed.');
+          if (versionCheck.result === 'newer-cli' || versionCheck.result === 'missing') {
+            reasons.push(`Run 'upgrade' first, or deploy with --auto-upgrade: managed.staticPublishVersion (${versionCheck.recorded ?? 'missing'}) is not the version that runs (${running}).`);
+          } else if (versionCheck.result !== 'same') {
+            reasons.push(`deploy refuses: this project uses a newer version (${versionCheck.recorded}) than the version that runs (${running}).`);
+          }
         }
       }
     }

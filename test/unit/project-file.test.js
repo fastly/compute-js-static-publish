@@ -188,6 +188,27 @@ describe('project file round trip', () => {
     });
   }
 
+  test('without name, authors, and description, the app gets the defaults of scaffold', async () => {
+    const text = renderProjectFile(base, '/project', '8.1.0');
+    const dir = makeTempDir();
+    const file = path.join(dir, 'defaults.project.js');
+    fs.writeFileSync(file, text);
+    const raw = (await import(pathToFileURL(file).href)).default;
+    const errors = [];
+    const rc = normalizeStaticPublisherRc(raw, errors);
+    const publishContent = normalizePublishContentConfig(raw.publishContent, errors);
+    const managed = normalizeProjectManaged({ ...raw.managed, name: undefined, authors: undefined, description: undefined }, errors);
+    assert.deepEqual(errors, []);
+    const config = appConfigFromProject(rc, publishContent, managed, {
+      projectDir: '/project',
+      appDir: base.appDir,
+      staticPublishVersionSpec: base.staticPublishVersionSpec,
+      template: base.template,
+    });
+    assert.deepEqual([ config.name, config.author, config.description ], [ 'compute-js-static-site', 'you@example.com', 'Fastly Compute static site' ]);
+    assert.match(generateApp(config)['fastly.toml'], /^name = "compute-js-static-site"$/m);
+  });
+
   test('managed.template must be the name of a template', () => {
     const errors = [];
     assert.equal(normalizeProjectManaged({ template: 'hono' }, errors), null);
