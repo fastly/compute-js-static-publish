@@ -12,13 +12,15 @@ async function handleRequest(event) {
 
   const request = event.request;
 
+  // Do custom things here!
+  // Handle API requests, serve non-static responses, etc.
+  // serveRequest() serves the 404 page or the SPA file for each path that
+  // has no file, so code after it does not run for those requests.
+
   const response = await publisherServer.serveRequest(request);
   if (response != null) {
     return response;
   }
-
-  // Do custom things here!
-  // Handle API requests, serve non-static responses, etc.
 
   return new Response('Not found', { status: 404 });
 }
