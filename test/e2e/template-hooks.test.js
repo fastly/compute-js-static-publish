@@ -14,6 +14,7 @@ import path from 'node:path';
 import { after, before, describe, test } from 'node:test';
 
 import {
+  CLI_PATH,
   makeTempDir,
   removeDir,
   run,
@@ -153,5 +154,54 @@ describe('npm run dev:watch in a scaffolded app', { skip: skipUnlessFastlyCli() 
     await server.stop();
     await new Promise(resolve => setTimeout(resolve, 1000));
     assert.equal(isRunning(pid), false, 'the watch script stopped with the server');
+  });
+});
+
+describe('run-dev-watch stops its children when it gets a signal', { skip: skipUnlessFastlyCli() }, () => {
+  let dir;
+  let computeJsDir;
+  let server;
+
+  before(async () => {
+    dir = makeTempDir('template-watch-signal');
+    writeFixtureContent(path.resolve(dir, 'public'));
+    computeJsDir = scaffoldApp(dir, [ '--kv-store-name', 'e2e-content' ]);
+    fs.mkdirSync(path.resolve(computeJsDir, 'scripts'), { recursive: true });
+    fs.writeFileSync(path.resolve(computeJsDir, 'scripts/template_watch.js'),
+      `import fs from 'node:fs';\nfs.writeFileSync('../watch-pid', String(process.pid));\nsetInterval(() => {}, 1000);\n`);
+    runCli([ 'publish-content', '--local' ], { cwd: computeJsDir });
+    // The CLI itself, without npm, so that the signal goes only to the CLI.
+    server = await startServe(computeJsDir, {
+      command: (addr) => [ process.execPath, [ CLI_PATH, 'run-dev-watch', '--addr', addr ] ],
+    });
+  });
+
+  after(async () => {
+    await server?.stop();
+    if (dir != null) {
+      removeDir(dir);
+    }
+  });
+
+  const isRunning = (pid) => {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  test('SIGTERM to the CLI stops fastly compute serve and the watch script', async () => {
+    const watchPid = Number(fs.readFileSync(path.resolve(dir, 'watch-pid'), 'utf-8'));
+    assert.equal(isRunning(watchPid), true, 'the watch script runs');
+
+    process.kill(server.pid, 'SIGTERM');
+    const end = Date.now() + 30_000;
+    const answers = async () => fetch(server.baseUrl + '/', { signal: AbortSignal.timeout(2000) }).then(() => true, () => false);
+    while (isRunning(server.pid) || isRunning(watchPid) || await answers()) {
+      assert.ok(Date.now() < end, `still running: cli ${isRunning(server.pid)}, watch script ${isRunning(watchPid)}, server ${await answers()}\n${server.getOutput()}`);
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
   });
 });
