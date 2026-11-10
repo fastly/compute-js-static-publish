@@ -240,7 +240,7 @@ The app also has a `dev:watch` script:
 "dev:watch":   "compute-js-static-publish run-dev-watch"
 ```
 
-`npm run dev:watch` runs `fastly compute serve --watch`, which builds and restarts the app when a file in the app directory changes. Options after `--` go to `fastly compute serve`, for example `npm run dev:watch -- --addr=127.0.0.1:8080`. If the app has `scripts/template_watch.js`, that file runs with Node.js next to the Fastly CLI, until the Fastly CLI stops. Use it to watch files outside the app directory: when they change, write a file in the app directory, and the Fastly CLI builds the app again.
+`npm run dev:watch` runs `fastly compute serve --watch`, which builds and restarts the app when a file in the app directory changes. Options after `--` go to `fastly compute serve`, for example `npm run dev:watch -- --addr=127.0.0.1:8080`. If the app has `scripts/template_watch.js`, that file runs with Node.js next to the Fastly CLI, until the Fastly CLI stops. Use it to watch files outside the app directory: when they change, write a file in the app directory, and the Fastly CLI builds the app again. `dev:watch` does not work on Windows.
 
 ## ⚙️ Configuring `static-publish.rc.js`
 
