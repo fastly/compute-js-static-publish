@@ -297,7 +297,7 @@ describe('hono extensions in a managed project', { skip: skipUnlessFastlyCli() }
     const ejectDir = makeTempDir('hono-ext-eject');
     try {
       fs.cpSync(projectDir, ejectDir, { recursive: true, filter: (src) => !src.includes(`${path.sep}.static-publish`) });
-      const result = runCli([ 'eject' ], { cwd: ejectDir, env: { CJSP_TEST_EJECT_PACKAGE_SPEC: `file:${REPO_DIR}`, FASTLY_SERVICE_ID: '' } });
+      const result = runCli([ 'eject' ], { cwd: ejectDir, env: { CJSP_TEST_ONLY_EJECT_PACKAGE_SPEC: `file:${REPO_DIR}`, FASTLY_SERVICE_ID: '' } });
       assert.equal(result.status, 0, result.output);
       const appDir = path.resolve(ejectDir, 'compute-js');
       assert.match(fs.readFileSync(path.resolve(appDir, 'static-publish.rc.js'), 'utf-8'), /extensionsDir: "\.\.\/hono-extensions"/);
