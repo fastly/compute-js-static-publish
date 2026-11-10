@@ -19,18 +19,26 @@ async function handleRequest(event) {
     return selection.response;
   }
 
-  // Do custom things here!
-  // Handle API requests, serve non-static responses, etc.
-  // serveRequest() serves the 404 page or the SPA file for each path that
-  // has no file, so code after it does not run for those requests.
+  // Code that must run before the published files goes here.
 
+  // Serve the published file for the request. With fallback: false, a path
+  // that has no file does not get the SPA file or the 404 page here.
   const response = await publisherServer.serveRequest(request, {
     collectionName: selection.collectionName,
     pathname: selection.pathname,
+    fallback: false,
   });
   if (response != null) {
     return response;
   }
 
-  return new Response('Not found', { status: 404 });
+  // Do custom things here!
+  // Handle API requests, serve non-static responses, etc. This code runs only
+  // for the requests that no published file matches.
+
+  // When nothing else matches, serve the SPA file or the 404 page.
+  const fallback = await publisherServer.serveFallback(request, {
+    collectionName: selection.collectionName,
+  });
+  return fallback ?? new Response('Not found', { status: 404 });
 }
