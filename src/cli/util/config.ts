@@ -522,9 +522,11 @@ export const normalizePublishContentConfig = buildNormalizeFunctionForObject<Pub
     errors.push('assetInclusionTest, if specified, must be null or a function.');
   }
 
+  let hiddenItemsAsWritten: string[] = [];
   if (!isSpecified(config, 'hiddenItems')) {
     hiddenItems = [];
   } else {
+    hiddenItemsAsWritten = (Array.isArray(hiddenItems) ? hiddenItems : [ hiddenItems ]).filter((x): x is string => typeof x === 'string');
     hiddenItems = normalizeItemList('hiddenItems', hiddenItems, errors);
   }
 
@@ -590,6 +592,7 @@ export const normalizePublishContentConfig = buildNormalizeFunctionForObject<Pub
     includeWellKnown,
     assetInclusionTest,
     hiddenItems,
+    hiddenItemsAsWritten,
     contentCompression,
     brotliQuality,
     contentTypes,
