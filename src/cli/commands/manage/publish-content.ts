@@ -362,7 +362,7 @@ export async function action(actionArgs: string[]) {
     console.warn(`⚠️ Cannot parse hiddenItems item index ${i}: '${x}', skipping...`);
   });
   if (hiddenItems.length > 0) {
-    console.log(`✔️ Hidden items: ${publishContentConfig.hiddenItems.join(', ')}`);
+    console.log(`✔️ Hidden items: ${publishContentConfig.hiddenItemsAsWritten.join(', ')}`);
   }
 
   // ### Collection name that we're currently publishing
