@@ -40,7 +40,9 @@ Description:
   After the first deploy, the Service ID is written into managed.serviceId in
   ${PROJECT_FILE_NAME}.
 
-  In an ejected app, this runs 'fastly compute publish'.
+  In an ejected app, this runs 'fastly compute publish', with --comment,
+  --fastly-service-id (as --service-id), and --fastly-api-token. --force and
+  --auto-upgrade are only for a managed project.
 
 Options:
   --force                          Deploy also when the fingerprint did not change.
@@ -96,7 +98,32 @@ export async function action(actionArgs: string[]) {
   } = parsed.commandLineOptions;
 
   if (detectProjectMode() === 'ejected') {
-    const result = child_process.spawnSync('fastly', [ 'compute', 'publish' ], { stdio: 'inherit' });
+    // fastly compute publish always builds and deploys, and an ejected app has
+    // no managed.staticPublishVersion.
+    for (const [ option, value ] of [ [ '--force', force ], [ '--auto-upgrade', autoUpgrade ] ] as const) {
+      if (value) {
+        fail(`${option} is only for a managed project. In an ejected app, deploy runs 'fastly compute publish', which always deploys.`);
+        return;
+      }
+    }
+    const publishArgs = [ 'compute', 'publish' ];
+    if (typeof comment === 'string' && comment !== '') {
+      publishArgs.push('--comment', comment);
+    }
+    if (typeof fastlyServiceId === 'string' && fastlyServiceId !== '') {
+      publishArgs.push('--service-id', fastlyServiceId);
+    }
+    if (isNonInteractive()) {
+      publishArgs.push('--non-interactive');
+    }
+    const env = typeof fastlyApiToken === 'string' && fastlyApiToken !== '' ?
+      { ...process.env, FASTLY_API_TOKEN: fastlyApiToken } :
+      process.env;
+    console.log(`▶️ fastly ${publishArgs.join(' ')}`);
+    const result = child_process.spawnSync(appFastlyCommand(path.resolve()), publishArgs, {
+      env,
+      stdio: [ isNonInteractive() ? 'ignore' : 'inherit', 'inherit', 'inherit' ],
+    });
     if (result.error != null || result.status !== 0) {
       fail(`'fastly compute publish' failed.`);
     }
