@@ -69,7 +69,8 @@ describe('buildManagedLockfile', () => {
     assert.equal(lock.version, '0.1.0');
     assert.equal(lock.packages[''].name, 'my-site');
     assert.equal(lock.packages[''].version, '0.1.0');
-    assert.deepEqual(lock.packages[''].devDependencies, { b: '^2.0.0', [THIS_PACKAGE]: 'file:/p/node_modules/@fastly/compute-js-static-publish' });
+    assert.deepEqual(lock.packages[''].dependencies, { a: '^1.0.0', [THIS_PACKAGE]: 'file:/p/node_modules/@fastly/compute-js-static-publish' });
+    assert.deepEqual(lock.packages[''].devDependencies, { b: '^2.0.0' });
     assert.deepEqual(lock.packages[`node_modules/${THIS_PACKAGE}`], { resolved: '../../node_modules/@fastly/compute-js-static-publish', link: true });
     assert.deepEqual(lock.packages['../../node_modules/@fastly/compute-js-static-publish'], {
       version: '8.1.0',

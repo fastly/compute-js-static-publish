@@ -81,7 +81,7 @@ export function buildManagedLockfile(templateLock: PackageLock, options: Managed
     root.name = options.appName;
   }
   root.version = options.appVersion;
-  root.devDependencies = { ...(root.devDependencies as Record<string, string> | undefined), [THIS_PACKAGE]: spec };
+  root.dependencies = { ...(root.dependencies as Record<string, string> | undefined), [THIS_PACKAGE]: spec };
   lock.packages[''] = root;
 
   lock.packages[`node_modules/${THIS_PACKAGE}`] = {
