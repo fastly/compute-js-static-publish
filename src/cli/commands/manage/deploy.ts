@@ -37,8 +37,9 @@ Description:
   'fastly compute deploy'. The comment of the new service version has the
   fingerprint of the app, so that 'status' and the next deploy can compare it.
 
-  After the first deploy, the Service ID is written into managed.serviceId in
-  ${PROJECT_FILE_NAME}.
+  After the first deploy, which makes a new service, the Service ID is written
+  into managed.serviceId in ${PROJECT_FILE_NAME}. A Service ID from
+  --fastly-service-id or FASTLY_SERVICE_ID does not change the file.
 
   In an ejected app, this runs 'fastly compute publish', with --comment,
   --fastly-service-id (as --service-id), and --fastly-api-token. --force and
@@ -208,7 +209,15 @@ export async function action(actionArgs: string[]) {
     return;
   }
 
-  if (project.managed.serviceId == null) {
+  // Write the Service ID into the project file only when it is the service of
+  // the project: a new service, or the one in the fastly.toml of the generated
+  // app. A Service ID from --fastly-service-id or FASTLY_SERVICE_ID is for this
+  // deploy only, so it does not change the committed file.
+  const oneOff = serviceIdResult?.source === 'commandline' || serviceIdResult?.source === 'env';
+  if (project.managed.serviceId == null && oneOff) {
+    console.log(`  * managed.serviceId is not set. The Service ID ${serviceId} came from ${serviceIdResult!.source === 'env' ? 'FASTLY_SERVICE_ID' : '--fastly-service-id'}, so ${PROJECT_FILE_NAME} was not changed.`);
+  }
+  if (project.managed.serviceId == null && !oneOff) {
     const projectFilePath = path.resolve(PROJECT_FILE_NAME);
     const updated = writeBackServiceId(fs.readFileSync(projectFilePath, 'utf-8'), serviceId);
     if (updated != null) {

@@ -8,6 +8,7 @@
 // and the variables below. The test replaces the active version of the service.
 
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import path from 'node:path';
 import { after, before, describe, test } from 'node:test';
 
@@ -40,6 +41,9 @@ describe('deploy of a managed project', { skip }, () => {
   test('the first deploy deploys, and records the fingerprint', () => {
     const first = run([ 'deploy', '--force', '--comment', 'e2e' ]);
     assert.match(first, new RegExp(`🎉 Deployed ${process.env.CJSP_TEST_DEPLOY_SERVICE_ID} version \\d+`));
+    // The Service ID came from FASTLY_SERVICE_ID, so the project file does not change.
+    assert.match(first, /came from FASTLY_SERVICE_ID, so static-publish\.project\.js was not changed/);
+    assert.match(fs.readFileSync(path.resolve(dir, 'static-publish.project.js'), 'utf-8'), /serviceId: undefined,/);
 
     const status = run([ 'status' ]);
     assert.match(statusValue(status, 'Deployed fingerprint'), new RegExp(`^${statusValue(status, 'Fingerprint')} \\(version \\d+\\)$`));
