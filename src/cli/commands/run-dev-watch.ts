@@ -33,13 +33,40 @@ export async function serveApp(appDir: string, serveArgs: string[]): Promise<Ser
   });
 
   console.log(`▶️ fastly compute serve ${serveArgs.join(' ')}`);
-  const result = await new Promise<ServeResult>(resolve => {
-    const child = child_process.spawn(fastly, [ 'compute', 'serve', ...serveArgs ], { cwd: appDir, stdio: 'inherit' });
-    child.on('error', error => resolve({ status: null, signal: null, error }));
-    child.on('exit', (status, signal) => resolve({ status, signal }));
-  });
-  watcher?.kill();
-  return result;
+  // The Fastly CLI of the app is a Node.js wrapper that starts the fastly
+  // binary, which starts Viceroy. The wrapper does not forward signals. Thus
+  // the Fastly CLI runs in its own process group, and a signal goes to the
+  // whole group.
+  const child = child_process.spawn(fastly, [ 'compute', 'serve', ...serveArgs ], { cwd: appDir, stdio: 'inherit', detached: true });
+
+  // A signal to this process (for example SIGTERM from a process manager, or
+  // SIGINT from Ctrl+C) goes to the Fastly CLI and to the watch script, so that
+  // nothing stays running. This process waits until the Fastly CLI stops.
+  const forward = (signal: NodeJS.Signals) => {
+    if (child.pid != null) {
+      try {
+        process.kill(-child.pid, signal);
+      } catch {
+        // The process group has already stopped.
+      }
+    }
+    watcher?.kill(signal);
+  };
+  const signals: NodeJS.Signals[] = [ 'SIGINT', 'SIGTERM', 'SIGHUP' ];
+  for (const signal of signals) {
+    process.on(signal, forward);
+  }
+  try {
+    return await new Promise<ServeResult>(resolve => {
+      child.on('error', error => resolve({ status: null, signal: null, error }));
+      child.on('exit', (status, signal) => resolve({ status, signal }));
+    });
+  } finally {
+    for (const signal of signals) {
+      process.off(signal, forward);
+    }
+    watcher?.kill();
+  }
 }
 
 // The dev:watch script of every app calls this: `fastly compute serve --watch`
