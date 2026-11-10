@@ -28,6 +28,9 @@ export async function serveApp(appDir: string, serveArgs: string[]): Promise<Ser
   const watcher = serveArgs.includes('--watch') && fs.existsSync(watchScript) ?
     child_process.spawn(process.execPath, [ watchScript ], { cwd: appDir, stdio: 'inherit' }) :
     undefined;
+  watcher?.on('error', error => {
+    console.error(`❌ Could not run ${TEMPLATE_WATCH_SCRIPT}: ${String(error)}`);
+  });
 
   console.log(`▶️ fastly compute serve ${serveArgs.join(' ')}`);
   const result = await new Promise<ServeResult>(resolve => {

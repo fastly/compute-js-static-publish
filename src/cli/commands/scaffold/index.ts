@@ -91,9 +91,9 @@ export type InitAppOptions = {
   notFoundPage: string | undefined,
   autoIndex: string[],
   autoExt: string[],
-  name: string | undefined,
-  author: string | undefined,
-  description: string | undefined,
+  name: string,
+  author: string,
+  description: string,
   serviceId: string | undefined,
   publishId: string | undefined,
   defaultCollectionName: string | undefined,
@@ -141,14 +141,15 @@ function buildOptions(
 
   const options = structuredClone(defaultOptions);
 
-  if (packageJson?.name !== undefined) {
-    options.name = packageJson!.name;
+  // Only string values: in a package.json, author can also be an object.
+  if (typeof packageJson?.name === 'string') {
+    options.name = packageJson.name;
   }
-  if (packageJson?.author !== undefined) {
-    options.author = packageJson!.author;
+  if (typeof packageJson?.author === 'string') {
+    options.author = packageJson.author;
   }
-  if (packageJson?.description !== undefined) {
-    options.description = packageJson!.description;
+  if (typeof packageJson?.description === 'string') {
+    options.description = packageJson.description;
   }
 
   {
@@ -833,7 +834,6 @@ export async function action(actionArgs: string[]) {
 
   console.log("Initializing Compute Application in " + computeJsDir + "...");
   fs.mkdirSync(computeJsDir);
-  fs.mkdirSync(path.resolve(computeJsDir, './src'));
 
   const resourceFiles = generateApp({
     appDir: computeJsDir,
