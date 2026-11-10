@@ -31,6 +31,9 @@ checkout through a `file:` dependency. The tests need network access for `npm in
 | `kv-store.test.js`       | Publishes to a real KV Store two times, and makes sure that the second publish uploads nothing. Then deletes the collection and cleans.          | The environment variables below           |
 | `s3.test.js`             | The same test with an S3-compatible bucket. It also serves the content from the bucket with `fastly compute serve`.                               | The Fastly CLI, and the variables below   |
 | `deployed.test.js`       | Deploys an app to a real service. Makes sure that, without a purge, the response cache serves the old content, and that a publish with a purge makes it serve the new content. Then replaces the KV Store body of a file, and makes sure that the service does not serve or cache an empty or a short body. | The Fastly CLI, and the variables below   |
+| `scaffold-golden.test.js` | Scaffolds apps with the CLI, and checks that the files are exactly the golden files of `test/golden/`.           | Nothing                                   |
+| `global-options.test.js` | Checks `--version` and `--project-dir`.                                                                          | Nothing                                   |
+| `template-hooks.test.js` | Checks the template hooks (`run-template-hook` and the npm scripts that call it), and `npm run dev:watch` with its watch script. | The Fastly CLI, for `dev:watch`           |
 
 If a test does not have what it needs, it is skipped, and the output tells which environment variables to set.
 

@@ -14,9 +14,9 @@ import { renderAppResource } from './render.js';
 // Paths are absolute. The fields map onto the scaffold flags.
 export type AppConfig = {
   appDir: string,
-  name: string | undefined,
-  author: string | undefined,
-  description: string | undefined,
+  name: string,
+  author: string,
+  description: string,
   serviceId: string | undefined,
   storage:
     | { mode: 'kv-store', kvStoreName: string }
