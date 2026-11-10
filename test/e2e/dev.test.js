@@ -71,7 +71,7 @@ describe('dev in a managed project', { skip: skipUnlessFastlyCli() }, () => {
 
   test('the app uses this checkout through a file: link', () => {
     const pkg = JSON.parse(fs.readFileSync(path.resolve(appDir, 'package.json'), 'utf-8'));
-    assert.equal(pkg.devDependencies['@fastly/compute-js-static-publish'], `file:${REPO_DIR}`);
+    assert.equal(pkg.dependencies['@fastly/compute-js-static-publish'], `file:${REPO_DIR}`);
     const link = path.resolve(appDir, 'node_modules/@fastly/compute-js-static-publish');
     assert.ok(fs.lstatSync(link).isSymbolicLink());
     assert.equal(fs.realpathSync(link), fs.realpathSync(REPO_DIR));
