@@ -41,7 +41,7 @@ export function parseGlobalOptions(args: string[], env: Record<string, string | 
     for (const option of SECRET_OPTIONS) {
       if (arg.startsWith(`${option}=`)) {
         secrets.push(arg.slice(option.length + 1));
-      } else if (arg === option && args[i + 1] != null) {
+      } else if (arg === option && args[i + 1] != null && !args[i + 1].startsWith('-')) {
         secrets.push(args[i + 1]);
       }
     }
