@@ -5,7 +5,7 @@
 
 // Ejects managed projects, and compares the result with an ejected scaffold
 // of the same flags. The tests never run a published version of this package,
-// so they give eject a `file:` spec through CJSP_TEST_EJECT_PACKAGE_SPEC.
+// so they give eject a `file:` spec through CJSP_TEST_ONLY_EJECT_PACKAGE_SPEC.
 // Needs network access for `npm install`, and the Fastly CLI for the serve
 // test. No credentials are necessary.
 
@@ -25,7 +25,7 @@ import {
   writeFixtureContent,
 } from './helpers.js';
 
-const EJECT_ENV = { CJSP_TEST_EJECT_PACKAGE_SPEC: `file:${REPO_DIR}`, FASTLY_SERVICE_ID: '' };
+const EJECT_ENV = { CJSP_TEST_ONLY_EJECT_PACKAGE_SPEC: `file:${REPO_DIR}`, FASTLY_SERVICE_ID: '' };
 
 // The files of an app, without node_modules and package-lock.json, with the
 // version and the date of generatedFrom replaced.
