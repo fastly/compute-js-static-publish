@@ -95,6 +95,21 @@ describe('managed commands', () => {
         removeDir(ejectedDir);
       }
     });
+
+    test('deploy in an ejected app: --force and --auto-upgrade are errors', () => {
+      const ejectedDir = makeTempDir('deploy-ejected');
+      try {
+        fs.writeFileSync(path.resolve(ejectedDir, 'static-publish.rc.js'), `export default { kvStoreName: 'x', publishId: 'default', defaultCollectionName: 'live', staticPublisherWorkingDir: './static-publisher' };`);
+        for (const option of [ '--force', '--auto-upgrade' ]) {
+          const result = runText([ 'deploy', option ], ejectedDir);
+          assert.notEqual(result.status, 0, option);
+          assert.match(result.output, new RegExp(`${option} is only for a managed project`));
+          assert.doesNotMatch(result.output, /▶️ fastly/, 'the Fastly CLI did not run');
+        }
+      } finally {
+        removeDir(ejectedDir);
+      }
+    });
   });
 
   describe('version check and upgrade', () => {
