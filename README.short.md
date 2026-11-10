@@ -6,7 +6,7 @@ This CLI tool helps you:
 
 - ✅ Deploy static sites to Fastly Compute with zero backend
 - 📦 Store files in Fastly KV Store efficiently
-  - 🎁 New in v8: Support for S3-compatible storage such as Fastly Object Storage (Beta) 
+  - 🎁 Since v8: Support for S3-compatible storage such as Fastly Object Storage (Beta) 
 - 🗂 Publish to named collections (`live`, `preview-42`, etc.)
 - 🔄 Switch between collections at runtime
 - 🧹 Clean up old or expired assets
@@ -21,7 +21,7 @@ Create a directory for your project, place your static files in `./public`, then
 npx @fastly/compute-js-static-publish@latest --root-dir=./public --kv-store-name=site-content
 ```
 
-**New in v8:** S3-compatible storage (such as Fastly Object Storage) is also supported (Beta). To use this mode, type:
+**Since v8:** S3-compatible storage (such as Fastly Object Storage) is also supported (Beta). To use this mode, type:
 
 ```sh
 npx @fastly/compute-js-static-publish@latest --root-dir=./public --storage-mode=s3 --s3-region=<region> --s3-bucket=<bucket-name>
@@ -30,6 +30,14 @@ npx @fastly/compute-js-static-publish@latest --root-dir=./public --storage-mode=
 If the storage needs a custom endpoint, as Fastly Object Storage does, add `--s3-endpoint=<endpoint>` (for example, `--s3-endpoint=https://us-east-1.object.fastlystorage.app`).
 
 For more details, see the [S3-compatible storage](https://github.com/fastly/compute-js-static-publish/blob/main/README.md#-using-s3-compatible-storage-beta) section in the full documentation.
+
+**New in 8.1:** a managed project has only one file in your repo, `static-publish.project.js`, and the CLI generates the app. Add `--template=hono` for a Hono app:
+
+```sh
+npx @fastly/compute-js-static-publish@latest --managed --root-dir=./public --kv-store-name=site-content
+npx @fastly/compute-js-static-publish@latest publish-content --local
+npx @fastly/compute-js-static-publish@latest dev
+```
 
 ### 🔧 Local Preview
 
@@ -73,11 +81,16 @@ If the app uses S3-compatible storage, your files are already in the bucket afte
 
 - **Managed projects:** keep only `static-publish.project.js` in your repo. The CLI generates the app, and `dev`, `deploy`, `status`, `upgrade`, and `eject` work with it. ([Managed and ejected apps](https://github.com/fastly/compute-js-static-publish/blob/main/README.md#managed-and-ejected-apps))
 - **Previews:** serve another collection for a request, selected by host, path, query, cookie, or header. ([Previews](https://github.com/fastly/compute-js-static-publish/blob/main/README.md#-previews-collection-selection))
-- **Hidden files:** publish files that the server does not serve for a request, for your own code to read. ([Hidden files](https://github.com/fastly/compute-js-static-publish/blob/main/README.md#hidden-files))
-- **Hono:** the `hono` template, with your own middleware and routes in `hono-extensions/`, and examples for GRIP streaming and OAuth login. For your own Hono app, `@fastly/compute-js-static-publish/hono` replaces `@fastly/hono-compute-js-static-publish`. ([Using Hono](https://github.com/fastly/compute-js-static-publish/blob/main/README.md#-using-hono))
+- **Hidden files:** publish files that the server does not serve for a request, for your own code to read. Deploy your app with 8.1 before you publish hidden files: an app built with 8.0 does not serve a collection that has hidden files. ([Hidden files](https://github.com/fastly/compute-js-static-publish/blob/main/README.md#hidden-files))
+- **Hono:** the `hono` template (`--template=hono`), with your own middleware and routes in `hono-extensions/`, and examples for GRIP streaming and OAuth login. For your own Hono app, `@fastly/compute-js-static-publish/hono` replaces `@fastly/hono-compute-js-static-publish`. ([Using Hono](https://github.com/fastly/compute-js-static-publish/blob/main/README.md#-using-hono))
 - **CI:** `--json` output, exit codes, error codes, `--project-dir`, and `--non-interactive`. ([Using the CLI in CI](https://github.com/fastly/compute-js-static-publish/blob/main/README.md#-using-the-cli-in-ci))
 
-Before you upgrade, read [CHANGELOG.md](https://github.com/fastly/compute-js-static-publish/blob/main/CHANGELOG.md): collection names now must be DNS labels (lowercase letters, digits, and `-`), and a usage or config error now exits with `2`.
+Before you upgrade, read [CHANGELOG.md](https://github.com/fastly/compute-js-static-publish/blob/main/CHANGELOG.md). These changes can break something:
+
+- The name of a new collection must be a DNS label: lowercase `a-z`, `0-9`, and `-`, from 1 to 63 characters, with no `-` at the start or the end. A collection that exists continues to work with another name, with a warning.
+- A usage or config error exits with `2`. Before, every error exited with `1`.
+- `collectionSelector.fromCookie()`: the activate and reset paths redirect with `308`. Before, they used `302`.
+- `PublisherServer`: the fields `serverTiming`, `settingsCached`, and `assetEntryMapCache` are read-only (deprecated). Code that assigns to them gets a TypeScript error.
 
 ## Features
 
