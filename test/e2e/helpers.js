@@ -123,7 +123,7 @@ export function scaffoldApp(dir, scaffoldArgs, { rootDir = './public' } = {}) {
   runCli([ '--root-dir', rootDir, ...scaffoldArgs ], { cwd: dir });
   const computeJsDir = path.resolve(dir, 'compute-js');
   const packageJson = JSON.parse(fs.readFileSync(path.resolve(computeJsDir, 'package.json'), 'utf-8'));
-  const dependency = packageJson.devDependencies['@fastly/compute-js-static-publish'];
+  const dependency = packageJson.dependencies['@fastly/compute-js-static-publish'];
   if (!dependency.startsWith('file:')) {
     throw new Error(`The scaffolded app does not use this checkout: ${dependency}`);
   }

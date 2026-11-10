@@ -104,10 +104,13 @@ export function generateApp(config: AppConfig): Record<string, string> {
     type: 'module',
     devDependencies: {
       ...template.devDependencies,
-      '@fastly/compute-js-static-publish': staticPublishVersionSpec,
     },
+    // This package is a dependency, not a dev dependency: the code of the app
+    // imports it, and the postinstall script runs it, also with
+    // npm ci --omit=dev.
     dependencies: {
       ...template.dependencies,
+      '@fastly/compute-js-static-publish': staticPublishVersionSpec,
     },
     engines: {
       node: '>=20.11.0',

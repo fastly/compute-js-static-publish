@@ -83,11 +83,11 @@ describe('templates', () => {
     const templatePackageJson = JSON.parse(fs.readFileSync(path.resolve(RESOURCES_DIR, 'templates/plain/package.json'), 'utf-8'));
     const files = generateApp({ ...config, template: loadAppTemplate('plain') });
     const packageJson = JSON.parse(files['package.json']);
-    assert.deepEqual(packageJson.dependencies, templatePackageJson.dependencies);
-    assert.deepEqual(packageJson.devDependencies, {
-      ...templatePackageJson.devDependencies,
+    assert.deepEqual(packageJson.dependencies, {
+      ...templatePackageJson.dependencies,
       '@fastly/compute-js-static-publish': '^8.1.0',
     });
+    assert.deepEqual(packageJson.devDependencies, templatePackageJson.devDependencies);
   });
 
   test('the template package.json has no scripts, and does not list this package', () => {
