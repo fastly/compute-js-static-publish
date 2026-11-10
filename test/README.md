@@ -66,6 +66,7 @@ npm run test:e2e
 | `CJSP_TEST_SERVICE_ID`    | `kv-store.test.js`, `s3.test.js` (optional) | A Service ID to purge after publishing. You can use the service of `deployed.test.js` |
 | `CJSP_TEST_DEPLOY_SERVICE_ID` | `deployed.test.js`, `managed-deploy.test.js` | A Compute service for tests. **The test replaces the active version of this service.** |
 | `CJSP_TEST_DEPLOY_URL`    | `deployed.test.js`              | The URL of that service, for example `https://<name>.edgecompute.app`    |
+| `CJSP_TEST_ONLY_EJECT_PACKAGE_SPEC` | `eject.test.js` (it sets it itself) | Do not set it. The test gives `eject` the spec `file:<checkout>`, because the version of the checkout is not on npm. `eject` shows a warning when it is set |
 | `KEEP_E2E_DIRS`           | all (optional)                  | Set to keep the temporary directories, to examine them after a test     |
 
 The KV Store and S3 tests use a new publish ID for each run (for example `e2e-mf3k2a-1b2c3d`) and the collection
