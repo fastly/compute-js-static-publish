@@ -172,10 +172,11 @@ export async function action(actionArgs: string[]) {
   console.log(`📦 Writing the app into ${rootRelative(appDir)}...`);
   writeManagedAppFiles(appDir, files);
 
-  // Pin this package: "^<version>" stays in package.json, and the lockfile gets exactly <version>.
+  // Pin this package: "^<version>" stays in the dependencies of package.json,
+  // and the lockfile gets exactly <version>.
   const installArgs = testSpec != null ?
     [ 'install', '--no-audit', '--no-fund' ] :
-    [ 'install', '--save-dev', `${THIS_PACKAGE}@${version}`, '--no-audit', '--no-fund' ];
+    [ 'install', '--save-prod', `${THIS_PACKAGE}@${version}`, '--no-audit', '--no-fund' ];
   console.log(`npm ${installArgs.join(' ')}`);
   const install = child_process.spawnSync('npm', installArgs, { cwd: appDir, stdio: [ 'ignore', process.stderr, 'inherit' ] });
   if (install.error != null || install.status !== 0) {
