@@ -40,6 +40,11 @@ describe('parseGlobalOptions()', () => {
     assert.deepEqual(options.argv, [ 'clean', '--fastly-api-token=token-1234567', '--s3-secret-access-key', 'key-1234567' ]);
   });
 
+  test('a secret option followed by another option has no value', () => {
+    const options = parseGlobalOptions([ 'clean', '--fastly-api-token', '--verbose' ]);
+    assert.deepEqual(options.secrets, []);
+  });
+
   test('--project-dir needs one value', () => {
     for (const args of [ [ '--project-dir' ], [ '--project-dir=' ], [ '--project-dir', '--local' ] ]) {
       assert.match(parseGlobalOptions(args).error, /needs a directory/, args.join(' '));
