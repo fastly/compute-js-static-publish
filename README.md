@@ -677,7 +677,9 @@ Assets are stored in multiple formats (uncompressed + compressed) if configured.
 
 ## 🧩 Using PublisherServer in Custom Apps
 
-You can combine PublisherServer with custom logic to support APIs, authentication, redirects, or A/B testing. `PublisherServer` returns `null` when it cannot handle a request, allowing you to chain in your own logic.
+You can combine PublisherServer with custom logic to support APIs, authentication, redirects, or A/B testing. Handle your own routes before you call `serveRequest()`.
+
+`serveRequest()` returns `null` for a method other than `GET` or `HEAD`, and when no file matches and no SPA file or 404 page applies. If `publish-content.config.js` sets a 404 page or an SPA file, `serveRequest()` serves that page for each path that has no file. Thus, code after `serveRequest()` does not run for those requests.
 
 ```js
 import { PublisherServer } from '@fastly/compute-js-static-publish';
@@ -690,17 +692,17 @@ addEventListener("fetch", event => {
 });
 
 async function handleRequest(request) {
-  const response = await publisherServer.serveRequest(request);
-  if (response) {
-    return response;
-  }
-
-  // Add your custom logic here
+  // Add your custom logic here, before serveRequest()
   const url = new URL(request.url);
   if (url.pathname === '/api/hello') {
     return new Response(JSON.stringify({ greeting: "hi" }), {
       headers: { 'content-type': 'application/json' }
     });
+  }
+
+  const response = await publisherServer.serveRequest(request);
+  if (response != null) {
+    return response;
   }
 
   return new Response("Not Found", { status: 404 });
