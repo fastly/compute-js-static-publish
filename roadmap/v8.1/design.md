@@ -75,7 +75,8 @@ There are three kinds of files:
 
 - `resources/templates/<name>/package.json` is a real `package.json` with all the `dependencies` and `devDependencies` of the template (for `plain`: `@fastly/js-compute` and `@fastly/cli`). It has no `scripts`, and it does not list this package.
 - `generateApp()` reads it with `JSON.parse`. It sets `name`, `version`, `description`, `author`, `type`, `engines`, `private`, and `scripts` (the template hooks, `build`, and the scripts for the storage mode), and adds this package to `devDependencies` (`^<version>`, or in managed mode the `file:` link of task 3.5). Then it writes the file with `JSON.stringify`. The output has the key order of 8.0.0 (the golden files check it).
-- **Dependabot** keeps the dependencies up to date. A new `.github/dependabot.yml` has the `npm` ecosystem, with `directories: ["/", "/resources/templates/*"]`. Its PRs are reviewed like other PRs.
+- The template directory also has a `package-lock.json`. CI checks that it matches the `package.json`. In part 1, `scaffold` does not use it (it runs `npm install`, as in 8.0.0). Part 3 uses it (task 3.5).
+- **Dependabot** keeps the dependencies and the lockfile up to date. `.github/dependabot.yml` has the `npm` ecosystem for `/resources/templates/*`. Its PRs are reviewed like other PRs.
 
 #### Config files
 
@@ -520,7 +521,7 @@ Requirements from tools that run this package with no person present:
 
 The same version of this package and the same config must make the same app, including the resolved dependency versions. Without that, two deploys of the same commit can get different versions of `@fastly/js-compute` and the ~160 packages below it (the compiler toolchain). The deployed app does not change by itself (the fingerprint decides when to build), but a later deploy, for example for a small config change, can then also get a new toolchain that nobody asked for, and a laptop and CI can build different apps from the same commit.
 
-- **Tentative: a lockfile for each template (A),** next to the template's `package.json` in `resources/templates/<name>/` (task 1.2), with a CI check that it matches its `package.json`. Managed mode runs `npm ci`. The alternative is exact versions in `package.json` and no lockfile (B), which pins the direct dependencies but not the packages below them. Task 3.5 tests A and keeps it, or changes to B.
+- **Tentative: a lockfile for each template (A):** the lockfile next to the template's `package.json` in `resources/templates/<name>/`, and its CI check, come in task 1.2. This task uses it. Managed mode runs `npm ci`. The alternative is exact versions in `package.json` and no lockfile (B), which pins the direct dependencies but not the packages below them. Task 3.5 tests A and keeps it, or changes to B.
 - **How the lockfiles are shipped:** each template's lockfile is in its template directory in `resources/`, which the package ships. npm leaves out only the **root** `package-lock.json` of a published package: a nested `package-lock.json` is kept (checked with npm 11, `npm pack --dry-run`). Thus the template lockfiles can keep the normal name. Check again with the npm version of the release workflow.
 - **Who updates them:** Dependabot (task 1.2), in the same PR as the `package.json`. A template's `package.json` has no `scripts` and does not list this package (`generateApp()` adds both), so `npm install` in the template directory runs no hooks, and the lockfile has no `file:` link. To update a lockfile by hand, run `npm install --ignore-scripts` in its template directory.
 - **Private registries:** a lockfile has `registry.npmjs.org` URLs; npm 7 and later replace the default registry with the one configured in `.npmrc`.

@@ -9,8 +9,19 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 
 ## [unreleased]
 
+### Added
+
+- `--project-dir`: run a command for the app in another directory, for example from the root of the repo in CI. All relative paths are then relative to that directory.
+- `--version`: print the version of this package. It works in any directory.
+- Template hooks: the `package.json` of a scaffolded app has `prebuild`, `postbuild`, and `postinstall` scripts. Each runs `scripts/template_<name>.js` of the app if that file exists, and otherwise does nothing.
+- `npm run dev:watch` in a scaffolded app: runs `fastly compute serve --watch`. If the app has `scripts/template_watch.js`, it runs that script next to the Fastly CLI, until the Fastly CLI stops.
+- `scaffold` writes `generatedFrom` into `static-publish.rc.js`: the template, the version of this package, and the date.
+- `scaffold --default-collection-name`: the collection to serve when no collection is selected. The default is `live`, as before.
+- `scaffold --template`: the template of the app's code. `plain`, the default, is the only template.
+
 ### Changed
 
+- Scaffolding: the app has `@fastly/compute-js-static-publish` in `dependencies`. It was in `devDependencies`. The code of the app imports it, and the `postinstall` script of the app runs it, so `npm ci --omit=dev` needs it.
 - `PublisherServer.setResponseCache()`: the default of `maxBodySize` is now 16 MiB. It was 8 MiB.
 - Scaffolder: in the generated `src/index.js`, the place for your own code is before `serveRequest()`. It was after `serveRequest()`, where it did not run for a path that has no file when a 404 page or an SPA file is set.
 
@@ -22,6 +33,7 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 - `PublisherServer`: when no file matches a request, the server serves the SPA file or the 404 page only if the request accepts HTML. Now a request accepts HTML only if its `Accept` header is missing or empty, or has `text/html`, `text/*`, or `*/*` with a q-value that is not 0. The most specific of these media ranges gives the q-value. Before, almost all requests got the HTML page, for example a request with `Accept: application/json`, `Accept: image/*`, or `Accept: text/html;q=0`. Now `serveRequest()` returns `null` for such a request, and your app makes the response.
 - README: the Fastly Object Storage example uses the region `us-east-1` and the endpoint `https://us-east-1.object.fastlystorage.app`. The example used `us-east`, which is a legacy region: you cannot make a new bucket in it in the Fastly control panel. The README also links to the list of regions and endpoints.
 - README: the custom app example handles its route before `serveRequest()`, and the text says when `serveRequest()` returns `null`. Before, the example handled `/api/hello` after `serveRequest()`, so a request for it got the 404 page when a 404 page was set.
+- `scaffold` now escapes the values that it writes into `fastly.toml`. Before, a `"` or a `\` in `--name`, `--description`, or `--author`, or a KV Store name with a character such as `.`, gave a `fastly.toml` that was not valid.
 
 ## [8.0.1] - 2026-11-04
 
