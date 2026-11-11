@@ -785,17 +785,15 @@ export async function action(actionArgs: string[]) {
     }
     let s3Endpoint = options.s3Endpoint;
     if (s3Endpoint == null || s3Endpoint === '') {
-      // If endpoint is not presented, we assume it's from AWS,
-      // and ask the SDK what the hostname would be.
-      // This is required because we need to add the hostname as a
-      // backend in the Compute service.
-      s3Endpoint = await findHostnameForAwsS3RegionAndBucket(s3Region, s3Bucket);
-      if (s3Endpoint) {
-        console.log('✅ S3 endpoint resolved:', s3Endpoint);
-      } else {
-        fail('failed', `Unable to resolve S3 endpoint from region '${s3Region}' and bucket '${s3Bucket}'.`);
+      // Without an endpoint, the bucket is on AWS. The app needs its host name
+      // for the backend in the Compute service.
+      const hostname = findHostnameForAwsS3RegionAndBucket(s3Region, s3Bucket);
+      if (hostname == null) {
+        fail('usage', `The bucket name '${s3Bucket}' has a dot, so it cannot be a host name of AWS S3 under HTTPS. Set --s3-endpoint, for example --s3-endpoint=https://s3.${s3Region}.amazonaws.com. Then the bucket is in the path of the URL.`);
         return;
       }
+      s3Endpoint = hostname;
+      console.log('✅ S3 endpoint resolved:', s3Endpoint);
       s3EndpointUrl = new URL(`https://${s3Endpoint}/`);
       s3EndpointGenerated = true;
     } else {
