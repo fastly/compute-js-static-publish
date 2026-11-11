@@ -8,21 +8,38 @@ import * as path from 'node:path';
 
 import { type OptionDefinition } from 'command-line-args';
 
-import { type AssetEntryMap, } from '../../../models/assets/index.js';
+import {
+  type AssetEntryMap,
+  HIDDEN_INDEX_FEATURE,
+  findAssetEntry,
+  hiddenIndexKey,
+} from '../../../models/assets/index.js';
 import { type ContentCompressionTypes } from '../../../models/compression/index.js';
 import { type PublisherServerConfigNormalized } from '../../../models/config/publisher-server-config.js';
 import { type ContentTypeDef, type PublishContentConfigNormalized } from '../../../models/config/publish-content-config.js';
+import { parseItemPatterns, testItemPatterns } from '../../../models/config/item-patterns.js';
 import { encodeIndexMetadata, type IndexMetadata } from '../../../models/server/index.js';
 import { calcExpirationTime } from '../../../models/time/index.js';
 import { parseCommandLine } from '../../util/args.js';
+import { errorCodeOf, fail, recordFailure, setJsonResult } from '../../util/output.js';
+import { checkCollectionNameForWrite } from '../../util/collection-name.js';
 import { mergeContentTypes, testFileContentType } from '../../util/content-types.js';
-import { LoadConfigError, loadPublishContentConfigFile, loadStaticPublisherRcFile } from '../../util/config.js';
+import {
+  LoadConfigError,
+  configFileName,
+  detectProjectMode,
+  getComputeAppDir,
+  loadProjectFile,
+  loadPublishContentConfig,
+  loadStaticPublisherRcFile,
+} from '../../util/config.js';
+import { PROJECT_FILE_NAME } from '../../../models/config/static-publish-project.js';
 import { applyDefaults } from '../../util/data.js';
 import { calculateFileSizeAndHash, enumerateFiles, rootRelative } from '../../util/files.js';
 import { ensureVariantFileExists, OncePerKey, type Variants } from '../../util/variants.js';
 import { concurrentMap } from '../../util/retryable.js';
 import { ProgressLog } from '../../util/progress.js';
-import { type PurgeTarget, loadPurgeTarget, purgeCollection } from '../../util/purge.js';
+import { type PurgeResult, type PurgeTarget, loadPurgeTarget, purgeCollection } from '../../util/purge.js';
 import {
   getStorageKeysByHexPrefix,
   isVariantInStorage,
@@ -31,6 +48,7 @@ import {
   StorageProviderBatch,
   type StorageProviderBatchEntry,
 } from '../../storage/storage-provider.js';
+import { cliCommand } from '../../util/package.js';
 
 // Storage key format:
 // <publishId>_index_<preview_id>.json
@@ -41,7 +59,7 @@ function help() {
   console.log(`\
 
 Usage:
-  npx @fastly/compute-js-static-publish publish-content [--collection-name=<name>] [options]
+  ${cliCommand()} publish-content [--collection-name=<name>] [options]
 
 Description:
   Publishes static files from your local root directory into a named collection,
@@ -118,9 +136,9 @@ Global Options:
   -h, --help                       Show this help message and exit.
 
 Examples:
-  npx @fastly/compute-js-static-publish publish-content --collection-name=preview-456
-  npx @fastly/compute-js-static-publish publish-content --expires-in=7d --kv-overwrite
-  npx @fastly/compute-js-static-publish publish-content --expires-never --local
+  ${cliCommand()} publish-content --collection-name=preview-456
+  ${cliCommand()} publish-content --expires-in=7d --kv-overwrite
+  ${cliCommand()} publish-content --expires-never --local
 
 `);
 }
@@ -156,7 +174,7 @@ export async function action(actionArgs: string[]) {
     if (parsed.error != null) {
       console.error(String(parsed.error));
       console.error();
-      process.exitCode = 1;
+      recordFailure('usage', String(parsed.error));
     }
 
     help();
@@ -187,8 +205,7 @@ export async function action(actionArgs: string[]) {
   if (s3UploadConcurrencyValue !== undefined) {
     if (typeof s3UploadConcurrencyValue !== 'string' || !/^\d+$/.test(s3UploadConcurrencyValue) ||
       Number(s3UploadConcurrencyValue) < 1 || Number(s3UploadConcurrencyValue) > 256) {
-      console.error(`❌ --s3-upload-concurrency must be an integer from 1 to 256.`);
-      process.exitCode = 1;
+      fail('usage', `--s3-upload-concurrency must be an integer from 1 to 256.`);
       return;
     }
     s3UploadConcurrency = Number(s3UploadConcurrencyValue);
@@ -198,7 +215,7 @@ export async function action(actionArgs: string[]) {
 
   // compute-js-static-publisher cli is always run from the Compute application directory
   // in other words, the directory that contains `fastly.toml`.
-  const computeAppDir = path.resolve();
+  const computeAppDir = getComputeAppDir();
 
   console.log(`🚀 Publishing content...`);
 
@@ -207,22 +224,24 @@ export async function action(actionArgs: string[]) {
   try {
     staticPublisherRc = await loadStaticPublisherRcFile();
   } catch (err) {
-    console.error("❌ Can't load static-publish.rc.js");
+    console.error(`❌ Can't load ${configFileName()}`);
     console.error("Run this from a compute-js-static-publish compute-js directory.");
     if (err instanceof LoadConfigError) {
       for (const error of err.errors) {
         console.error(error);
       }
     }
-    process.exitCode = 1;
+    recordFailure('config-invalid', `Can't load ${configFileName()}.`);
     return;
   }
 
-  const configFilePath = configFilePathValue ?? './publish-content.config.js';
+  // In a managed project, the default is the publishContent section of the project file.
+  const managedProject = detectProjectMode() === 'managed' ? await loadProjectFile() : null;
+  const configFilePath = configFilePathValue ?? (managedProject != null ? `${PROJECT_FILE_NAME} (publishContent)` : './publish-content.config.js');
 
   let publishContentConfig: PublishContentConfigNormalized;
   try {
-    publishContentConfig = await loadPublishContentConfigFile(configFilePath);
+    publishContentConfig = await loadPublishContentConfig(configFilePathValue);
   } catch (err) {
     console.error(`❌ Can't load ${configFilePath}`);
     if (err instanceof LoadConfigError) {
@@ -230,7 +249,7 @@ export async function action(actionArgs: string[]) {
         console.error(error);
       }
     }
-    process.exitCode = 1;
+    recordFailure('config-invalid', `Can't load ${configFilePath}.`);
     return;
   }
 
@@ -238,8 +257,7 @@ export async function action(actionArgs: string[]) {
   let brotliQualitySource = 'config';
   if (brotliQualityValue !== undefined) {
     if (typeof brotliQualityValue !== 'string' || !/^\d+$/.test(brotliQualityValue) || Number(brotliQualityValue) > 11) {
-      console.error(`❌ --brotli-quality must be an integer from 0 to 11.`);
-      process.exitCode = 1;
+      fail('usage', `--brotli-quality must be an integer from 0 to 11.`);
       return;
     }
     publishContentConfig.brotliQuality = Number(brotliQualityValue);
@@ -261,7 +279,7 @@ export async function action(actionArgs: string[]) {
   } catch(err: unknown) {
     console.error(`❌ Cannot process expiration time`);
     console.error(String(err));
-    process.exitCode = 1;
+    recordFailure('usage', `Cannot process expiration time: ${String(err)}`);
     return;
   }
 
@@ -293,7 +311,7 @@ export async function action(actionArgs: string[]) {
   } catch (err: unknown) {
     console.error(`❌ Could not instantiate store provider`);
     console.error(String(err));
-    process.exitCode = 1;
+    recordFailure(errorCodeOf(err), String(err));
     return;
   }
 
@@ -304,12 +322,13 @@ export async function action(actionArgs: string[]) {
       localMode: localMode ?? false,
       computeAppDir,
       fastlyServiceId,
+      projectServiceId: managedProject?.managed.serviceId,
       fastlyApiToken,
       purgeEnvironments: purgeEnvironmentValues,
     });
   } catch (err: unknown) {
     console.error(String(err));
-    process.exitCode = 1;
+    recordFailure(errorCodeOf(err), String(err));
     return;
   }
 
@@ -338,10 +357,21 @@ export async function action(actionArgs: string[]) {
     console.log(`✔️ (.well-known is exempt from exclusion.)`);
   }
 
+  // The files to publish as hidden files (see also assetInclusionTest).
+  const hiddenItems = parseItemPatterns(publishContentConfig.hiddenItems, (i, x) => {
+    console.warn(`⚠️ Cannot parse hiddenItems item index ${i}: '${x}', skipping...`);
+  });
+  if (hiddenItems.length > 0) {
+    console.log(`✔️ Hidden items: ${publishContentConfig.hiddenItemsAsWritten.join(', ')}`);
+  }
+
   // ### Collection name that we're currently publishing
   // for example, live, staging
   const collectionName = collectionNameValue ?? process.env.PUBLISHER_COLLECTION_NAME ?? defaultCollectionName;
   console.log(`✔️ Collection Name: ${collectionName}`);
+  if (!await checkCollectionNameForWrite(storageProvider, publishId, collectionName)) {
+    return;
+  }
 
   if (expirationTime == null) {
     // includes null and undefined
@@ -440,9 +470,13 @@ export async function action(actionArgs: string[]) {
       return;
     }
 
+    // A hidden file is published, but PublisherServer does not serve it for a request.
+    const hidden = (typeof includeAsset === 'object' && includeAsset.hidden === true) ||
+      testItemPatterns(hiddenItems, assetKey);
+
     // #### Base file size, hash, last modified time
     const { size: baseSize, hash: baseHash } = await calculateFileSizeAndHash(file);
-    scanProgress.add(1, () => `📄 File '${rootRelative(file)}' - ${baseSize} bytes, sha256: ${baseHash}`);
+    scanProgress.add(1, () => `📄 File '${rootRelative(file)}' - ${baseSize} bytes, sha256: ${baseHash}${hidden ? ' (hidden)' : ''}`);
     const stats = fs.statSync(file);
     const lastModifiedTime = Math.floor((stats.mtime).getTime() / 1000);
 
@@ -552,6 +586,7 @@ export async function action(actionArgs: string[]) {
 
     return {
       assetKey,
+      hidden,
       asset: {
         key: `sha256:${baseHash}`,
         size: baseSize,
@@ -563,16 +598,23 @@ export async function action(actionArgs: string[]) {
     };
   });
 
+  let hiddenCount = 0;
   for (const result of fileResults) {
     if (result == null) {
       continue;
     }
-    assetsIndex[result.assetKey] = result.asset;
+    if (result.hidden) {
+      assetsIndex[hiddenIndexKey(result.assetKey)] = result.asset;
+      hiddenCount++;
+    } else {
+      assetsIndex[result.assetKey] = result.asset;
+    }
     for (const batchItem of result.batchItems) {
       batch.add(batchItem);
     }
   }
   console.log(`✅  Scan complete.`);
+  console.log(`  | ${Object.keys(assetsIndex).length} file(s) in the index, ${hiddenCount} of them hidden.`);
   if (existingKeys != null) {
     console.log(`  | ${existingVariantCount} variant(s) already in storage, ${batch.storageProviderBatchEntries.length} to upload.`);
   } else {
@@ -588,6 +630,11 @@ export async function action(actionArgs: string[]) {
   const indexMetadata: IndexMetadata = {
     publishedTime: Math.floor(Date.now() / 1000),
     expirationTime: expirationTime ?? undefined,
+    // A server that does not support hidden files must not serve this collection.
+    requires: hiddenCount > 0 ? [ HIDDEN_INDEX_FEATURE ] : undefined,
+    // For collections list, which then reads only the metadata.
+    fileCount: Object.keys(assetsIndex).length,
+    hiddenFileCount: hiddenCount,
   };
 
   const indexFileName = `index_${collectionName}.json`;
@@ -629,7 +676,7 @@ export async function action(actionArgs: string[]) {
 
   if(spaFile != null) {
     console.log(` ✔️ Application SPA file '${spaFile}'.`);
-    const spaAsset = assetsIndex[spaFile];
+    const spaAsset = findAssetEntry(assetsIndex, spaFile, true);
     if(spaAsset == null || spaAsset.contentType !== 'text/html') {
       if (verbose) {
         console.log(` ⚠️ Notice: '${spaFile}' does not exist or is not of type 'text/html'. Ignoring.`);
@@ -645,7 +692,7 @@ export async function action(actionArgs: string[]) {
   let notFoundPageFile = server.notFoundPageFile;
   if(notFoundPageFile != null) {
     console.log(` ✔️ Application 'not found (404)' file '${notFoundPageFile}'.`);
-    const notFoundPageAsset = assetsIndex[notFoundPageFile];
+    const notFoundPageAsset = findAssetEntry(assetsIndex, notFoundPageFile, true);
     if(notFoundPageAsset == null || notFoundPageAsset.contentType !== 'text/html') {
       if (verbose) {
         console.log(` ⚠️ Notice: '${notFoundPageFile}' does not exist or is not of type 'text/html'. Ignoring.`);
@@ -682,10 +729,34 @@ export async function action(actionArgs: string[]) {
 
   console.log(`✅  Settings have been saved.`);
 
+  // A failed purge is only a warning (exit 0), because the content is published.
+  const purgeResults: PurgeResult[] = [];
   if (purgeTarget != null) {
-    await purgeCollection(purgeTarget, publishId, collectionName);
+    purgeResults.push(...await purgeCollection(purgeTarget, publishId, collectionName));
   }
 
   console.log(`🎉 Completed.`);
+
+  setJsonResult({
+    collection: collectionName,
+    publishId,
+    // The files in the index.
+    files: {
+      total: Object.keys(assetsIndex).length,
+      hidden: hiddenCount,
+    },
+    // Each file, and each compressed variant that is kept.
+    storageItems: {
+      uploaded: batch.storageProviderBatchEntries.length,
+      reused: existingVariantCount,
+    },
+    expiresAt: expirationTime != null ? new Date(expirationTime * 1000).toISOString() : null,
+    // null: no purge (--local, or no Service ID).
+    purge: purgeTarget != null ? {
+      ok: purgeResults.every(x => x.result !== 'failed'),
+      serviceId: purgeTarget.serviceId,
+      environments: purgeResults,
+    } : null,
+  });
 
 }

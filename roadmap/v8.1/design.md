@@ -75,7 +75,8 @@ There are three kinds of files:
 
 - `resources/templates/<name>/package.json` is a real `package.json` with all the `dependencies` and `devDependencies` of the template (for `plain`: `@fastly/js-compute` and `@fastly/cli`). It has no `scripts`, and it does not list this package.
 - `generateApp()` reads it with `JSON.parse`. It sets `name`, `version`, `description`, `author`, `type`, `engines`, `private`, and `scripts` (the template hooks, `build`, and the scripts for the storage mode), and adds this package to `devDependencies` (`^<version>`, or in managed mode the `file:` link of task 3.5). Then it writes the file with `JSON.stringify`. The output has the key order of 8.0.0 (the golden files check it).
-- **Dependabot** keeps the dependencies up to date. A new `.github/dependabot.yml` has the `npm` ecosystem, with `directories: ["/", "/resources/templates/*"]`. Its PRs are reviewed like other PRs.
+- The template directory also has a `package-lock.json`. CI checks that it matches the `package.json`. In part 1, `scaffold` does not use it (it runs `npm install`, as in 8.0.0). Part 3 uses it (task 3.5).
+- **Dependabot** keeps the dependencies and the lockfile up to date. `.github/dependabot.yml` has the `npm` ecosystem for `/resources/templates/*`. Its PRs are reviewed like other PRs.
 
 #### Config files
 
@@ -520,7 +521,7 @@ Requirements from tools that run this package with no person present:
 
 The same version of this package and the same config must make the same app, including the resolved dependency versions. Without that, two deploys of the same commit can get different versions of `@fastly/js-compute` and the ~160 packages below it (the compiler toolchain). The deployed app does not change by itself (the fingerprint decides when to build), but a later deploy, for example for a small config change, can then also get a new toolchain that nobody asked for, and a laptop and CI can build different apps from the same commit.
 
-- **Tentative: a lockfile for each template (A),** next to the template's `package.json` in `resources/templates/<name>/` (task 1.2), with a CI check that it matches its `package.json`. Managed mode runs `npm ci`. The alternative is exact versions in `package.json` and no lockfile (B), which pins the direct dependencies but not the packages below them. Task 3.5 tests A and keeps it, or changes to B.
+- **Tentative: a lockfile for each template (A):** the lockfile next to the template's `package.json` in `resources/templates/<name>/`, and its CI check, come in task 1.2. This task uses it. Managed mode runs `npm ci`. The alternative is exact versions in `package.json` and no lockfile (B), which pins the direct dependencies but not the packages below them. Task 3.5 tests A and keeps it, or changes to B.
 - **How the lockfiles are shipped:** each template's lockfile is in its template directory in `resources/`, which the package ships. npm leaves out only the **root** `package-lock.json` of a published package: a nested `package-lock.json` is kept (checked with npm 11, `npm pack --dry-run`). Thus the template lockfiles can keep the normal name. Check again with the npm version of the release workflow.
 - **Who updates them:** Dependabot (task 1.2), in the same PR as the `package.json`. A template's `package.json` has no `scripts` and does not list this package (`generateApp()` adds both), so `npm install` in the template directory runs no hooks, and the lockfile has no `file:` link. To update a lockfile by hand, run `npm install --ignore-scripts` in its template directory.
 - **Private registries:** a lockfile has `registry.npmjs.org` URLs; npm 7 and later replace the default registry with the one configured in `.npmrc`.
@@ -829,16 +830,17 @@ fire(app);
 - **Output:**
   - `src/index.js`: a Hono app. It uses `serveStatic()` for files, `app.notFound(serveFallback())` for the SPA file and the 404 page, and `fire(app)` from `@fastly/hono-fastly-compute`.
   - Extra `dependencies` (in the template's `package.json`, task 1.2): `hono` `^4.13.0` and `@fastly/hono-fastly-compute` `^0.4.0` (0.4.0 accepts `@fastly/js-compute` 4).
-  - `gitignore`: `.hono-extensions/` and `src/hono-extensions.generated.js` (task 6.6).
+  - `gitignore`: `src/hono-extensions.generated.js` (task 6.6).
 - The template does not use `hono/service-worker`: by default, its handler sends each 404 response to `fetch()`, and Compute has no default backend.
 - The template uses `logFastlyServiceVersion()` from `@fastly/hono-fastly-compute`, in place of its own logging middleware.
-- **Values of this package on `c.var.staticPublisher`** ("things that belong to static-publisher"), set by a middleware of the template before the extensions. `/hono` exports the type.
+- **Values of this package on `c.var.staticPublisher`** ("things that belong to static-publisher"), set by `selectCollection()` before the extensions. `/hono` exports the type, `StaticPublisherVariables`.
   - `c.var.staticPublisher.publisherServer`: the app's `PublisherServer`.
-  - `c.var.staticPublisher.collectionName`: the collection that collection selection chose.
-- **Collection selection:** a middleware calls `resolveCollection()`, returns its `response` if it has one, and sets `c.var.staticPublisher.collectionName`. `fromStaticPublishRc(rc, { collectionName: (c) => c.var.staticPublisher.collectionName })`. The `path` source uses `rewriteRequestPath`. The template declares `supports.collectionSelection`.
+  - `c.var.staticPublisher.collectionName`: the collection that collection selection chose (`null` for the default collection).
+  - `c.var.staticPublisher.pathname`: for a `path` source, the request path without the prefix of the source.
+- **Collection selection:** `selectCollection()` (from `fromStaticPublishRc(rc)`) calls `resolveCollection()`, returns its `response` if it has one, and sets `c.var.staticPublisher`. `serveStatic()` and `serveFallback()` read the selection from `c.var.staticPublisher`, so the template passes no `collectionName`. For a `path` source, `serveStatic()` uses `pathname`. The template declares `supports.collectionSelection`.
 - **Managed mode:** the `hono` template's lockfile (task 3.5), and tests with `managed.template: 'hono'`, including a switch from `plain` to `hono`.
 
-**To decide in this part:** the name of the template's middleware that sets `c.var.staticPublisher` (this file uses `staticPublisherVars()` as an example), and the exported type for `c.var`.
+**Decided in this part:** the middleware that sets `c.var.staticPublisher` is `selectCollection()` (part 6a); there is no separate middleware. The exported type for `c.var` is `StaticPublisherVariables`.
 
 ### Hono extensions
 
@@ -850,58 +852,53 @@ A feature of the `hono` template, not of the core of this package. The folder is
 my-site/                          ← project dir
 ├── static-publish.project.js
 └── hono-extensions/              ← the customer's code (committed)
-    ├── middleware/
-    │   ├── 10-auth.js            → app.use('*', …), before everything else
-    │   ├── 20-grip.ts
-    │   └── _example.js           → skipped (inactive example from template init)
-    ├── routes/
-    │   └── stream.js             → mounted before the static files
+    ├── 10-auth.js                → a module (its middleware phase: app.use('*', …))
+    ├── grip.ts                   → a module (middleware and beforeFiles phases)
+    ├── _example.ts               → skipped (inactive example from template init)
     ├── lib/                      → helpers (not scanned)
     ├── package.json              ← dependencies of the extension code
     └── package-lock.json         ← the customer's lockfile
 ```
 
 - The location is `build.hono.extensionsDir` (default `./hono-extensions`), in `static-publish.project.js` (managed) or `static-publish.rc.js` (ejected). The path is relative to that file. It is a `build` setting, so it applies in managed and in ejected mode. (Not `extDir`: in this project "ext" means a file extension, as in `autoExt`.)
-- **The folder is optional.** Without it, or with it empty, the app is **exactly** the default `hono` app: the manifest has empty lists, so the loops in `src/index.js` mount nothing. `src/index.js` is the same with or without the folder; only `src/hono-extensions.generated.js` changes. The fingerprint is the same as for any project without the folder. Each subfolder is optional by itself. To add or remove the folder later changes the fingerprint, so the next deploy uses it.
+- **The folder is optional.** Without it, or with it empty, the app is **exactly** the default `hono` app: the manifest has an empty list, so the loops in `src/index.js` mount nothing. `src/index.js` is the same with or without the folder; only `src/hono-extensions.generated.js` changes. The fingerprint is the same as for any project without the folder. To add or remove the folder later changes the fingerprint, so the next deploy uses it.
 
 #### Build: the hooks of the template (task 6.6)
 
 The `hono` template ships `scripts/template_prebuild.js` and `scripts/template_postinstall.js` as files in the app, the same as `src/index.js`. The core of this package has no code for extensions: it only writes the template's files, and the template hooks (task 1.4) run them.
 
-`template_prebuild.js` (runs before each build):
+`template_prebuild.js` (runs before each build) calls `bundleHonoExtensions()` of the public export `@fastly/compute-js-static-publish/hono/build`:
 
 1. Reads `build.hono.extensionsDir` from the app's `static-publish.rc.js`, in both modes. The path is relative to the rc. In managed mode, the generator wrote it again relative to the generated rc (for example `../../hono-extensions`).
-2. Deletes `<appDir>/.hono-extensions/`, then **copies** the extensions folder there: its files and its installed `node_modules`, **without the packages that the template provides**.
-3. Scans the copy (`middleware/`, `routes/`) in file-name order.
-4. Writes **`src/hono-extensions.generated.js`**: the manifest, which imports each module from the copy, and collects the modules' bindings.
+2. Scans the files directly in the folder, in file-name order.
+3. **Bundles** the modules with esbuild into **`src/hono-extensions.generated.js`**: one ESM file, with the manifest. The packages that the app provides are **external**: each package in the `dependencies` of the app's `package.json`, this package, their subpaths, and `fastly:*` (`honoExtensionsExternals()`). Thus their imports stay in the bundle, and js-compute's own bundle step resolves them to the app's `node_modules`: one `hono` in the Wasm binary. Everything else (the modules, their helpers, and the packages installed in the folder) is in the bundle.
 
 ```js
-// src/hono-extensions.generated.js (written by template_prebuild.js)
-import m0 from '../.hono-extensions/middleware/10-auth.js';
-import m1 from '../.hono-extensions/middleware/20-grip.ts';
-import r0 from '../.hono-extensions/routes/stream.js';
-export const middleware = [ { name: 'auth', module: m0 }, { name: 'grip', module: m1 } ];
-export const routes = [ { name: 'stream', module: r0 } ];
-export const bindings = { /* merged from the modules */ };
+// src/hono-extensions.generated.js (written by template_prebuild.js; the modules are bundled in it)
+export const extensions = [ { name: 'auth', file: '10-auth.js', module: m0 }, { name: 'grip', file: 'grip.ts', module: m1 } ];
 ```
 
-`js-compute-runtime` already bundles with esbuild (its `bundle` step: `bundle: true`, the `fastly` package condition, and a plugin that resolves `fastly:*` imports). It bundles `src/index.js`, which imports the manifest and, through it, every module and what the modules import. The template does not bundle anything itself. `build` is not changed.
+- **Why bundle** (and not import from the folder directly): imports resolve by going up the directory tree from the file that imports. From `hono-extensions/`, `hono` would resolve to `hono-extensions/node_modules/hono`, a second copy next to the app's. With the provided packages external, they resolve from the app.
+- **Why not copy the folder into the app** (the first design): a copy of `node_modules` at each build is slow, a symlink brings back the second `hono` (esbuild follows symlinks), and error locations would point at the copy.
+- **esbuild comes from the app** (a dev dependency of the template). `template_prebuild.js` passes it to `bundleHonoExtensions()`, because in managed mode this package is a `file:` link to a directory outside the app, where esbuild is not installed.
+- The bundle uses the `fastly` package condition, as js-compute's own bundle step does.
+- **The manifest is always generated, never a source file,** in both modes: each build writes it again (only if its content changes); `template_postinstall.js` writes a stub with an empty list if it is missing, so that an editor does not flag the import in `src/index.ts`; it is never committed (the template's `gitignore` field). The template has a fixed `src/hono-extensions.generated.d.ts` with the types of the manifest.
+- **Because the scripts are part of the app:** `eject` writes them to the same place, so the ejected app builds the same; after eject, they stay with the app, like `src/index.ts`; in managed mode, they are generated again with the rest of the app and are in the fingerprint; after eject, the customer can change them.
 
-- **The copy is at a fixed path in the app dir:** `<appDir>/.hono-extensions/` (`.static-publish/app/.hono-extensions/` in managed mode, `compute-js/.hono-extensions/` in ejected mode), not in the working dir.
-- **Why copy** (and not import from the folder directly): imports resolve by going up the directory tree from the file that imports. From `hono-extensions/`, `hono` would resolve to `hono-extensions/node_modules/hono`, a second copy next to the app's. From the copy in the app dir, anything that is not in the copy's `node_modules` (the provided packages) resolves to the **app's** `node_modules`: one `hono` in the bundle.
-- **The manifest is always generated, never a source file,** in both modes, because it comes from the current files: each build writes it again; `template_postinstall.js` also writes it (or a stub with empty lists) only so that it exists before the first build, so that an editor does not flag the import in `src/index.js` (this matters for ejected apps, where customers edit `src/index.js`); it is never committed (the template's `gitignore` field). A committed stub does not work: git still shows changes to a tracked file that is in `.gitignore`.
-- The scripts need only Node (`fs`, `path`). They can use the public helper API (task 6.5).
-- **Because the scripts are part of the app:** `eject` writes them to the same place, so the ejected app builds the same; after eject, they stay with the app, like `src/index.js` (an upgrade of this package cannot change the manifest format under an ejected `src/index.js`); in managed mode, they are generated again with the rest of the app and are in the fingerprint; after eject, the customer can change them.
-
-**To decide in this part:** the exact shape of the manifest entries (this file uses `{ name, module }`), and how `defineMiddleware()` stores the bindings for `template_prebuild.js` to collect.
+**Decided in this part:** the manifest entries are `{ name, file, module }`, and `module` is the value of `defineExtension()`, which has the bindings and the phases. `mergeBindings()` merges them at the top level of `src/index.ts`, so that an error stops the build (the top level runs at the Wizer step). The build does not collect them.
 
 #### Which files are modules
 
 - **File types:** `.js`, `.mjs`, `.ts`, `.mts`. js-compute's esbuild step handles TypeScript (it removes the types; it does no type checking). `.d.ts` files are ignored. (`.tsx`/`.jsx`, for `hono/jsx`, can come later.)
-- **Only files directly in `middleware/` and `routes/` are modules.** Subfolders are not scanned, and files that start with `_` or `.` are skipped. Thus helpers can be next to modules (`middleware/_shared.ts`, `middleware/lib/sign.ts`), or in a folder such as `hono-extensions/lib/`.
-- **Name** = the file name without the order prefix and the extension (`20-grip.ts` → `grip`). It is the key in `templateOptions.hono`. Two files with the same name (`20-grip.js` and `20-grip.ts`, or `10-grip.js` and `20-grip.ts`) are an error.
-- **Order of middleware:** the file-name prefix (`10-`, `20-`, …).
-- **Routes:** `defineRoutes((app, options) => …)` only. No file-based paths (they can come later without breaking this).
+- **Only files directly in the folder are modules.** Subfolders are not scanned, and files that start with `_` or `.` are skipped. Thus helpers go in a folder such as `hono-extensions/lib/`, or in a file such as `_shared.ts`.
+- **Name** = the file name without the order prefix and the extension (`20-grip.ts` → `grip`). It is the key in `templateOptions.hono.extensions`. Two files with the same name (`20-grip.js` and `20-grip.ts`, or `10-grip.js` and `20-grip.ts`) are an error.
+- **Order:** the file-name prefix (`10-`, `20-`, …), in each phase.
+- **No file-based paths.** A module adds its handlers with the methods of Hono (they can come later without breaking this).
+- **Decided in this part (with the user, after the examples of part 6d):** one kind of module, `defineExtension()`, with **phases**, in place of `defineMiddleware()` (with `path`) and `defineRoutes()` (with `after: 'files'`) in two folders. Hono itself does not separate middleware and routes: `app.use()` is `app.all()`-like registration, and only the order of registration matters. Two kinds, two folders, two option maps (`middleware.<name>`, `routes.<name>`), and settings for only one kind (`path`, `after`) were more to learn than the order needs, and one feature (OAuth: a login check and its routes) had to be split in two files. The phases keep the one guarantee that the two kinds gave: the `middleware` phase of all modules comes before the `beforeFiles` phase of any module, so a login check applies to the routes of every module, whatever the file names.
+  - The second argument is a function (the `middleware` phase), or an object with the keys `middleware`, `beforeFiles`, `afterFiles` (camelCase, the same names as in the object). There is no `phase` option.
+  - Each phase function gets `(app, options)`. A module that uses two phases has the same options in both (one entry in `templateOptions.hono.extensions`).
+  - `mergeBindings()` checks the phases at the top level: an object with no phase, a key that is not a phase, or a value that is not a function stops the build, and names the file.
+  - `c.env` in a module is typed from its bindings (`BindingResource`, with `| undefined`, because a missing resource is `undefined`). The type map is in this package, so `/hono` does not need the types of `@fastly/hono-fastly-compute`. `c.var` is not typed in a module, so that a module can set its own variables.
 
 #### Imports in modules
 
@@ -909,35 +906,37 @@ The modules are bundled by esbuild, so their imports work as usual:
 
 - Relative imports (`./foo.js`), including from `.ts` files with the `.js` specifier for a `.ts` file, and specifiers with no extension.
 - JSON (`./bar.json`, also `with { type: 'json' }`); the data is inlined.
-- Packages from the extensions' installed packages (through the copy); the provided packages (`hono`, …) from the app.
+- Packages installed in the folder (bundled); the provided packages (`hono`, …) from the app (external).
 - `fastly:*` modules (`fastly:secret-store`, `fastly:env`, …), through js-compute's plugin.
 - Other file types: only esbuild's **default** loaders apply, because js-compute has no loader options. `.txt` imports as text; `.html` and `.svg` do not. Workaround: put the content in a `.js` or `.ts` module (`export default \`<svg …>\``).
 
 What does not work, because the code runs in a Wasm bundle on Compute:
 
 - Reading files at runtime (`fs.readFile`, `__dirname`): import them.
-- Node built-ins (`node:*`): bundling fails. `template_prebuild.js` can give a clearer error if it scans the modules first.
+- Node built-ins (`node:*`): bundling fails.
 - Dynamic imports with a calculated path (`` import(`./${x}.js`) ``): esbuild cannot follow them. A literal `import('./x.js')` works.
 
-**Type checking** is not part of the build. For editor support and an optional `tsc --noEmit` in CI, the folder has a `tsconfig.json` (from `template init`), with the types for `@fastly/js-compute` (`fastly:*`), `hono`, and `defineMiddleware()` / `defineRoutes()`.
+**Type checking** is not part of the build. For editor support and an optional `tsc --noEmit` in CI, the folder has a `tsconfig.json` (from `template init`), with the types for `@fastly/js-compute` (`fastly:*`), `hono`, and `defineExtension()`.
 
 #### Mount order in `src/index.js`
 
 `src/index.js` loops over the manifest. It does not import modules one by one. The order matters, because `serveStatic()` goes to the next handler when no file matches.
 
-```js
-import { middleware, routes, bindings } from './hono-extensions.generated.js';
+```ts
+import { extensions } from './hono-extensions.generated.js';
 
-const fire = buildFire({ ...bindings, ...rc.templateOptions?.hono?.bindings });
-const app = new Hono();
+const honoOptions = rc.templateOptions?.hono;
+const fire = buildFire(mergeBindings(honoOptions?.bindings, extensions) as BindingsDefs);
+const app = new Hono<{ Bindings: typeof fire.Bindings, Variables: StaticPublisherVariables }>();
 app.use('*', logFastlyServiceVersion());
-app.use('*', staticPublisherVars());            // sets c.var.staticPublisher
-// 1. middleware, in file-name order
-for (const m of middleware) app.use('*', m.module.factory(rc.templateOptions?.hono?.middleware?.[m.name]));
-// 2. routes
-for (const r of routes) r.module.factory(app, rc.templateOptions?.hono?.routes?.[r.name]);
+app.use('*', selectCollection());               // sets c.var.staticPublisher
+// 1. the middleware phase of all modules, then 2. their beforeFiles phase, in file-name order
+for (const phase of [ 'middleware', 'beforeFiles' ] as const)
+  for (const e of extensions) e.module.phases[phase]?.(app, honoOptions?.extensions?.[e.name]);
 app.use('*', serveStatic());                     // 3. published files
-app.notFound(serveFallback());                   // 4. SPA file / 404 page
+// 4. the afterFiles phase: only the requests that no file matches
+for (const e of extensions) e.module.phases.afterFiles?.(app, honoOptions?.extensions?.[e.name]);
+app.notFound(serveFallback());                   // 5. SPA file / 404 page
 fire(app);
 ```
 
@@ -945,33 +944,25 @@ After eject, this is ordinary code: the customer can skip a module, change the o
 
 #### Module shape (task 6.7)
 
-Each file default-exports a **factory**, so that it can get options. `defineMiddleware()` and `defineRoutes()` from `@fastly/compute-js-static-publish/hono` give types and completion. There is no extra context argument: a handler gets everything from `c`, as in any Hono app (bindings on `c.env`, values of this package on `c.var.staticPublisher`).
+Each file default-exports `defineExtension()` from `@fastly/compute-js-static-publish/hono`, with a function for each phase, so that it gets the app and its options at the top level of the app. It gives types and completion. There is no extra context argument: a handler gets everything from `c`, as in any Hono app (bindings on `c.env`, values of this package on `c.var.staticPublisher`).
 
 ```js
-// hono-extensions/middleware/20-grip.js
-import { defineMiddleware } from '@fastly/compute-js-static-publish/hono';
+// hono-extensions/grip.js
+import { defineExtension } from '@fastly/compute-js-static-publish/hono';
 import { serveGrip } from '@fanoutio/serve-grip/hono';
 
-export default defineMiddleware(
-  { bindings: { grip: 'SecretStore:GRIP' } },
-  (options) => async (c, next) => { const key = c.env.grip; /* … */ },
-);
-```
-
-```js
-// hono-extensions/routes/stream.js
-import { defineRoutes } from '@fastly/compute-js-static-publish/hono';
-
-export default defineRoutes((app, options) => {
-  app.get('/stream', (c) => {
-    if (c.var.grip.isProxied) {
+export default defineExtension({ bindings: { grip: 'SecretStore:grip' } }, {
+  middleware: (app, options) => {
+    app.use('/stream/*', serveGrip((c) => ({ /* settings from c.env.grip */ })));
+  },
+  beforeFiles: (app, options) => {
+    app.get('/stream/:channel', (c) => {
       const gripInstruct = c.var.grip.startInstruct();
-      gripInstruct.addChannel('test');
+      gripInstruct.addChannel(c.req.param('channel'));
       gripInstruct.setHoldStream();
       return c.text('[stream open]\n');
-    }
-    // …
-  });
+    });
+  },
 });
 ```
 
@@ -980,13 +971,13 @@ export default defineRoutes((app, options) => {
 Extensions use `c.env`, from `buildFire()` of `@fastly/hono-fastly-compute`. It supports `Acl`, `Backend`, `ConfigStore`, `env`, `KVStore`, `Logger`, and `SecretStore`, plus `c.env.clientInfo` and `c.env.serverInfo`. Resources are looked up lazily and cached; a resource that is missing or not linked is `undefined`.
 
 - **Two sources, merged into one `buildFire()` call,** so `c.env` is the same object at runtime:
-  - A module declares its own (`defineMiddleware({ bindings: … }, …)`). They are typed in that module. `template_prebuild.js` collects them into the manifest.
+  - A module declares its own (`defineExtension({ bindings: … }, …)`). They are typed in that module. `mergeBindings()` reads them from the manifest.
   - The rc declares app-level ones in `templateOptions.hono.bindings`. They are visible in `src/index.js` after eject.
 - The same key with the same value is OK. The same key with **different** values is an error at build time that names both sources.
 - Check binding names when possible: a Config Store name that is not a valid identifier (for example `my-config`) cannot be opened.
 - Values of this package are on `c.var.staticPublisher` (task 6.3).
 
-**To decide in this part:** whether the build checks binding names (for example a Config Store name that is not a valid identifier).
+**Decided in this part:** the build does not check binding names. A binding value must be a non-empty string.
 
 #### Options (task 6.4)
 
@@ -1007,7 +998,7 @@ Extensions use `c.env`, from `buildFire()` of `@fastly/hono-fastly-compute`. It 
 - **Secrets are never in the config:** modules read them through bindings.
 - Options for each collection (through the publish settings and `getServerConfig()`) could come later, for options that can differ between collections; never for anything that is necessary before the collection is known.
 
-**To decide in this part (optional):** in managed mode, leave the `templateOptions` keys of other templates out of the generated rc (they are not used).
+**Decided in this part:** in managed mode, the generated rc has only the `templateOptions` key of the app's template, so that a change to the options of another template does not change the app. An unknown key in `build` or `templateOptions` is a warning (`checkTemplateSettings()`).
 
 #### Dependencies
 
@@ -1025,14 +1016,14 @@ The extensions folder is its own small package:
 ```
 
 - The customer runs `npm install` (or `npm ci`) **in the folder**, so that the editor and the type checker see everything, including the peer packages. Never in the generated app (it is generated again).
-- The template declares the packages that it **provides** (`hono`, `@fastly/compute-js-static-publish`, `@fastly/js-compute`). `template_prebuild.js` copies the folder's `node_modules` into the app **without** them, so at build time they resolve to the app's copies: one `hono` in the bundle. Imports from other packages work the same way (serve-grip's own `import 'hono'` also finds the app's copy).
+- The template **provides** the `dependencies` of the app (`hono`, `@fastly/hono-fastly-compute`, `@fastly/js-compute`) and this package. The bundle leaves them external, so at build time they resolve to the app's copies: one `hono` in the Wasm binary. Imports in other packages work the same way (serve-grip's own `import 'hono'` also stays external).
 - **Two lockfiles, never merged.** The packages of the extensions come from the folder's lockfile (the customer's); the packages of the app come from the template's lockfile (task 3.5). Thus the builds stay reproducible.
 - **Version check:** `template_prebuild.js` warns if a range in the folder's `package.json` for a provided package does not include the version that the app has. The build uses the template's `hono`, not the one in the folder's `node_modules`. The message gives the fix: `hono-extensions/package.json expects hono ^4.6.0, but the app provides 4.13.2. Run: npx @fastly/compute-js-static-publish template init`. A mismatch is a warning, not an error: the app's copy is the one that runs, so the risk is only types that are a little wrong.
 - **Install both:** `npm ci` in the folder **and** in the app dir. CI tools must do both, the folder first.
-- **Copy rules:** a real copy, not a symlink (esbuild follows symlinks to the real path, which would bring back the second `hono`); extension code must not import files outside the folder (for example `../shared/x.js`), because they are not copied; copying `node_modules` takes a little time at each build.
-- **Side effects:** error locations and source maps point at the copy, not at the folder. The Fastly CLI's file watcher may not see changes in the folder, because it is outside the app dir; otherwise, edits show at the next build.
+- **Imports from outside the folder** (for example `../shared/x.js`) are bundled, but they are not part of the fingerprint, and the watcher does not see their changes. Keep the code of the extensions in the folder.
+- **Error locations** point at the files in the folder.
 
-**To test in this part (task 6.6):** whether the Fastly CLI's file watcher (`fastly compute serve --watch`) sees changes in `hono-extensions/`. If not, pass the folder to the watcher's directory option.
+**Tested in this part (task 6.6):** `fastly compute serve --watch` does not see changes in `hono-extensions/`, because it watches only the app dir (`--watch-dir`, default the current dir). It sees a change to `src/hono-extensions.generated.js`, also though that file is in `.gitignore` (since Fastly CLI 7, the watcher reads only `.fastlyignore`). Thus the template has `scripts/template_watch.js` (part 1: `npm run dev:watch`; part 3: `dev -- --watch`), which calls `watchHonoExtensions()`: it watches the folder (except `node_modules/`), and after a change bundles again. The new manifest makes the Fastly CLI build and restart the app. While the folder does not exist, it checks each second if the folder was made. `--watch-dir` is not used: it takes one directory, which would have to be the parent of the app and of the folder.
 
 #### `template init` (task 6.8)
 
@@ -1045,19 +1036,19 @@ A command of the core. Each template defines what it initializes. For `hono`, it
 
 | Command | Effect |
 |---|---|
-| `template init` | If the folder is missing: makes it, with `package.json` (peer dependencies set to the provided versions, from `pinnedVersion()`), a starter `tsconfig.json`, empty `middleware/` and `routes/`, and an **inactive** example, `middleware/_example.js` (skipped until the customer renames it, so that a new Hono app is still exactly the plain Hono app). If the folder exists: updates only the parts that the template owns (the peer versions in `package.json`, merged; the customer's own dependencies are not changed), and adds missing starter files. Never changes customer modules. |
+| `template init` | If the folder is missing: makes it, with `package.json` (peer dependencies set to the provided versions), a starter `tsconfig.json` (with `typescript` as a dev dependency), and an **inactive** example, `_example.ts` (skipped until the customer renames it, so that a new Hono app is still exactly the plain Hono app). If the folder exists: updates only the parts that the template owns (the peer versions in `package.json`, merged; the customer's own dependencies are not changed), and adds missing starter files. Never changes customer modules. |
 | `template init --reset` | Also writes the starter files (`tsconfig.json`, the example) again, as the template has them. Lists what it will replace and asks, or needs `--force` in non-interactive mode. Never deletes customer modules. |
 | `template init --check` | Changes nothing. Fails if the parts that the template owns have drifted. For CI. |
 
 Then `npm install` in the folder (npm 7 and later install peer dependencies). `status --json` (part 5) lists the provided packages and their versions.
 
-**Where the versions come from:** in managed mode, the template's pinned versions (`pinnedVersion()`, from the shipped lockfile); in ejected mode, the app's installed packages (for example `compute-js/node_modules/hono/package.json`).
+**Where the versions come from** (`providedVersions()`): the app's installed packages if they are installed (for example `compute-js/node_modules/hono/package.json`), else the template's pinned versions (`pinnedVersion()`, from the shipped lockfile). This package is the version that runs.
 
-**To decide in this part:** whether `deploy` and `dev` show a hint when `managed.template` is `hono` but there is no extensions folder.
+**Decided in this part:** `deploy` and `dev` show a one-line hint when `managed.template` is `hono` but there is no extensions folder. `template init --check` fails with the error code `template-init-needed` (exit code `2`).
 
 #### Fingerprint
 
-There is no separate bundle to hash. The fingerprint (task 3.7) also includes the **contents of the extensions folder** (modules and helpers) and **its lockfile**, so any change to the customer's code or to its resolved dependencies triggers a deploy, and nothing else does. (The manifest follows from these.)
+The fingerprint (task 3.7) also includes the **files of the extensions folder** (modules, helpers, and **its lockfile**; not `node_modules/` and `.git/`), so any change to the customer's code or to its resolved dependencies triggers a deploy, and nothing else does. (The manifest follows from these.)
 
 #### Eject
 
@@ -1067,7 +1058,16 @@ Nothing about the extensions changes at eject:
 - The folder stays where it is. `build.hono.extensionsDir` stays in the rc, with the path written again relative to the rc's new location (for example `../hono-extensions`).
 - The customer can now change `src/index.js` (skip or reorder modules) and the hook scripts.
 
-**To test in this part (tasks 3.9 and 6.8):** `eject` writes `build.hono.extensionsDir` again relative to the rc's new location (for example `../hono-extensions`).
+**Tested in this part (tasks 3.9 and 6.8):** `eject` writes `build.hono.extensionsDir` again relative to the rc's new location (for example `../hono-extensions`), and the ejected app builds with the extensions (e2e).
+
+### Examples (part 6d)
+
+**Decided in this part:**
+
+- The examples are folders in `examples/hono/<name>/`, in the repository only (not in the npm package; `files` in `package.json` does not list `examples/`). Other examples of this package go to `examples/` too. Each folder has a README and a `hono-extensions/` folder: the modules, and a `package.json` with the `dependencies` of the example. For a new project, the customer copies this `hono-extensions/` folder into the project, and runs `template init` (which adds the peer dependencies and the starter files) and `npm install`. For a project that exists, the README shows how to copy the files and install the packages. The README says that there is no way to scaffold an app with an example. The local e2e tests use the steps for a new project, one example in each project. The deployed test puts both examples in one project with the steps for a project that exists.
+- `grip`: the pattern of the Fastly starter kit `fanout` (the app hands off one path to Fanout through the backend `self`, and answers the requests from Fanout itself), not of `fanout-forward`. One module, `grip.ts`: in the `middleware` phase, the handoff and `serveGrip()` on `${path}/*` (default `/events`); in the `beforeFiles` phase, `GET ${path}/stream/:channel` (HTTP stream), `GET ${path}/sse/:channel` (Server-Sent Events), and `POST ${publishPath}/:channel` (default `/publish`) with `Authorization: Bearer <PUBLISH_KEY>`. No long-poll and no WebSocket. Secret Store `grip`: `PUBLISH_KEY` and `FANOUT_API_TOKEN` on Fastly (the publish URL and the verify key come from `buildFanoutGripConfig()`); `GRIP_URL` and `GRIP_VERIFY_KEY` locally (Pushpin).
+- `oauth`: `@hono/oauth-providers` for GitHub and Google. One module, `10-oauth.ts`, all in the `middleware` phase: a login check on `protect` (default `/*`; `/auth/*` never needs a session) with `login` and `allowedUsers` (`github:<login>`, `google:<verified email>`), and the routes `/auth/github`, `/auth/google`, `/auth/logout`. The session is a cookie signed with `SESSION_KEY` (HMAC-SHA256), with an expiry time (`sessionMaxAge`). The client secrets are read for each request (a secret cannot be read at the top level). Protected responses get `Cache-Control: private`.
+- Local secrets come from environment variables, through `managed.fastlyToml.local_server.secret_stores` (`env`).
 
 ### What this needs from the template mechanism (task 6.4)
 
@@ -1094,3 +1094,13 @@ type AppTemplate = {
 ### Public helper API (task 6.5)
 
 The files that a template ships use only the public API of this package, because they stay in the app after eject, with later versions of this package. The helpers for template scripts (for example: read the rc; list the modules with the naming rules) are a public, semver'd API, for example a Node-side subpath export.
+
+## Part 7: The npx command of a prerelease
+
+Decided with the user, after 8.1.0-beta.1:
+
+- **The CLI computes the dist-tag from its own version** (`cliCommand()` in `src/cli/util/package.ts`): the first prerelease identifier, which is also the npm dist-tag of `ci-release.yaml` (`8.1.0-beta.1` → `@beta`). A stable version gives the command with no dist-tag, as before, or `@latest` for the usage of `scaffold`. A script that changes the source for each prerelease was considered; the computed command is always correct, also for a build from a branch, and needs no release step.
+- **No dist-tag when the copy that runs is installed locally** (decided with the user after a test: in a project with 8.1.0-beta.1 installed, `npx …` runs beta.1, but `npx …@beta` runs beta.2 from npm). `isLocalCopy()` finds the nearest `node_modules/@fastly/compute-js-static-publish` from the current directory, and compares its real path with the copy that runs. This applies in an ejected app, and in a managed project that has this package as a dev dependency (which `deploy` recommends).
+- **The files that the CLI writes into an app do not get a dist-tag.** The `package.json` scripts of a scaffolded app run `npx @fastly/compute-js-static-publish …`, and the app has this package in its dependencies, so npx runs that copy. With a dist-tag, npx would look up the dist-tag on npm, and could run another version.
+- **Part 7 is on top of the stack**, not on `dev/8.1`, because `getOwnVersion()` comes from part 1, and parts 3 and 6 add most of the messages.
+- **The docs** cannot know the version of the CLI. `scripts/prerelease-docs.mjs <dist-tag> <git-ref>` (#175, on `dev/8.1`) changes them in the version commit of each prerelease: the npx commands get the dist-tag, and the links to this repository point at the branch of the prerelease.

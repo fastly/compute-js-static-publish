@@ -9,6 +9,134 @@ This is straightforward if you're using `compute-js-static-publisher` out-of-the
 > This document is under construction.
 > 
 
+## Move an existing app to managed mode (8.1)
+
+You do not have to do this. An ejected app (a `compute-js/` directory with `static-publish.rc.js`) continues to work.
+In managed mode, this package generates the app from one file, `static-publish.project.js`, and you upgrade by
+changing the version of this package. See "Managed and ejected apps" in `README.md`.
+
+> [!IMPORTANT]
+> Managed mode generates the `plain` app. If you changed `src/index.js` (or other files of the app), keep your app
+> ejected, or move your changes into options of the project file first.
+
+These steps move a project with this layout. Change the paths to match your project:
+
+```
+my-site/
+├── public/
+└── compute-js/        ← static-publish.rc.js, publish-content.config.js, fastly.toml, ...
+```
+
+1. In `my-site/`, add this package as a dev dependency at 8.1.0 or later, so that the version is pinned:
+
+   ```sh
+   npm install --save-dev @fastly/compute-js-static-publish
+   ```
+
+2. Make `my-site/static-publish.project.js`. Paths in it are relative to `my-site/`:
+
+   ```js
+   /** @type {import('@fastly/compute-js-static-publish').StaticPublishProject} */
+   const project = {
+     // From compute-js/static-publish.rc.js: the storage fields (kvStore or s3), publishId,
+     // defaultCollectionName, and collectionSelection, if you have it. Do not copy generatedFrom.
+     storageMode: "kv-store",
+     kvStore: { kvStoreName: "site-content" },
+     publishId: "default",
+     defaultCollectionName: "live",
+     // A new working directory beside the project file.
+     staticPublisherWorkingDir: "./static-publisher",
+
+     // The contents of compute-js/publish-content.config.js, with rootDir relative to my-site/
+     // ('../public' becomes './public').
+     publishContent: {
+       rootDir: "./public",
+       server: { /* ... */ },
+     },
+
+     managed: {
+       // From compute-js/fastly.toml: name, description, authors, and service_id.
+       name: "my-site",
+       description: "My site",
+       authors: [ "me@example.com" ],
+       serviceId: "SERVICE_ID",
+       // The version of this package that you installed in step 1.
+       staticPublishVersion: "8.1.0",
+     },
+   };
+
+   export default project;
+   ```
+
+   If the app has no service yet, write the line `    serviceId: undefined,` (exactly), so that the first `deploy`
+   writes the Service ID into it.
+
+3. Add these lines to `my-site/.gitignore`:
+
+   ```
+   /.static-publish/
+   /static-publisher/
+   ```
+
+4. In `my-site/`, check the project, publish to the local KV Store, and run the app:
+
+   ```sh
+   npx compute-js-static-publish status
+   npx compute-js-static-publish publish-content --local
+   npx compute-js-static-publish dev
+   ```
+
+   The CLI uses only the files of the directory where it runs, so `compute-js/` has no effect here.
+
+5. Deploy. The first `deploy` deploys the generated app to the service of `managed.serviceId`, because the active
+   version has no fingerprint yet:
+
+   ```sh
+   FASTLY_API_TOKEN=... npx compute-js-static-publish deploy
+   ```
+
+   The collections in storage do not change. Publish again only to change the content.
+
+6. When the steps above work, take `compute-js/` out of the repo, and commit `static-publish.project.js`.
+
+## Move from `@fastly/hono-compute-js-static-publish` (8.1)
+
+`@fastly/hono-compute-js-static-publish` supports v6 and v7 of this package. From 8.1, this package has Hono support itself, as `@fastly/compute-js-static-publish/hono`. First upgrade the app to v8 (see [Upgrade from v7 to v8](#upgrade-from-v7-to-v8)). Then:
+
+1. Remove the old package, and add the packages that a Hono app uses on Compute:
+
+   ```sh
+   npm uninstall @fastly/hono-compute-js-static-publish
+   npm install hono @fastly/hono-fastly-compute
+   ```
+
+2. Change the code. `fromStaticPublishRc()` now returns an object, not the `serveStatic` function:
+
+   ```js
+   // Before
+   import { fire } from 'hono/service-worker';
+   import { fromStaticPublishRc } from '@fastly/hono-compute-js-static-publish';
+   const serveStatic = fromStaticPublishRc(rc);
+
+   // After
+   import { fire } from '@fastly/hono-fastly-compute';
+   import { fromStaticPublishRc } from '@fastly/compute-js-static-publish/hono';
+   const { serveStatic, serveFallback } = fromStaticPublishRc(rc);
+   ```
+
+   Use `fire()` from `@fastly/hono-fastly-compute`, not from `hono/service-worker`. By default, the handler of `hono/service-worker` sends each 404 response to `fetch()`, and Compute has no default backend.
+
+3. Add `app.notFound(serveFallback())`. `serveStatic()` does not serve the SPA file or the 404 page.
+
+4. Change the types in the JSDoc of your config files to the main package, for example `import('@fastly/compute-js-static-publish').StaticPublishRc`. The `/hono` export does not have these types.
+
+Differences of `serveStatic()`:
+
+- It serves files with `PublisherServer.serveRequest()`. Thus it uses `autoIndex`, `autoExt`, the compressed variants, and the response cache. The old package looked up the request path in the index directly.
+- It applies `publicDirPrefix` (deprecated). If it is set, `root` is relative to it.
+- It serves only `GET` and `HEAD`. For other methods, it calls the next handler.
+- For previews, use `selectCollection()` with `collectionSelection` in `static-publish.rc.js` (see [Using Hono](./README.md#-using-hono)).
+
 ## Upgrade from v7 to v8
 
 v8 can use the files that v7 published. The storage key layout did not change. v8 also accepts the v7 format of
@@ -72,10 +200,20 @@ To stop using `publicDirPrefix`:
 1. Find the files that are under `rootDir` but not under the public directory (`site/public/` in the example). For
    each file, do one of these steps:
    - If your app does not use the file, do nothing. After step 2, the CLI does not publish it.
-   - If the file is your `spaFile` or your `notFoundPageFile`, move it into the public directory. Then requests can
-     also get it at its own URL, for example `/404.html`.
-   - If your code reads the file with `getMatchingAsset()`, move it into the public directory. Then requests can also
-     get it at its own URL. To prevent this, return a response in `src/index.js` before you call `serveRequest()`:
+   - If the file is your `spaFile` or your `notFoundPageFile`, or if your code reads the file with
+     `getMatchingAsset()`, move it into the public directory, and add it to `hiddenItems` in
+     `publish-content.config.js` (from 8.1.0). A hidden file is published, but requests cannot get it at its own URL,
+     for example `/404.html`. The server still serves a hidden `spaFile` or `notFoundPageFile` as the fallback page,
+     and your code gets a hidden file with `getMatchingAsset(key, { includeHidden: true })`. See "Hidden files" in
+     `README.md`. Your app must be built with 8.1.0 or later to serve a collection that has hidden files:
+
+     ```js
+     hiddenItems: [ '/404.html', '/templates/' ],
+     ```
+
+     Before 8.1.0, there are no hidden files. Move the file into the public directory. Then requests can also get it
+     at its own URL. To prevent this for a file that your code reads, return a response in `src/index.js` before you
+     call `serveRequest()`:
 
      ```js
      const url = new URL(request.url);

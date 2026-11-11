@@ -4,16 +4,18 @@
  */
 
 import { getCommandAndArgs } from '../../../util/args.js';
+import { fail, isJsonMode, recordFailure } from '../../../util/output.js';
 import * as deleteCommand from './delete.js';
 import * as listCommand from './list.js';
 import * as promoteCommand from './promote.js';
 import * as updateExpirationCommand from './update-expiration.js';
+import { cliCommand } from '../../../util/package.js';
 
 function help() {
   console.log(`\
 
 Usage:
-  npx @fastly/compute-js-static-publish collections <sub-command> [options]
+  ${cliCommand()} collections <sub-command> [options]
 
 Description:
   Manage named collections within a Compute application built with @fastly/compute-js-static-publish.
@@ -45,8 +47,8 @@ Global Options:
   -h, --help                       Show this help message and exit.
 
 Examples:
-  npx @fastly/compute-js-static-publish collections list
-  npx @fastly/compute-js-static-publish collections delete --collection-name=preview-42
+  ${cliCommand()} collections list
+  ${cliCommand()} collections delete --collection-name=preview-42
 `);
 }
 
@@ -66,7 +68,7 @@ export async function action(actionArgs: string[]) {
       console.error(commandAndArgs.error);
       console.error(`Specify one of the following sub-commands: ${Object.keys(modes).join(', ')}`);
       console.error();
-      process.exitCode = 1;
+      recordFailure('usage', commandAndArgs.error);
     }
 
     help();
@@ -74,6 +76,10 @@ export async function action(actionArgs: string[]) {
   }
 
   const { command, argv, } = commandAndArgs;
+  if (isJsonMode() && ![ 'list', 'delete', 'promote' ].includes(command)) {
+    fail('json-not-supported', `--json is not supported for 'collections ${command}'.`);
+    return;
+  }
   await modes[command].action(argv);
 
 }

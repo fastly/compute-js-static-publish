@@ -43,6 +43,8 @@ export type LoadPurgeTargetParams = {
   localMode: boolean,
   computeAppDir: string,
   fastlyServiceId: unknown,
+  // managed.serviceId of a managed project.
+  projectServiceId?: string,
   fastlyApiToken: unknown,
   purgeEnvironments: unknown,
 };
@@ -64,9 +66,10 @@ export function loadPurgeTarget(params: LoadPurgeTargetParams): PurgeTarget | nu
   const serviceIdResult = loadServiceId({
     commandLine: params.fastlyServiceId,
     fastlyTomlPath: path.resolve(params.computeAppDir, 'fastly.toml'),
+    projectServiceId: params.projectServiceId,
   });
   if (serviceIdResult == null) {
-    console.log(`- Service ID not found (--fastly-service-id, FASTLY_SERVICE_ID, or fastly.toml). Will skip the purge.`);
+    console.log(`- Service ID not found (--fastly-service-id, FASTLY_SERVICE_ID, managed.serviceId, or fastly.toml). Will skip the purge.`);
     return null;
   }
   console.log(`✔️ Service ID from ${serviceIdResult.source}: ${serviceIdResult.serviceId}`);
@@ -132,13 +135,18 @@ export async function purgeSurrogateKey(
 
 }
 
+export type PurgeResult = { environment: PurgeEnvironment } & PurgeOutcome;
+
 // Purges the cached responses of a collection in each environment of the purge
-// target. A failed purge is a warning, because the change to storage is done.
-export async function purgeCollection(purgeTarget: PurgeTarget, publishId: string, collectionName: string) {
+// target, and returns the outcome for each environment. A failed purge is a
+// warning, because the change to storage is done.
+export async function purgeCollection(purgeTarget: PurgeTarget, publishId: string, collectionName: string): Promise<PurgeResult[]> {
   const surrogateKey = `${publishId}-${collectionName}`;
+  const results: PurgeResult[] = [];
   for (const environment of purgeTarget.environments) {
     console.log(`Purging surrogate key [${surrogateKey}] on service [${purgeTarget.serviceId}] (${environment})...`);
     const outcome = await purgeSurrogateKey(purgeTarget.fastlyApiContext, purgeTarget.serviceId, surrogateKey, true, environment);
+    results.push({ environment, ...outcome });
     switch (outcome.result) {
     case 'purged':
       console.log('Purged');
@@ -151,4 +159,5 @@ export async function purgeCollection(purgeTarget: PurgeTarget, publishId: strin
       break;
     }
   }
+  return results;
 }
