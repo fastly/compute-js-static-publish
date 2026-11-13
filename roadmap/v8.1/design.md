@@ -1098,10 +1098,10 @@ The files that a template ships use only the public API of this package, because
 
 ## Part 7: The npx command of a prerelease
 
-Decided with the user, after 8.1.0-beta.1:
+Decided after 8.1.0-beta.1:
 
 - **The CLI computes the dist-tag from its own version** (`cliCommand()` in `src/cli/util/package.ts`): the first prerelease identifier, which is also the npm dist-tag of `ci-release.yaml` (`8.1.0-beta.1` → `@beta`). A stable version gives the command with no dist-tag, as before, or `@latest` for the usage of `scaffold`. A script that changes the source for each prerelease was considered; the computed command is always correct, also for a build from a branch, and needs no release step.
-- **No dist-tag when the copy that runs is installed locally** (decided with the user after a test: in a project with 8.1.0-beta.1 installed, `npx …` runs beta.1, but `npx …@beta` runs beta.2 from npm). `isLocalCopy()` finds the nearest `node_modules/@fastly/compute-js-static-publish` from the current directory, and compares its real path with the copy that runs. This applies in an ejected app, and in a managed project that has this package as a dev dependency (which `deploy` recommends).
+- **No dist-tag when the copy that runs is installed locally** (decided after a test: in a project with 8.1.0-beta.1 installed, `npx …` runs beta.1, but `npx …@beta` runs beta.2 from npm). `isLocalCopy()` finds the nearest `node_modules/@fastly/compute-js-static-publish` from the current directory, and compares its real path with the copy that runs. This applies in an ejected app, and in a managed project that has this package as a dev dependency (which `deploy` recommends).
 - **The files that the CLI writes into an app do not get a dist-tag.** The `package.json` scripts of a scaffolded app run `npx @fastly/compute-js-static-publish …`, and the app has this package in its dependencies, so npx runs that copy. With a dist-tag, npx would look up the dist-tag on npm, and could run another version.
 - **Part 7 is on top of the stack**, not on `dev/8.1`, because `getOwnVersion()` comes from part 1, and parts 3 and 6 add most of the messages.
 - **The docs** cannot know the version of the CLI. `scripts/prerelease-docs.mjs <dist-tag> <git-ref>` (#175, on `dev/8.1`) changes them in the version commit of each prerelease: the npx commands get the dist-tag, and the links to this repository point at the branch of the prerelease.
