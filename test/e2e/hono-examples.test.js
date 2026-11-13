@@ -125,8 +125,8 @@ async function waitFor(check, message, timeoutMs = 30_000) {
 
 // A session cookie of the OAuth example, signed as hono/cookie
 // setSignedCookie() does.
-function makeSessionCookie(id, { key, exp = Math.floor(Date.now() / 1000) + 600 }) {
-  const value = JSON.stringify({ id, name: 'E2E', exp });
+function makeSessionCookie(id, { key, exp = Math.floor(Date.now() / 1000) + 600, accountId = 'github-id:1' }) {
+  const value = JSON.stringify({ id, accountId, name: 'E2E', exp });
   const signature = crypto.createHmac('sha256', key).update(value).digest('base64');
   return `session=${encodeURIComponent(`${value}.${signature}`)}`;
 }
@@ -224,11 +224,15 @@ describe('the OAuth example', { skip: skipUnlessFastlyCli() }, () => {
 
   before(async () => {
     ({ dir } = makeExampleProject([ 'oauth' ], {
+      // A path source, to check that a preview URL needs the same login.
+      scaffoldArgs: [ '--kv-store-name', 'e2e-content', '--collection-selection', 'path:/_preview/{collection}' ],
       templateOptions: {
         extensions: {
           oauth: {
-            protect: '/docs/*',
-            allowedUsers: [ 'github:octocat' ],
+            // The login path is also protected, so the login check must let it through.
+            protect: [ '/docs/*', '/signin' ],
+            login: '/signin',
+            allowedUsers: [ 'github:octocat', 'github-id:42' ],
             github: { clientId: 'e2e-github-client' },
             google: { clientId: 'e2e-google-client' },
           },
@@ -270,8 +274,26 @@ describe('the OAuth example', { skip: skipUnlessFastlyCli() }, () => {
   test('a protected path without a session goes to the login, and keeps the path', async () => {
     const res = await get('/docs/');
     assert.equal(res.status, 302);
-    assert.equal(res.headers.location, '/auth/github');
+    assert.equal(res.headers.location, '/signin');
     assert.ok(res.headers['set-cookie'].some(x => x.startsWith('oauth_return_to=%2Fdocs%2F;')));
+  });
+
+  test('protect is a path prefix', async () => {
+    assert.equal((await get('/docs')).status, 302);
+    assert.notEqual((await get('/docsx')).status, 302);
+  });
+
+  test('the login path is not checked, also when protect has it', async () => {
+    assert.notEqual((await get('/signin')).status, 302);
+  });
+
+  test('a preview URL of a protected path needs the same login', async () => {
+    const res = await get('/_preview/live/docs/');
+    assert.equal(res.status, 302);
+    assert.equal(res.headers.location, '/signin');
+    const allowed = await get('/_preview/live/docs/', { cookie: sessionCookie('github:octocat') });
+    assert.equal(allowed.status, 200);
+    assert.match(allowed.body.toString(), /<h1>Docs<\/h1>/);
   });
 
   test('the login routes go to GitHub and Google with the client ID', async () => {
@@ -298,6 +320,11 @@ describe('the OAuth example', { skip: skipUnlessFastlyCli() }, () => {
   test('another user gets 403', async () => {
     const res = await get('/docs/', { cookie: sessionCookie('github:someone-else') });
     assert.equal(res.status, 403);
+  });
+
+  test('allowedUsers can have the account ID, which does not change with the name', async () => {
+    const res = await get('/docs/', { cookie: sessionCookie('github:new-name', { accountId: 'github-id:42' }) });
+    assert.equal(res.status, 200);
   });
 
   test('a session with a wrong signature, or an expired one, goes to the login', async () => {
