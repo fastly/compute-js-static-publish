@@ -614,10 +614,12 @@ export async function action(actionArgs: string[]) {
   }
   console.log(`✅  Scan complete.`);
   console.log(`  | ${Object.keys(assetsIndex).length} file(s) in the index, ${hiddenCount} of them hidden.`);
+  // Counted before applyBatch(), which can split the entries into chunks.
+  const uploadedVariantCount = batch.storageProviderBatchEntries.length;
   if (existingKeys != null) {
-    console.log(`  | ${existingVariantCount} variant(s) already in storage, ${batch.storageProviderBatchEntries.length} to upload.`);
+    console.log(`  | ${existingVariantCount} variant(s) already in storage, ${uploadedVariantCount} to upload.`);
   } else {
-    console.log(`  | ${batch.storageProviderBatchEntries.length} variant(s) to upload.`);
+    console.log(`  | ${uploadedVariantCount} variant(s) to upload.`);
   }
 
   await storageProvider.applyBatch(batch, { existingKeys, verbose });
@@ -746,7 +748,7 @@ export async function action(actionArgs: string[]) {
     },
     // Each file, and each compressed variant that is kept.
     storageItems: {
-      uploaded: batch.storageProviderBatchEntries.length,
+      uploaded: uploadedVariantCount,
       reused: existingVariantCount,
     },
     expiresAt: expirationTime != null ? new Date(expirationTime * 1000).toISOString() : null,
