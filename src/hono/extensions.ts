@@ -115,19 +115,24 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> =>
 // one name with two different resources; the message names the file. Call it at
 // the top level of the app, so that an error stops the build.
 export function mergeBindings(appBindings: ExtensionBindings | undefined, entries: ExtensionEntry[]): ExtensionBindings {
-  const merged: ExtensionBindings = {};
-  const sourceOf: Record<string, string> = {};
+  // Maps, so that a binding name such as 'toString' is not found on
+  // Object.prototype.
+  const merged = new Map<string, string>();
+  const sourceOf = new Map<string, string>();
 
   const add = (bindings: ExtensionBindings, source: string) => {
     for (const [ name, resource ] of Object.entries(bindings)) {
-      if (name in merged && merged[name] !== resource) {
+      const existing = merged.get(name);
+      if (existing != null && existing !== resource) {
         throw new Error(
-          `The binding '${name}' is '${merged[name]}' in ${sourceOf[name]}, ` +
+          `The binding '${name}' is '${existing}' in ${sourceOf.get(name)}, ` +
           `but '${resource}' in ${source}. Use the same resource, or another name.`,
         );
       }
-      merged[name] = resource;
-      sourceOf[name] ??= source;
+      merged.set(name, resource);
+      if (!sourceOf.has(name)) {
+        sourceOf.set(name, source);
+      }
     }
   };
 
@@ -156,5 +161,5 @@ export function mergeBindings(appBindings: ExtensionBindings | undefined, entrie
     }
     add(module.bindings ?? {}, source);
   }
-  return merged;
+  return Object.fromEntries(merged);
 }
