@@ -233,13 +233,13 @@ An **ejected app** is in the repo, and you own its code. Every app that `scaffol
 
 #### Managed projects
 
-`scaffold --managed` writes only one file, `static-publish.project.js`, in the current directory (the project dir), and adds `.static-publish/` and the working directory to the `.gitignore` there:
+`scaffold --managed` writes only one file, `static-publish.project.js`, in the current directory (the project dir), and adds `node_modules/`, `.static-publish/`, and the working directory to the `.gitignore` there, if they are not in it:
 
 ```
 my-site/
 ├── static-publish.project.js            # Commit this: the only config file
 ├── public/                              # Your static site files
-├── .gitignore                           # Ignores .static-publish/ and static-publisher/
+├── .gitignore                           # Ignores node_modules/, .static-publish/, and static-publisher/
 └── static-publisher/                    # ⚠️ Do not commit - the working directory
 ```
 
