@@ -23,6 +23,8 @@ export function templateHasInit(templateName: string): boolean {
 }
 
 // The starter files of a template, keyed by the path relative to its folder.
+// The file 'gitignore' is written as '.gitignore', because npm leaves a file
+// named .gitignore out of the published package.
 function starterFiles(templateName: string): Record<string, string> {
   const dir = path.resolve(resourcesDir, 'template-init', templateName);
   const files: Record<string, string> = {};
@@ -32,7 +34,7 @@ function starterFiles(templateName: string): Record<string, string> {
       if (entry.isDirectory()) {
         walk(rel);
       } else {
-        files[rel] = fs.readFileSync(path.resolve(dir, rel), 'utf-8');
+        files[rel === 'gitignore' ? '.gitignore' : rel] = fs.readFileSync(path.resolve(dir, rel), 'utf-8');
       }
     }
   };

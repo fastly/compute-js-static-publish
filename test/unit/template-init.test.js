@@ -45,10 +45,11 @@ describe('template init', () => {
     assert.match(versions.hono, /^4\.\d+\.\d+$/);
   });
 
-  test('a new folder gets package.json, tsconfig.json, and the inactive example', () => {
+  test('a new folder gets package.json, tsconfig.json, .gitignore, and the inactive example', () => {
     const dir = path.join(makeDir(), 'hono-extensions');
     const plan = planTemplateInit('hono', dir, provided, { reset: false });
-    assert.deepEqual(Object.keys(plan.write).sort(), [ '_example.ts', 'package.json', 'tsconfig.json' ]);
+    assert.deepEqual(Object.keys(plan.write).sort(), [ '.gitignore', '_example.ts', 'package.json', 'tsconfig.json' ]);
+    assert.equal(plan.write['.gitignore'], '/node_modules\n');
     assert.deepEqual(plan.replace, []);
     const packageJson = JSON.parse(plan.write['package.json']);
     assert.deepEqual(packageJson.peerDependencies, { hono: '^4.13.14', '@fastly/compute-js-static-publish': '^8.1.0' });
