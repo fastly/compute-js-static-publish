@@ -207,7 +207,8 @@ export async function action(actionArgs: string[]) {
         reason: 'up-to-date',
         serviceId,
         version: active.number,
-        domain: (await getVersionDomains(context, serviceId, active.number))[0] ?? null,
+        // Only the JSON result has the domain, so get it only in JSON mode.
+        domain: isJsonMode() ? (await getVersionDomains(context, serviceId, active.number))[0] ?? null : null,
         fingerprint,
         staticPublishVersion,
       });
