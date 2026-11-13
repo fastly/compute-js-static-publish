@@ -148,7 +148,7 @@ describe('hono extensions in an ejected app', { skip: skipUnlessFastlyCli() }, (
   });
 
   test('scaffold makes the extensions folder next to the app', () => {
-    for (const file of [ 'package.json', 'tsconfig.json', '_example.ts' ]) {
+    for (const file of [ 'package.json', 'tsconfig.json', '.gitignore', '_example.ts' ]) {
       assert.ok(fs.existsSync(path.resolve(extensionsDir, file)), file);
     }
     assert.match(fs.readFileSync(path.resolve(computeJsDir, 'static-publish.rc.js'), 'utf-8'), /extensionsDir: "\.\.\/hono-extensions"/);
