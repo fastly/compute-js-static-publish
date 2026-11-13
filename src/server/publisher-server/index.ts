@@ -21,7 +21,15 @@ import {
   type AssetEntryMap,
   type AssetVariantMetadata,
   decodeAssetVariantMetadata,
+  findAssetEntry,
+  isHiddenIndexKey,
 } from '../../models/assets/index.js';
+import { parseItemPatterns, testItemPatterns } from '../../models/config/item-patterns.js';
+import {
+  type CollectionSelection,
+  validateCollectionSelection,
+} from '../../models/config/collection-selection.js';
+import { type ResolveCollectionResult, isSelectedByUrl, resolveCollection } from '../collection-selection/index.js';
 import { decodeIndexMetadata, getUnsupportedIndexFeatures } from '../../models/server/index.js';
 import { isExpired } from '../../models/time/index.js';
 import {
@@ -48,6 +56,14 @@ import {
   streamBytesInPieces,
 } from './response-cache.js';
 import { checkBodyLength } from '../util/body-length.js';
+
+export type GetMatchingAssetOptions = {
+  // Also try autoExt and autoIndex. The default is false.
+  applyAuto?: boolean,
+  // Also find hidden files. serveRequest() never serves a hidden file for a
+  // request path. The default is false.
+  includeHidden?: boolean,
+};
 
 type AssetVariant = {
   storageEntry: StorageEntry,
@@ -79,6 +95,54 @@ type AssetInit = {
   cache?: 'extended' | 'never' | null,
 };
 
+export type ServeRequestOptions = {
+  // The collection for this call. null selects the default collection. If not
+  // set, the active collection is used (see setActiveCollectionName()).
+  collectionName?: string | null,
+  // The path to look up, in place of the path of the request URL. It must be
+  // decoded, and start with a slash.
+  pathname?: string,
+  // false: when no file matches, do not serve the SPA file or the 404 page.
+  // Call serveFallback() for them. The default is true.
+  fallback?: boolean,
+  // false: do not answer /healthz. The default is true.
+  healthCheck?: boolean,
+};
+
+export type ServeFallbackOptions = {
+  // The collection for this call, as in ServeRequestOptions.
+  collectionName?: string | null,
+};
+
+// The state of one request for one collection: the settings and the index that
+// the request read, and the Server-Timing of the request. A sandbox can be reused
+// for more than one request, so this state is not kept from one request to the next.
+type CollectionScope = {
+  collectionName: string,
+  serverTiming: ServerTiming | null,
+  settings: PublisherServerConfigNormalized | null | undefined,
+  assetEntryMap: AssetEntryMap | null | undefined,
+  // When true, serveCached() does not store the response of this request.
+  doNotStoreResponse: boolean,
+};
+
+// The response for a collection other than the default collection that is not
+// published, or that expired. It can be published at any time, so no cache
+// stores this response.
+function collectionNotAvailableResponse(collectionName: string): Response {
+  return new Response(
+    `Collection '${collectionName}' is not available. It is not published, or it expired.`,
+    {
+      status: 404,
+      headers: {
+        'content-type': 'text/plain',
+        'x-content-type-options': 'nosniff',
+        'cache-control': 'no-store',
+      },
+    },
+  );
+}
+
 export class PublisherServer {
   public constructor(
     publishId: string,
@@ -91,17 +155,20 @@ export class PublisherServer {
     this.activeCollectionName = this.defaultCollectionName;
     this.collectionNameHeader = 'X-Publisher-Server-Collection';
     this.serverTimingRequestHeader = null;
-    this.serverTiming = null;
     this.responseCache = null;
+    this.currentScope = this.newScope(this.activeCollectionName, null);
+    this.requestScopes = new WeakMap();
   }
 
   static fromStaticPublishRc(config: StaticPublishRc) {
     const storeProvider = loadStorageProviderFromStaticPublishRc(config);
-    return new PublisherServer(
+    const server = new PublisherServer(
       config.publishId,
       storeProvider,
       config.defaultCollectionName,
     );
+    server.setCollectionSelection(config.collectionSelection ?? null);
+    return server;
   }
 
   publishId: string;
@@ -113,28 +180,54 @@ export class PublisherServer {
   // When set, a request that has this header gets a Server-Timing response header.
   serverTimingRequestHeader: string | null;
 
-  // Timing for the current request, or null if timing is off for it.
-  serverTiming: ServerTiming | null;
-
   // When set, responses are cached with the Core Cache API. See setResponseCache().
   responseCache: ResponseCacheOptions | null;
 
-  // Cached settings
-  settingsCached: PublisherServerConfigNormalized | null | undefined;
+  // See setCollectionSelection().
+  collectionSelection: CollectionSelection | null = null;
 
-  // Cached index
-  assetEntryMapCache: AssetEntryMap | null | undefined;
+  // The scope of the methods that do not take a request, such as getServerConfig()
+  // and getMatchingAsset(). beginRequest(), serveRequest(), and
+  // setActiveCollectionName() replace it.
+  private currentScope: CollectionScope;
 
-  // When true, serveCached() does not store the response of the current request.
-  doNotStoreResponse: boolean = false;
+  // The scopes of each request, for each collection. Thus, two calls for one
+  // request (for example, beginRequest() and then serveRequest()) read the
+  // index one time.
+  private requestScopes: WeakMap<Request, Map<string, CollectionScope>>;
+
+  /**
+   * @deprecated Read-only. This returns the Server-Timing of the current request.
+   * It will be removed in v9.
+   */
+  get serverTiming(): ServerTiming | null {
+    return this.currentScope.serverTiming;
+  }
+
+  /**
+   * @deprecated Read-only. This returns the settings that the current request
+   * read. Use getServerConfig().
+   * It will be removed in v9.
+   */
+  get settingsCached(): PublisherServerConfigNormalized | null | undefined {
+    return this.currentScope.settings;
+  }
+
+  /**
+   * @deprecated Read-only. This returns the index that the current request read.
+   * Use getAssetEntryMap().
+   * It will be removed in v9.
+   */
+  get assetEntryMapCache(): AssetEntryMap | null | undefined {
+    return this.currentScope.assetEntryMap;
+  }
 
   // null selects the default collection. A sandbox can be reused for more than
   // one request, so call this for each request, also when no collection is
   // selected. Otherwise, the collection of the previous request stays active.
   setActiveCollectionName(collectionName: string | null) {
     this.activeCollectionName = collectionName ?? this.defaultCollectionName;
-    this.settingsCached = undefined;
-    this.assetEntryMapCache = undefined;
+    this.currentScope = this.newScope(this.activeCollectionName, this.currentScope.serverTiming);
   }
 
   setCollectionNameHeader(collectionHeader: string | null) {
@@ -156,32 +249,92 @@ export class PublisherServer {
     this.responseCache = options;
   }
 
-  // Start handling a new request. serveRequest() calls this. If you call
-  // getMatchingAsset() and serveAsset() directly, call this first.
-  // A sandbox can be reused for more than one request, so this also clears the
-  // settings and the index that a previous request read. Without this, a reused
-  // sandbox serves an old index after a publish, and serves an expired collection.
-  beginRequest(request: Request) {
-    this.settingsCached = undefined;
-    this.assetEntryMapCache = undefined;
-    this.doNotStoreResponse = false;
-    const header = this.serverTimingRequestHeader;
-    this.serverTiming = header != null && request.headers.has(header) ? new ServerTiming() : null;
+  // The collectionSelection of static-publish.rc.js. fromStaticPublishRc() sets
+  // it. null (the default) turns collection selection off. Throws a TypeError if
+  // the config is not valid.
+  // With a config, a collection that is not the default collection, selected
+  // with the collectionName option of serveRequest() or serveFallback(), gets:
+  // - if it does not exist or has expired: onMissing ('not-found': a 404
+  //   response; 'default': the default collection).
+  // - X-Robots-Tag: noindex (unless noindex is false).
+  // - Cache-Control: private, unless the collection comes from the URL (a host,
+  //   path, or query source). See markPreviewResponse().
+  setCollectionSelection(config: CollectionSelection | null) {
+    if (config != null) {
+      const errors = validateCollectionSelection(config);
+      if (errors.length > 0) {
+        throw new TypeError(`Invalid collectionSelection:\n${errors.join('\n')}`);
+      }
+    }
+    this.collectionSelection = config;
   }
 
-  private timed<T>(name: string, fn: () => Promise<T>): Promise<T> {
-    return this.serverTiming != null ? this.serverTiming.measure(name, fn) : fn();
+  // Choose the collection for a request with the collectionSelection config.
+  // If the result has a response, return it. Otherwise, pass its collectionName
+  // and pathname to serveRequest().
+  resolveCollection(request: Request): ResolveCollectionResult {
+    return resolveCollection(request, this.collectionSelection);
+  }
+
+  // Start handling a new request. serveRequest() and serveFallback() call this. If you call
+  // getMatchingAsset() and serveAsset() directly, call this first.
+  // A sandbox can be reused for more than one request, so this starts a new
+  // scope: the settings and the index that a previous request read are not used.
+  // Without this, a reused sandbox serves an old index after a publish, and
+  // serves an expired collection.
+  beginRequest(request: Request) {
+    this.beginRequestFor(request, undefined);
+  }
+
+  private newServerTiming(request: Request) {
+    const header = this.serverTimingRequestHeader;
+    return header != null && request.headers.has(header) ? new ServerTiming() : null;
+  }
+
+  private newScope(collectionName: string, serverTiming: ServerTiming | null): CollectionScope {
+    return {
+      collectionName,
+      serverTiming,
+      settings: undefined,
+      assetEntryMap: undefined,
+      doNotStoreResponse: false,
+    };
+  }
+
+  // The scope of a request for a collection. A new request gets a new scope.
+  private scopeForRequest(request: Request, name: string): CollectionScope {
+    let scopes = this.requestScopes.get(request);
+    if (scopes == null) {
+      scopes = new Map();
+      this.requestScopes.set(request, scopes);
+    }
+    let scope = scopes.get(name);
+    if (scope == null) {
+      // All the collections of one request share one Server-Timing.
+      const otherScope = scopes.values().next().value;
+      scope = this.newScope(name, otherScope != null ? otherScope.serverTiming : this.newServerTiming(request));
+      scopes.set(name, scope);
+    }
+    return scope;
+  }
+
+  private timed<T>(scope: CollectionScope, name: string, fn: () => Promise<T>): Promise<T> {
+    return scope.serverTiming != null ? scope.serverTiming.measure(name, fn) : fn();
   }
 
   // Server config is obtained from storage, and cached until the next beginRequest()
   // or setActiveCollectionName().
   async getServerConfig() {
-    if (this.settingsCached !== undefined) {
-      return this.settingsCached;
+    return this.getServerConfigFor(this.currentScope);
+  }
+
+  private async getServerConfigFor(scope: CollectionScope) {
+    if (scope.settings !== undefined) {
+      return scope.settings;
     }
-    const settingsFileKey = `${this.publishId}_settings_${this.activeCollectionName}`;
-    this.settingsCached = await this.timed('settings', async () => {
-      const settingsFile = await this.storageProvider.getEntry(settingsFileKey, [`${this.publishId}-${this.activeCollectionName}`, 'settings']);
+    const settingsFileKey = `${this.publishId}_settings_${scope.collectionName}`;
+    scope.settings = await this.timed(scope, 'settings', async () => {
+      const settingsFile = await this.storageProvider.getEntry(settingsFileKey, [`${this.publishId}-${scope.collectionName}`, 'settings']);
       if (settingsFile == null) {
         console.error(`Settings File not found at ${settingsFileKey}.`);
         console.error(`You may need to publish your application.`);
@@ -189,41 +342,39 @@ export class PublisherServer {
       }
       return (await settingsFile.json()) as PublisherServerConfigNormalized;
     });
-    return this.settingsCached;
+    return scope.settings;
   }
 
   async getStaticItems() {
-    const serverConfig = await this.getServerConfig();
+    return this.getStaticItemsFor(this.currentScope);
+  }
+
+  private async getStaticItemsFor(scope: CollectionScope) {
+    const serverConfig = await this.getServerConfigFor(scope);
     if (serverConfig == null) {
       return [];
     }
-    return serverConfig.staticItems
-      .map((x, i) => {
-        if (x.startsWith('re:')) {
-          const fragments = x.slice(3).match(/\/(.*?)\/([a-z]*)?$/i);
-          if (fragments == null) {
-            console.warn(`Cannot parse staticItems item index ${i}: '${x}', skipping...`);
-            return '';
-          }
-          return new RegExp(fragments[1], fragments[2] || '');
-        }
-        return x;
-      })
-      .filter(x => Boolean(x));
+    return parseItemPatterns(serverConfig.staticItems, (i, x) => {
+      console.warn(`Cannot parse staticItems item index ${i}: '${x}', skipping...`);
+    });
   }
 
   async getAssetEntryMap() {
-    if (this.assetEntryMapCache !== undefined) {
-      return this.assetEntryMapCache;
+    return this.getAssetEntryMapFor(this.currentScope);
+  }
+
+  private async getAssetEntryMapFor(scope: CollectionScope) {
+    if (scope.assetEntryMap !== undefined) {
+      return scope.assetEntryMap;
     }
-    const indexFileKey = `${this.publishId}_index_${this.activeCollectionName}`;
-    const indexFile = await this.timed('index', () =>
-      this.storageProvider.getEntry(indexFileKey, [`${this.publishId}-${this.activeCollectionName}`, 'index']),
+    const indexFileKey = `${this.publishId}_index_${scope.collectionName}`;
+    const indexFile = await this.timed(scope, 'index', () =>
+      this.storageProvider.getEntry(indexFileKey, [`${this.publishId}-${scope.collectionName}`, 'index']),
     );
     if (indexFile == null) {
       console.error(`Index File not found at ${indexFileKey}.`);
       console.error(`You may need to publish your application.`);
-      this.assetEntryMapCache = null;
+      scope.assetEntryMap = null;
       return null;
     }
 
@@ -243,41 +394,56 @@ export class PublisherServer {
     if (unsupportedFeatures.length > 0) {
       console.error(`Collection at ${indexFileKey} requires features that this version of the server does not support: ${unsupportedFeatures.join(', ')}.`);
       console.error(`Build and deploy the application with a newer version of @fastly/compute-js-static-publish.`);
-      this.assetEntryMapCache = null;
+      scope.assetEntryMap = null;
       return null;
     }
 
     let collectionIsExpired = false;
-    if (this.activeCollectionName !== this.defaultCollectionName && metadata != null) {
+    if (scope.collectionName !== this.defaultCollectionName && metadata != null) {
       collectionIsExpired = metadata.expirationTime != null && isExpired(metadata.expirationTime);
     }
 
     if (collectionIsExpired) {
       console.error(`Requested collection expired at ${indexFileKey}.`);
-      this.assetEntryMapCache = null;
+      scope.assetEntryMap = null;
       return null;
     }
 
     // Read and parse in two steps, so that Server-Timing can report each one.
-    const indexText = await this.timed('index-body', () => indexFile.text());
-    this.assetEntryMapCache = await this.timed('index-parse', async () => JSON.parse(indexText) as AssetEntryMap);
-    return this.assetEntryMapCache;
+    const indexText = await this.timed(scope, 'index-body', () => indexFile.text());
+    scope.assetEntryMap = await this.timed(scope, 'index-parse', async () => JSON.parse(indexText) as AssetEntryMap);
+    return scope.assetEntryMap;
   }
 
-  async getMatchingAsset(assetKey: string, applyAuto: boolean = false): Promise<AssetEntry | null> {
+  // Find the file for an asset key. The second argument can also be a boolean,
+  // the value of applyAuto.
+  async getMatchingAsset(assetKey: string, options: boolean | GetMatchingAssetOptions = false): Promise<AssetEntry | null> {
+    const { applyAuto = false, includeHidden = false } = typeof options === 'boolean' ? { applyAuto: options } : options;
+    return this.getMatchingAssetFor(this.currentScope, assetKey, applyAuto, includeHidden);
+  }
 
-    const serverConfig = await this.getServerConfig();
+  private async getMatchingAssetFor(scope: CollectionScope, assetKey: string, applyAuto: boolean, includeHidden: boolean): Promise<AssetEntry | null> {
+
+    const serverConfig = await this.getServerConfigFor(scope);
     if (serverConfig == null) {
       return null;
     }
-    const assetEntryMap = await this.getAssetEntryMap();
+    const assetEntryMap = await this.getAssetEntryMapFor(scope);
     if (assetEntryMap == null) {
       return null;
     }
 
+    // A key that starts with 'hidden:' is never looked up, so that a request path
+    // cannot name a hidden file. (A real asset key always starts with a slash.)
+    // With includeHidden, a normal key also finds the hidden file of that key.
+    if (isHiddenIndexKey(assetKey)) {
+      return null;
+    }
+    const lookup = (key: string) => findAssetEntry(assetEntryMap, key, includeHidden);
+
     if(!assetKey.endsWith('/')) {
       // A path that does not end in a slash can match an asset directly
-      const asset = assetEntryMap[assetKey];
+      const asset = lookup(assetKey);
       if (asset != null) {
         return asset;
       }
@@ -287,7 +453,7 @@ export class PublisherServer {
         // looks for an asset that has the specified suffix (usually extension, such as .html)
         for (const extEntry of serverConfig.autoExt) {
           let assetKeyWithExt = assetKey + extEntry;
-          const asset = assetEntryMap[assetKeyWithExt];
+          const asset = lookup(assetKeyWithExt);
           if (asset != null) {
             return asset;
           }
@@ -308,7 +474,7 @@ export class PublisherServer {
         assetNameAsDir = assetNameAsDir + '/';
         for (const indexEntry of serverConfig.autoIndex) {
           let assetKeyIndex = assetNameAsDir + indexEntry;
-          const asset = assetEntryMap[assetKeyIndex];
+          const asset = lookup(assetKeyIndex);
           if (asset != null) {
             return asset;
           }
@@ -324,7 +490,11 @@ export class PublisherServer {
   // For example, if accept-encoding had br;q=1,gzip;q=0.5, and the server accepts both br and gzip,
   // the result would be [['br'], ['gzip']]
   async findAcceptEncodingsGroups(request: Request): Promise<ContentCompressionTypes[][]> {
-    const serverConfig = await this.getServerConfig();
+    return this.findAcceptEncodingsGroupsFor(this.currentScope, request);
+  }
+
+  private async findAcceptEncodingsGroupsFor(scope: CollectionScope, request: Request): Promise<ContentCompressionTypes[][]> {
+    const serverConfig = await this.getServerConfigFor(scope);
     if (serverConfig == null || serverConfig.allowedEncodings.length === 0) {
       return [];
     }
@@ -333,17 +503,12 @@ export class PublisherServer {
   }
 
   async testExtendedCache(pathname: string) {
-    const staticItems = await this.getStaticItems();
-    return staticItems
-      .some(x => {
-        if (x instanceof RegExp) {
-          return x.test(pathname);
-        }
-        if (x.endsWith('/')) {
-          return pathname.startsWith(x);
-        }
-        return x === pathname;
-      });
+    return this.testExtendedCacheFor(this.currentScope, pathname);
+  }
+
+  private async testExtendedCacheFor(scope: CollectionScope, pathname: string) {
+    const staticItems = await this.getStaticItemsFor(scope);
+    return testItemPatterns(staticItems, pathname);
   }
 
   handlePreconditions(request: Request, asset: AssetEntry, responseHeaders: Headers): Response | null {
@@ -414,12 +579,16 @@ export class PublisherServer {
   }
   
   public async loadAssetVariant(entry: AssetEntry, variant: ContentCompressionTypes | null): Promise<AssetVariant | null> {
+    return this.loadAssetVariantFor(this.currentScope, entry, variant);
+  }
+
+  private async loadAssetVariantFor(scope: CollectionScope, entry: AssetEntry, variant: ContentCompressionTypes | null): Promise<AssetVariant | null> {
 
     const baseHash = entry.key.slice(7);
     const baseKey = `${this.publishId}_files_sha256_${baseHash}`;
     const variantKey = variant != null ? `${baseKey}_${variant}` : baseKey;
 
-    const storageEntry = await this.timed('asset', () => this.storageProvider.getEntry(variantKey));
+    const storageEntry = await this.timed(scope, 'asset', () => this.storageProvider.getEntry(variantKey));
     if (storageEntry == null) {
       return null;
     }
@@ -443,7 +612,7 @@ export class PublisherServer {
     };
   }
 
-  private async findAssetVariantForAcceptEncodingsGroups(entry: AssetEntry, acceptEncodingsGroups: ContentCompressionTypes[][] = []): Promise<AssetVariant> {
+  private async findAssetVariantForAcceptEncodingsGroups(scope: CollectionScope, entry: AssetEntry, acceptEncodingsGroups: ContentCompressionTypes[][] = []): Promise<AssetVariant> {
 
     if (!entry.key.startsWith('sha256:')) {
       throw new TypeError(`Key must start with 'sha256:': ${entry.key}`);
@@ -461,7 +630,7 @@ export class PublisherServer {
           continue;
         }
 
-        const assetVariant = await this.loadAssetVariant(entry, encoding);
+        const assetVariant = await this.loadAssetVariantFor(scope, entry, encoding);
         if (assetVariant == null) {
           continue;
         }
@@ -476,7 +645,7 @@ export class PublisherServer {
       }
     }
 
-    const baseAssetVariant = await this.loadAssetVariant(entry, null);
+    const baseAssetVariant = await this.loadAssetVariantFor(scope, entry, null);
     if (baseAssetVariant == null) {
       throw new TypeError('Key not found: ' + entry.key);
     }
@@ -485,12 +654,16 @@ export class PublisherServer {
   }
 
   async serveAsset(request: Request, asset: AssetEntry, init?: AssetInit): Promise<Response> {
+    return this.serveAssetFor(this.currentScope, request, asset, init);
+  }
+
+  private async serveAssetFor(scope: CollectionScope, request: Request, asset: AssetEntry, init?: AssetInit): Promise<Response> {
 
     const headers = new Headers(init?.headers);
     headers.set('Content-Type', asset.contentType);
 
     if (this.collectionNameHeader) {
-      headers.set(this.collectionNameHeader, this.activeCollectionName);
+      headers.set(this.collectionNameHeader, scope.collectionName);
       headers.append('Vary', this.collectionNameHeader);
     }
 
@@ -507,8 +680,8 @@ export class PublisherServer {
       headers.append('Cache-Control', cacheControlValue);
     }
 
-    const acceptEncodings = await this.findAcceptEncodingsGroups(request);
-    const assetVariant = await this.findAssetVariantForAcceptEncodingsGroups(asset, acceptEncodings);
+    const acceptEncodings = await this.findAcceptEncodingsGroupsFor(scope, request);
+    const assetVariant = await this.findAssetVariantForAcceptEncodingsGroups(scope, asset, acceptEncodings);
     if (assetVariant.contentEncoding != null) {
       headers.append('Content-Encoding', assetVariant.contentEncoding);
     }
@@ -518,8 +691,8 @@ export class PublisherServer {
       headers.set('Last-Modified', (new Date( asset.lastModifiedTime * 1000 )).toUTCString());
     }
 
-    if (this.serverTiming != null) {
-      headers.append('Server-Timing', this.serverTiming.toHeaderValue());
+    if (scope.serverTiming != null) {
+      headers.append('Server-Timing', scope.serverTiming.toHeaderValue());
     }
 
     const preconditionResponse = this.handlePreconditions(request, asset, headers);
@@ -556,11 +729,20 @@ export class PublisherServer {
     keyPath: string,
     produce: (request: Request) => Promise<Response | null>,
   ): Promise<Response | null> {
+    return this.serveCachedFor(this.currentScope, request, keyPath, produce);
+  }
+
+  private async serveCachedFor(
+    scope: CollectionScope,
+    request: Request,
+    keyPath: string,
+    produce: (request: Request) => Promise<Response | null>,
+  ): Promise<Response | null> {
     if (this.responseCache == null) {
       return produce(request);
     }
 
-    const key = buildResponseCacheKey(this.publishId, this.activeCollectionName, keyPath, request);
+    const key = buildResponseCacheKey(this.publishId, scope.collectionName, keyPath, request);
     const lookupStart = performance.now();
     const entry = CoreCache.transactionLookup(key);
     const state = entry.state();
@@ -568,21 +750,21 @@ export class PublisherServer {
     if (!state.mustInsertOrUpdate()) {
       const metadata = state.found() && state.usable() ? decodeCachedResponseMetadata(entry.userMetadata()) : null;
       if (metadata?.tooLarge) {
-        this.serverTiming?.add('cache', performance.now() - lookupStart, 'bypass');
+        scope.serverTiming?.add('cache', performance.now() - lookupStart, 'bypass');
         return produce(request);
       }
       if (metadata != null) {
         // age() is in milliseconds. A hit younger than the time since a purge proves the entry was refilled.
-        this.serverTiming?.add('cache', performance.now() - lookupStart, `hit age=${Math.round(entry.age() / 1000)}s`);
-        return this.responseFromCache(request, metadata, entry.body());
+        scope.serverTiming?.add('cache', performance.now() - lookupStart, `hit age=${Math.round(entry.age() / 1000)}s`);
+        return this.responseFromCache(scope, request, metadata, entry.body());
       }
       // Not usable, and another request is not filling it for us: serve without the cache.
-      this.serverTiming?.add('cache', performance.now() - lookupStart, 'bypass');
+      scope.serverTiming?.add('cache', performance.now() - lookupStart, 'bypass');
       return produce(request);
     }
 
     // This request must fill the entry (a miss, or a stale entry after a soft purge).
-    this.serverTiming?.add('cache', performance.now() - lookupStart, 'miss');
+    scope.serverTiming?.add('cache', performance.now() - lookupStart, 'miss');
     let response: Response | null;
     try {
       response = await produce(buildCacheFillRequest(request));
@@ -591,7 +773,7 @@ export class PublisherServer {
       throw err;
     }
 
-    if (this.doNotStoreResponse) {
+    if (scope.doNotStoreResponse) {
       entry.cancel();
       return response;
     }
@@ -599,7 +781,7 @@ export class PublisherServer {
     const insertOptions = {
       // The Core Cache takes maxAge in milliseconds. ResponseCacheOptions.maxAge is in seconds.
       maxAge: this.responseCache.maxAge * 1000,
-      surrogateKeys: [`${this.publishId}-${this.activeCollectionName}`],
+      surrogateKeys: [`${this.publishId}-${scope.collectionName}`],
     };
 
     if (response == null) {
@@ -646,7 +828,7 @@ export class PublisherServer {
         length: 0,
       });
       writer.close();
-      return this.responseFromCache(request, metadata, readResult.body);
+      return this.responseFromCache(scope, request, metadata, readResult.body);
     }
 
     const writer = entry.insert({
@@ -660,10 +842,11 @@ export class PublisherServer {
       writer.append(piece);
     }
     writer.close();
-    return this.responseFromCache(request, metadata, streamBytesInPieces(readResult.bytes));
+    return this.responseFromCache(scope, request, metadata, streamBytesInPieces(readResult.bytes));
   }
 
   private responseFromCache(
+    scope: CollectionScope,
     request: Request,
     metadata: Exclude<CachedResponseMetadata, { tooLarge: true }>,
     body: BodyInit,
@@ -673,8 +856,8 @@ export class PublisherServer {
     }
 
     const headers = new Headers(metadata.headers);
-    if (this.serverTiming != null) {
-      headers.append('Server-Timing', this.serverTiming.toHeaderValue());
+    if (scope.serverTiming != null) {
+      headers.append('Server-Timing', scope.serverTiming.toHeaderValue());
     }
 
     const lastModified = headers.get('Last-Modified');
@@ -691,32 +874,155 @@ export class PublisherServer {
     });
   }
 
-  async serveRequest(request: Request): Promise<Response | null> {
+  // Serve the file that matches the request. If no file matches, serve the SPA
+  // file or the 404 page (see options.fallback). Returns null if there is no
+  // response for the request, for example for a method other than GET and HEAD.
+  async serveRequest(request: Request, options: ServeRequestOptions = {}): Promise<Response | null> {
 
-    this.beginRequest(request);
+    let scope = this.beginRequestFor(request, options.collectionName);
 
     // Only handle GET and HEAD
     if (request.method !== 'GET' && request.method !== 'HEAD') {
       return null;
     }
 
-    const url = new URL(request.url);
-    const pathname = decodeURI(url.pathname);
+    let pathname;
+    if (options.pathname != null) {
+      if (!options.pathname.startsWith('/')) {
+        throw new TypeError(`pathname must start with '/': ${options.pathname}`);
+      }
+      pathname = options.pathname;
+    } else {
+      pathname = decodeURI(new URL(request.url).pathname);
+    }
 
     // Custom health check route
-    if (pathname === '/healthz') {
+    if (options.healthCheck !== false && pathname === '/healthz') {
       return new Response("OK", { status: 200 });
     }
 
+    const selected = await this.checkSelectedCollection(request, scope);
+    if (selected instanceof Response) {
+      return selected;
+    }
+    scope = selected.scope;
+
     // The fallback pages (SPA, not found) depend on whether the client accepts HTML.
-    const keyPath = requestAcceptsTextHtml(request) ? pathname : `${pathname}|no-html`;
-    return this.serveCached(request, keyPath, (fillRequest) => this.serveRequestFromStorage(fillRequest, pathname));
+    // With fallback: false, the response does not depend on HTML, so it has its own cache key.
+    const fallback = options.fallback !== false && requestAcceptsTextHtml(request);
+    const keyPath = fallback ? pathname : `${pathname}|no-html`;
+    const response = await this.serveCachedFor(scope, request, keyPath, (fillRequest) => this.serveRequestFromStorage(scope, fillRequest, pathname, fallback));
+    return selected.preview ? this.markPreviewResponse(request, selected.scope, response) : response;
   }
 
-  private async serveRequestFromStorage(request: Request, pathname: string): Promise<Response | null> {
+  // Serve the SPA file or the 404 page, as serveRequest() does when no file
+  // matches. Use it after serveRequest() with fallback: false. Returns null for
+  // a method other than GET and HEAD, if the client does not accept HTML, or if
+  // the collection has no fallback page.
+  async serveFallback(request: Request, options: ServeFallbackOptions = {}): Promise<Response | null> {
 
-    const serverConfig = await this.getServerConfig();
-    if (serverConfig == null && this.activeCollectionName === this.defaultCollectionName) {
+    let scope = this.beginRequestFor(request, options.collectionName);
+
+    // Only handle GET and HEAD
+    if (request.method !== 'GET' && request.method !== 'HEAD') {
+      return null;
+    }
+
+    if (!requestAcceptsTextHtml(request)) {
+      return null;
+    }
+
+    const selected = await this.checkSelectedCollection(request, scope);
+    if (selected instanceof Response) {
+      return selected;
+    }
+    scope = selected.scope;
+
+    // The fallback response is the same for all paths, so it has one cache key.
+    // A path always starts with a slash, so this key is not the key of a path.
+    const response = await this.serveCachedFor(scope, request, '|fallback', async (fillRequest) => {
+      const serverConfig = await this.getServerConfigFor(scope);
+      if (serverConfig == null) {
+        return null;
+      }
+      return this.serveFallbackFromStorage(scope, fillRequest, serverConfig);
+    });
+    return selected.preview ? this.markPreviewResponse(request, selected.scope, response) : response;
+  }
+
+  // Returns true if the collection is published, has not expired, and can
+  // be served by this version. It reads the settings and the index into the scope.
+  async isCollectionAvailable(request: Request, collectionName: string | null): Promise<boolean> {
+    return this.isCollectionAvailableFor(this.scopeForRequest(request, collectionName ?? this.defaultCollectionName));
+  }
+
+  private async isCollectionAvailableFor(scope: CollectionScope): Promise<boolean> {
+    return (await this.getServerConfigFor(scope)) != null && (await this.getAssetEntryMapFor(scope)) != null;
+  }
+
+  // With collection selection, check a collection that is not the default
+  // collection (see setCollectionSelection()). Returns the scope to serve, and
+  // whether to mark the response as a preview, or a 404 response for onMissing:
+  // 'not-found'. The check reads the index, also when the response cache has the
+  // response.
+  private async checkSelectedCollection(request: Request, scope: CollectionScope): Promise<{ scope: CollectionScope, preview: boolean } | Response> {
+    const config = this.collectionSelection;
+    if (config == null || scope.collectionName === this.defaultCollectionName) {
+      return { scope, preview: false };
+    }
+    if (await this.isCollectionAvailableFor(scope)) {
+      return { scope, preview: true };
+    }
+    if (config.onMissing === 'default') {
+      this.currentScope = this.scopeForRequest(request, this.defaultCollectionName);
+      return { scope: this.currentScope, preview: false };
+    }
+    const response = collectionNotAvailableResponse(scope.collectionName);
+    if (config.noindex !== false) {
+      response.headers.set('X-Robots-Tag', 'noindex');
+    }
+    return response;
+  }
+
+  // A response from a collection that is not the default collection. If a host,
+  // path, or query source of the request selects this collection, the URL
+  // names the collection, so a shared cache can store the response. Otherwise
+  // (a cookie or header source, or a collectionName that the app chose) the same
+  // URL can serve another collection, so the response gets Cache-Control:
+  // private, and shared caches do not store it.
+  private markPreviewResponse(request: Request, scope: CollectionScope, response: Response | null): Response | null {
+    if (response == null || this.collectionSelection == null) {
+      return response;
+    }
+    const headers = new Headers(response.headers);
+    if (!isSelectedByUrl(resolveCollection(request, this.collectionSelection), scope.collectionName)) {
+      const cacheControl = headers.get('Cache-Control');
+      if (cacheControl == null || cacheControl === '') {
+        headers.set('Cache-Control', 'private');
+      } else if (!/\b(private|no-store)\b/i.test(cacheControl)) {
+        headers.set('Cache-Control', `private, ${cacheControl}`);
+      }
+    }
+    if (this.collectionSelection.noindex !== false) {
+      headers.set('X-Robots-Tag', 'noindex');
+    }
+    return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+  }
+
+  // Make the scope of the request for the collection the current scope.
+  // collectionName is as in ServeRequestOptions.
+  private beginRequestFor(request: Request, collectionName: string | null | undefined): CollectionScope {
+    const name = collectionName === undefined ?
+      this.activeCollectionName :
+      collectionName ?? this.defaultCollectionName;
+    this.currentScope = this.scopeForRequest(request, name);
+    return this.currentScope;
+  }
+
+  private async serveRequestFromStorage(scope: CollectionScope, request: Request, pathname: string, fallback: boolean): Promise<Response | null> {
+
+    const serverConfig = await this.getServerConfigFor(scope);
+    if (serverConfig == null && scope.collectionName === this.defaultCollectionName) {
       return new Response(
         `Settings not found. You may need to publish your application.`,
         {
@@ -733,58 +1039,55 @@ export class PublisherServer {
     // response cache does not store this response.
     if (
       serverConfig == null ||
-      (this.activeCollectionName !== this.defaultCollectionName && await this.getAssetEntryMap() == null)
+      (scope.collectionName !== this.defaultCollectionName && await this.getAssetEntryMapFor(scope) == null)
     ) {
-      this.doNotStoreResponse = true;
-      return new Response(
-        `Collection '${this.activeCollectionName}' is not available. It is not published, or it expired.`,
-        {
-          status: 404,
-          headers: {
-            'content-type': 'text/plain',
-            'x-content-type-options': 'nosniff',
-            'cache-control': 'no-store',
-          },
-        },
-      );
+      scope.doNotStoreResponse = true;
+      return collectionNotAvailableResponse(scope.collectionName);
     }
 
-    const asset = await this.getMatchingAsset(serverConfig.publicDirPrefix + pathname, true);
+    const asset = await this.getMatchingAssetFor(scope, serverConfig.publicDirPrefix + pathname, true, false);
     if (asset != null) {
-      return this.serveAsset(request, asset, {
-        cache: await this.testExtendedCache(pathname) ? 'extended' : null,
+      return this.serveAssetFor(scope, request, asset, {
+        cache: await this.testExtendedCacheFor(scope, pathname) ? 'extended' : null,
       });
     }
 
-    // fallback HTML responses, like SPA and "not found" pages
-    if (requestAcceptsTextHtml(request)) {
+    if (fallback) {
+      return this.serveFallbackFromStorage(scope, request, serverConfig);
+    }
 
-      const assetEntryMap = await this.getAssetEntryMap();
-      if (assetEntryMap == null) {
-        return null;
+    return null;
+  }
+
+  // fallback HTML responses, like SPA and "not found" pages
+  private async serveFallbackFromStorage(scope: CollectionScope, request: Request, serverConfig: PublisherServerConfigNormalized): Promise<Response | null> {
+
+    const assetEntryMap = await this.getAssetEntryMapFor(scope);
+    if (assetEntryMap == null) {
+      return null;
+    }
+
+    // These are raw asset paths, not relative to public path. The SPA file and
+    // the 404 page can be hidden files.
+    const { spaFile } = serverConfig;
+
+    if (spaFile != null) {
+      const asset = findAssetEntry(assetEntryMap, spaFile, true);
+      if (asset != null) {
+        return this.serveAssetFor(scope, request, asset, {
+          cache: 'never',
+        });
       }
+    }
 
-      // These are raw asset paths, not relative to public path
-      const { spaFile } = serverConfig;
-
-      if (spaFile != null) {
-        const asset = assetEntryMap[spaFile];
-        if (asset != null) {
-          return this.serveAsset(request, asset, {
-            cache: 'never',
-          });
-        }
-      }
-
-      const { notFoundPageFile } = serverConfig;
-      if (notFoundPageFile != null) {
-        const asset = assetEntryMap[notFoundPageFile];
-        if (asset != null) {
-          return this.serveAsset(request, asset, {
-            status: 404,
-            cache: 'never',
-          });
-        }
+    const { notFoundPageFile } = serverConfig;
+    if (notFoundPageFile != null) {
+      const asset = findAssetEntry(assetEntryMap, notFoundPageFile, true);
+      if (asset != null) {
+        return this.serveAssetFor(scope, request, asset, {
+          status: 404,
+          cache: 'never',
+        });
       }
     }
 

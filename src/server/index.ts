@@ -4,8 +4,19 @@
  */
 
 export { type StaticPublishRc } from '../models/config/static-publish-rc.js';
+export { type StaticPublishProject } from '../models/config/static-publish-project.js';
 export { type PublishContentConfig } from '../models/config/publish-content-config.js';
 export * as collectionSelector from './collection-selector/index.js';
+export {
+  type ResolveCollectionResult,
+  resolveCollection,
+} from './collection-selection/index.js';
+export {
+  type CollectionSelection,
+  type CollectionSelectionSource,
+  previewUrl,
+  validateCollectionSelection,
+} from '../models/config/collection-selection.js';
 export {
   CookieCollectionSelector,
   type CookieCollectionSelectorOpts,
@@ -22,7 +33,12 @@ export {
   setSecretStoreKeyForS3SecretAccessKey,
   setS3CredentialsBuilder,
 } from './storage/s3-storage-provider.js';
-export { PublisherServer } from './publisher-server/index.js';
+export {
+  type GetMatchingAssetOptions,
+  type ServeFallbackOptions,
+  type ServeRequestOptions,
+  PublisherServer,
+} from './publisher-server/index.js';
 
 // Register storage builder providers
 import { registerStorageProviderBuilder } from './storage/storage-provider.js';

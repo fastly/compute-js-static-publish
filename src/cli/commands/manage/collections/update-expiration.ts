@@ -10,15 +10,22 @@ import { type OptionDefinition } from 'command-line-args';
 
 import { decodeIndexMetadata, encodeIndexMetadata } from '../../../../models/server/index.js';
 import { calcExpirationTime } from '../../../../models/time/index.js';
-import { LoadConfigError, loadStaticPublisherRcFile } from '../../../util/config.js';
+import {
+  LoadConfigError,
+  configFileName,
+  getComputeAppDir,
+  loadStaticPublisherRcFile,
+} from '../../../util/config.js';
 import { parseCommandLine } from '../../../util/args.js';
+import { errorCodeOf, fail, recordFailure } from '../../../util/output.js';
 import { loadStorageProviderFromStaticPublishRc } from '../../../storage/storage-provider.js';
+import { cliCommand } from '../../../util/package.js';
 
 function help() {
   console.log(`\
 
 Usage:
-  npx @fastly/compute-js-static-publish collections update-expiration \\
+  ${cliCommand()} collections update-expiration \\
     --collection-name=<name> \\
     [options]
 
@@ -84,7 +91,7 @@ export async function action(actionArgs: string[]) {
     if (parsed.error != null) {
       console.error(String(parsed.error));
       console.error();
-      process.exitCode = 1;
+      recordFailure('usage', String(parsed.error));
     }
 
     help();
@@ -105,11 +112,10 @@ export async function action(actionArgs: string[]) {
 
   // compute-js-static-publisher cli is always run from the Compute application directory
   // in other words, the directory that contains `fastly.toml`.
-  const computeAppDir = path.resolve();
+  const computeAppDir = getComputeAppDir();
 
   if (collectionNameValue == null) {
-    console.error("❌ Required argument '--collection-name' not specified.");
-    process.exitCode = 1;
+    fail('usage', "Required argument '--collection-name' not specified.");
     return;
   }
 
@@ -119,12 +125,11 @@ export async function action(actionArgs: string[]) {
   } catch(err: unknown) {
     console.error(`❌ Cannot process expiration time`);
     console.error(String(err));
-    process.exitCode = 1;
+    recordFailure('usage', `Cannot process expiration time: ${String(err)}`);
     return;
   }
   if (expirationTime === undefined) {
-    console.error("❌ Exactly one of '--expires-in', '--expires-at', or '--expires-never' is required.");
-    process.exitCode = 1;
+    fail('usage', "Exactly one of '--expires-in', '--expires-at', or '--expires-never' is required.");
     return;
   }
 
@@ -135,14 +140,14 @@ export async function action(actionArgs: string[]) {
   try {
     staticPublisherRc = await loadStaticPublisherRcFile();
   } catch (err) {
-    console.error("❌ Can't load static-publish.rc.js");
+    console.error(`❌ Can't load ${configFileName()}`);
     console.error("Run this from a compute-js-static-publish compute-js directory.");
     if (err instanceof LoadConfigError) {
       for (const error of err.errors) {
         console.error(error);
       }
     }
-    process.exitCode = 1;
+    recordFailure('config-invalid', `Can't load ${configFileName()}.`);
     return;
   }
 
@@ -168,7 +173,7 @@ export async function action(actionArgs: string[]) {
   } catch (err: unknown) {
     console.error(`❌ Could not instantiate store provider`);
     console.error(String(err));
-    process.exitCode = 1;
+    recordFailure(errorCodeOf(err), String(err));
     return;
   }
 
