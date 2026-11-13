@@ -36,6 +36,22 @@ describe('collectionSelectionFromFlags', () => {
     });
   });
 
+  test('host and path with value', () => {
+    const { collectionSelection, errors } = collectionSelectionFromFlags({
+      sources: [
+        'host:stag.example.com,value=staging',
+        'path:/_staging,sticky,value=staging',
+        'cookie',
+      ],
+    });
+    assert.deepEqual(errors, []);
+    assert.deepEqual(collectionSelection.sources, [
+      { type: 'host', pattern: 'stag.example.com', value: 'staging' },
+      { type: 'path', prefix: '/_staging', value: 'staging', sticky: 'cookie' },
+      { type: 'cookie' },
+    ]);
+  });
+
   test('cookie with no value uses the defaults', () => {
     assert.deepEqual(collectionSelectionFromFlags({ sources: [ 'cookie' ] }).collectionSelection, { sources: [ { type: 'cookie' } ] });
   });
@@ -63,6 +79,8 @@ describe('collectionSelectionFromFlags', () => {
     [ 'bad noindex', { sources: [ 'cookie' ], noindex: 'yes' }, /'true' or 'false'/ ],
     [ 'options without sources', { allow: [ 'pr-*' ] }, /need --collection-selection/ ],
     [ 'bad pattern', { sources: [ 'host:preview.example.com' ] }, /exactly one \{collection\}/ ],
+    [ 'sticky on a host', { sources: [ 'host:stag.example.com,value=staging,sticky', 'cookie' ] }, /unknown option 'sticky'/ ],
+    [ 'value not in allow', { sources: [ 'host:stag.example.com,value=staging' ], allow: [ 'pr-*' ] }, /not in collectionSelection\.allow/ ],
   ];
   for (const [ name, flags, error ] of bad) {
     test(`refuses: ${name}`, () => {
