@@ -11,8 +11,8 @@ import { type OptionDefinition } from 'command-line-args';
 
 import { managedAppState, prepareManagedApp } from '../../managed/app.js';
 import { checkVersionForCommand, loadManagedProject } from '../../managed/command-helpers.js';
-import { getActiveVersion, getVersionDomains } from '../../managed/fastly-service.js';
-import { formatVersionComment, parseVersionComment } from '../../managed/fingerprint.js';
+import { getActiveVersion, getDeployedApp, getVersionDomains } from '../../managed/fastly-service.js';
+import { formatVersionComment } from '../../managed/fingerprint.js';
 import { writeBackServiceId } from '../../managed/project-edit.js';
 import { loadApiToken } from '../../util/api-token.js';
 import { parseCommandLine } from '../../util/args.js';
@@ -194,9 +194,10 @@ export async function action(actionArgs: string[]) {
 
   if (serviceId != null && !force) {
     const active = await getActiveVersion(context, serviceId);
-    const deployed = parseVersionComment(active?.comment);
+    const deployed = active != null ? await getDeployedApp(context, serviceId, active) : null;
     if (active != null && deployed?.fingerprint === fingerprint) {
-      console.log(`✅ The active version ${active.number} already has this app (fingerprint ${fingerprint}). Nothing to deploy. Use --force to deploy anyway.`);
+      const from = deployed.fingerprintVersion != null ? `, the same package as version ${deployed.fingerprintVersion}` : '';
+      console.log(`✅ The active version ${active.number} already has this app (fingerprint ${fingerprint}${from}). Nothing to deploy. Use --force to deploy anyway.`);
       return;
     }
   }

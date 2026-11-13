@@ -9,8 +9,7 @@ import { type OptionDefinition } from 'command-line-args';
 
 import { managedAppState } from '../../managed/app.js';
 import { loadManagedProject } from '../../managed/command-helpers.js';
-import { getActiveVersion, getVersionDomains } from '../../managed/fastly-service.js';
-import { parseVersionComment } from '../../managed/fingerprint.js';
+import { getActiveVersion, getDeployedApp, getVersionDomains } from '../../managed/fastly-service.js';
 import { checkProjectVersion } from '../../managed/version-check.js';
 import { loadApiToken } from '../../util/api-token.js';
 import { parseCommandLine } from '../../util/args.js';
@@ -92,6 +91,8 @@ export async function action(actionArgs: string[]) {
   let deployedFingerprint: string | null = null;
   let deployedStaticPublishVersion: string | null = null;
   let activeVersion: number | null = null;
+  // The version whose comment has the fingerprint, if it is not the active version.
+  let fingerprintVersion: number | null = null;
   let domain: string | null = null;
   let needsDeploy: boolean | null;
   const reasons: string[] = [];
@@ -111,12 +112,13 @@ export async function action(actionArgs: string[]) {
     } else {
       activeVersion = active.number;
       domain = (await getVersionDomains(context, serviceId, active.number))[0] ?? null;
-      const deployed = parseVersionComment(active.comment);
+      const deployed = await getDeployedApp(context, serviceId, active);
       if (deployed == null) {
         needsDeploy = true;
-        reasons.push(`The active version (${active.number}) was not deployed by 'deploy' (its comment has no fingerprint).`);
+        reasons.push(`The active version (${active.number}) was not deployed by 'deploy': its comment has no fingerprint, and its package is not the package of the newest version that has one.`);
       } else {
         deployedFingerprint = deployed.fingerprint;
+        fingerprintVersion = deployed.fingerprintVersion ?? null;
         deployedStaticPublishVersion = deployed.staticPublishVersion;
         needsDeploy = deployed.fingerprint !== fingerprint;
         if (needsDeploy) {
@@ -141,7 +143,7 @@ export async function action(actionArgs: string[]) {
   console.log(`Version of the project : ${versionCheck.recorded ?? '(missing)'}`);
   console.log(`Version that runs      : ${running}${versionCheck.result !== 'same' ? `  ⚠️ ${versionCheck.result}` : ''}`);
   console.log(`Fingerprint            : ${fingerprint}`);
-  console.log(`Deployed fingerprint   : ${deployedFingerprint ?? '(unknown)'}${activeVersion != null ? ` (version ${activeVersion})` : ''}`);
+  console.log(`Deployed fingerprint   : ${deployedFingerprint ?? '(unknown)'}${activeVersion != null ? ` (version ${activeVersion}${fingerprintVersion != null ? `, the same package as version ${fingerprintVersion}` : ''})` : ''}`);
   console.log(`Deploy necessary       : ${needsDeploy == null ? 'unknown' : needsDeploy ? 'yes' : 'no'}`);
   for (const reason of reasons) {
     console.log(`  * ${reason}`);
