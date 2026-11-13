@@ -172,6 +172,18 @@ describe('managed commands', () => {
   });
 
   describe('deploy checks', () => {
+    test('options after -- that deploy sets itself are errors', () => {
+      for (const [ args, message ] of [
+        [ [ '--', '--comment=x' ], /--comment cannot be given to the Fastly CLI/ ],
+        [ [ '--', '-is', 'abc' ], /-s \(--service-id\) cannot be given to the Fastly CLI/ ],
+      ]) {
+        const { status, output } = runText([ 'deploy', ...args ], dir, { ...NO_TOKEN, FASTLY_API_TOKEN: 'not-a-real-token-123456' });
+        assert.notEqual(status, 0, args.join(' '));
+        assert.match(output, message);
+        assert.doesNotMatch(output, /▶️ fastly/, 'the Fastly CLI did not run');
+      }
+    });
+
     test('without an API token', () => {
       const { status, output } = runText([ 'deploy' ], dir);
       assert.notEqual(status, 0);
