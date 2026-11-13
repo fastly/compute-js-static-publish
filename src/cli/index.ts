@@ -15,7 +15,7 @@ import { runTemplateHook } from './commands/run-template-hook.js';
 import { type GlobalOptions, parseGlobalOptions } from './util/global-options.js';
 import { setUpOutput } from './util/output.js';
 import { getOwnVersion } from './util/package.js';
-import { detectProjectMode } from './util/config.js';
+import { detectProjectMode, findProjectDirsNear } from './util/config.js';
 import { PROJECT_FILE_NAME, RC_FILE_NAME } from '../models/config/static-publish-project.js';
 
 // Register storage builder providers
@@ -116,6 +116,22 @@ async function run(globalOptions: GlobalOptions) {
   }
 
   if (mode === 'scaffold') {
+
+    // A command for a project or an app, in a directory that has none.
+    const command = process.argv[2];
+    if (command != null && manageCommands.MANAGEMENT_COMMANDS.includes(command)) {
+      console.error(`❌ '${command}' is a command for a managed project or an app, but this directory has no ${PROJECT_FILE_NAME} or ${RC_FILE_NAME}.`);
+      const near = findProjectDirsNear();
+      for (const { dir, mode: kind } of near.slice(0, 3)) {
+        const relative = path.relative(process.cwd(), dir) || '.';
+        console.error(`  * ${relative} has ${kind === 'managed' ? PROJECT_FILE_NAME : RC_FILE_NAME}. Run the command there, or add --project-dir=${relative}.`);
+      }
+      if (near.length === 0) {
+        console.error(`  * Run it in the directory of the project (with ${PROJECT_FILE_NAME}) or of the app (with ${RC_FILE_NAME}), or add --project-dir.`);
+      }
+      process.exitCode = 1;
+      return;
+    }
 
     console.log("🧑‍💻Fastly Compute JavaScript Static Publisher (Scaffolding mode)");
     await scaffoldCommand.action(process.argv);

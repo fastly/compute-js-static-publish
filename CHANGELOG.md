@@ -41,6 +41,7 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 
 ### Changed
 
+- A command for a managed project or an app (for example `status` or `deploy`) in a directory that has no `static-publish.project.js` or `static-publish.rc.js` now stops with an error that names the directories nearby that have one. Before, the CLI started scaffolding, and showed an unclear error for the command.
 - Scaffolding: the `src/index.js` of the `plain` app calls `serveRequest()` with `fallback: false`, then has the place for your own code, and then calls `serveFallback()` for the SPA file or the 404 page. Thus your code runs for each request that no published file matches, also when the collection has a fallback page. Code that must run before the published files goes before `serveRequest()`.
 - Scaffolding: the app has `@fastly/compute-js-static-publish` in `dependencies`. It was in `devDependencies`. The code of the app imports it, and the `postinstall` script of the app runs it, so `npm ci --omit=dev` needs it.
 - `PublisherServer.setResponseCache()`: the default of `maxBodySize` is now 16 MiB. It was 8 MiB.

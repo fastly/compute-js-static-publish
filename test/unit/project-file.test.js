@@ -20,6 +20,7 @@ import {
 } from '../../build/cli/cli/managed/project-file.js';
 import {
   detectProjectMode,
+  findProjectDirsNear,
   normalizeProjectManaged,
   normalizePublishContentConfig,
   normalizeStaticPublisherRc,
@@ -77,6 +78,25 @@ describe('detectProjectMode', () => {
     assert.equal(detectProjectMode(dir), 'conflict');
     fs.rmSync(path.join(dir, 'static-publish.rc.js'));
     assert.equal(detectProjectMode(dir), 'managed');
+  });
+});
+
+describe('findProjectDirsNear', () => {
+  test('a parent directory and a subdirectory', () => {
+    const root = makeTempDir();
+    fs.writeFileSync(path.join(root, 'static-publish.project.js'), '');
+    const here = path.join(root, 'hono-extensions');
+    fs.mkdirSync(path.join(here, 'compute-js'), { recursive: true });
+    fs.mkdirSync(path.join(here, 'node_modules', 'x'), { recursive: true });
+    fs.writeFileSync(path.join(here, 'compute-js', 'static-publish.rc.js'), '');
+    fs.writeFileSync(path.join(here, 'node_modules', 'x', 'static-publish.rc.js'), '');
+    const found = findProjectDirsNear(here).map(x => [ path.relative(here, x.dir), x.mode ]);
+    assert.deepEqual(found, [ [ '..', 'managed' ], [ 'compute-js', 'ejected' ] ]);
+  });
+
+  test('nothing near', () => {
+    const dir = makeTempDir();
+    assert.deepEqual(findProjectDirsNear(dir).filter(x => x.dir.startsWith(dir)), []);
   });
 });
 
