@@ -1012,9 +1012,13 @@ To build and deploy to your Compute service:
 // The lines that scaffold --managed adds to the .gitignore of the project dir.
 const GITIGNORE_COMMENT = '# @fastly/compute-js-static-publish';
 
+// A line is present also without its leading or trailing '/': for example,
+// 'node_modules' in the file also ignores the directory of '/node_modules/'.
+const gitignoreKey = (line: string) => line.trim().replace(/^\//, '').replace(/\/$/, '');
+
 export function addGitignoreLines(existing: string | null, lines: string[]): { content: string, added: string[] } {
-  const present = new Set((existing ?? '').split(/\r?\n/).map(x => x.trim()));
-  const added = lines.filter(line => !present.has(line));
+  const present = new Set((existing ?? '').split(/\r?\n/).map(gitignoreKey));
+  const added = lines.filter(line => !present.has(gitignoreKey(line)));
   if (added.length === 0) {
     return { content: existing ?? '', added };
   }
@@ -1034,11 +1038,13 @@ function writeManagedProject(appConfig: AppConfig, projectDir: string) {
   fs.writeFileSync(projectFilePath, renderProjectFile(appConfig, projectDir, getOwnVersion()), 'utf-8');
   console.log(`🚀 Managed project created: ${rootRelative(projectFilePath)}`);
 
-  // Ignore the generated app and the working dir. Never change the customer's lines.
+  // Ignore the node_modules of the project (this package can be a dev
+  // dependency of the project), the generated app, and the working dir. Never
+  // change the customer's lines.
   const gitignorePath = path.resolve(projectDir, '.gitignore');
   const existing = fs.existsSync(gitignorePath) ? fs.readFileSync(gitignorePath, 'utf-8') : null;
   const workingDir = path.relative(projectDir, appConfig.staticPublisherWorkingDir).split(path.sep).join('/');
-  const lines = [ '/.static-publish/' ];
+  const lines = [ '/node_modules/', '/.static-publish/' ];
   if (!workingDir.startsWith('..')) {
     lines.push(`/${workingDir}/`);
   }
