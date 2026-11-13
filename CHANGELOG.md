@@ -52,6 +52,7 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 
 ### Changed
 
+- The npm package includes `CHANGELOG.md`.
 - Scaffolding: the `src/index.js` of the `plain` app calls `serveRequest()` with `fallback: false`, then has the place for your own code, and then calls `serveFallback()` for the SPA file or the 404 page. Thus your code runs for each request that no published file matches, also when the collection has a fallback page. Code that must run before the published files goes before `serveRequest()`.
 - Scaffolding: the app has `@fastly/compute-js-static-publish` in `dependencies`. It was in `devDependencies`. The code of the app imports it, and the `postinstall` script of the app runs it, so `npm ci --omit=dev` needs it.
 - `PublisherServer.setResponseCache()`: the default of `maxBodySize` is now 16 MiB. It was 8 MiB.

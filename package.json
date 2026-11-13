@@ -87,6 +87,7 @@
     "package.json",
     "README.md",
     "DOCUMENTATION.md",
+    "CHANGELOG.md",
     "SECURITY.md"
   ]
 }
