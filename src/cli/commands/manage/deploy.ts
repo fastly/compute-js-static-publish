@@ -17,6 +17,7 @@ import { writeBackServiceId } from '../../managed/project-edit.js';
 import { loadApiToken } from '../../util/api-token.js';
 import { parseCommandLine } from '../../util/args.js';
 import { detectProjectMode } from '../../util/config.js';
+import { findRefusedFastlyOption } from '../../util/fastly-options.js';
 import { readServiceId } from '../../util/fastly-toml.js';
 import { getOwnPackageDir, getOwnVersion } from '../../util/package.js';
 import { appFastlyCommand } from '../run-dev-watch.js';
@@ -29,7 +30,7 @@ function help() {
   console.log(`\
 
 Usage:
-  npx @fastly/compute-js-static-publish deploy [options]
+  npx @fastly/compute-js-static-publish deploy [options] [-- <options for the Fastly CLI>]
 
 Description:
   Deploys the app of a managed project, only if it changed: generates the app,
@@ -55,6 +56,12 @@ Options:
                                    managed.serviceId. Without one, the Fastly CLI
                                    makes a new service.
   --fastly-api-token=<token>       Default: FASTLY_API_TOKEN.
+  -- <options>                     Options for 'fastly compute deploy' (in an ejected app,
+                                   'fastly compute publish'), for example
+                                   -- --status-check-timeout=180. Not allowed: --comment,
+                                   --service-id (-s), --token (-t), --package (-p),
+                                   --dir (-C), and --env, because deploy sets them, or
+                                   they deploy something else.
 
 Global Options:
   -h, --help                       Show this help message and exit.
@@ -73,6 +80,11 @@ function runFastly(appDir: string, args: string[], apiToken: string) {
 
 export async function action(actionArgs: string[]) {
 
+  // Options after -- go to the Fastly CLI.
+  const separator = actionArgs.indexOf('--');
+  const fastlyArgs = separator === -1 ? [] : actionArgs.slice(separator + 1);
+  const ownArgs = separator === -1 ? actionArgs : actionArgs.slice(0, separator);
+
   const optionDefinitions: OptionDefinition[] = [
     { name: 'force', type: Boolean },
     { name: 'auto-upgrade', type: Boolean },
@@ -80,7 +92,7 @@ export async function action(actionArgs: string[]) {
     { name: 'fastly-service-id', type: String },
     { name: 'fastly-api-token', type: String },
   ];
-  const parsed = parseCommandLine(actionArgs, optionDefinitions);
+  const parsed = parseCommandLine(ownArgs, optionDefinitions);
   if (parsed.needHelp) {
     if (parsed.error != null) {
       console.error(String(parsed.error));
@@ -97,6 +109,12 @@ export async function action(actionArgs: string[]) {
     ['fastly-service-id']: fastlyServiceId,
     ['fastly-api-token']: fastlyApiToken,
   } = parsed.commandLineOptions;
+
+  const refused = findRefusedFastlyOption(fastlyArgs);
+  if (refused != null) {
+    fail(refused);
+    return;
+  }
 
   if (detectProjectMode() === 'ejected') {
     // fastly compute publish always builds and deploys, and an ejected app has
@@ -117,6 +135,7 @@ export async function action(actionArgs: string[]) {
     if (isNonInteractive()) {
       publishArgs.push('--non-interactive');
     }
+    publishArgs.push(...fastlyArgs);
     const env = typeof fastlyApiToken === 'string' && fastlyApiToken !== '' ?
       { ...process.env, FASTLY_API_TOKEN: fastlyApiToken } :
       process.env;
@@ -196,6 +215,7 @@ export async function action(actionArgs: string[]) {
   if (isNonInteractive()) {
     deployArgs.push('--non-interactive');
   }
+  deployArgs.push(...fastlyArgs);
   const deploy = runFastly(appDir, deployArgs, apiToken.apiToken);
   if (deploy.error != null || deploy.status !== 0) {
     fail(`'fastly compute deploy' failed.`);
