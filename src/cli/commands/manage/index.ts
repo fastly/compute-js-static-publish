@@ -75,18 +75,21 @@ Examples:
 `);
 }
 
-export async function action(actionArgs: string[]) {
+const modes = {
+  'clean': cleanCommand,
+  'deploy': deployCommand,
+  'dev': devCommand,
+  'eject': ejectCommand,
+  'status': statusCommand,
+  'upgrade': upgradeCommand,
+  'publish-content': publishContentCommand,
+  'collections': collectionsCommands,
+};
 
-  const modes = {
-    'clean': cleanCommand,
-    'deploy': deployCommand,
-    'dev': devCommand,
-    'eject': ejectCommand,
-    'status': statusCommand,
-    'upgrade': upgradeCommand,
-    'publish-content': publishContentCommand,
-    'collections': collectionsCommands,
-  };
+// The commands for a project or an app. Scaffolding mode does not have them.
+export const MANAGEMENT_COMMANDS: readonly string[] = Object.keys(modes);
+
+export async function action(actionArgs: string[]) {
 
   const commandAndArgs = getCommandAndArgs(actionArgs, modes);
 

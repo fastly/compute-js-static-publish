@@ -64,6 +64,39 @@ export function detectProjectMode(dir: string = '.'): ProjectMode {
   return hasProject ? 'managed' : hasRc ? 'ejected' : 'scaffold';
 }
 
+// The directories near dir that have a project file or an rc file: the parent
+// directories, and the directories directly in dir (for example compute-js/).
+// For the message when a command for a project or an app runs in another
+// directory.
+export function findProjectDirsNear(dir: string = '.'): { dir: string, mode: 'managed' | 'ejected' }[] {
+  const found: { dir: string, mode: 'managed' | 'ejected' }[] = [];
+  const add = (candidate: string) => {
+    const mode = detectProjectMode(candidate);
+    if (mode === 'managed' || mode === 'ejected') {
+      found.push({ dir: candidate, mode });
+    }
+  };
+  const start = path.resolve(dir);
+  for (let current = path.dirname(start); ; current = path.dirname(current)) {
+    add(current);
+    if (path.dirname(current) === current) {
+      break;
+    }
+  }
+  let entries: fs.Dirent[] = [];
+  try {
+    entries = fs.readdirSync(start, { withFileTypes: true });
+  } catch {
+    // An unreadable directory has no subdirectories to check.
+  }
+  for (const entry of entries) {
+    if (entry.isDirectory() && !entry.name.startsWith('.') && entry.name !== 'node_modules') {
+      add(path.join(start, entry.name));
+    }
+  }
+  return found;
+}
+
 // The directory of the Compute app: the current directory in an ejected app,
 // or .static-publish/app in a managed project. The local KV Store file has
 // paths relative to it, because `fastly compute serve` runs there.
