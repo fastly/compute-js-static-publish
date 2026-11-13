@@ -13,6 +13,7 @@ import {
   formatVersionComment,
   managedAppFiles,
   parseVersionComment,
+  findDeployedApp,
 } from '../../build/cli/cli/managed/fingerprint.js';
 import { writeBackServiceId, writeBackStaticPublishVersion } from '../../build/cli/cli/managed/project-edit.js';
 import { renderProjectFile } from '../../build/cli/cli/managed/project-file.js';
@@ -194,5 +195,46 @@ describe('previewUrlTemplates', () => {
       { type: 'query', url: 'https://site.edgecompute.app/?collection={collection}' },
       { type: 'cookie', url: 'https://site.edgecompute.app/activate?collection={collection}&redirectTo=%2F' },
     ]);
+  });
+});
+
+describe('findDeployedApp', () => {
+  const fpA = 'a'.repeat(64);
+  const fpB = 'b'.repeat(64);
+  const comment = (fp) => `static-publish 8.1.0 fp:${fp}`;
+  const hashes = (map) => async (version) => map[version] ?? null;
+
+  test('the fingerprint of the active version', async () => {
+    const result = await findDeployedApp({ number: 3, comment: comment(fpA) }, [], hashes({}));
+    assert.deepEqual(result, { staticPublishVersion: '8.1.0', fingerprint: fpA });
+  });
+
+  test('a version cloned by hand: the newest earlier fingerprint, if the package is the same', async () => {
+    // 45 was deployed; 46 and 47 were cloned by hand, with the same package.
+    const versions = [ { number: 45, comment: comment(fpA) }, { number: 46, comment: null }, { number: 47, comment: '' } ];
+    const result = await findDeployedApp({ number: 47, comment: '' }, versions, hashes({ 45: 'h1', 46: 'h1', 47: 'h1' }));
+    assert.deepEqual(result, { staticPublishVersion: '8.1.0', fingerprint: fpA, fingerprintVersion: 45 });
+  });
+
+  test('another package: unknown', async () => {
+    const versions = [ { number: 1, comment: comment(fpA) }, { number: 2, comment: null } ];
+    assert.equal(await findDeployedApp({ number: 2, comment: null }, versions, hashes({ 1: 'h1', 2: 'h2' })), null);
+  });
+
+  test('only the newest earlier version with a fingerprint is compared', async () => {
+    // 3 has the package of 1, but 2 is the newest version with a fingerprint.
+    const versions = [ { number: 1, comment: comment(fpA) }, { number: 2, comment: comment(fpB) }, { number: 3, comment: null } ];
+    assert.equal(await findDeployedApp({ number: 3, comment: null }, versions, hashes({ 1: 'h1', 2: 'h2', 3: 'h1' })), null);
+  });
+
+  test('versions after the active version are not used', async () => {
+    const versions = [ { number: 1, comment: null }, { number: 2, comment: comment(fpA) } ];
+    assert.equal(await findDeployedApp({ number: 1, comment: null }, versions, hashes({ 1: 'h1', 2: 'h1' })), null);
+  });
+
+  test('no version with a fingerprint, or no package: unknown', async () => {
+    assert.equal(await findDeployedApp({ number: 2, comment: null }, [ { number: 1, comment: 'by hand' } ], hashes({ 1: 'h1', 2: 'h1' })), null);
+    const versions = [ { number: 1, comment: comment(fpA) } ];
+    assert.equal(await findDeployedApp({ number: 2, comment: null }, versions, hashes({})), null);
   });
 });
