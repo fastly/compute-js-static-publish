@@ -159,7 +159,7 @@ describe('generateApp() writes a valid fastly.toml', () => {
   }
 });
 
-describe('s3.secretStoreLinkName', () => {
+describe('s3.fastlyBackendName and s3.secretStoreLinkName', () => {
   const s3 = { mode: 's3', region: 'us-east-1', bucket: 'my-bucket', endpointUrl: 'https://s3.example.com/', endpointGenerated: false };
 
   test('the default resource link name is S3_CREDENTIALS', () => {
@@ -167,7 +167,17 @@ describe('s3.secretStoreLinkName', () => {
     const parsed = toml.parse(files['fastly.toml']);
     assert.ok('S3_CREDENTIALS' in parsed.local_server.secret_stores);
     assert.ok('S3_CREDENTIALS' in parsed.setup.secret_stores);
-    assert.doesNotMatch(files['static-publish.rc.js'], /secretStoreLinkName/);
+    assert.ok('s3_storage' in parsed.local_server.backends);
+    assert.ok('s3_storage' in parsed.setup.backends);
+    assert.doesNotMatch(files['static-publish.rc.js'], /secretStoreLinkName|fastlyBackendName/);
+  });
+
+  test('fastly.toml and the rc use another backend name', () => {
+    const files = generateApp({ ...base, storage: { ...s3, fastlyBackendName: 'object_storage' } });
+    const parsed = toml.parse(files['fastly.toml']);
+    assert.deepEqual(Object.keys(parsed.local_server.backends), [ 'object_storage' ]);
+    assert.deepEqual(Object.keys(parsed.setup.backends), [ 'object_storage' ]);
+    assert.match(files['static-publish.rc.js'], /fastlyBackendName: "object_storage",/);
   });
 
   test('fastly.toml and the rc use another name', () => {

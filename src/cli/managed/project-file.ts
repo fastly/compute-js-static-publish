@@ -105,6 +105,7 @@ export function appConfigFromProject(
       bucket: rc.s3.bucket,
       endpointUrl,
       endpointGenerated: rc.s3.endpoint == null,
+      ...(rc.s3.fastlyBackendName != null ? { fastlyBackendName: rc.s3.fastlyBackendName } : {}),
       ...(rc.s3.secretStoreLinkName != null ? { secretStoreLinkName: rc.s3.secretStoreLinkName } : {}),
     };
   } else {
