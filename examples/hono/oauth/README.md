@@ -38,7 +38,7 @@ The steps:
 `10-oauth.ts` is one module. All of it is in the `middleware` phase:
 
 ```
-The login check       On the protect paths (default: all paths).
+The login check       On the protect paths (default: all paths), also through a preview URL.
                       No valid session      → 302 to the login route
                       Not in allowedUsers   → 403
                       Otherwise             → c.var.user, the request continues, and the
@@ -60,9 +60,11 @@ GET /private/report.html      valid session → the published file
 ```
 
 - The module has the prefix `10-`, so it comes before other modules in each phase. The `middleware` phase of all modules comes before their other phases, so the login check also protects the routes of other modules on the protected paths.
-- The routes under `/auth/` never need a session.
+- The routes under `/auth/`, and the `login` path, never need a session.
+- The login check compares the `protect` paths with the path of the request, and also with the path without the prefix of a `path` source of [collection selection](../../../README.md#-previews-collection-selection). Thus `/_preview/staging/private/report.html` needs the same login as `/private/report.html`.
 - The session cookie has the user and an expiry time, signed with `SESSION_KEY` (HMAC-SHA256). The app does not store sessions. To log out all visitors, change `SESSION_KEY`.
-- The user ID is `github:<login>` or `google:<email>`. For Google, only an email address that Google verified is accepted.
+- A visitor who logs in has two IDs: `id` is `github:<login>` or `google:<email>`, and `accountId` is `github-id:<number>` or `google-id:<number>`, the number of the account at the provider. For Google, only an email address that Google verified is accepted.
+- A GitHub user name, or the email address of a Google account, can change, and then someone else can get it. `id` is easy to read, but to allow an account and not a name in `allowedUsers`, use `accountId`. GitHub shows the number of an account at `https://api.github.com/users/<login>` (`id`).
 
 ## Options
 
@@ -73,9 +75,9 @@ templateOptions: {
   hono: {
     extensions: {
       oauth: {
-        protect: '/private/*',
+        protect: '/private',
         login: '/auth/github',
-        allowedUsers: [ 'github:octocat', 'google:someone@example.com' ],
+        allowedUsers: [ 'github-id:583231', 'google:someone@example.com' ],
         github: { clientId: 'Iv1.0123456789abcdef' },
         google: { clientId: '0123456789-abc.apps.googleusercontent.com' },
         sessionMaxAge: 86400,
@@ -87,9 +89,9 @@ templateOptions: {
 
 | Option | Default | |
 | --- | --- | --- |
-| `protect` | `'/*'` | The paths that need a login: a path, or a list of paths. |
-| `login` | `/auth/github` | Where a visitor without a session goes. |
-| `allowedUsers` | anyone | The users that can log in. Without it, any GitHub or Google user can log in. |
+| `protect` | `'/'` | The paths that need a login: a path prefix, or a list of them. `'/private'` is `/private` and all paths under it. `'/private/*'` is the same. |
+| `login` | `/auth/github` | Where a visitor without a session goes. The login check lets this path through. |
+| `allowedUsers` | anyone | The visitors that can log in: the `id` or the `accountId` of each visitor. Without it, any GitHub or Google user can log in. |
 | `github.clientId` | | The client ID of your GitHub OAuth app. Without it, `/auth/github` does not exist. |
 | `google.clientId` | | The client ID of your Google OAuth client. Without it, `/auth/google` does not exist. |
 | `sessionMaxAge` | `86400` | How long a session lasts, in seconds. |
