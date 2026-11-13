@@ -16,14 +16,20 @@ export type CollectionSelectionHostSource = {
   type: 'host',
   // The hostname, with one {collection} placeholder in one label, for example
   // '{collection}.preview.example.com' or 'branch-{collection}.preview.example.com'.
+  // With value, a hostname without the placeholder, for example 'stag.example.com'.
   pattern: string,
+  // The collection for the hostname in pattern, for example 'staging'.
+  value?: string,
 };
 
 export type CollectionSelectionPathSource = {
   type: 'path',
   // A path prefix with one {collection} placeholder, for example '/_preview/{collection}'.
+  // With value, a prefix without the placeholder, for example '/_staging'.
   // The prefix is removed before the file lookup.
   prefix: string,
+  // The collection for the prefix, for example 'staging'.
+  value?: string,
   // 'cookie': also set the cookie of the cookie source, and redirect to the path without the prefix.
   sticky?: 'cookie',
 };
@@ -151,6 +157,20 @@ export function validateCollectionSelection(config: unknown): string[] {
     return [ 'collectionSelection must be an object.' ];
   }
   const { sources, allow, onMissing, noindex } = config as Record<string, unknown>;
+  const allowIsValid = allow === undefined ||
+    (Array.isArray(allow) && allow.every(x => typeof x === 'string' && ALLOW_PATTERN.test(x)));
+
+  // The value of a host or path source: a collection name that allow (if set) matches.
+  const checkValue = (name: string, value: unknown, patternField: string, pattern: unknown) => {
+    if (typeof value !== 'string' || !isValidCollectionName(value)) {
+      errors.push(`${name}.value must be a valid collection name. ${COLLECTION_NAME_RULE}`);
+    } else if (allowIsValid && !isCollectionNameAllowed(value, allow as string[] | undefined)) {
+      errors.push(`${name}.value '${value}' is not in collectionSelection.allow.`);
+    }
+    if (typeof pattern === 'string' && pattern.includes(COLLECTION_PLACEHOLDER)) {
+      errors.push(`${name}: use ${COLLECTION_PLACEHOLDER} in ${patternField}, or value, not both.`);
+    }
+  };
 
   if (!Array.isArray(sources)) {
     errors.push('collectionSelection.sources must be an array.');
@@ -170,9 +190,17 @@ export function validateCollectionSelection(config: unknown): string[] {
       }
       switch (s.type) {
       case 'host': {
+        if (s.value !== undefined) {
+          checkValue(name, s.value, 'pattern', s.pattern);
+          if (typeof s.pattern !== 'string' ||
+            (!s.pattern.includes(COLLECTION_PLACEHOLDER) && !/^[a-z0-9-]+(\.[a-z0-9-]+)*$/i.test(s.pattern))) {
+            errors.push(`${name}.pattern must be a hostname: use only a-z, 0-9, '-', and '.'.`);
+          }
+          break;
+        }
         const parts = typeof s.pattern === 'string' ? splitPattern(s.pattern) : null;
         if (parts == null) {
-          errors.push(`${name}.pattern must be a string with exactly one ${COLLECTION_PLACEHOLDER}.`);
+          errors.push(`${name}.pattern must be a string with exactly one ${COLLECTION_PLACEHOLDER}, or a hostname with value.`);
         } else if (!/^[a-z0-9.-]*$/i.test(parts.before + parts.after)) {
           errors.push(`${name}.pattern must be a hostname: use only a-z, 0-9, '-', and '.' around ${COLLECTION_PLACEHOLDER}.`);
         } else if (MAX_LABEL_LENGTH - hostLabelFixedLength(parts) < 1) {
@@ -181,12 +209,17 @@ export function validateCollectionSelection(config: unknown): string[] {
         break;
       }
       case 'path': {
-        const parts = typeof s.prefix === 'string' ? splitPattern(s.prefix) : null;
+        if (s.value !== undefined) {
+          checkValue(name, s.value, 'prefix', s.prefix);
+        }
+        const parts = typeof s.prefix !== 'string' ? null :
+          s.value !== undefined ? { before: s.prefix, after: '' } :
+          splitPattern(s.prefix);
         if (parts == null) {
-          errors.push(`${name}.prefix must be a string with exactly one ${COLLECTION_PLACEHOLDER}.`);
+          errors.push(`${name}.prefix must be a string with exactly one ${COLLECTION_PLACEHOLDER}, or a prefix with value.`);
         } else if (!parts.before.startsWith('/')) {
           errors.push(`${name}.prefix must start with '/'.`);
-        } else if (parts.after.endsWith('/')) {
+        } else if ((s.value !== undefined ? parts.before : parts.after).endsWith('/')) {
           errors.push(`${name}.prefix must not end with '/'.`);
         } else if (/[?#]/.test(parts.before + parts.after)) {
           errors.push(`${name}.prefix must not contain '?' or '#'.`);
@@ -218,6 +251,9 @@ export function validateCollectionSelection(config: unknown): string[] {
         }
         break;
       }
+      if (s.value !== undefined && s.type !== 'host' && s.type !== 'path') {
+        errors.push(`${name}.value is only for the 'host' and 'path' sources.`);
+      }
       if (s.sticky !== undefined) {
         if (s.type !== 'path' && s.type !== 'query') {
           errors.push(`${name}.sticky is only for the 'path' and 'query' sources.`);
@@ -236,10 +272,8 @@ export function validateCollectionSelection(config: unknown): string[] {
     }
   }
 
-  if (allow !== undefined) {
-    if (!Array.isArray(allow) || !allow.every(x => typeof x === 'string' && ALLOW_PATTERN.test(x))) {
-      errors.push(`collectionSelection.allow must be an array of patterns. Use a-z, 0-9, '-', and '*'.`);
-    }
+  if (!allowIsValid) {
+    errors.push(`collectionSelection.allow must be an array of patterns. Use a-z, 0-9, '-', and '*'.`);
   }
 
   if (onMissing !== undefined && onMissing !== 'not-found' && onMissing !== 'default') {
@@ -269,6 +303,12 @@ export function previewUrl(collectionName: string, baseUrl: string, config: Coll
   for (const source of config.sources) {
     switch (source.type) {
     case 'host': {
+      if (source.value != null) {
+        if (source.value === collectionName) {
+          return `${base.protocol}//${source.pattern.toLowerCase()}/`;
+        }
+        continue;
+      }
       const maxLength = maxCollectionNameLengthForHost(source.pattern);
       if (collectionName.length > maxLength) {
         throw new Error(`'${collectionName}' is too long for the host pattern '${source.pattern}': a host label has at most ${MAX_LABEL_LENGTH} characters, so the name can have at most ${maxLength}.`);
@@ -276,6 +316,12 @@ export function previewUrl(collectionName: string, baseUrl: string, config: Coll
       return `${base.protocol}//${source.pattern.replace(COLLECTION_PLACEHOLDER, collectionName).toLowerCase()}/`;
     }
     case 'path':
+      if (source.value != null) {
+        if (source.value === collectionName) {
+          return `${base.origin}${source.prefix}/`;
+        }
+        continue;
+      }
       return `${base.origin}${source.prefix.replace(COLLECTION_PLACEHOLDER, collectionName)}/`;
     case 'query': {
       const url = new URL('/', base);

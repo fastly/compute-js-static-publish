@@ -33,11 +33,14 @@ export const COLLECTION_SELECTION_FLAGS_HELP = `\
   --collection-selection <source>       Select the collection of a request, for example for
                                         previews. Can be repeated; the sources are tried in order.
                                           host:<pattern>             host:{collection}.preview.example.com
+                                          host:<host>,value=<name>   host:stag.example.com,value=staging
                                           path:<prefix>[,sticky]     path:/_preview/{collection},sticky
+                                          path:<prefix>,value=<name> path:/_staging,value=staging,sticky
                                           query:<param>[,sticky]     query:collection,sticky
                                           cookie[:<name>][,maxAge=<seconds>][,activatePath=<path>][,resetPath=<path>]
                                           header:<name>              header:x-publisher-collection
                                         'sticky' also sets the cookie of the cookie source, so it needs a cookie source.
+                                        'value' gives one collection for a hostname or a prefix without {collection}.
   --collection-allow <patterns>         The collections that can be selected, for example "pr-*,staging".
                                         Default: any collection.
   --collection-on-missing <value>       When the selected collection is not published or has
@@ -59,6 +62,21 @@ function parseSource(spec: string, errors: string[]): CollectionSelectionSource 
     }
     return true;
   };
+  // The options of a host or path source: value=<collection>, and sticky
+  // (only if allowSticky).
+  const valueAndSticky = (allowSticky: boolean) => {
+    const result: { value?: string, sticky?: 'cookie' } = {};
+    for (const option of options) {
+      if (allowSticky && option === 'sticky') {
+        result.sticky = 'cookie';
+      } else if (option.startsWith('value=')) {
+        result.value = option.slice('value='.length);
+      } else {
+        errors.push(`--collection-selection ${type}: unknown option '${option}'.`);
+      }
+    }
+    return result;
+  };
   const sticky = () => {
     let result: 'cookie' | undefined;
     for (const option of options) {
@@ -77,12 +95,18 @@ function parseSource(spec: string, errors: string[]): CollectionSelectionSource 
   };
 
   switch (type) {
-  case 'host':
-    noOptions();
-    return needValue('pattern') ? { type, pattern: value! } : null;
+  case 'host': {
+    const o = valueAndSticky(false);
+    return needValue('pattern') ? { type, pattern: value!, ...(o.value != null ? { value: o.value } : {}) } : null;
+  }
   case 'path': {
-    const s = sticky();
-    return needValue('prefix') ? { type, prefix: value!, ...(s != null ? { sticky: s } : {}) } : null;
+    const o = valueAndSticky(true);
+    return needValue('prefix') ? {
+      type,
+      prefix: value!,
+      ...(o.value != null ? { value: o.value } : {}),
+      ...(o.sticky != null ? { sticky: o.sticky } : {}),
+    } : null;
   }
   case 'query': {
     const s = sticky();
