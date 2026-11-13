@@ -251,6 +251,8 @@ The project file has the settings that an ejected app has in its two files:
 
 Paths in the project file are relative to it. The name of the file marks the mode: a directory with `static-publish.project.js` is a managed project, and a directory with `static-publish.rc.js` is an ejected app. A directory with both is an error.
 
+The project file is a JavaScript module, and the CLI loads it with `import()`. Thus the `type` field of the nearest `package.json` decides its module format. The file that `scaffold --managed` writes uses `export default`, which needs an ES module. In a directory whose `package.json` has `"type": "commonjs"`, change `export default` to `module.exports =`. The other contents of the file stay the same.
+
 `publish-content`, `collections`, and `clean` run in the project dir (or with `--project-dir`), and read the project file. `publish-content` purges the service of `managed.serviceId`, after `--fastly-service-id` and `FASTLY_SERVICE_ID`.
 
 To run the app on your computer:
