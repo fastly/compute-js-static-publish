@@ -59,6 +59,12 @@ describe('addGitignoreLines', () => {
     assert.deepEqual(addGitignoreLines(existing, lines), { content: existing, added: [] });
   });
 
+  test('a line without its leading or trailing / is present', () => {
+    for (const existing of [ 'node_modules\n', 'node_modules/\n', '/node_modules\n', '  /node_modules/  \n' ]) {
+      assert.deepEqual(addGitignoreLines(existing, [ '/node_modules/' ]).added, [], existing);
+    }
+    assert.deepEqual(addGitignoreLines('web/node_modules\n', [ '/node_modules/' ]).added, [ '/node_modules/' ]);
+  });
 });
 
 describe('detectProjectMode', () => {
