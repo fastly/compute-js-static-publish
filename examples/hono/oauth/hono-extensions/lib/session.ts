@@ -7,12 +7,18 @@ import { deleteCookie, getCookie, getSignedCookie, setCookie, setSignedCookie } 
 // The options of the example, in templateOptions.hono.extensions.oauth. A
 // provider without a clientId has no login route.
 export type OAuthOptions = {
-  // The paths that need a login. The default is '/*', all paths.
+  // The paths that need a login, as path prefixes: '/docs' is /docs and all
+  // paths under it. '/docs/*' is the same as '/docs'. The default is '/', all
+  // paths.
   protect?: string | string[],
   // Where a visitor without a session goes. The default is '/auth/github'.
+  // The login check lets this path through.
   login?: string,
-  // If set, only these users can log in, for example
-  // [ 'github:octocat', 'google:someone@example.com' ].
+  // If set, only these users can log in: the id or the accountId of OAuthUser,
+  // for example [ 'github:octocat', 'github-id:583231', 'google:someone@example.com' ].
+  // A GitHub user name, or the email address of a Google account, can change,
+  // and then someone else can get it. To allow an account, and not a name,
+  // use the accountId.
   allowedUsers?: string[],
   github?: { clientId: string },
   google?: { clientId: string },
@@ -23,8 +29,12 @@ export type OAuthOptions = {
 // The visitor of a session, on c.var.user after the login check.
 export type OAuthUser = {
   // The provider and the name, for example 'github:octocat' or
-  // 'google:someone@example.com'. allowedUsers uses this value.
+  // 'google:someone@example.com'. Easy to read, but it can change.
   id: string,
+  // The provider and the number of the account, which does not change, for
+  // example 'github-id:583231' or 'google-id:104738291847502931' (the ID of the
+  // provider).
+  accountId: string,
   name: string,
 };
 
@@ -35,6 +45,17 @@ export const AUTH_PATH = '/auth';
 // The binding of the Secret Store with the secrets, for defineExtension().
 // With 'as const', c.env.oauth has the type SecretStore | undefined.
 export const OAUTH_BINDINGS = { oauth: 'SecretStore:oauth' } as const;
+
+// The path prefixes of the protect option. '/docs/*' and '/docs/' are the same
+// prefix as '/docs'.
+export function protectPrefixes(protect: string | string[] | undefined): string[] {
+  return [ protect ?? '/' ].flat().map(path => path.replace(/\/\*$/, '').replace(/\/+$/, '') || '/');
+}
+
+// True if the path is one of the prefixes, or is under one of them.
+export function isUnderPrefix(path: string, prefixes: string[]): boolean {
+  return prefixes.some(prefix => prefix === '/' || path === prefix || path.startsWith(`${prefix}/`));
+}
 
 const SESSION_COOKIE = 'session';
 const RETURN_TO_COOKIE = 'oauth_return_to';
@@ -55,10 +76,11 @@ export async function readSession(c: Context, sessionKey: string): Promise<OAuth
   }
   try {
     const session = JSON.parse(value);
-    if (typeof session.id !== 'string' || typeof session.exp !== 'number' || session.exp < Date.now() / 1000) {
+    if (typeof session.id !== 'string' || typeof session.accountId !== 'string' ||
+      typeof session.exp !== 'number' || session.exp < Date.now() / 1000) {
       return null;
     }
-    return { id: session.id, name: String(session.name ?? '') };
+    return { id: session.id, accountId: session.accountId, name: String(session.name ?? '') };
   } catch {
     return null;
   }

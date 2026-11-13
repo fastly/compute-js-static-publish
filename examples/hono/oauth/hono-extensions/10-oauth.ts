@@ -4,10 +4,13 @@
 // All of it is in the middleware phase, which comes before the routes of all
 // modules:
 // - The login check, on the paths of the protect option (default: all paths).
-//   A visitor without a valid session goes to the login route. With
-//   allowedUsers, other users get 403. The responses get
+//   It runs on each request, and checks the path of the request, and also the
+//   path without the prefix of a path source of collection selection (for
+//   example /docs/ of /_preview/staging/docs/), so that a preview URL needs
+//   the same login. A visitor without a valid session goes to the login path.
+//   With allowedUsers, other users get 403. The responses get
 //   'Cache-Control: private', so that a shared cache does not keep them. The
-//   paths under /auth/ do not need a session.
+//   paths under /auth/, and the login path, do not need a session.
 // - GET /auth/github, GET /auth/google: start the login. The provider then
 //   sends the visitor back to the same path with a code. The route gets the
 //   user from the provider, sets the session cookie, and goes back to the path
@@ -27,7 +30,9 @@ import {
   type OAuthOptions,
   type OAuthUser,
   deleteSession,
+  isUnderPrefix,
   oauthSecret,
+  protectPrefixes,
   readSession,
   setReturnTo,
   takeReturnTo,
@@ -49,8 +54,17 @@ function withSecret(secretKey: string, make: (clientSecret: string) => Middlewar
 }
 
 export default defineExtension({ bindings: OAUTH_BINDINGS }, (app, options?: OAuthOptions) => {
-  const loginCheck: MiddlewareHandler = async (c, next) => {
-    if (c.req.path === AUTH_PATH || c.req.path.startsWith(`${AUTH_PATH}/`)) {
+  const prefixes = protectPrefixes(options?.protect);
+  const login = options?.login ?? `${AUTH_PATH}/github`;
+  const loginPath = new URL(login, 'https://localhost').pathname;
+
+  app.use('*', async (c, next) => {
+    if (c.req.path === AUTH_PATH || c.req.path.startsWith(`${AUTH_PATH}/`) || c.req.path === loginPath) {
+      return next();
+    }
+    // selectCollection() sets this path for a path source.
+    const pathInCollection: string | undefined = c.get('staticPublisher')?.pathname;
+    if (!isUnderPrefix(c.req.path, prefixes) && (pathInCollection == null || !isUnderPrefix(pathInCollection, prefixes))) {
       return next();
     }
     const sessionKey = await oauthSecret(c, 'SESSION_KEY');
@@ -61,18 +75,15 @@ export default defineExtension({ bindings: OAUTH_BINDINGS }, (app, options?: OAu
     if (user == null) {
       const url = new URL(c.req.url);
       setReturnTo(c, url.pathname + url.search);
-      return c.redirect(options?.login ?? `${AUTH_PATH}/github`);
+      return c.redirect(login);
     }
-    if (options?.allowedUsers != null && !options.allowedUsers.includes(user.id)) {
+    if (options?.allowedUsers != null && !options.allowedUsers.includes(user.id) && !options.allowedUsers.includes(user.accountId)) {
       return c.text('Forbidden\n', 403);
     }
     c.set('user', user);
     await next();
     c.header('Cache-Control', 'private');
-  };
-  for (const path of [ options?.protect ?? '/*' ].flat()) {
-    app.use(path, loginCheck);
-  }
+  });
 
   const maxAge = options?.sessionMaxAge ?? DEFAULT_SESSION_MAX_AGE;
 
@@ -98,7 +109,11 @@ export default defineExtension({ bindings: OAUTH_BINDINGS }, (app, options?: OAu
         githubAuth({ client_id: github.clientId, client_secret: clientSecret, oauthApp: true, scope: [ 'read:user', 'user:email' ] })),
       (c) => {
         const user = c.get('user-github');
-        return finishLogin(c, user?.login == null ? null : { id: `github:${user.login}`, name: user.name ?? user.login });
+        return finishLogin(c, user?.login == null ? null : {
+          id: `github:${user.login}`,
+          accountId: `github-id:${user.id}`,
+          name: user.name ?? user.login,
+        });
       },
     );
   }
@@ -112,7 +127,11 @@ export default defineExtension({ bindings: OAUTH_BINDINGS }, (app, options?: OAu
       (c) => {
         const user = c.get('user-google');
         // Only an email address that Google verified identifies the user.
-        return finishLogin(c, user?.email == null || !user.verified_email ? null : { id: `google:${user.email}`, name: user.name ?? user.email });
+        return finishLogin(c, user?.email == null || !user.verified_email ? null : {
+          id: `google:${user.email}`,
+          accountId: `google-id:${user.id}`,
+          name: user.name ?? user.email,
+        });
       },
     );
   }
