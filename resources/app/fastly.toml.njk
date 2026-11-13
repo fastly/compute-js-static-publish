@@ -35,14 +35,14 @@ key = "S3_SECRET_ACCESS_KEY"
 env = "S3_SECRET_ACCESS_KEY"
 
 [local_server.backends]
-[local_server.backends.s3_storage]
+[local_server.backends.{{ s3BackendName | tomlKey }}]
 url = {{ s3EndpointUrl | toml }}
 override_host = {{ s3EndpointHostname | toml }}
 
 [setup]
 
 [setup.backends]
-[setup.backends.s3_storage]
+[setup.backends.{{ s3BackendName | tomlKey }}]
 address = {{ s3EndpointHostname | toml }}
 description = "S3 API endpoint"
 port = 443

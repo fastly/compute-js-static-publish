@@ -183,7 +183,7 @@ Ready to go live? All you need is a [free Fastly account](https://www.fastly.com
 npm run fastly:deploy
 ```
 
-The app reads the S3 credentials from the Secret Store that has the resource link name `S3_CREDENTIALS` on your service. To use another resource link name, for example a link that your service already has, set `s3.secretStoreLinkName` in `static-publish.rc.js` (in a managed project, in `static-publish.project.js`), and build the app again. `setSecretStoreForS3Credentials()` in the code of the app also sets the name, and is used in place of `s3.secretStoreLinkName`.
+The app reads the S3 credentials from the Secret Store that has the resource link name `S3_CREDENTIALS` on your service. To use another resource link name, for example a link that your service already has, set `s3.secretStoreLinkName` in `static-publish.rc.js` (in a managed project, in `static-publish.project.js`), and build the app again. `setSecretStoreForS3Credentials()` in the code of the app also sets the name, and is used in place of `s3.secretStoreLinkName`. In the same way, `s3.fastlyBackendName` sets the name of the backend of the S3 endpoint (default `s3_storage`).
 
 When the Fastly CLI creates a new service, it creates a Secret Store named `S3_CREDENTIALS`, links it to the service with the same name, and prompts you for the values `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY`.
 
@@ -282,7 +282,7 @@ managed: {
 ```
 
 - Only `local_server` and `setup` can be added. The CLI writes the other parts of `fastly.toml`.
-- The CLI also writes some resources: the KV Store of the content, and in S3 mode, the `S3_CREDENTIALS` Secret Store and the `s3_storage` backend. A resource with one of these names is an error.
+- The CLI also writes some resources: the KV Store of the content, and in S3 mode, the `S3_CREDENTIALS` Secret Store and the `s3_storage` backend (other names with `s3.secretStoreLinkName` and `s3.fastlyBackendName`). A resource with one of these names is an error.
 - Do not put a secret in the project file: in `local_server`, read it from an environment variable (`env`) or a file (`file`) that is not committed.
 - `local_server` does not change the fingerprint, because it is only for `fastly compute serve`. `setup` changes it.
 - `eject` writes the sections into the `fastly.toml` of the ejected app.

@@ -23,7 +23,7 @@ export type AppConfig = {
   serviceId: string | undefined,
   storage:
     | { mode: 'kv-store', kvStoreName: string }
-    | { mode: 's3', region: string, bucket: string, endpointUrl: string, endpointGenerated: boolean, secretStoreLinkName?: string },
+    | { mode: 's3', region: string, bucket: string, endpointUrl: string, endpointGenerated: boolean, fastlyBackendName?: string, secretStoreLinkName?: string },
   publishId: string,
   defaultCollectionName: string,
   staticPublisherWorkingDir: string,
@@ -153,6 +153,7 @@ export function generateApp(config: AppConfig): Record<string, string> {
   let localServerKvStorePath: string | undefined;
   let s3EndpointUrl: string | undefined;
   let s3EndpointHostname: string | undefined;
+  let s3BackendName: string | undefined;
   let s3SecretStoreLinkName: string | undefined;
   if (storage.mode === 'kv-store') {
     localServerKvStorePath = dotRelative(computeJsDir, path.resolve(staticPublisherWorkingDir, 'kvstore.json'));
@@ -162,6 +163,7 @@ export function generateApp(config: AppConfig): Record<string, string> {
     const url = new URL(storage.endpointUrl);
     s3EndpointUrl = String(url);
     s3EndpointHostname = url.hostname;
+    s3BackendName = storage.fastlyBackendName ?? 's3_storage';
     s3SecretStoreLinkName = storage.secretStoreLinkName ?? 'S3_CREDENTIALS';
   }
   resourceFiles['fastly.toml'] = addFastlyTomlSections(renderAppResource('fastly.toml', {
@@ -173,6 +175,7 @@ export function generateApp(config: AppConfig): Record<string, string> {
     localServerKvStorePath,
     s3EndpointUrl,
     s3EndpointHostname,
+    s3BackendName,
     s3SecretStoreLinkName,
   }), fastlyToml);
 
