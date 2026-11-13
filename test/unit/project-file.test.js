@@ -58,6 +58,7 @@ describe('addGitignoreLines', () => {
     const existing = '/.static-publish/\n/static-publisher/\n';
     assert.deepEqual(addGitignoreLines(existing, lines), { content: existing, added: [] });
   });
+
 });
 
 describe('detectProjectMode', () => {
@@ -151,7 +152,7 @@ describe('project file round trip', () => {
     },
     's3-endpoint': { ...base, storage: { mode: 's3', region: 'us-east-1', bucket: 'my-bucket', endpointUrl: 'https://s3.example.com/', endpointGenerated: false } },
     's3-aws': { ...base, storage: { mode: 's3', region: 'us-east-1', bucket: 'my-bucket', endpointUrl: 'https://my-bucket.s3.us-east-1.amazonaws.com/', endpointGenerated: true } },
-    's3 with secretStoreLinkName': { ...base, storage: { mode: 's3', region: 'us-east-1', bucket: 'my-bucket', endpointUrl: 'https://s3.example.com/', endpointGenerated: false, secretStoreLinkName: 'site-secrets' } },
+    's3 with fastlyBackendName and secretStoreLinkName': { ...base, storage: { mode: 's3', region: 'us-east-1', bucket: 'my-bucket', endpointUrl: 'https://s3.example.com/', endpointGenerated: false, fastlyBackendName: 'object_storage', secretStoreLinkName: 'site-secrets' } },
     'managed.fastlyToml': {
       ...base,
       fastlyToml: {

@@ -90,6 +90,7 @@ export type StaticPublishPartialS3Storage = {
     region: string,
     bucket: string,
     endpoint?: string,
+    // The name of the backend of the S3 endpoint on the service. Default: 's3_storage'.
     fastlyBackendName?: string,
     // The resource link name of the Secret Store with the S3 credentials on the
     // service. Default: 'S3_CREDENTIALS'.
