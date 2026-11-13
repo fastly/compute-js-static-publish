@@ -171,6 +171,22 @@ describe('managed commands', () => {
     });
   });
 
+  describe('a command in another directory', () => {
+    test('a subdirectory of the project: the CLI names the project directory', () => {
+      const sub = path.resolve(dir, 'sub-e2e');
+      fs.mkdirSync(sub, { recursive: true });
+      try {
+        const { status, output } = runText([ 'status' ], sub);
+        assert.equal(status, 1);
+        assert.match(output, /'status' is a command for a managed project or an app/);
+        assert.match(output, /\.\. has static-publish\.project\.js\. Run the command there, or add --project-dir=\.\./);
+        assert.doesNotMatch(output, /Scaffolding mode/);
+      } finally {
+        fs.rmSync(sub, { recursive: true, force: true });
+      }
+    });
+  });
+
   describe('deploy checks', () => {
     test('options after -- that deploy sets itself are errors', () => {
       for (const [ args, message ] of [
