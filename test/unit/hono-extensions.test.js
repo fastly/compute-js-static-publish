@@ -51,6 +51,15 @@ describe('mergeBindings()', () => {
     );
   });
 
+  test('a binding name of Object.prototype is an ordinary name', () => {
+    const odd = defineExtension({ bindings: { toString: 'KVStore:a', constructor: 'ConfigStore:b' } }, () => {});
+    assert.deepEqual(mergeBindings({}, [ entry('odd.ts', odd) ]), { toString: 'KVStore:a', constructor: 'ConfigStore:b' });
+    assert.throws(
+      () => mergeBindings({ toString: 'KVStore:other' }, [ entry('odd.ts', odd) ]),
+      /The binding 'toString' is 'KVStore:other' in templateOptions\.hono\.bindings, but 'KVStore:a' in hono-extensions\/odd\.ts\./,
+    );
+  });
+
   test('a module must default-export defineExtension()', () => {
     assert.throws(() => mergeBindings({}, [ entry('x.ts', async () => {}) ]),
       /hono-extensions\/x\.ts: the default export must be defineExtension\(…\)\./);
