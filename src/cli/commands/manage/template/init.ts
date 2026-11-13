@@ -33,14 +33,14 @@ Description:
   The template is managed.template in ${PROJECT_FILE_NAME}, or
   generatedFrom.template in ${RC_FILE_NAME}.
 
-  A new folder gets package.json, tsconfig.json, and inactive examples. In a
-  folder that exists, it updates only the peer dependencies on the packages
-  that the app provides, and adds the starter files that are missing. It never
-  changes your modules. Then run npm install in the folder.
+  A new folder gets package.json, tsconfig.json, .gitignore, and an inactive
+  example. In a folder that exists, it updates only the peer dependencies on
+  the packages that the app provides, and adds the starter files that are
+  missing. It never changes your modules. Then run npm install in the folder.
 
 Options:
-  --reset                          Also write the starter files again (tsconfig.json
-                                   and the examples). Asks before it replaces a file,
+  --reset                          Also write the starter files again (tsconfig.json,
+                                   .gitignore, and the example). Asks before it replaces a file,
                                    or needs --force in non-interactive mode.
   --force                          With --reset: replace without a question.
   --check                          Change nothing. Fail (template-init-needed) if

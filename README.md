@@ -1190,6 +1190,7 @@ npx @fastly/compute-js-static-publish template init
 hono-extensions/
 ├── package.json        # Your dependencies, and the peer dependencies on the packages that the app provides
 ├── tsconfig.json       # For your editor
+├── .gitignore          # Ignores node_modules/
 ├── 10-auth.ts          # A module
 ├── api.ts              # A module
 ├── _example.ts         # An example, not a module (the name starts with _)
@@ -1264,7 +1265,7 @@ templateOptions: {
 - In a managed project, the files of the folder (without `node_modules/`) are part of the fingerprint, so a change to a module makes `deploy` deploy again.
 - Keep the code of the extensions in the folder. A module can import a file from outside the folder, and the build bundles it, but a change to that file does not change the fingerprint, and the watcher does not see it.
 
-**`template init`** makes the folder with `package.json`, `tsconfig.json`, and the example. In a folder that exists, it updates only the peer dependencies, and adds the starter files that are missing. It never changes your modules. `--reset` writes the starter files again (it asks first, or needs `--force` with `--non-interactive`). `--check` changes nothing, and fails with `template-init-needed` if the folder is out of date, for example after an upgrade of this package; use it in CI.
+**`template init`** makes the folder with `package.json`, `tsconfig.json`, `.gitignore` (for `node_modules/`), and the example. In a folder that exists, it updates only the peer dependencies, and adds the starter files that are missing. It never changes your modules. `--reset` writes the starter files again (it asks first, or needs `--force` with `--non-interactive`). `--check` changes nothing, and fails with `template-init-needed` if the folder is out of date, for example after an upgrade of this package; use it in CI.
 
 **Watch:** `dev -- --watch` (managed) and `npm run dev:watch` (ejected) also watch the extensions folder, also if it does not exist yet. A change in the folder bundles the modules again, and then the Fastly CLI builds and restarts the app. If a module has an error, the watcher shows it and the app keeps the last modules that built.
 
