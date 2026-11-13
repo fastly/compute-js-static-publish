@@ -119,7 +119,7 @@ and declares the Fastly resources that it uses (bindings).
    ```
 
 3. Move each part of your code into a module. See "Hono extensions" in `README.md` for the phases, the options, and
-   the bindings.
+   the bindings, and `examples/hono/` in the repository for two complete examples.
 4. Continue with step 3 above. `dev` and `deploy` build the app with your modules.
 
 ## Move from `@fastly/hono-compute-js-static-publish` (8.1)

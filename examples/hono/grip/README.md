@@ -25,7 +25,7 @@ The steps:
    npm install
    ```
 
-   `template init` adds the packages that the template provides to `package.json` (as peer dependencies), and the starter files (`tsconfig.json`, and `_example.ts`, which the build does not load). `npm install` installs the packages of the example.
+   `template init` adds the packages that the template provides to `package.json` (as peer dependencies), and the starter files (`tsconfig.json`, `.gitignore`, and `_example.ts`, which the build does not load). `npm install` installs the packages of the example. It also installs the peer dependencies, for your editor and the type checker. The build uses the copies of the app.
 3. Set up the example in `static-publish.project.js` (a managed project):
    - the options in `templateOptions.hono.extensions.grip` (see [Options](#options));
    - for local development, the sections of `managed.fastlyToml` in [Local development](#local-development);
