@@ -980,6 +980,7 @@ To build and deploy to your Compute service:
 
   The application reads the S3 credentials from the Secret Store that has the resource
   link name 'S3_CREDENTIALS' on the service. The Secret Store can have a different name.
+  To use another resource link name, set s3.secretStoreLinkName in static-publish.rc.js.
 
   To deploy to an existing service, do these steps first:
     1. Create a Secret Store with the values 'S3_ACCESS_KEY_ID' and 'S3_SECRET_ACCESS_KEY'.
@@ -998,8 +999,8 @@ To build and deploy to your Compute service:
 
   If a Secret Store named 'S3_CREDENTIALS' already exists, the Fastly CLI asks for a
   different name. If you leave it empty, it uses the existing Secret Store. If you give
-  a different name, the Fastly CLI uses it for the resource link too. Then call
-  setSecretStoreForS3Credentials() with that name in src/index.js, and deploy again.
+  a different name, the Fastly CLI uses it for the resource link too. Then set
+  s3.secretStoreLinkName in static-publish.rc.js to that name, and deploy again.
 
   After the deploy, fastly.toml has the service ID, so s3:publish also purges the
   service's cache. For this purge, s3:publish needs FASTLY_API_TOKEN too.

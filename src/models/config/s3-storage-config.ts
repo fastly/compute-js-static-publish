@@ -12,6 +12,7 @@ export type S3StorageConfig = {
   bucket: string,
   endpoint?: string,
   fastlyBackendName?: string,
+  secretStoreLinkName?: string,
 };
 
 export function getS3StorageConfigFromRc(rc: StaticPublishS3Storage): S3StorageConfig {
@@ -20,5 +21,6 @@ export function getS3StorageConfigFromRc(rc: StaticPublishS3Storage): S3StorageC
     bucket: rc.s3.bucket,
     endpoint: rc.s3.endpoint,
     fastlyBackendName: rc.s3.fastlyBackendName,
+    secretStoreLinkName: rc.s3.secretStoreLinkName,
   };
 }

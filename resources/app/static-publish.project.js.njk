@@ -22,6 +22,9 @@ const project = {
 {% if not storage.endpointGenerated %}
     endpoint: {{ s3EndpointUrl | js }},
 {% endif %}
+{% if storage.secretStoreLinkName %}
+    secretStoreLinkName: {{ storage.secretStoreLinkName | js }},
+{% endif %}
   },
 {% endif %}
   publishId: {{ publishId | js }},

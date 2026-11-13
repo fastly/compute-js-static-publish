@@ -91,6 +91,9 @@ export type StaticPublishPartialS3Storage = {
     bucket: string,
     endpoint?: string,
     fastlyBackendName?: string,
+    // The resource link name of the Secret Store with the S3 credentials on the
+    // service. Default: 'S3_CREDENTIALS'.
+    secretStoreLinkName?: string,
   },
 };
 
@@ -114,6 +117,10 @@ export function isS3StorageConfigRc(rc: unknown): rc is StaticPublishS3Storage {
           !('fastlyBackendName' in rc.s3) ||
           rc.s3.fastlyBackendName === undefined ||
           typeof rc.s3.fastlyBackendName === 'string'
+        ) && (
+          !('secretStoreLinkName' in rc.s3) ||
+          rc.s3.secretStoreLinkName === undefined ||
+          (typeof rc.s3.secretStoreLinkName === 'string' && rc.s3.secretStoreLinkName !== '')
         )
       ) {
         return true;
