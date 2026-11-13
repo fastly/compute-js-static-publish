@@ -99,7 +99,14 @@ export function appConfigFromProject(
     } else {
       throw new Error('The S3 endpoint of the project is not resolved.');
     }
-    storage = { mode: 's3', region: rc.s3.region, bucket: rc.s3.bucket, endpointUrl, endpointGenerated: rc.s3.endpoint == null };
+    storage = {
+      mode: 's3',
+      region: rc.s3.region,
+      bucket: rc.s3.bucket,
+      endpointUrl,
+      endpointGenerated: rc.s3.endpoint == null,
+      ...(rc.s3.secretStoreLinkName != null ? { secretStoreLinkName: rc.s3.secretStoreLinkName } : {}),
+    };
   } else {
     storage = { mode: 'kv-store', kvStoreName: getKvStoreConfigFromRc(rc).kvStoreName };
   }

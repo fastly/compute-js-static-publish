@@ -159,6 +159,27 @@ describe('generateApp() writes a valid fastly.toml', () => {
   }
 });
 
+describe('s3.secretStoreLinkName', () => {
+  const s3 = { mode: 's3', region: 'us-east-1', bucket: 'my-bucket', endpointUrl: 'https://s3.example.com/', endpointGenerated: false };
+
+  test('the default resource link name is S3_CREDENTIALS', () => {
+    const files = generateApp({ ...base, storage: s3 });
+    const parsed = toml.parse(files['fastly.toml']);
+    assert.ok('S3_CREDENTIALS' in parsed.local_server.secret_stores);
+    assert.ok('S3_CREDENTIALS' in parsed.setup.secret_stores);
+    assert.doesNotMatch(files['static-publish.rc.js'], /secretStoreLinkName/);
+  });
+
+  test('fastly.toml and the rc use another name', () => {
+    const files = generateApp({ ...base, storage: { ...s3, secretStoreLinkName: 'site-secrets' } });
+    const parsed = toml.parse(files['fastly.toml']);
+    assert.deepEqual(Object.keys(parsed.local_server.secret_stores), [ 'site-secrets' ]);
+    assert.deepEqual(Object.keys(parsed.setup.secret_stores), [ 'site-secrets' ]);
+    assert.deepEqual(Object.keys(parsed.setup.secret_stores['site-secrets'].entries), [ 'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY' ]);
+    assert.match(files['static-publish.rc.js'], /secretStoreLinkName: "site-secrets",/);
+  });
+});
+
 describe('collectionSelection', () => {
   const collectionSelection = { sources: [ { type: 'header', name: 'x-c' } ] };
 
