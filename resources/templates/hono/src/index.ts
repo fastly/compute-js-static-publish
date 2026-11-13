@@ -1,4 +1,3 @@
-/// <reference types="@fastly/js-compute" />
 import { Hono } from 'hono';
 import { fire, logFastlyServiceVersion } from '@fastly/hono-fastly-compute';
 import { fromStaticPublishRc, type StaticPublisherVariables } from '@fastly/compute-js-static-publish/hono';
