@@ -77,6 +77,47 @@ describe('resolveCollection', () => {
     });
   });
 
+  describe('host or path with value', () => {
+    const config = {
+      sources: [
+        { type: 'host', pattern: 'stag.example.com', value: 'staging' },
+        { type: 'path', prefix: '/_staging', value: 'staging' },
+        { type: 'host', pattern: '{collection}.preview.example.com' },
+      ],
+    };
+
+    test('a host selects the value', () => {
+      assert.deepEqual(resolveCollection(req('https://stag.example.com/a.html'), config),
+        { collectionName: 'staging', matchedBy: 'host' });
+      assert.equal(resolveCollection(req('https://STAG.Example.com/'), config).collectionName, 'staging');
+    });
+
+    test('a host must match exactly', () => {
+      assert.equal(resolveCollection(req('https://x.stag.example.com/'), config).collectionName, null);
+      assert.equal(resolveCollection(req('https://stag.example.org/'), config).collectionName, null);
+    });
+
+    test('a path selects the value and removes the prefix', () => {
+      assert.deepEqual(resolveCollection(req('https://example.com/_staging/a%20b.html'), config),
+        { collectionName: 'staging', pathname: '/a b.html', matchedBy: 'path' });
+      assert.equal(resolveCollection(req('https://example.com/_staging'), config).pathname, '/');
+      assert.equal(resolveCollection(req('https://example.com/_stagingx/a.html'), config).collectionName, null);
+    });
+
+    test('the other sources still work', () => {
+      assert.equal(resolveCollection(req('https://pr-1.preview.example.com/'), config).collectionName, 'pr-1');
+    });
+
+    test('a sticky path with value redirects to the path without the prefix', () => {
+      const sticky = { sources: [ { type: 'path', prefix: '/_staging', value: 'staging', sticky: 'cookie' }, { type: 'cookie' } ] };
+      const result = resolveCollection(req('https://example.com/_staging/docs/?a=1'), sticky);
+      assert.equal(result.collectionName, 'staging');
+      assert.equal(result.response.status, 308);
+      assert.equal(result.response.headers.get('location'), '/docs/?a=1');
+      assert.match(result.response.headers.get('set-cookie'), /^publisher-collection=staging;/);
+    });
+  });
+
   describe('query', () => {
     const config = { sources: [ { type: 'query', param: 'collection' } ] };
 
@@ -318,6 +359,17 @@ describe('validateCollectionSelection', () => {
     assert.deepEqual(validateCollectionSelection(valid), []);
   });
 
+  test('accepts a value that allow matches', () => {
+    assert.deepEqual(validateCollectionSelection({
+      sources: [
+        { type: 'host', pattern: 'stag.example.com', value: 'staging' },
+        { type: 'path', prefix: '/_staging', value: 'staging', sticky: 'cookie' },
+        { type: 'cookie' },
+      ],
+      allow: [ 'pr-*', 'stag*' ],
+    }), []);
+  });
+
   const cases = [
     [ 'not an object', null, /must be an object/ ],
     [ 'no sources', {}, /sources must be an array/ ],
@@ -338,6 +390,13 @@ describe('validateCollectionSelection', () => {
     [ 'sticky not cookie', { sources: [ { type: 'query', param: 'c', sticky: 'yes' }, { type: 'cookie' } ] }, /must be 'cookie'/ ],
     [ 'sticky without cookie source', { sources: [ { type: 'query', param: 'c', sticky: 'cookie' } ] }, /needs a 'cookie' source/ ],
     [ 'bad allow', { sources: [], allow: [ 'Pr-*' ] }, /allow must be/ ],
+    [ 'host value that is not a name', { sources: [ { type: 'host', pattern: 'stag.example.com', value: 'Staging' } ] }, /value must be a valid collection name/ ],
+    [ 'host value with a placeholder', { sources: [ { type: 'host', pattern: '{collection}.example.com', value: 'staging' } ] }, /in pattern, or value, not both/ ],
+    [ 'host value with a hostname that is not valid', { sources: [ { type: 'host', pattern: 'stag.example.com/x', value: 'staging' } ] }, /must be a hostname/ ],
+    [ 'host value not in allow', { sources: [ { type: 'host', pattern: 'stag.example.com', value: 'staging' } ], allow: [ 'pr-*' ] }, /value 'staging' is not in collectionSelection\.allow/ ],
+    [ 'path value with a placeholder', { sources: [ { type: 'path', prefix: '/_preview/{collection}', value: 'staging' } ] }, /in prefix, or value, not both/ ],
+    [ 'path value that ends with /', { sources: [ { type: 'path', prefix: '/_staging/', value: 'staging' } ] }, /must not end with/ ],
+    [ 'value on a query source', { sources: [ { type: 'query', param: 'c', value: 'staging' } ] }, /value is only for the 'host' and 'path'/ ],
     [ 'bad onMissing', { sources: [], onMissing: 'x' }, /onMissing/ ],
     [ 'bad noindex', { sources: [], noindex: 'yes' }, /noindex/ ],
   ];
@@ -369,6 +428,19 @@ describe('previewUrl', () => {
   test('cookie', () => {
     const config = { sources: [ { type: 'cookie' } ] };
     assert.equal(previewUrl('pr-42', base, config), 'https://example.edgecompute.app/activate?collection=pr-42&redirectTo=%2F');
+  });
+
+  test('host or path with value: only for that collection', () => {
+    const config = {
+      sources: [
+        { type: 'host', pattern: 'Stag.example.com', value: 'staging' },
+        { type: 'path', prefix: '/_qa', value: 'qa' },
+        { type: 'query', param: 'collection' },
+      ],
+    };
+    assert.equal(previewUrl('staging', base, config), 'https://stag.example.com/');
+    assert.equal(previewUrl('qa', base, config), 'https://example.edgecompute.app/_qa/');
+    assert.equal(previewUrl('pr-42', base, config), 'https://example.edgecompute.app/?collection=pr-42');
   });
 
   test('header alone: no URL', () => {

@@ -73,6 +73,11 @@ function compile(config: CollectionSelection): Compiled {
   const matchers = config.sources.map((source: CollectionSelectionSource): Compiled['matchers'][number] => {
     switch (source.type) {
     case 'host': {
+      if (source.value != null) {
+        const hostname = source.pattern.toLowerCase();
+        const value = source.value;
+        return (url) => url.hostname.toLowerCase() === hostname && allowed(value) ? { collectionName: value } : null;
+      }
       const parts = splitPattern(source.pattern)!;
       const re = new RegExp(`^${escapeRegExp(parts.before.toLowerCase())}${NAME_GROUP}${escapeRegExp(parts.after.toLowerCase())}$`);
       return (url) => {
@@ -81,11 +86,16 @@ function compile(config: CollectionSelection): Compiled {
       };
     }
     case 'path': {
-      const parts = splitPattern(source.prefix)!;
-      const re = new RegExp(`^${escapeRegExp(parts.before)}${NAME_GROUP}${escapeRegExp(parts.after)}(/.*)?$`);
+      // With value, the whole prefix is fixed text.
+      const value = source.value;
+      const parts = value != null ? null : splitPattern(source.prefix)!;
+      const re = parts != null ?
+        new RegExp(`^${escapeRegExp(parts.before)}${NAME_GROUP}${escapeRegExp(parts.after)}(/.*)?$`) :
+        new RegExp(`^${escapeRegExp(source.prefix)}()(/.*)?$`);
       return (url) => {
         const match = re.exec(url.pathname);
-        if (match == null || !allowed(match[1])) {
+        const name = value ?? match?.[1];
+        if (match == null || !allowed(name)) {
           return null;
         }
         let pathname;
@@ -94,7 +104,7 @@ function compile(config: CollectionSelection): Compiled {
         } catch {
           return null;
         }
-        return { collectionName: match[1], pathname };
+        return { collectionName: name, pathname };
       };
     }
     case 'query':
@@ -224,8 +234,8 @@ export function resolveCollection(request: Request, config: CollectionSelection 
       let location;
       if (source.type === 'path') {
         // The path without the prefix, not decoded.
-        const parts = splitPattern(source.prefix)!;
-        const prefix = parts.before + match.collectionName + parts.after;
+        const parts = source.value != null ? null : splitPattern(source.prefix)!;
+        const prefix = parts != null ? parts.before + match.collectionName + parts.after : source.prefix;
         location = (url.pathname.slice(prefix.length) || '/') + url.search;
       } else {
         const params = new URLSearchParams(url.search);

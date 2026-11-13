@@ -465,6 +465,7 @@ const rc = {
     // Tried in order. The first source that gives a collection wins.
     // If no source gives a collection, the default collection is used.
     sources: [
+      { type: 'host',   pattern: 'stag.example.com', value: 'staging' },
       { type: 'host',   pattern: '{collection}.preview.example.com' },
       { type: 'path',   prefix: '/_preview/{collection}', sticky: 'cookie' },
       { type: 'query',  param: 'collection', sticky: 'cookie' },
@@ -485,14 +486,15 @@ const rc = {
 
 | Source | Reads | Notes |
 |--------|-------|-------|
-| `host` | The hostname, matched against `pattern` | Needs a wildcard domain and TLS for it. The pattern has one `{collection}` in one label, with fixed text around it if you want (`branch-{collection}.preview.example.com`). A host label has at most 63 characters. Make sure that your production hostname does not match the pattern. |
-| `path` | A path prefix, which is removed before the file lookup | Works on `*.edgecompute.app`. Links that start with `/` lose the prefix, so use it with `sticky: 'cookie'`, or for a site with relative links. The links in HTML do not change. |
+| `host` | The hostname, matched against `pattern` | Needs a wildcard domain and TLS for it. The pattern has one `{collection}` in one label, with fixed text around it if you want (`branch-{collection}.preview.example.com`). A host label has at most 63 characters. Make sure that your production hostname does not match the pattern. With `value`, `pattern` is one hostname without `{collection}`, and selects the collection in `value` (`stag.example.com` → `staging`). |
+| `path` | A path prefix, which is removed before the file lookup | Works on `*.edgecompute.app`. Links that start with `/` lose the prefix, so use it with `sticky: 'cookie'`, or for a site with relative links. The links in HTML do not change. With `value`, `prefix` has no `{collection}`, and selects the collection in `value` (`/_staging` → `staging`). |
 | `query` | A query parameter | Only the request that has it. Usually used with `sticky: 'cookie'`. |
 | `cookie` | A cookie | Also serves the activate path (`/activate?collection=<name>&redirectTo=<path>`) and the reset path. |
 | `header` | A request header | For tests, CI checks, and API clients. |
 
 - `sticky: 'cookie'` on a `path` or `query` source: when the source matches, set the cookie of the `cookie` source, and redirect (`308`) to the URL without the prefix or the parameter. It needs a `cookie` source.
 - A name must follow the [collection name rule](#-collections-publish-preview-promote) and match `allow`. Otherwise the source is skipped.
+- A `value` must also follow the collection name rule, and match `allow` if it is set. Otherwise the config is not valid, and the CLI and the app show an error.
 - Redirects go only to a path on the same site. `redirectTo` with another site redirects to `/`.
 - The responses of a selected collection (not the default collection) get `X-Robots-Tag: noindex` (unless `noindex` is `false`). They get `Cache-Control: private` if the URL does not name the collection. See [Shared caches](#shared-caches).
 - To find out if a selected collection exists, `PublisherServer` reads its index, also when the [response cache](#️-caching-responses-with-the-core-cache) has the response.
@@ -1134,7 +1136,9 @@ npx @fastly/compute-js-static-publish@latest \
 **Collection selection** (written as `collectionSelection` in `static-publish.rc.js`; see [Previews: Collection Selection](#-previews-collection-selection)):
 - `--collection-selection`: A source. Can be repeated; the sources are tried in the order of the flags.
    - `host:<pattern>`, for example `host:{collection}.preview.example.com`
+   - `host:<hostname>,value=<collection>`, for example `host:stag.example.com,value=staging`
    - `path:<prefix>[,sticky]`, for example `path:/_preview/{collection},sticky`
+   - `path:<prefix>,value=<collection>[,sticky]`, for example `path:/_staging,value=staging`
    - `query:<param>[,sticky]`, for example `query:collection,sticky`
    - `cookie[:<cookieName>][,maxAge=<seconds>][,activatePath=<path>][,resetPath=<path>]`
    - `header:<name>`, for example `header:x-publisher-collection`
