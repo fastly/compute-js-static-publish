@@ -35,6 +35,7 @@ export const buildStoreProvider: StorageProviderBuilder = (config: StaticPublish
     return null;
   }
   const s3StorageConfig = getS3StorageConfigFromRc(config);
+  _secretStoreLinkNameFromRc = s3StorageConfig.secretStoreLinkName;
   return new S3StorageProvider(
     s3StorageConfig.region,
     s3StorageConfig.bucket,
@@ -45,17 +46,24 @@ export const buildStoreProvider: StorageProviderBuilder = (config: StaticPublish
   );
 };
 
-let _secretStoreLinkNameForS3Credentials = 'S3_CREDENTIALS';
+// The resource link name of the Secret Store with the S3 credentials:
+// setSecretStoreForS3Credentials(), else s3.secretStoreLinkName of
+// static-publish.rc.js, else 'S3_CREDENTIALS'.
+let _secretStoreLinkNameFromCode: string | undefined = undefined;
+let _secretStoreLinkNameFromRc: string | undefined = undefined;
+const secretStoreLinkNameForS3Credentials = () =>
+  _secretStoreLinkNameFromCode ?? _secretStoreLinkNameFromRc ?? 'S3_CREDENTIALS';
 let _secretStoreKeyForS3AccessKeyId = 'S3_ACCESS_KEY_ID';
 let _secretStoreKeyForS3SecretAccessKey = 'S3_SECRET_ACCESS_KEY';
 
 /**
  * Sets the resource link name of the Secret Store that has the S3 credentials.
  * This is the name of the link between the service and the Secret Store, not
- * the name of the Secret Store. The default is 'S3_CREDENTIALS'.
+ * the name of the Secret Store. It is used in place of s3.secretStoreLinkName of
+ * static-publish.rc.js. The default is 'S3_CREDENTIALS'.
  */
 export function setSecretStoreForS3Credentials(resourceLinkName: string) {
-  _secretStoreLinkNameForS3Credentials = resourceLinkName;
+  _secretStoreLinkNameFromCode = resourceLinkName;
 }
 
 export function setSecretStoreKeyForS3AccessKeyId(secretStoreKey: string) {
@@ -71,21 +79,22 @@ export async function buildS3CredentialsFromSecretStore() {
   if (_s3CredentialsFromSecretStore != null) {
     return _s3CredentialsFromSecretStore;
   }
+  const linkName = secretStoreLinkNameForS3Credentials();
   let secretStore;
   try {
-    secretStore = new SecretStore(_secretStoreLinkNameForS3Credentials);
+    secretStore = new SecretStore(linkName);
   } catch {
-    throw new Error(`Could not open the secret store for S3 credentials with the resource link name '${_secretStoreLinkNameForS3Credentials}'`);
+    throw new Error(`Could not open the secret store for S3 credentials with the resource link name '${linkName}'`);
   }
   const accessKeyIdEntry = await secretStore.get(_secretStoreKeyForS3AccessKeyId);
   if (accessKeyIdEntry == null) {
-    throw new Error(`Could not retrieve value '${_secretStoreKeyForS3AccessKeyId}' in the secret store with the resource link name '${_secretStoreLinkNameForS3Credentials}'`);
+    throw new Error(`Could not retrieve value '${_secretStoreKeyForS3AccessKeyId}' in the secret store with the resource link name '${linkName}'`);
   }
   const accessKeyId = accessKeyIdEntry.plaintext();
 
   const secretAccessKeyEntry = await secretStore.get(_secretStoreKeyForS3SecretAccessKey);
   if (secretAccessKeyEntry == null) {
-    throw new Error(`Could not retrieve value '${_secretStoreKeyForS3SecretAccessKey}' in the secret store with the resource link name '${_secretStoreLinkNameForS3Credentials}'`);
+    throw new Error(`Could not retrieve value '${_secretStoreKeyForS3SecretAccessKey}' in the secret store with the resource link name '${linkName}'`);
   }
   const secretAccessKey = secretAccessKeyEntry.plaintext();
 
