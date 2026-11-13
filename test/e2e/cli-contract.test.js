@@ -113,6 +113,21 @@ describe('CLI contract', () => {
       assert.equal(status, 2);
       assert.equal(json.error.code, 'json-not-supported', 'scaffold');
     });
+
+    test('publish-content: storageItems.uploaded counts variants, not the chunks of a large file', () => {
+      // Larger than one KV Store chunk (20 MiB), so the file is split into two chunks.
+      const bigFile = path.resolve(dir, 'public', 'big.bin');
+      fs.writeFileSync(bigFile, Buffer.alloc(21 * 1024 * 1024, 1));
+      try {
+        const { status, json, stderr } = runJson([ 'publish-content', '--local', '--collection-name', 'big-1' ], { cwd: computeJsDir });
+        assert.equal(status, 0, stderr);
+        const planned = Number(/(\d+) variant\(s\) to upload/.exec(stderr)?.[1]);
+        assert.ok(planned > 0, stderr);
+        assert.equal(json.storageItems.uploaded, planned);
+      } finally {
+        fs.rmSync(bigFile);
+      }
+    });
   });
 
   describe('exit codes and error codes', () => {
