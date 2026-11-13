@@ -57,7 +57,7 @@ export function isLocalCopy(dir: string = process.cwd()): boolean {
 // The npx command of this package, for the messages of the CLI.
 // - If a plain npx runs this copy (it is installed in the project or the app),
 //   the command has no dist-tag. A dist-tag makes npx get the version of that
-//   tag from npm, which can be another version than the installed one.
+//   tag from npm, which can be a different version from the installed one.
 // - Else, the version of a prerelease (for example 8.1.0-beta.1) gives the
 //   dist-tag of the prerelease (@beta), because npx without a dist-tag runs
 //   the latest stable version, which does not have the features of the
@@ -68,12 +68,18 @@ export function cliCommand(
   version: string = getOwnVersion(),
   localCopy: boolean = isLocalCopy(),
 ): string {
+  const command = 'npx @fastly/compute-js-static-publish';
   if (localCopy) {
-    return 'npx @fastly/compute-js-static-publish';
+    return command;
   }
   const prerelease = /^\d+\.\d+\.\d+-([a-z][a-z0-9-]*)/.exec(version)?.[1];
-  const distTag = prerelease ?? (options.latest ? 'latest' : undefined);
-  return `npx @fastly/compute-js-static-publish${distTag != null ? `@${distTag}` : ''}`;
+  if (prerelease != null) {
+    return `${command}@${prerelease}`;
+  }
+  if (options.latest) {
+    return `${command}@latest`;
+  }
+  return command;
 }
 
 export function findComputeJsStaticPublisherVersion(packageJson: PackageJson | null) {
