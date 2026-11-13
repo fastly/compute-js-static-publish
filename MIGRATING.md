@@ -16,8 +16,9 @@ In managed mode, this package generates the app from one file, `static-publish.p
 changing the version of this package. See "Managed and ejected apps" in `README.md`.
 
 > [!IMPORTANT]
-> Managed mode generates the `plain` app. If you changed `src/index.js` (or other files of the app), keep your app
-> ejected, or move your changes into options of the project file first.
+> Managed mode generates the app from a template: `plain` (the default) or `hono`. If you changed `src/index.js` (or
+> other files of the app), move your changes into options of the project file, or into Hono extensions (see
+> [An app with changes to `src/index.js`](#an-app-with-changes-to-srcindexjs)), or keep your app ejected.
 
 These steps move a project with this layout. Change the paths to match your project:
 
@@ -98,6 +99,28 @@ my-site/
    The collections in storage do not change. Publish again only to change the content.
 
 6. When the steps above work, take `compute-js/` out of the repo, and commit `static-publish.project.js`.
+
+### An app with changes to `src/index.js`
+
+Managed mode generates `src/index.js` again for each build, so your changes to it would be lost. With the `hono`
+template, you can keep your code in Hono extensions: modules in the folder `hono-extensions/`, beside the project file.
+The build bundles them into the app. Code that ran before `serveRequest()`, for example a redirect of an old host name,
+a login check, or a proxy to another service, goes into a `middleware` or `beforeFiles` phase. Code that ran when no
+file matched, for example a special page for a path, goes into an `afterFiles` phase. Each module gets its own options,
+and declares the Fastly resources that it uses (bindings).
+
+1. In step 2, add `template: "hono"` to `managed`.
+2. In `my-site/`, make the folder, and install its packages:
+
+   ```sh
+   npx compute-js-static-publish template init
+   cd hono-extensions
+   npm install
+   ```
+
+3. Move each part of your code into a module. See "Hono extensions" in `README.md` for the phases, the options, and
+   the bindings.
+4. Continue with step 3 above. `dev` and `deploy` build the app with your modules.
 
 ## Move from `@fastly/hono-compute-js-static-publish` (8.1)
 
