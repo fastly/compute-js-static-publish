@@ -31,6 +31,11 @@ checkout through a `file:` dependency. The tests need network access for `npm in
 | `kv-store.test.js`       | Publishes to a real KV Store two times, and makes sure that the second publish uploads nothing. Then deletes the collection and cleans.          | The environment variables below           |
 | `s3.test.js`             | The same test with an S3-compatible bucket. It also serves the content from the bucket with `fastly compute serve`.                               | The Fastly CLI, and the variables below   |
 | `deployed.test.js`       | Deploys an app to a real service. Makes sure that, without a purge, the response cache serves the old content, and that a publish with a purge makes it serve the new content. Then replaces the KV Store body of a file, and makes sure that the service does not serve or cache an empty or a short body. | The Fastly CLI, and the variables below   |
+| `managed-project.test.js` | Scaffolds a managed project (`static-publish.project.js`), and runs the commands from the project dir.        | Nothing                                   |
+| `managed-commands.test.js` | `status`, `upgrade`, the version check of `deploy` and `dev`, and the checks that `deploy` does before it calls the Fastly API. | Nothing                                   |
+| `dev.test.js`            | Runs `dev` in a managed project: it generates the app in `.static-publish/app`, installs it with `npm ci`, and serves it. | The Fastly CLI                            |
+| `eject.test.js`          | Ejects managed projects, and compares the result with an ejected scaffold of the same flags.                   | The Fastly CLI, for the serve test        |
+| `managed-deploy.test.js` | Deploys a managed project two times. The second deploy does nothing, because the fingerprint did not change. **It replaces the active version of the service.** | The Fastly CLI, and the variables below   |
 | `scaffold-golden.test.js` | Scaffolds apps with the CLI, and checks that the files are exactly the golden files of `test/golden/`.           | Nothing                                   |
 | `global-options.test.js` | Checks `--version` and `--project-dir`.                                                                          | Nothing                                   |
 | `template-hooks.test.js` | Checks the template hooks (`run-template-hook` and the npm scripts that call it), and `npm run dev:watch` with its watch script. | The Fastly CLI, for `dev:watch`           |
@@ -59,8 +64,9 @@ npm run test:e2e
 | `CJSP_TEST_S3_BUCKET`     | `s3.test.js`                    | The name of a bucket for tests                                           |
 | `CJSP_TEST_S3_ENDPOINT`   | `s3.test.js` (optional)         | The endpoint, for storage that is not AWS S3                             |
 | `CJSP_TEST_SERVICE_ID`    | `kv-store.test.js`, `s3.test.js` (optional) | A Service ID to purge after publishing. You can use the service of `deployed.test.js` |
-| `CJSP_TEST_DEPLOY_SERVICE_ID` | `deployed.test.js`         | A Compute service for tests. **The test replaces the active version of this service.** |
+| `CJSP_TEST_DEPLOY_SERVICE_ID` | `deployed.test.js`, `managed-deploy.test.js` | A Compute service for tests. **The test replaces the active version of this service.** |
 | `CJSP_TEST_DEPLOY_URL`    | `deployed.test.js`              | The URL of that service, for example `https://<name>.edgecompute.app`    |
+| `CJSP_TEST_ONLY_EJECT_PACKAGE_SPEC` | `eject.test.js` (it sets it itself) | Do not set it. The test gives `eject` the spec `file:<checkout>`, because the version of the checkout is not on npm. `eject` shows a warning when it is set |
 | `KEEP_E2E_DIRS`           | all (optional)                  | Set to keep the temporary directories, to examine them after a test     |
 
 The KV Store and S3 tests use a new publish ID for each run (for example `e2e-mf3k2a-1b2c3d`) and the collection

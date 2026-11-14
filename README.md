@@ -183,7 +183,7 @@ Ready to go live? All you need is a [free Fastly account](https://www.fastly.com
 npm run fastly:deploy
 ```
 
-The app reads the S3 credentials from the Secret Store that has the resource link name `S3_CREDENTIALS` on your service.
+The app reads the S3 credentials from the Secret Store that has the resource link name `S3_CREDENTIALS` on your service. To use another resource link name, for example a link that your service already has, set `s3.secretStoreLinkName` in `static-publish.rc.js` (in a managed project, in `static-publish.project.js`), and build the app again. `setSecretStoreForS3Credentials()` in the code of the app also sets the name, and is used in place of `s3.secretStoreLinkName`. In the same way, `s3.fastlyBackendName` sets the name of the backend of the S3 endpoint (default `s3_storage`).
 
 When the Fastly CLI creates a new service, it creates a Secret Store named `S3_CREDENTIALS`, links it to the service with the same name, and prompts you for the values `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY`.
 
@@ -214,6 +214,126 @@ my-project/
     └── src/
         └── index.js                     # Your Compute app entry point
 ```
+
+### Managed and ejected apps
+
+From 8.1.0, a project can be **managed** or **ejected**:
+
+| | Managed | Ejected |
+|---|---|---|
+| In the repo | One file, `static-publish.project.js`, in the project dir | The app dir (`compute-js/`) with `static-publish.rc.js` and `publish-content.config.js`, as above |
+| Who owns the app code | This package: it generates the app | You |
+| Upgrade this package | Run `upgrade`; the next `deploy` deploys the new app | Change the files by hand (see `MIGRATING.md`) |
+| Deploy | `deploy`, only when the generated app changed | `npm run fastly:deploy` (or `deploy`) |
+| Customize | The options of the project file | Anything |
+
+An **ejected app** is in the repo, and you own its code. Every app that `scaffold` makes without `--managed`, and every app made before 8.1.0, is an ejected app. A **managed project** has only a project file in the repo, and this package generates the app when it needs it.
+
+`scaffold` makes an ejected app, as before. `scaffold --managed` makes a managed project. `eject` converts a managed project into an ejected app. To move an existing app to managed mode, see `MIGRATING.md`.
+
+#### Managed projects
+
+`scaffold --managed` writes only one file, `static-publish.project.js`, in the current directory (the project dir), and adds `node_modules/`, `.static-publish/`, and the working directory to the `.gitignore` there, if they are not in it:
+
+```
+my-site/
+├── static-publish.project.js            # Commit this: the only config file
+├── public/                              # Your static site files
+├── .gitignore                           # Ignores node_modules/, .static-publish/, and static-publisher/
+└── static-publisher/                    # ⚠️ Do not commit - the working directory
+```
+
+The project file has the settings that an ejected app has in its two files:
+
+- The top level has the fields of `static-publish.rc.js` (`storageMode`, `kvStore` or `s3`, `publishId`, `defaultCollectionName`, `staticPublisherWorkingDir`, `collectionSelection`).
+- `publishContent` has the fields of `publish-content.config.js`. `publish-content --config <file>` replaces it for one run.
+- `managed` has the settings of the generated app (`name`, `description`, `authors`, `serviceId`, `staticPublishVersion`, the version of this package that the project uses, and `fastlyToml`, see below).
+
+Paths in the project file are relative to it. The name of the file marks the mode: a directory with `static-publish.project.js` is a managed project, and a directory with `static-publish.rc.js` is an ejected app. A directory with both is an error.
+
+The project file is a JavaScript module, and the CLI loads it with `import()`. Thus the `type` field of the nearest `package.json` decides its module format. The file that `scaffold --managed` writes uses `export default`, which needs an ES module. In a directory whose `package.json` has `"type": "commonjs"`, change `export default` to `module.exports =`. The other contents of the file stay the same.
+
+`publish-content`, `collections`, and `clean` run in the project dir (or with `--project-dir`), and read the project file. `publish-content` purges the service of `managed.serviceId`, after `--fastly-service-id` and `FASTLY_SERVICE_ID`.
+
+To run the app on your computer:
+
+```sh
+npx @fastly/compute-js-static-publish publish-content --local
+npx @fastly/compute-js-static-publish dev
+```
+
+`dev` generates the app in `.static-publish/app/`, installs its dependencies with `npm ci` if they changed, and runs `fastly compute serve` in it. Options after `--` go to `fastly compute serve`, for example `dev -- --addr=127.0.0.1:8080`. With `dev -- --watch`, a change in the app builds and restarts it, and the watch script of the template (`scripts/template_watch.js`, see [Template hooks](#-template-hooks)), if it has one, runs next to `fastly compute serve`. The app serves the content of the local KV Store, `kvstore.json` in the working directory.
+
+**Local resources and setup in `fastly.toml`.** The CLI generates the `fastly.toml` of the app. To add resources for `fastly compute serve` (`[local_server]`) or for the first deploy, which makes the service (`[setup]`), add them to `managed.fastlyToml`, in the structure of [`fastly.toml`](https://www.fastly.com/documentation/reference/compute/fastly-toml/). For example, a local Secret Store and a local Config Store:
+
+```js
+managed: {
+  // ...
+  fastlyToml: {
+    local_server: {
+      secret_stores: { oauth: [ { key: 'GITHUB_CLIENT_SECRET', env: 'GITHUB_CLIENT_SECRET' } ] },
+      config_stores: { site_config: { format: 'inline-toml', contents: { greeting: 'hello' } } },
+    },
+    setup: {
+      secret_stores: { oauth: { entries: { GITHUB_CLIENT_SECRET: { description: 'The client secret' } } } },
+    },
+  },
+},
+```
+
+- Only `local_server` and `setup` can be added. The CLI writes the other parts of `fastly.toml`.
+- The CLI also writes some resources: the KV Store of the content, and in S3 mode, the `S3_CREDENTIALS` Secret Store and the `s3_storage` backend (other names with `s3.secretStoreLinkName` and `s3.fastlyBackendName`). A resource with one of these names is an error.
+- Do not put a secret in the project file: in `local_server`, read it from an environment variable (`env`) or a file (`file`) that is not committed.
+- `local_server` does not change the fingerprint, because it is only for `fastly compute serve`. `setup` changes it.
+- `eject` writes the sections into the `fastly.toml` of the ejected app.
+
+The same version of this package always generates the same app, with the same versions of all dependencies: this package has a lockfile for the app of each template. The app uses the copy of this package that runs the CLI, through a `file:` link. Thus, add this package as a dev dependency of your project, and run the CLI from it, so that the version is pinned:
+
+```sh
+npm install --save-dev @fastly/compute-js-static-publish
+```
+
+To deploy the app:
+
+```sh
+npx @fastly/compute-js-static-publish deploy
+```
+
+`deploy` generates the app, installs it if necessary, and runs `fastly compute build` and `fastly compute deploy`, only if the app changed. It needs a Fastly API token (`FASTLY_API_TOKEN` or `--fastly-api-token`). Options after `--` go to `fastly compute deploy`, for example `deploy -- --status-check-timeout=180`. `deploy` refuses `--comment`, `--service-id` (`-s`), `--token` (`-t`), `--package` (`-p`), `--dir` (`-C`), and `--env` there, because it sets them, or they deploy something else.
+
+- **The fingerprint** is a SHA-256 of the generated app and the version of this package. It does not depend on the content, on `publishContent`, on the Service ID, or on the path of this package on your computer. `deploy` writes it into the comment of the new service version (`static-publish <version> fp:<fingerprint>`, then ` | <text>` with `--comment <text>`, for example a commit SHA). The next `deploy` reads the comment of the active version, and does nothing if the fingerprint is the same. A version that you clone by hand, for example to add a backend, has no comment, but it keeps the package of the version that it came from. Thus, if the active version has no fingerprint, `deploy` and `status` use the newest earlier version that has one, if the two versions have the same package. `--force` deploys anyway.
+- **The first deploy** makes a new service (the Fastly CLI asks for its name and domain, unless `--non-interactive`), and writes its ID into `managed.serviceId`. Commit the project file then. To deploy to a service that exists, use `--fastly-service-id` or `FASTLY_SERVICE_ID`. These do not change `managed.serviceId`: to make a service that exists the service of the project, set `managed.serviceId` in the project file. With S3 storage, the first deploy must be done on your computer, because the Fastly CLI asks for the S3 credentials of the Secret Store; with `--non-interactive`, it is an error.
+- `status` shows the fingerprint of the app, the fingerprint of the active version, and if a deploy is necessary, and the preview URLs of [collection selection](#-previews-collection-selection). Without an API token, the deployed fingerprint is unknown.
+
+**The version of this package.** `managed.staticPublishVersion` records the version of this package that the project uses. `dev` and `deploy` compare it with the version that runs:
+
+| The CLI that runs | Result |
+|---|---|
+| The same version | Continue. |
+| A newer version | Stop. Run `upgrade` to move the project to the new version (and commit the project file), or use `--auto-upgrade`. |
+| An older version | Stop. An older version never deploys over an app that a newer version made. |
+
+Thus a new release of this package never changes your app by itself, also with `npx @fastly/compute-js-static-publish@latest`.
+
+**Eject.** `eject` converts a managed project into an ejected app that you own:
+
+- It writes the app that `deploy` would deploy into `./compute-js` (or `--dir`). It refuses a directory that exists, unless `--force`.
+- It splits the project file into `compute-js/static-publish.rc.js` (with `generatedFrom`) and `compute-js/publish-content.config.js`, and writes the paths again, so that they point at the same directories (for example `staticPublisherWorkingDir: '../static-publisher'`). Then it deletes `static-publish.project.js`.
+- `publishContent` must be data: eject cannot copy functions or regular expressions (for example `assetInclusionTest`). If it has them, eject stops before it writes anything. Remove them, eject, and add them to `compute-js/publish-content.config.js` by hand.
+- `package.json` gets `"@fastly/compute-js-static-publish": "^<version>"`, and the lockfile has exactly `<version>`, so that the first ejected build is the same app. This needs a version that is published on npm, and one `npm install` (network access).
+- After eject, run the commands in `compute-js/`. Run `publish-content --local` again before `npm run dev:start`. You can delete `.static-publish/`.
+
+**API token scopes.** Give CI the least access that it needs. As far as we know (check the [Fastly documentation of API tokens](https://www.fastly.com/documentation/reference/api/auth-tokens/)):
+
+| Command | Scope |
+|---|---|
+| `status` (the active version of the service) | `global:read` |
+| `publish-content` and `collections` with the KV Store (writes) | `global` |
+| The purge after `publish-content` (S3 storage) | `purge_select` |
+| `deploy` | `global` |
+
+Limit the token to the service of the project, where possible.
+
 
 ### 🪝 Template hooks
 
@@ -1125,6 +1245,7 @@ npx @fastly/compute-js-static-publish@latest \
 - `--author`: Author to insert into `fastly.toml`
 - `--service-id`: Optional existing Fastly Compute service ID
 - `--template`: The template of the app's code (default: `plain`). `plain` is the only template.
+- `--managed`: Write only `static-publish.project.js` (a [managed project](#managed-projects)) in the current directory, in place of the app. `--output` is not used.
 
 **Used in building config files:**
 - `--root-dir`: Required. Directory of static site content.
@@ -1162,9 +1283,11 @@ npx @fastly/compute-js-static-publish publish-content \
   --collection-name=staging
 ```
 
-With `--project-dir`, all relative paths are relative to that directory: the paths in `static-publish.rc.js` and `publish-content.config.js`, and also the paths in the other options (for example `--config` and `--root-dir`). The directory must have a `static-publish.rc.js`. To scaffold an app in another directory, use `--output`.
+With `--project-dir`, all relative paths are relative to that directory: the paths in `static-publish.rc.js` and `publish-content.config.js`, and also the paths in the other options (for example `--config` and `--root-dir`). The directory must have a `static-publish.rc.js` (an app) or a `static-publish.project.js` (a [managed project](#managed-projects)). To scaffold an app in another directory, use `--output`.
 
 To print the version of this package, run `npx @fastly/compute-js-static-publish --version`. It works in any directory.
+
+With `--non-interactive`, or when the `CI` environment variable is set, the CLI never asks for input: missing input is an error. `deploy` then also runs the Fastly CLI with `--non-interactive`. The output never shows the values of `--fastly-api-token`, `--s3-secret-access-key`, `FASTLY_API_TOKEN`, and `S3_SECRET_ACCESS_KEY`.
 
 #### `publish-content`
 

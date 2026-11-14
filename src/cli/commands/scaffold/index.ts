@@ -25,7 +25,11 @@ import {
   loadAppTemplate,
 } from './app-template.js';
 import { COLLECTION_SELECTION_FLAGS_HELP, collectionSelectionFromFlags } from '../../util/collection-selection-flags.js';
-import { generateApp } from './generate-app.js';
+import { type AppConfig, DEFAULT_APP_INFO, generateApp } from './generate-app.js';
+import { renderProjectFile } from '../../managed/project-file.js';
+import { dotRelative } from '../../util/files.js';
+import { checkStaticPublisherWorkingDir } from '../../../models/config/static-publish-rc.js';
+import { MANAGED_APP_DIR, PROJECT_FILE_NAME } from '../../../models/config/static-publish-project.js';
 import { COLLECTION_NAME_RULE, isValidCollectionName } from '../../../models/collections/index.js';
 
 function help() {
@@ -61,6 +65,10 @@ Options:
   --template <name>                     The template of the app's code (default: "plain")
                                         Valid templates: ${APP_TEMPLATE_NAMES.join(', ')}
 
+  --managed                             Write only static-publish.project.js (a managed project) in the
+                                        current directory, and add .static-publish/ and the working
+                                        directory to .gitignore. The CLI generates the app when it needs it.
+
 Compute Service Metadata:
   --name <name>                         App name (for fastly.toml)
   --description <text>                  App description (for fastly.toml)
@@ -81,6 +89,7 @@ ${COLLECTION_SELECTION_FLAGS_HELP}
 
 Other:
   --version                             Print the version of this package and exit
+  --non-interactive                     Never ask a question (also on when CI is set)
   --verbose                             Enable verbose output
   -h, --help                            Show help
 `);
@@ -120,9 +129,9 @@ const defaultOptions: InitAppOptions = {
   notFoundPage: undefined,
   autoIndex: [ 'index.html', 'index.htm' ],
   autoExt: [ '.html', '.htm' ],
-  author: 'you@example.com',
-  name: 'compute-js-static-site',
-  description: 'Fastly Compute static site',
+  author: DEFAULT_APP_INFO.author,
+  name: DEFAULT_APP_INFO.name,
+  description: DEFAULT_APP_INFO.description,
   serviceId: undefined,
   publishId: undefined,
   defaultCollectionName: undefined,
@@ -540,6 +549,9 @@ export async function action(actionArgs: string[]) {
     { name: 'collection-allow', type: String, multiple: true, },
     { name: 'collection-on-missing', type: String, },
     { name: 'collection-noindex', type: String, },
+
+    // Write static-publish.project.js (a managed project) in place of the app.
+    { name: 'managed', type: Boolean, },
   ];
 
   const parsed = parseCommandLine(actionArgs, optionDefinitions);
@@ -589,7 +601,12 @@ export async function action(actionArgs: string[]) {
     return;
   }
 
-  const COMPUTE_JS_DIR = options.outputDir;
+  // A managed project: the project dir is the current directory. The CLI
+  // generates the app in .static-publish/app when it needs it.
+  const managed = parsed.commandLineOptions['managed'] === true;
+  const projectDir = path.resolve();
+
+  const COMPUTE_JS_DIR = managed ? MANAGED_APP_DIR : options.outputDir;
   if (COMPUTE_JS_DIR == null) {
     console.error("❌ required parameter --output not provided.");
     process.exitCode = 1;
@@ -657,9 +674,18 @@ export async function action(actionArgs: string[]) {
   // Static Publisher Working Root Dir must be under the current dir
   // This comes in relative to cwd.
   const STATIC_PUBLISHER_WORKING_DIR = options.staticPublisherWorkingDir ??
-    path.resolve(computeJsDir, './static-publisher');
+    path.resolve(managed ? projectDir : computeJsDir, './static-publisher');
   const staticPublisherWorkingDir = path.resolve(STATIC_PUBLISHER_WORKING_DIR);
-  if (
+  if (managed) {
+    // In a managed project, the working dir is relative to the project file.
+    const workingDirError = checkStaticPublisherWorkingDir(dotRelative(projectDir, staticPublisherWorkingDir).split(path.sep).join('/'));
+    if (workingDirError != null || staticPublisherWorkingDir.startsWith(path.resolve(projectDir, '.static-publish') + path.sep)) {
+      console.error(`❌ Specified static publisher working directory '${rootRelative(staticPublisherWorkingDir)}' is not valid.`);
+      console.error(`  * It must not be the project directory, a directory above it, or in .static-publish.`);
+      process.exitCode = 1;
+      return;
+    }
+  } else if (
     !staticPublisherWorkingDir.startsWith(computeJsDir) ||
     staticPublisherWorkingDir === computeJsDir ||
     staticPublisherWorkingDir === path.resolve(computeJsDir, './bin') ||
@@ -726,7 +752,7 @@ export async function action(actionArgs: string[]) {
   const autoIndex = options.autoIndex;
   const autoExt = options.autoExt;
 
-  const exists = fs.existsSync(computeJsDir);
+  const exists = !managed && fs.existsSync(computeJsDir);
   if(exists) {
     console.error(`❌ '${COMPUTE_JS_DIR}' directory already exists!`);
     console.error(`  You should not run this command if this directory exists.`);
@@ -859,10 +885,7 @@ export async function action(actionArgs: string[]) {
 
   console.log('');
 
-  console.log("Initializing Compute Application in " + computeJsDir + "...");
-  fs.mkdirSync(computeJsDir);
-
-  const resourceFiles = generateApp({
+  const appConfig: AppConfig = {
     appDir: computeJsDir,
     name,
     author,
@@ -889,7 +912,17 @@ export async function action(actionArgs: string[]) {
       generatedAt: new Date().toISOString().slice(0, 10),
     },
     collectionSelection,
-  });
+  };
+
+  if (managed) {
+    writeManagedProject(appConfig, projectDir);
+    return;
+  }
+
+  console.log("Initializing Compute Application in " + computeJsDir + "...");
+  fs.mkdirSync(computeJsDir);
+
+  const resourceFiles = generateApp(appConfig);
 
   // Write out the files
   for (const [filename, content] of Object.entries(resourceFiles)) {
@@ -947,6 +980,7 @@ To build and deploy to your Compute service:
 
   The application reads the S3 credentials from the Secret Store that has the resource
   link name 'S3_CREDENTIALS' on the service. The Secret Store can have a different name.
+  To use another resource link name, set s3.secretStoreLinkName in static-publish.rc.js.
 
   To deploy to an existing service, do these steps first:
     1. Create a Secret Store with the values 'S3_ACCESS_KEY_ID' and 'S3_SECRET_ACCESS_KEY'.
@@ -965,12 +999,67 @@ To build and deploy to your Compute service:
 
   If a Secret Store named 'S3_CREDENTIALS' already exists, the Fastly CLI asks for a
   different name. If you leave it empty, it uses the existing Secret Store. If you give
-  a different name, the Fastly CLI uses it for the resource link too. Then call
-  setSecretStoreForS3Credentials() with that name in src/index.js, and deploy again.
+  a different name, the Fastly CLI uses it for the resource link too. Then set
+  s3.secretStoreLinkName in static-publish.rc.js to that name, and deploy again.
 
   After the deploy, fastly.toml has the service ID, so s3:publish also purges the
   service's cache. For this purge, s3:publish needs FASTLY_API_TOKEN too.
 
 `);
   }
+}
+
+// The lines that scaffold --managed adds to the .gitignore of the project dir.
+const GITIGNORE_COMMENT = '# @fastly/compute-js-static-publish';
+
+// A line is present also without its leading or trailing '/': for example,
+// 'node_modules' in the file also ignores the directory of '/node_modules/'.
+const gitignoreKey = (line: string) => line.trim().replace(/^\//, '').replace(/\/$/, '');
+
+export function addGitignoreLines(existing: string | null, lines: string[]): { content: string, added: string[] } {
+  const present = new Set((existing ?? '').split(/\r?\n/).map(gitignoreKey));
+  const added = lines.filter(line => !present.has(gitignoreKey(line)));
+  if (added.length === 0) {
+    return { content: existing ?? '', added };
+  }
+  let content = existing ?? '';
+  if (content !== '' && !content.endsWith('\n')) {
+    content += '\n';
+  }
+  if (content !== '') {
+    content += '\n';
+  }
+  content += [ GITIGNORE_COMMENT, ...added ].join('\n') + '\n';
+  return { content, added };
+}
+
+function writeManagedProject(appConfig: AppConfig, projectDir: string) {
+  const projectFilePath = path.resolve(projectDir, PROJECT_FILE_NAME);
+  fs.writeFileSync(projectFilePath, renderProjectFile(appConfig, projectDir, getOwnVersion()), 'utf-8');
+  console.log(`🚀 Managed project created: ${rootRelative(projectFilePath)}`);
+
+  // Ignore the node_modules of the project (this package can be a dev
+  // dependency of the project), the generated app, and the working dir. Never
+  // change the customer's lines.
+  const gitignorePath = path.resolve(projectDir, '.gitignore');
+  const existing = fs.existsSync(gitignorePath) ? fs.readFileSync(gitignorePath, 'utf-8') : null;
+  const workingDir = path.relative(projectDir, appConfig.staticPublisherWorkingDir).split(path.sep).join('/');
+  const lines = [ '/node_modules/', '/.static-publish/' ];
+  if (!workingDir.startsWith('..')) {
+    lines.push(`/${workingDir}/`);
+  }
+  const { content, added } = addGitignoreLines(existing, lines);
+  if (added.length > 0) {
+    fs.writeFileSync(gitignorePath, content, 'utf-8');
+    console.log(`✔️ Added to ${existing == null ? 'a new ' : ''}.gitignore: ${added.join(', ')}`);
+  }
+
+  console.log(`
+The CLI generates the Compute app from ${PROJECT_FILE_NAME}.
+Commit ${PROJECT_FILE_NAME}. Do not commit .static-publish/.
+
+To publish your content from this directory:
+
+  npx @fastly/compute-js-static-publish publish-content --local
+`);
 }

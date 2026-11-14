@@ -6,9 +6,11 @@
 import * as path from 'node:path';
 
 import { type CollectionSelection } from '../../../models/config/collection-selection.js';
+import { type FastlyTomlSections } from '../../../models/config/static-publish-project.js';
 import { type GeneratedFrom } from '../../../models/config/static-publish-rc.js';
 import { dotRelative } from '../../util/files.js';
 import { type AppTemplate } from './app-template.js';
+import { addFastlyTomlSections } from './fastly-toml-sections.js';
 import { renderAppResource } from './render.js';
 
 // The resolved settings of an app: everything that generateApp() needs.
@@ -21,7 +23,7 @@ export type AppConfig = {
   serviceId: string | undefined,
   storage:
     | { mode: 'kv-store', kvStoreName: string }
-    | { mode: 's3', region: string, bucket: string, endpointUrl: string, endpointGenerated: boolean },
+    | { mode: 's3', region: string, bucket: string, endpointUrl: string, endpointGenerated: boolean, fastlyBackendName?: string, secretStoreLinkName?: string },
   publishId: string,
   defaultCollectionName: string,
   staticPublisherWorkingDir: string,
@@ -36,10 +38,14 @@ export type AppConfig = {
   staticPublishVersionSpec: string,
   // The template of the app.
   template: AppTemplate,
-  // Written into static-publish.rc.js.
-  generatedFrom: GeneratedFrom,
+  // Written into static-publish.rc.js, if set. A managed project has none.
+  generatedFrom: GeneratedFrom | undefined,
   // Written into static-publish.rc.js, if set. The template must support it.
   collectionSelection?: CollectionSelection,
+  // Added to fastly.toml, if set (managed.fastlyToml of a managed project).
+  fastlyToml?: FastlyTomlSections,
+  // Written as package-lock.json, if set (a managed app).
+  packageLock?: string,
 };
 
 // The names of the template hooks. Every app has them as npm scripts. Each one
@@ -47,8 +53,17 @@ export type AppConfig = {
 export const TEMPLATE_HOOKS = [ 'prebuild', 'postbuild', 'postinstall' ] as const;
 
 // The watch script of a template, if it has one. It runs next to
-// `fastly compute serve --watch` (npm run dev:watch), until it is stopped.
+// `fastly compute serve --watch` (npm run dev:watch, or dev -- --watch), until
+// it is stopped.
 export const TEMPLATE_WATCH_SCRIPT = 'scripts/template_watch.js';
+
+// The name, author, and description of an app when the flags or the project
+// file do not give them.
+export const DEFAULT_APP_INFO = {
+  name: 'compute-js-static-site',
+  author: 'you@example.com',
+  description: 'Fastly Compute static site',
+};
 
 // Makes the files of the app, keyed by the path relative to the app dir.
 // It does not write files or use the network, so that tests can compare its
@@ -75,6 +90,8 @@ export function generateApp(config: AppConfig): Record<string, string> {
     template,
     generatedFrom,
     collectionSelection,
+    fastlyToml,
+    packageLock,
   } = config;
 
   if (collectionSelection != null && !template.supports.collectionSelection) {
@@ -83,9 +100,10 @@ export function generateApp(config: AppConfig): Record<string, string> {
 
   const resourceFiles: Record<string, string> = {};
 
-  // .gitignore
+  // .gitignore. The working dir only if it is in the app dir.
+  const workingDirInApp = path.relative(computeJsDir, staticPublisherWorkingDir);
   resourceFiles['.gitignore'] = renderAppResource('gitignore', {
-    workingDirInApp: path.relative(computeJsDir, staticPublisherWorkingDir),
+    workingDirInApp: !workingDirInApp.startsWith('..') ? workingDirInApp : undefined,
   });
 
   // package.json: the dependencies come from the template's package.json.
@@ -127,10 +145,16 @@ export function generateApp(config: AppConfig): Record<string, string> {
     scripts: packageJsonScripts,
   }, undefined, 2);
 
+  if (packageLock != null) {
+    resourceFiles['package-lock.json'] = packageLock;
+  }
+
   // fastly.toml
   let localServerKvStorePath: string | undefined;
   let s3EndpointUrl: string | undefined;
   let s3EndpointHostname: string | undefined;
+  let s3BackendName: string | undefined;
+  let s3SecretStoreLinkName: string | undefined;
   if (storage.mode === 'kv-store') {
     localServerKvStorePath = dotRelative(computeJsDir, path.resolve(staticPublisherWorkingDir, 'kvstore.json'));
     // kvstore.json
@@ -139,8 +163,10 @@ export function generateApp(config: AppConfig): Record<string, string> {
     const url = new URL(storage.endpointUrl);
     s3EndpointUrl = String(url);
     s3EndpointHostname = url.hostname;
+    s3BackendName = storage.fastlyBackendName ?? 's3_storage';
+    s3SecretStoreLinkName = storage.secretStoreLinkName ?? 'S3_CREDENTIALS';
   }
-  resourceFiles['fastly.toml'] = renderAppResource('fastly.toml', {
+  resourceFiles['fastly.toml'] = addFastlyTomlSections(renderAppResource('fastly.toml', {
     author,
     description,
     name,
@@ -149,7 +175,9 @@ export function generateApp(config: AppConfig): Record<string, string> {
     localServerKvStorePath,
     s3EndpointUrl,
     s3EndpointHostname,
-  });
+    s3BackendName,
+    s3SecretStoreLinkName,
+  }), fastlyToml);
 
   // static-publish.rc.js
   resourceFiles['static-publish.rc.js'] = renderAppResource('static-publish.rc.js', {

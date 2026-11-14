@@ -90,7 +90,11 @@ export type StaticPublishPartialS3Storage = {
     region: string,
     bucket: string,
     endpoint?: string,
+    // The name of the backend of the S3 endpoint on the service. Default: 's3_storage'.
     fastlyBackendName?: string,
+    // The resource link name of the Secret Store with the S3 credentials on the
+    // service. Default: 'S3_CREDENTIALS'.
+    secretStoreLinkName?: string,
   },
 };
 
@@ -114,6 +118,10 @@ export function isS3StorageConfigRc(rc: unknown): rc is StaticPublishS3Storage {
           !('fastlyBackendName' in rc.s3) ||
           rc.s3.fastlyBackendName === undefined ||
           typeof rc.s3.fastlyBackendName === 'string'
+        ) && (
+          !('secretStoreLinkName' in rc.s3) ||
+          rc.s3.secretStoreLinkName === undefined ||
+          (typeof rc.s3.secretStoreLinkName === 'string' && rc.s3.secretStoreLinkName !== '')
         )
       ) {
         return true;
@@ -133,3 +141,34 @@ export type StaticPublishRc =
   | StaticPublishKvStore
   | StaticPublishS3Storage
 ;
+
+// The rule for staticPublisherWorkingDir: a relative path that starts with
+// './' or '../'. The path is relative to the file that has it
+// (static-publish.rc.js or static-publish.project.js). It must not be that
+// file's directory or a directory above it, so that publish-content never
+// writes its files among the customer's own files. Returns an error message,
+// or null if the value is valid.
+export function checkStaticPublisherWorkingDir(value: unknown): string | null {
+  const message = `staticPublisherWorkingDir must be a relative path that starts with './' or '../', and that is not the directory of the config file or a directory above it.`;
+  if (typeof value !== 'string' || !(value.startsWith('./') || value.startsWith('../'))) {
+    return message;
+  }
+  if (value.includes('//') || value.includes('\\')) {
+    return message;
+  }
+  const segments: string[] = [];
+  for (const segment of value.split('/')) {
+    if (segment === '' || segment === '.') {
+      continue;
+    }
+    if (segment === '..' && segments.length > 0 && segments[segments.length - 1] !== '..') {
+      segments.pop();
+    } else {
+      segments.push(segment);
+    }
+  }
+  if (segments.every(x => x === '..')) {
+    return message;
+  }
+  return null;
+}

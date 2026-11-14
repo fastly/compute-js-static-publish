@@ -5,6 +5,11 @@
 
 import { getCommandAndArgs } from '../../util/args.js';
 import * as cleanCommand from './clean.js';
+import * as deployCommand from './deploy.js';
+import * as devCommand from './dev.js';
+import * as ejectCommand from './eject.js';
+import * as statusCommand from './status.js';
+import * as upgradeCommand from './upgrade.js';
 import * as publishContentCommand from './publish-content.js';
 import * as collectionsCommands from './collections/index.js';
 
@@ -26,6 +31,11 @@ Available Commands:
   collections delete               Delete a specific collection index
   collections promote              Copy a collection to another name
   collections update-expiration    Modify expiration time for an existing collection
+  dev                              Run the app of a managed project locally
+  status                           Show the state of the app, and if a deploy is necessary
+  deploy                           Deploy the app of a managed project, if it changed
+  upgrade                          Move a managed project to the version of this CLI
+  eject                            Convert a managed project into an ejected app
 
 KV Store Options:
   --local                          Instead of working with the Fastly KV Store, operate on
@@ -45,9 +55,12 @@ S3 Storage Options (BETA):
 
 Global Options:
   --project-dir=<dir>              Run the command for the app in <dir>, the directory
-                                   that has static-publish.rc.js. Relative paths, also
-                                   in other options, are then relative to <dir>.
+                                   that has static-publish.rc.js or static-publish.project.js.
+                                   Relative paths, also in other options, are then
+                                   relative to <dir>.
   --version                        Print the version of this package and exit.
+  --non-interactive                Never ask a question. Missing input is an error.
+                                   This is also on when the CI environment variable is set.
   -h, --help                       Show this help message and exit.
 
 Automatic Project Initialization:
@@ -62,13 +75,21 @@ Examples:
 `);
 }
 
-export async function action(actionArgs: string[]) {
+const modes = {
+  'clean': cleanCommand,
+  'deploy': deployCommand,
+  'dev': devCommand,
+  'eject': ejectCommand,
+  'status': statusCommand,
+  'upgrade': upgradeCommand,
+  'publish-content': publishContentCommand,
+  'collections': collectionsCommands,
+};
 
-  const modes = {
-    'clean': cleanCommand,
-    'publish-content': publishContentCommand,
-    'collections': collectionsCommands,
-  };
+// The commands for a project or an app. Scaffolding mode does not have them.
+export const MANAGEMENT_COMMANDS: readonly string[] = Object.keys(modes);
+
+export async function action(actionArgs: string[]) {
 
   const commandAndArgs = getCommandAndArgs(actionArgs, modes);
 
