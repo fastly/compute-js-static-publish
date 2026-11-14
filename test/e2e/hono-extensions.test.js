@@ -325,6 +325,19 @@ export default defineExtension((app, options, { staticResponse }) => {
   });
 });
 `;
+  // The same use case with serveStatic() and except() of hono/combine.
+  const BRAND_MODULE = `\
+import { defineExtension } from '@fastly/compute-js-static-publish/hono';
+import { except } from 'hono/combine';
+
+export default defineExtension((app, options, { serveStatic }) => {
+  const notPreview = (c) => c.var.staticPublisher.collectionName == null;
+  app.use('/brand/*', except(notPreview,
+    serveStatic({ onMissing: 'default' }),
+    (c) => c.text('No brand file', 404),
+  ));
+});
+`;
   const PREVIEW = 'x-preview';
   let dir;
   let projectDir;
@@ -336,11 +349,14 @@ export default defineExtension((app, options, { staticResponse }) => {
     const publicDir = path.resolve(projectDir, 'public');
     writeFixtureContent(publicDir);
     fs.mkdirSync(path.resolve(publicDir, 'theme'), { recursive: true });
+    fs.mkdirSync(path.resolve(publicDir, 'brand'), { recursive: true });
     runCli([ '--managed', '--template', 'hono', '--root-dir', './public', '--kv-store-name', 'e2e-content', '--collection-selection', `header:${PREVIEW}` ], { cwd: projectDir });
-    writeFiles(path.resolve(projectDir, 'hono-extensions'), { '10-theme.ts': THEME_MODULE });
+    writeFiles(path.resolve(projectDir, 'hono-extensions'), { '10-theme.ts': THEME_MODULE, '20-brand.ts': BRAND_MODULE });
     fs.writeFileSync(path.resolve(publicDir, 'theme/site.css'), '/* live */');
+    fs.writeFileSync(path.resolve(publicDir, 'brand/logo.css'), '/* live */');
     runCli([ 'publish-content', '--local' ], { cwd: projectDir });
     fs.writeFileSync(path.resolve(publicDir, 'theme/site.css'), '/* pr-1 */');
+    fs.writeFileSync(path.resolve(publicDir, 'brand/logo.css'), '/* pr-1 */');
     runCli([ 'publish-content', '--local', '--collection-name', 'pr-1' ], { cwd: projectDir });
     server = await startDev(projectDir);
   });
@@ -377,6 +393,24 @@ export default defineExtension((app, options, { staticResponse }) => {
     const res = await get('/theme/missing.css', 'pr-1');
     assert.equal(res.status, 404);
     assert.equal(res.body.toString(), 'No theme file');
+  });
+
+  test('the same with serveStatic() and except(): each case', async () => {
+    assert.equal((await get('/brand/logo.css')).body.toString(), '/* live */');
+    assert.equal((await get('/brand/logo.css', 'pr-1')).body.toString(), '/* pr-1 */');
+    const missingPreview = await get('/brand/logo.css', 'pr-9');
+    assert.equal(missingPreview.status, 200);
+    assert.equal(missingPreview.body.toString(), '/* live */');
+    assert.equal(missingPreview.headers['x-robots-tag'], undefined);
+    const noFile = await get('/brand/missing.css', 'pr-1');
+    assert.equal(noFile.status, 404);
+    assert.equal(noFile.body.toString(), 'No brand file');
+  });
+
+  test('without a preview, a missing file goes on to the app (except() skips the module)', async () => {
+    const res = await get('/brand/missing.css');
+    assert.equal(res.status, 404);
+    assert.notEqual(res.body.toString(), 'No brand file');
   });
 
   test('outside the module, a missing preview still gets the 404 of collectionSelection', async () => {
