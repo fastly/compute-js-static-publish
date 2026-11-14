@@ -1203,6 +1203,7 @@ fire(app);
 `fromStaticPublishRc(rc)` returns:
 
 - `serveStatic(options?)`: middleware that serves the file that matches the request. If no file matches, or the method is not `GET` or `HEAD`, it calls the next handler, so a route after it gets the request. It does not serve the SPA file or the 404 page, and it does not answer `/healthz`.
+- `staticResponse(c, options?)`: the same response as `serveStatic()`, for use inside a handler: the response of the file that matches the request, or `null` if no file matches or the method is not `GET` or `HEAD`. It takes the options of `serveStatic()`. Like `serveStatic()`, it never returns the SPA file or the 404 page.
 - `serveFallback(options?)`: for `app.notFound()`. It serves the SPA file or the 404 page. If there is neither, or the client does not accept HTML, it gives Hono's default 404 response.
 - `selectCollection()`: middleware that selects the collection of each request with the [`collectionSelection`](#-previews-collection-selection) of `static-publish.rc.js`. It returns the redirects of the selection (a `sticky` source, and the activate and reset paths of the `cookie` source), and sets `c.var.staticPublisher`. Then `serveStatic()` and `serveFallback()` use the selected collection. For a `path` source, `serveStatic()` looks up the path without the prefix.
 - `publisherServer`: the `PublisherServer`, to configure it. For example, `publisherServer.setResponseCache({ maxAge: 3600 })`.
@@ -1217,6 +1218,7 @@ If you make the `PublisherServer` yourself, use `fromPublisherServer(publisherSe
 | `path` | The path to serve, in place of the request path. For example, `./favicon.ico`. |
 | `rewriteRequestPath` | `(path, c) => string`. Changes the request path before it is resolved against `root`. |
 | `collectionName` | The collection: a string, `null` for the default collection, or `(c) => string \| null \| undefined`. Without it, or if the function returns `undefined`, the collection is the one that `selectCollection()` selected, or else the active collection. |
+| `onMissing` | With collection selection: `'not-found'` or `'default'` when the selected collection is not published or has expired, for this route only. The default is `collectionSelection.onMissing`. With `'default'`, the response is a normal response of the default collection, with its headers (no `X-Robots-Tag: noindex`). |
 
 For example, to serve `/assets/*` from the `static` directory:
 
@@ -1224,7 +1226,18 @@ For example, to serve `/assets/*` from the `static` directory:
 app.use('/assets/*', serveStatic({ root: './static', rewriteRequestPath: (path) => path.replace(/^\/assets/, '') }));
 ```
 
-`serveFallback()` takes the `collectionName` option, too. To give a default to all the middleware, pass it to `fromStaticPublishRc(rc, { collectionName })`. An option in a call replaces the default.
+`staticResponse()` is for a handler that decides itself whether to serve a file. For example, to serve `/theme/*` for a preview from the selected collection, or from the default collection if the preview is missing, and with a plain `404` and never the 404 page of the collection:
+
+```ts
+app.use('/theme/*', async (c, next) => {
+  if (c.var.staticPublisher.collectionName == null) {
+    return next(); // not a preview
+  }
+  return await staticResponse(c, { onMissing: 'default' }) ?? c.text('Not found', 404);
+});
+```
+
+`serveFallback()` takes the `collectionName` and `onMissing` options, too. To give a default to all the middleware, pass it to `fromStaticPublishRc(rc, { collectionName, onMissing })`. An option in a call replaces the default.
 
 In TypeScript, use `StaticPublisherVariables` for the variables of the app, so that `c.var.staticPublisher` has a type:
 
