@@ -33,18 +33,27 @@ export type StaticPublisherVariables = {
 // PublisherServer.
 export type CollectionNameOption = string | null | ((c: Context) => string | null | undefined);
 
+// With collectionSelection: when the selected collection does not exist or has
+// expired, 'not-found' gives a 404, and 'default' serves the default collection
+// (a normal response of the default collection, with its headers). The default
+// is collectionSelection.onMissing. It does nothing without collectionSelection.
+export type OnMissingOption = 'not-found' | 'default';
+
 export type ServeStaticOptions = ServeStaticPathOptions<Context> & {
   collectionName?: CollectionNameOption,
+  onMissing?: OnMissingOption,
 };
 
 export type ServeFallbackOptions = {
   collectionName?: CollectionNameOption,
+  onMissing?: OnMissingOption,
 };
 
 // Defaults for the middleware that fromPublisherServer() and fromStaticPublishRc()
 // make. An option in a call replaces the default.
 export type PublisherServerMiddlewareDefaults = {
   collectionName?: CollectionNameOption,
+  onMissing?: OnMissingOption,
 };
 
 export type PublisherServerMiddleware = {
@@ -53,6 +62,11 @@ export type PublisherServerMiddleware = {
   // method is not GET or HEAD, it calls the next handler. It does not serve the
   // SPA file or the 404 page (use serveFallback()), and does not answer /healthz.
   serveStatic: (options?: ServeStaticOptions) => MiddlewareHandler,
+  // The response of the file that matches the request, or null, for use in a
+  // handler. It takes the options of serveStatic(), and gets the same response.
+  // It returns null if no file matches, or if the method is not GET or HEAD. It
+  // never returns the SPA file or the 404 page.
+  staticResponse: (c: Context, options?: ServeStaticOptions) => Promise<Response | null>,
   // For app.notFound(): serves the SPA file or the 404 page of the collection.
   // If the collection has neither, or the client does not accept HTML, the
   // response is Hono's default 404 response.
@@ -86,20 +100,28 @@ function resolveCollectionName(
 
 export function fromPublisherServer(server: PublisherServer, defaults: PublisherServerMiddlewareDefaults = {}): PublisherServerMiddleware {
 
-  const serveStatic = (callOptions: ServeStaticOptions = {}): MiddlewareHandler => {
+  const staticResponse = async (c: Context, callOptions: ServeStaticOptions = {}): Promise<Response | null> => {
     const options = { ...defaults, ...callOptions };
+    const selection = getSelection(c, server);
+    // For a path source, the path without its prefix. A path option
+    // replaces the request path (see resolveServeStaticPathname()).
+    const requestPath = selection?.pathname ?? c.req.path;
+    const pathname = resolveServeStaticPathname(requestPath, c, options);
+    if (pathname == null) {
+      return null;
+    }
+    return server.serveRequest(c.req.raw, {
+      collectionName: resolveCollectionName(c, options.collectionName, selection),
+      pathname,
+      fallback: false,
+      healthCheck: false,
+      onMissing: options.onMissing,
+    });
+  };
+
+  const serveStatic = (callOptions: ServeStaticOptions = {}): MiddlewareHandler => {
     return async (c, next) => {
-      const selection = getSelection(c, server);
-      // For a path source, the path without its prefix. A path option
-      // replaces the request path (see resolveServeStaticPathname()).
-      const requestPath = selection?.pathname ?? c.req.path;
-      const pathname = resolveServeStaticPathname(requestPath, c, options);
-      const response = pathname != null ? await server.serveRequest(c.req.raw, {
-        collectionName: resolveCollectionName(c, options.collectionName, selection),
-        pathname,
-        fallback: false,
-        healthCheck: false,
-      }) : null;
+      const response = await staticResponse(c, callOptions);
       if (response == null) {
         await next();
         return;
@@ -113,6 +135,7 @@ export function fromPublisherServer(server: PublisherServer, defaults: Publisher
     return async (c) => {
       const response = await server.serveFallback(c.req.raw, {
         collectionName: resolveCollectionName(c, options.collectionName, getSelection(c, server)),
+        onMissing: options.onMissing,
       });
       return response ?? c.text('404 Not Found', 404);
     };
@@ -133,7 +156,7 @@ export function fromPublisherServer(server: PublisherServer, defaults: Publisher
     };
   };
 
-  return { publisherServer: server, serveStatic, serveFallback, selectCollection };
+  return { publisherServer: server, serveStatic, staticResponse, serveFallback, selectCollection };
 }
 
 export function fromStaticPublishRc(rc: StaticPublishRc, defaults: PublisherServerMiddlewareDefaults = {}): PublisherServerMiddleware {
