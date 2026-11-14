@@ -16,7 +16,10 @@ const honoOptions = rc.templateOptions?.hono;
 // with two different resources stops the build.
 const fire = buildFire(mergeBindings(honoOptions?.bindings, extensions) as BindingsDefs);
 
-const { serveStatic, serveFallback, selectCollection } = fromStaticPublishRc(rc);
+const { serveStatic, staticResponse, serveFallback, selectCollection, publisherServer } = fromStaticPublishRc(rc);
+
+// The helpers of the app that each phase of the extensions gets.
+const helpers = { serveStatic, staticResponse, serveFallback, publisherServer };
 
 const app = new Hono<{ Bindings: typeof fire.Bindings, Variables: StaticPublisherVariables }>();
 
@@ -30,7 +33,7 @@ app.use('*', selectCollection());
 // them, then the beforeFiles phase.
 for (const phase of [ 'middleware', 'beforeFiles' ] as const) {
   for (const e of extensions) {
-    e.module.phases[phase]?.(app, honoOptions?.extensions?.[e.name]);
+    e.module.phases[phase]?.(app, honoOptions?.extensions?.[e.name], helpers);
   }
 }
 
@@ -43,7 +46,7 @@ app.use('*', serveStatic());
 // The afterFiles phase of the extensions: only for the requests that no
 // published file matches.
 for (const e of extensions) {
-  e.module.phases.afterFiles?.(app, honoOptions?.extensions?.[e.name]);
+  e.module.phases.afterFiles?.(app, honoOptions?.extensions?.[e.name], helpers);
 }
 
 // When nothing matches, serve the SPA file or the 404 page.
