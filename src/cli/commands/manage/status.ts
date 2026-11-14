@@ -19,6 +19,8 @@ import { getOwnVersion } from '../../util/package.js';
 import { loadServiceId } from '../../util/service-id.js';
 import { previewUrlTemplates } from '../../../models/config/collection-selection.js';
 import { MANAGED_APP_DIR } from '../../../models/config/static-publish-project.js';
+import { DEFAULT_APP_TEMPLATE_NAME } from '../scaffold/app-template.js';
+import { providedVersions } from '../../managed/template-init.js';
 
 function help() {
   console.log(`\
@@ -140,7 +142,13 @@ export async function action(actionArgs: string[]) {
   const baseUrl = domain != null ? `https://${domain}` : 'https://<service domain>';
   const previewUrls = project.rc.collectionSelection != null ? previewUrlTemplates(baseUrl, project.rc.collectionSelection) : [];
 
+  // The packages that the template provides to its folder (for example to the
+  // Hono extensions), with the versions of the generated app.
+  const templateName = project.managed.template ?? DEFAULT_APP_TEMPLATE_NAME;
+  const providedPackages = providedVersions(templateName, path.resolve(MANAGED_APP_DIR, 'node_modules'), running);
+
   console.log(`Mode                   : managed`);
+  console.log(`Template               : ${templateName}`);
   console.log(`Service ID             : ${serviceId ?? '(none)'}${serviceIdResult != null ? ` (from ${serviceIdResult.source})` : ''}`);
   console.log(`Version of the project : ${versionCheck.recorded ?? '(missing)'}`);
   console.log(`Version that runs      : ${running}${versionCheck.result !== 'same' ? `  ⚠️ ${versionCheck.result}` : ''}`);
@@ -156,6 +164,7 @@ export async function action(actionArgs: string[]) {
 
   setJsonResult({
     mode: 'managed',
+    template: { name: templateName, provides: providedPackages },
     serviceId,
     staticPublishVersion: {
       recorded: versionCheck.recorded ?? null,
