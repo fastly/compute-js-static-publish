@@ -11,7 +11,7 @@ The steps:
 1. Make a new managed project with the `hono` template. Run this command in the directory of your project. In this example, the files of your site are in `./public`:
 
    ```sh
-   npx @fastly/compute-js-static-publish@latest --managed --template hono --root-dir=./public --kv-store-name=site-content
+   npx @fastly/compute-js-static-publish@beta --managed --template hono --root-dir=./public --kv-store-name=site-content
    ```
 
    This writes `static-publish.project.js` and the folder `hono-extensions/`. To add the example to a project that exists, see [Adding to an existing project](#adding-to-an-existing-project).
@@ -20,7 +20,7 @@ The steps:
    ```sh
    rm -rf hono-extensions
    cp -R <this repository>/examples/hono/oauth/hono-extensions hono-extensions
-   npx @fastly/compute-js-static-publish template init
+   npx @fastly/compute-js-static-publish@beta template init
    cd hono-extensions
    npm install
    ```
@@ -142,7 +142,7 @@ The values come from environment variables, so that no secret is in the project 
 export SESSION_KEY="$(openssl rand -base64 32)"
 export GITHUB_CLIENT_SECRET=…
 export GOOGLE_CLIENT_SECRET=…
-npx @fastly/compute-js-static-publish dev
+npx @fastly/compute-js-static-publish@beta dev
 ```
 
 Then open `http://localhost:7676/` in a browser. The cookies have the `Secure` attribute. Many browsers, for example Chrome and Firefox, accept such cookies on `localhost` without HTTPS. If your browser does not, use a local HTTPS proxy, or remove `secure: true` in `lib/session.ts` for local development only.
@@ -174,7 +174,7 @@ The login check runs before the published files on each request, so a visitor wi
 The project must use the `hono` template. For a managed project, this is `managed.template: 'hono'` in `static-publish.project.js`. If the project has no `hono-extensions/` folder, make it:
 
 ```sh
-npx @fastly/compute-js-static-publish template init
+npx @fastly/compute-js-static-publish@beta template init
 ```
 
 Make sure that `hono-extensions/` does not already have files with the same names (`10-oauth.ts` and `lib/session.ts`). The name of a module is its file name without the number prefix, and two modules with the same name stop the build. If the name `oauth` is already used, rename the module of the example, and use the new name in `templateOptions.hono.extensions`.
