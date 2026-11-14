@@ -62,15 +62,25 @@ describe('decodeIndexMetadata and encodeIndexMetadata', () => {
   test('decode the fields', () => {
     assert.deepEqual(
       decodeIndexMetadata({ publishedTime: '100', expirationTime: '200', requires: 'a, b,,c' }),
-      { publishedTime: 100, expirationTime: 200, requires: [ 'a', 'b', 'c' ], otherFields: undefined },
+      { publishedTime: 100, expirationTime: 200, requires: [ 'a', 'b', 'c' ], fileCount: undefined, hiddenFileCount: undefined, otherFields: undefined },
     );
   });
 
   test('read lowercase keys (S3 metadata)', () => {
     assert.deepEqual(
       decodeIndexMetadata({ publishedtime: '100', expirationtime: '200', requires: 'a' }),
-      { publishedTime: 100, expirationTime: 200, requires: [ 'a' ], otherFields: undefined },
+      { publishedTime: 100, expirationTime: 200, requires: [ 'a' ], fileCount: undefined, hiddenFileCount: undefined, otherFields: undefined },
     );
+  });
+
+  test('the file counts, also with the lowercase keys of S3', () => {
+    assert.deepEqual(encodeIndexMetadata({ publishedTime: 100, fileCount: 12, hiddenFileCount: 3 }), { publishedTime: '100', fileCount: '12', hiddenFileCount: '3' });
+    const decoded = decodeIndexMetadata({ publishedTime: '100', fileCount: '12', hiddenFileCount: '3' });
+    assert.equal(decoded.fileCount, 12);
+    assert.equal(decoded.hiddenFileCount, 3);
+    assert.equal(decodeIndexMetadata({ filecount: '7', hiddenfilecount: '0' }).fileCount, 7);
+    assert.equal(decodeIndexMetadata({ fileCount: 'x' }).fileCount, undefined);
+    assert.equal(decodeIndexMetadata({ fileCount: '5' }).otherFields, undefined, 'a known field');
   });
 
   test('an empty requires is the same as no requires', () => {
@@ -111,9 +121,14 @@ describe('decodeIndexMetadata and encodeIndexMetadata', () => {
 });
 
 describe('getUnsupportedIndexFeatures', () => {
-  test('this version supports no features', () => {
-    assert.deepEqual(SUPPORTED_INDEX_FEATURES, []);
-    assert.deepEqual(getUnsupportedIndexFeatures({ requires: [ 'hidden' ] }), [ 'hidden' ]);
+  test('this version supports hidden files', () => {
+    assert.deepEqual(SUPPORTED_INDEX_FEATURES, [ 'hidden' ]);
+    assert.deepEqual(getUnsupportedIndexFeatures({ requires: [ 'hidden' ] }), []);
+    assert.deepEqual(getUnsupportedIndexFeatures({ requires: [ 'hidden', 'future-feature' ] }), [ 'future-feature' ]);
+  });
+
+  test('a server without hidden does not serve a collection that requires it', () => {
+    assert.deepEqual(getUnsupportedIndexFeatures({ requires: [ 'hidden' ] }, []), [ 'hidden' ]);
   });
 
   test('gives the features that are not supported', () => {

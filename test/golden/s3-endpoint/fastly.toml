@@ -1,0 +1,43 @@
+# This file describes a Fastly Compute package. To learn more visit:
+# https://developer.fastly.com/reference/fastly-toml/
+
+authors = [ "you@example.com" ]
+description = "Fastly Compute static site"
+language = "javascript"
+manifest_version = 3
+name = "golden"
+
+[scripts]
+build = "npm run build"
+
+[local_server]
+
+[local_server.secret_stores]
+[[local_server.secret_stores.S3_CREDENTIALS]]
+key = "S3_ACCESS_KEY_ID"
+env = "S3_ACCESS_KEY_ID"
+[[local_server.secret_stores.S3_CREDENTIALS]]
+key = "S3_SECRET_ACCESS_KEY"
+env = "S3_SECRET_ACCESS_KEY"
+
+[local_server.backends]
+[local_server.backends.s3_storage]
+url = "https://s3.example.com/"
+override_host = "s3.example.com"
+
+[setup]
+
+[setup.backends]
+[setup.backends.s3_storage]
+address = "s3.example.com"
+description = "S3 API endpoint"
+port = 443
+[setup.secret_stores]
+[setup.secret_stores.S3_CREDENTIALS]
+description = "Credentials for S3 storage"
+[setup.secret_stores.S3_CREDENTIALS.entries]
+[setup.secret_stores.S3_CREDENTIALS.entries.S3_ACCESS_KEY_ID]
+description = "Access Key ID"
+[setup.secret_stores.S3_CREDENTIALS.entries.S3_SECRET_ACCESS_KEY]
+description = "Secret Access Key"
+
