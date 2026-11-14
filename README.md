@@ -903,10 +903,11 @@ async function handleRequest(request) {
 | `pathname` | The path to look up, in place of the path of the request URL. It must be decoded, and it must start with `/`. | The decoded path of the request URL |
 | `fallback` | `false`: if no file matches, do not serve the SPA file or the 404 page. Return `null`. | `true` |
 | `healthCheck` | `false`: do not answer `/healthz`. | `true` |
+| `onMissing` | With [collection selection](#-previews-collection-selection): what to do for this call when the selected collection is not published or has expired. `'not-found'`: the `404` below. `'default'`: serve the default collection, as a normal response of the default collection (its headers, without `X-Robots-Tag: noindex`). Without collection selection, it does nothing. | `collectionSelection.onMissing` |
 
 `serveRequest()` returns `null` for a method other than `GET` and `HEAD`, and when there is no response (no file matches, and there is no fallback page or `fallback` is `false`). If the default collection has no settings in storage, the response is `500`. A collection other than the default collection that is not published, or that expired, gets a plain-text `404` that names it.
 
-`serveFallback(request, { collectionName })` serves the SPA file (`200`) or the 404 page (`404`) of the collection, as `serveRequest()` does when no file matches. It returns `null` for a method other than `GET` and `HEAD`, for a client that does not accept HTML, or when the collection has no fallback page. Use it with `fallback: false`, to run your own logic between the files and the fallback page. The scaffolded app (`src/index.js`) uses this order:
+`serveFallback(request, { collectionName, onMissing })` serves the SPA file (`200`) or the 404 page (`404`) of the collection, as `serveRequest()` does when no file matches. It returns `null` for a method other than `GET` and `HEAD`, for a client that does not accept HTML, or when the collection has no fallback page. Use it with `fallback: false`, to run your own logic between the files and the fallback page. The scaffolded app (`src/index.js`) uses this order:
 
 ```js
 async function handleRequest(request) {

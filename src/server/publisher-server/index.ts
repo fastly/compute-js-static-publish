@@ -105,11 +105,19 @@ export type ServeRequestOptions = {
   fallback?: boolean,
   // false: do not answer /healthz. The default is true.
   healthCheck?: boolean,
+  // With collectionSelection: when the selected collection does not exist or
+  // has expired, 'not-found' gives a 404, and 'default' serves the default
+  // collection (a normal response of the default collection, with its headers).
+  // It is used in place of collectionSelection.onMissing for this call. It does
+  // nothing without collectionSelection.
+  onMissing?: 'not-found' | 'default',
 };
 
 export type ServeFallbackOptions = {
   // The collection for this call, as in ServeRequestOptions.
   collectionName?: string | null,
+  // As in ServeRequestOptions.
+  onMissing?: 'not-found' | 'default',
 };
 
 // The state of one request for one collection: the settings and the index that
@@ -907,7 +915,7 @@ export class PublisherServer {
       return new Response("OK", { status: 200 });
     }
 
-    const selected = await this.checkSelectedCollection(request, scope);
+    const selected = await this.checkSelectedCollection(request, scope, options.onMissing);
     if (selected instanceof Response) {
       return selected;
     }
@@ -938,7 +946,7 @@ export class PublisherServer {
       return null;
     }
 
-    const selected = await this.checkSelectedCollection(request, scope);
+    const selected = await this.checkSelectedCollection(request, scope, options.onMissing);
     if (selected instanceof Response) {
       return selected;
     }
@@ -971,7 +979,7 @@ export class PublisherServer {
   // whether to mark the response as a preview, or a 404 response for onMissing:
   // 'not-found'. The check reads the index, also when the response cache has the
   // response.
-  private async checkSelectedCollection(request: Request, scope: CollectionScope): Promise<{ scope: CollectionScope, preview: boolean } | Response> {
+  private async checkSelectedCollection(request: Request, scope: CollectionScope, onMissing?: 'not-found' | 'default'): Promise<{ scope: CollectionScope, preview: boolean } | Response> {
     const config = this.collectionSelection;
     if (config == null || scope.collectionName === this.defaultCollectionName) {
       return { scope, preview: false };
@@ -979,7 +987,7 @@ export class PublisherServer {
     if (await this.isCollectionAvailableFor(scope)) {
       return { scope, preview: true };
     }
-    if (config.onMissing === 'default') {
+    if ((onMissing ?? config.onMissing) === 'default') {
       this.currentScope = this.scopeForRequest(request, this.defaultCollectionName);
       return { scope: this.currentScope, preview: false };
     }
