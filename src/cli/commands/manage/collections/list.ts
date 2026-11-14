@@ -149,7 +149,8 @@ export async function action(actionArgs: string[]) {
       }
       const indexKey = indexesPrefix + collection;
 
-      const indexEntryInfo = await storageProvider.getStorageEntry(indexKey);
+      // Only the metadata: the index itself can be large.
+      const indexEntryInfo = await storageProvider.getStorageEntryInfo(indexKey);
       if (indexEntryInfo == null) {
         throw new Error(`❌ Can't load storage entry ${indexesPrefix + collection}`);
       }
@@ -164,6 +165,12 @@ export async function action(actionArgs: string[]) {
         console.log(`    Published  : ${new Date(indexMetadata.publishedTime * 1000)}`);
       }
       
+      if (indexMetadata.fileCount != null) {
+        console.log(`    Files      : ${indexMetadata.fileCount} (${indexMetadata.hiddenFileCount ?? 0} hidden)`);
+      } else {
+        console.log('    Files      : unknown (published with an older version)');
+      }
+
       if (indexMetadata.requires != null) {
         console.log(`    Requires   : ${indexMetadata.requires.join(', ')}`);
         const unsupportedFeatures = getUnsupportedIndexFeatures(indexMetadata);
