@@ -21,6 +21,7 @@ import { parseItemPatterns, testItemPatterns } from '../../../models/config/item
 import { encodeIndexMetadata, type IndexMetadata } from '../../../models/server/index.js';
 import { calcExpirationTime } from '../../../models/time/index.js';
 import { parseCommandLine } from '../../util/args.js';
+import { errorCodeOf, fail, recordFailure, setJsonResult } from '../../util/output.js';
 import { checkCollectionNameForWrite } from '../../util/collection-name.js';
 import { mergeContentTypes, testFileContentType } from '../../util/content-types.js';
 import {
@@ -38,7 +39,7 @@ import { calculateFileSizeAndHash, enumerateFiles, rootRelative } from '../../ut
 import { ensureVariantFileExists, OncePerKey, type Variants } from '../../util/variants.js';
 import { concurrentMap } from '../../util/retryable.js';
 import { ProgressLog } from '../../util/progress.js';
-import { type PurgeTarget, loadPurgeTarget, purgeCollection } from '../../util/purge.js';
+import { type PurgeResult, type PurgeTarget, loadPurgeTarget, purgeCollection } from '../../util/purge.js';
 import {
   getStorageKeysByHexPrefix,
   isVariantInStorage,
@@ -172,7 +173,7 @@ export async function action(actionArgs: string[]) {
     if (parsed.error != null) {
       console.error(String(parsed.error));
       console.error();
-      process.exitCode = 1;
+      recordFailure('usage', String(parsed.error));
     }
 
     help();
@@ -203,8 +204,7 @@ export async function action(actionArgs: string[]) {
   if (s3UploadConcurrencyValue !== undefined) {
     if (typeof s3UploadConcurrencyValue !== 'string' || !/^\d+$/.test(s3UploadConcurrencyValue) ||
       Number(s3UploadConcurrencyValue) < 1 || Number(s3UploadConcurrencyValue) > 256) {
-      console.error(`❌ --s3-upload-concurrency must be an integer from 1 to 256.`);
-      process.exitCode = 1;
+      fail('usage', `--s3-upload-concurrency must be an integer from 1 to 256.`);
       return;
     }
     s3UploadConcurrency = Number(s3UploadConcurrencyValue);
@@ -230,7 +230,7 @@ export async function action(actionArgs: string[]) {
         console.error(error);
       }
     }
-    process.exitCode = 1;
+    recordFailure('config-invalid', `Can't load ${configFileName()}.`);
     return;
   }
 
@@ -248,7 +248,7 @@ export async function action(actionArgs: string[]) {
         console.error(error);
       }
     }
-    process.exitCode = 1;
+    recordFailure('config-invalid', `Can't load ${configFilePath}.`);
     return;
   }
 
@@ -256,8 +256,7 @@ export async function action(actionArgs: string[]) {
   let brotliQualitySource = 'config';
   if (brotliQualityValue !== undefined) {
     if (typeof brotliQualityValue !== 'string' || !/^\d+$/.test(brotliQualityValue) || Number(brotliQualityValue) > 11) {
-      console.error(`❌ --brotli-quality must be an integer from 0 to 11.`);
-      process.exitCode = 1;
+      fail('usage', `--brotli-quality must be an integer from 0 to 11.`);
       return;
     }
     publishContentConfig.brotliQuality = Number(brotliQualityValue);
@@ -279,7 +278,7 @@ export async function action(actionArgs: string[]) {
   } catch(err: unknown) {
     console.error(`❌ Cannot process expiration time`);
     console.error(String(err));
-    process.exitCode = 1;
+    recordFailure('usage', `Cannot process expiration time: ${String(err)}`);
     return;
   }
 
@@ -311,7 +310,7 @@ export async function action(actionArgs: string[]) {
   } catch (err: unknown) {
     console.error(`❌ Could not instantiate store provider`);
     console.error(String(err));
-    process.exitCode = 1;
+    recordFailure(errorCodeOf(err), String(err));
     return;
   }
 
@@ -328,7 +327,7 @@ export async function action(actionArgs: string[]) {
     });
   } catch (err: unknown) {
     console.error(String(err));
-    process.exitCode = 1;
+    recordFailure(errorCodeOf(err), String(err));
     return;
   }
 
@@ -370,7 +369,6 @@ export async function action(actionArgs: string[]) {
   const collectionName = collectionNameValue ?? process.env.PUBLISHER_COLLECTION_NAME ?? defaultCollectionName;
   console.log(`✔️ Collection Name: ${collectionName}`);
   if (!await checkCollectionNameForWrite(storageProvider, publishId, collectionName)) {
-    process.exitCode = 1;
     return;
   }
 
@@ -616,10 +614,12 @@ export async function action(actionArgs: string[]) {
   }
   console.log(`✅  Scan complete.`);
   console.log(`  | ${Object.keys(assetsIndex).length} file(s) in the index, ${hiddenCount} of them hidden.`);
+  // Counted before applyBatch(), which can split the entries into chunks.
+  const uploadedVariantCount = batch.storageProviderBatchEntries.length;
   if (existingKeys != null) {
-    console.log(`  | ${existingVariantCount} variant(s) already in storage, ${batch.storageProviderBatchEntries.length} to upload.`);
+    console.log(`  | ${existingVariantCount} variant(s) already in storage, ${uploadedVariantCount} to upload.`);
   } else {
-    console.log(`  | ${batch.storageProviderBatchEntries.length} variant(s) to upload.`);
+    console.log(`  | ${uploadedVariantCount} variant(s) to upload.`);
   }
 
   await storageProvider.applyBatch(batch, { existingKeys, verbose });
@@ -730,10 +730,34 @@ export async function action(actionArgs: string[]) {
 
   console.log(`✅  Settings have been saved.`);
 
+  // A failed purge is only a warning (exit 0), because the content is published.
+  const purgeResults: PurgeResult[] = [];
   if (purgeTarget != null) {
-    await purgeCollection(purgeTarget, publishId, collectionName);
+    purgeResults.push(...await purgeCollection(purgeTarget, publishId, collectionName));
   }
 
   console.log(`🎉 Completed.`);
+
+  setJsonResult({
+    collection: collectionName,
+    publishId,
+    // The files in the index.
+    files: {
+      total: Object.keys(assetsIndex).length,
+      hidden: hiddenCount,
+    },
+    // Each file, and each compressed variant that is kept.
+    storageItems: {
+      uploaded: uploadedVariantCount,
+      reused: existingVariantCount,
+    },
+    expiresAt: expirationTime != null ? new Date(expirationTime * 1000).toISOString() : null,
+    // null: no purge (--local, or no Service ID).
+    purge: purgeTarget != null ? {
+      ok: purgeResults.every(x => x.result !== 'failed'),
+      serviceId: purgeTarget.serviceId,
+      environments: purgeResults,
+    } : null,
+  });
 
 }

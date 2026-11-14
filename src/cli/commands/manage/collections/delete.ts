@@ -8,6 +8,7 @@ import path from 'node:path';
 import { type OptionDefinition } from 'command-line-args';
 
 import { parseCommandLine } from '../../../util/args.js';
+import { errorCodeOf, fail, recordFailure, setJsonResult } from '../../../util/output.js';
 import {
   LoadConfigError,
   configFileName,
@@ -15,7 +16,7 @@ import {
   loadStaticPublisherRcFile,
 } from '../../../util/config.js';
 import { loadStorageProviderFromStaticPublishRc } from '../../../storage/storage-provider.js';
-import { type PurgeTarget, loadPurgeTarget, purgeCollection } from '../../../util/purge.js';
+import { type PurgeResult, type PurgeTarget, loadPurgeTarget, purgeCollection } from '../../../util/purge.js';
 
 function help() {
   console.log(`\
@@ -89,7 +90,7 @@ export async function action(actionArgs: string[]) {
     if (parsed.error != null) {
       console.error(String(parsed.error));
       console.error();
-      process.exitCode = 1;
+      recordFailure('usage', String(parsed.error));
     }
 
     help();
@@ -112,8 +113,7 @@ export async function action(actionArgs: string[]) {
   const computeAppDir = getComputeAppDir();
 
   if (collectionNameValue == null) {
-    console.error("❌ Required argument '--collection-name' not specified.");
-    process.exitCode = 1;
+    fail('usage', "Required argument '--collection-name' not specified.");
     return;
   }
 
@@ -131,7 +131,7 @@ export async function action(actionArgs: string[]) {
         console.error(error);
       }
     }
-    process.exitCode = 1;
+    recordFailure('config-invalid', `Can't load ${configFileName()}.`);
     return;
   }
 
@@ -157,14 +157,13 @@ export async function action(actionArgs: string[]) {
   } catch (err: unknown) {
     console.error(`❌ Could not instantiate store provider`);
     console.error(String(err));
-    process.exitCode = 1;
+    recordFailure(errorCodeOf(err), String(err));
     return;
   }
 
   const collectionName = collectionNameValue;
   if (collectionName === defaultCollectionName) {
-    console.error(`❌ Cannot delete default collection: ${collectionName}`);
-    process.exitCode = 1;
+    fail('usage', `Cannot delete default collection: ${collectionName}`);
     return;
   }
 
@@ -182,7 +181,7 @@ export async function action(actionArgs: string[]) {
     });
   } catch (err: unknown) {
     console.error(String(err));
-    process.exitCode = 1;
+    recordFailure(errorCodeOf(err), String(err));
     return;
   }
 
@@ -210,6 +209,12 @@ export async function action(actionArgs: string[]) {
     }
   }
 
+  // A collection that does not exist is not an error: there is nothing to
+  // delete. The purge still runs, in case an earlier delete did not purge.
+  if (assetKeysToDelete.size === 0) {
+    console.log(`✔️ Collection '${collectionName}' does not exist. Nothing to delete.`);
+  }
+
   // ### Delete items that have been flagged
   const items = [...assetKeysToDelete].map(key => ({key}));
   await storageProvider.doConcurrentParallel(
@@ -222,9 +227,23 @@ export async function action(actionArgs: string[]) {
     true,
   )
 
+  const purgeResults: PurgeResult[] = [];
   if (purgeTarget != null) {
-    await purgeCollection(purgeTarget, publishId, collectionName);
+    purgeResults.push(...await purgeCollection(purgeTarget, publishId, collectionName));
   }
 
   console.log("✅  Completed.")
+
+  setJsonResult({
+    collection: collectionName,
+    publishId,
+    deleted: assetKeysToDelete.size > 0,
+    ...(assetKeysToDelete.size === 0 ? { reason: 'not-found' } : {}),
+    // null: no purge (--local, or no Service ID).
+    purge: purgeTarget != null ? {
+      ok: purgeResults.every(x => x.result !== 'failed'),
+      serviceId: purgeTarget.serviceId,
+      environments: purgeResults,
+    } : null,
+  });
 }

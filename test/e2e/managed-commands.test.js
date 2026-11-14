@@ -61,11 +61,44 @@ describe('managed commands', () => {
       assert.equal(statusValue(output, 'Preview URL (query)'), 'https://<service domain>/?collection={collection}');
     });
 
+    test('a name in managed.fastlyToml that the CLI writes: config-invalid', () => {
+      const original = readProject();
+      try {
+        editProject(text => text.replace(/^(\s*)staticPublishVersion:/m, "$1fastlyToml: { local_server: { kv_stores: { 'e2e-content': {} } } },\n$1staticPublishVersion:"));
+        const result = runText([ 'status', '--json' ], dir);
+        assert.equal(result.status, 2, result.output);
+        const json = JSON.parse(result.stdout);
+        assert.equal(json.error.code, 'config-invalid');
+        assert.match(json.error.message, /managed\.fastlyToml\.local_server\.kv_stores\.e2e-content: the CLI writes this entry/);
+      } finally {
+        fs.writeFileSync(projectFile, original);
+      }
+    });
+
     test('with a service but no API token: unknown', () => {
       const { output } = runText([ 'status', '--fastly-service-id', 'SVC123' ], dir);
       assert.match(statusValue(output, 'Service ID'), /^SVC123 /);
       assert.equal(statusValue(output, 'Deploy necessary'), 'unknown');
       assert.match(output, /\* Unknown: no API token/);
+    });
+
+    test('--json', () => {
+      const result = runText([ 'status', '--json' ], dir);
+      assert.equal(result.status, 0, result.output);
+      const json = JSON.parse(result.stdout);
+      assert.equal(json.schemaVersion, 1);
+      assert.equal(json.mode, 'managed');
+      assert.equal(json.serviceId, null);
+      assert.deepEqual(json.staticPublishVersion, { recorded: VERSION, running: VERSION, check: 'same' });
+      assert.match(json.fingerprint.current, /^[0-9a-f]{64}$/);
+      assert.equal(json.fingerprint.deployed, null);
+      assert.equal(json.needsDeploy, true);
+      assert.deepEqual(json.previewUrls, [ { type: 'query', url: 'https://<service domain>/?collection={collection}' } ]);
+
+      const withService = JSON.parse(runText([ 'status', '--json', '--fastly-service-id', 'SVC123' ], dir).stdout);
+      assert.equal(withService.serviceId, 'SVC123');
+      assert.equal(withService.needsDeploy, null);
+      assert.match(withService.reasons[0], /no API token/);
     });
 
     test('the fingerprint does not change for publishContent or the service ID, and changes for the app', () => {
@@ -177,7 +210,7 @@ describe('managed commands', () => {
       fs.mkdirSync(sub, { recursive: true });
       try {
         const { status, output } = runText([ 'status' ], sub);
-        assert.equal(status, 1);
+        assert.equal(status, 2);
         assert.match(output, /'status' is a command for a managed project or an app/);
         assert.match(output, /\.\. has static-publish\.project\.js\. Run the command there, or add --project-dir=\.\./);
         assert.doesNotMatch(output, /Scaffolding mode/);

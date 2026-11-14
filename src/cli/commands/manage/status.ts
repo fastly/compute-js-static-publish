@@ -13,6 +13,7 @@ import { getActiveVersion, getDeployedApp, getVersionDomains } from '../../manag
 import { checkProjectVersion } from '../../managed/version-check.js';
 import { loadApiToken } from '../../util/api-token.js';
 import { parseCommandLine } from '../../util/args.js';
+import { recordFailure, setJsonResult } from '../../util/output.js';
 import { detectProjectMode } from '../../util/config.js';
 import { getOwnVersion } from '../../util/package.js';
 import { loadServiceId } from '../../util/service-id.js';
@@ -53,7 +54,7 @@ export async function action(actionArgs: string[]) {
     if (parsed.error != null) {
       console.error(String(parsed.error));
       console.error();
-      process.exitCode = 1;
+      recordFailure('usage', String(parsed.error));
     }
     help();
     return;
@@ -67,6 +68,7 @@ export async function action(actionArgs: string[]) {
     const serviceIdResult = loadServiceId({ commandLine: fastlyServiceId, fastlyTomlPath: path.resolve('fastly.toml') });
     console.log(`Mode       : ejected`);
     console.log(`Service ID : ${serviceIdResult?.serviceId ?? '(none)'}`);
+    setJsonResult({ mode: 'ejected', serviceId: serviceIdResult?.serviceId ?? null });
     return;
   }
 
@@ -152,4 +154,23 @@ export async function action(actionArgs: string[]) {
     console.log(`Preview URL (${type})${' '.repeat(Math.max(0, 9 - type.length))}: ${url}`);
   }
 
+  setJsonResult({
+    mode: 'managed',
+    serviceId,
+    staticPublishVersion: {
+      recorded: versionCheck.recorded ?? null,
+      running,
+      check: versionCheck.result,
+    },
+    fingerprint: {
+      current: fingerprint,
+      deployed: deployedFingerprint,
+      deployedStaticPublishVersion,
+    },
+    activeVersion,
+    domain,
+    needsDeploy,
+    reasons,
+    previewUrls,
+  });
 }
