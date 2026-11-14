@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { after, describe, test } from 'node:test';
+import { after, before, describe, mock, test } from 'node:test';
 
 import * as esbuild from 'esbuild';
 
@@ -20,6 +20,17 @@ import {
   watchHonoExtensions,
   writeHonoExtensionsStub,
 } from '../../build/cli/cli/hono/build.js';
+
+// The build writes its messages with console.log(). The test runner reads the
+// stdout of this file as its own messages, and in Node 22 some text there can
+// stop the runner with 'Unable to deserialize cloned data'. Thus the messages
+// are caught for all the tests of this file.
+before(() => {
+  mock.method(console, 'log', () => {});
+});
+after(() => {
+  mock.restoreAll();
+});
 
 const tempDirs = [];
 function makeDir(files = {}) {
