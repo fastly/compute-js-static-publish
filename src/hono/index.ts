@@ -22,6 +22,7 @@ export {
   type ExtensionBindings,
   type ExtensionEntry,
   type ExtensionEnv,
+  type ExtensionHelpers,
   type ExtensionPhase,
   type ExtensionPhaseFunction,
   type ExtensionPhases,

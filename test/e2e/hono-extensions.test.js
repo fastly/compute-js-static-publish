@@ -309,6 +309,83 @@ describe('hono extensions in a managed project', { skip: skipUnlessFastlyCli() }
   });
 });
 
+describe('the helpers of the app in an extension', { skip: skipUnlessFastlyCli() }, () => {
+  // The use case: serve /theme/* on a preview, from the selected collection, or
+  // from the default collection if the preview is missing, with a plain 404
+  // (never the 404 page of the collection).
+  const THEME_MODULE = `\
+import { defineExtension } from '@fastly/compute-js-static-publish/hono';
+
+export default defineExtension((app, options, { staticResponse }) => {
+  app.use('/theme/*', async (c, next) => {
+    if (c.var.staticPublisher.collectionName == null) {
+      return next();
+    }
+    return await staticResponse(c, { onMissing: 'default' }) ?? c.text('No theme file', 404);
+  });
+});
+`;
+  const PREVIEW = 'x-preview';
+  let dir;
+  let projectDir;
+  let server;
+
+  before(async () => {
+    dir = makeTempDir('hono-ext-helpers');
+    projectDir = path.resolve(dir, 'site');
+    const publicDir = path.resolve(projectDir, 'public');
+    writeFixtureContent(publicDir);
+    fs.mkdirSync(path.resolve(publicDir, 'theme'), { recursive: true });
+    runCli([ '--managed', '--template', 'hono', '--root-dir', './public', '--kv-store-name', 'e2e-content', '--collection-selection', `header:${PREVIEW}` ], { cwd: projectDir });
+    writeFiles(path.resolve(projectDir, 'hono-extensions'), { '10-theme.ts': THEME_MODULE });
+    fs.writeFileSync(path.resolve(publicDir, 'theme/site.css'), '/* live */');
+    runCli([ 'publish-content', '--local' ], { cwd: projectDir });
+    fs.writeFileSync(path.resolve(publicDir, 'theme/site.css'), '/* pr-1 */');
+    runCli([ 'publish-content', '--local', '--collection-name', 'pr-1' ], { cwd: projectDir });
+    server = await startDev(projectDir);
+  });
+
+  after(async () => {
+    await server?.stop();
+    if (dir != null) {
+      removeDir(dir);
+    }
+  });
+
+  const get = (pathname, preview) => rawRequest(server.baseUrl + pathname, { headers: { ...HTML, ...(preview != null ? { [PREVIEW]: preview } : {}) } });
+
+  test('without a preview, the published files of the app serve it', async () => {
+    const res = await get('/theme/site.css');
+    assert.equal(res.status, 200);
+    assert.equal(res.body.toString(), '/* live */');
+  });
+
+  test('a preview gets the file of the selected collection', async () => {
+    const res = await get('/theme/site.css', 'pr-1');
+    assert.equal(res.status, 200);
+    assert.equal(res.body.toString(), '/* pr-1 */');
+  });
+
+  test("a missing preview gets the file of the default collection, with the default collection's headers", async () => {
+    const res = await get('/theme/site.css', 'pr-9');
+    assert.equal(res.status, 200);
+    assert.equal(res.body.toString(), '/* live */');
+    assert.equal(res.headers['x-robots-tag'], undefined);
+  });
+
+  test('no file: the plain 404 of the module, never the 404 page', async () => {
+    const res = await get('/theme/missing.css', 'pr-1');
+    assert.equal(res.status, 404);
+    assert.equal(res.body.toString(), 'No theme file');
+  });
+
+  test('outside the module, a missing preview still gets the 404 of collectionSelection', async () => {
+    const res = await get('/about.html', 'pr-9');
+    assert.equal(res.status, 404);
+    assert.doesNotMatch(res.body.toString(), /<h1>About<\/h1>/);
+  });
+});
+
 describe('npm run dev:watch in an ejected hono app', { skip: skipUnlessFastlyCli() }, () => {
   let dir;
   let extensionsDir;
