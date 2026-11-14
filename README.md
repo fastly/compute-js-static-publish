@@ -288,6 +288,8 @@ managed: {
 - `local_server` does not change the fingerprint, because it is only for `fastly compute serve`. `setup` changes it.
 - `eject` writes the sections into the `fastly.toml` of the ejected app.
 
+`managed.template` selects the template of the app: `plain` (the default) or `hono`. To switch, change it. The next `dev` or `deploy` generates the app again with the new template, and `npm ci` installs its dependencies. The fingerprint changes, so `deploy` deploys again. Files of the old template can stay in `.static-publish/app/`. They do not change the build. To remove them, delete `.static-publish/`: the next `dev` or `deploy` generates it again.
+
 The same version of this package always generates the same app, with the same versions of all dependencies: this package has a lockfile for the app of each template. The app uses the copy of this package that runs the CLI, through a `file:` link. Thus, add this package as a dev dependency of your project, and run the CLI from it, so that the version is pinned:
 
 ```sh
@@ -1168,6 +1170,18 @@ Notes:
 
 `@fastly/compute-js-static-publish/hono` has middleware for [Hono](https://hono.dev/) apps. It serves the published files with `PublisherServer`, so a Hono app gets all the features of the server: `autoIndex`, `autoExt`, the compressed variants, `304` responses, the [response cache](#️-caching-responses-with-the-core-cache), `Server-Timing`, and [collection selection](#-previews-collection-selection).
 
+### The `hono` template
+
+To scaffold a Hono app, add `--template hono` (in a managed project: `managed.template: 'hono'`):
+
+```sh
+npx @fastly/compute-js-static-publish@latest --template hono --root-dir=./public --kv-store-name=site-content
+```
+
+The app is TypeScript: `src/index.ts`, with code like the example below, and `tsconfig.json`. Add your own routes in `src/index.ts`. The build (`js-compute-runtime ./src/index.ts`) removes the types, but does not check them. To check the types, run `npx tsc` in the app. The app has `typescript` as a dev dependency.
+
+### Hono in your own app
+
 Add `hono` and `@fastly/hono-fastly-compute` to your app:
 
 ```sh
@@ -1475,7 +1489,7 @@ npx @fastly/compute-js-static-publish@latest \
   [--static-publisher-working-dir=<output>/static-publisher] \
   [--publish-id=<prefix>] \
   [--default-collection-name=live] \
-  [--template=plain] \
+  [--template=plain|hono] \
   [--static-dir=./public/static] \
   [--spa=./public/spa.html] \
   [--not-found-page=./public/404.html] \
@@ -1506,7 +1520,7 @@ npx @fastly/compute-js-static-publish@latest \
 - `--description`: Application description to insert into `fastly.toml`
 - `--author`: Author to insert into `fastly.toml`
 - `--service-id`: Optional existing Fastly Compute service ID
-- `--template`: The template of the app's code (default: `plain`). `plain` is the only template.
+- `--template`: The template of the app's code (default: `plain`). `plain` is a JavaScript app that calls `PublisherServer.serveRequest()` from a fetch event listener. `hono` is a TypeScript [Hono](https://hono.dev/) app (see [Using Hono](#-using-hono)).
 - `--managed`: Write only `static-publish.project.js` (a [managed project](#managed-projects)) in the current directory, in place of the app. `--output` is not used.
 
 **Used in building config files:**
