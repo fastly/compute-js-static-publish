@@ -14,6 +14,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { compareVersions } from '../managed/version-check.js';
+import { cliCommand } from '../util/package.js';
 
 // The file that the build writes into the app, and that src/index.ts imports.
 export const HONO_EXTENSIONS_MANIFEST = 'src/hono-extensions.generated.js';
@@ -186,7 +187,7 @@ export function checkProvidedVersions(appDir: string, extensionsDir: string): st
     if (satisfiesRange(version, range) === false) {
       warnings.push(
         `hono-extensions/package.json expects ${name} ${range}, but the app provides ${version}. ` +
-        `The build uses the app's ${name}. Run: npx @fastly/compute-js-static-publish template init`,
+        `The build uses the app's ${name}. Run: ${cliCommand()} template init`,
       );
     }
   }
