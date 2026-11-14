@@ -406,6 +406,8 @@ npx @fastly/compute-js-static-publish publish-content \
 
 You can overwrite or republish any collection at any time. Old file hashes will be reused automatically where contents match.
 
+A collection name must be a DNS label: lowercase `a-z`, `0-9`, and `-`, from 1 to 63 characters, with no `-` at the start or the end (for example `live`, `staging`, `pr-42`). Thus a name is safe in storage keys, in cookies, and in hostnames. If a CI tool makes collection names from branch names, it must convert them to this form (for example `feature/Foo_bar` to `feature-foo-bar`). A collection that was published before this rule continues to work, with a warning, but new collections must follow it.
+
 ### Expiration (Auto-cleanup)
 
 Collections can expire automatically:
@@ -455,9 +457,158 @@ addEventListener("fetch", event => {
 });
 ```
 
+### 👀 Previews: Collection Selection
+
+`collectionSelection` in `static-publish.rc.js` chooses the collection that serves each request, for example to show a preview of a pull request. It is off by default: without it, every request gets the default collection.
+
+```js
+const rc = {
+  // ...
+  collectionSelection: {
+    // Tried in order. The first source that gives a collection wins.
+    // If no source gives a collection, the default collection is used.
+    sources: [
+      { type: 'host',   pattern: 'stag.example.com', value: 'staging' },
+      { type: 'host',   pattern: '{collection}.preview.example.com' },
+      { type: 'path',   prefix: '/_preview/{collection}', sticky: 'cookie' },
+      { type: 'query',  param: 'collection', sticky: 'cookie' },
+      { type: 'cookie', cookieName: 'publisher-collection',
+        activatePath: '/activate', resetPath: '/reset', maxAge: 604800 },
+      { type: 'header', name: 'x-publisher-collection' },
+    ],
+    // The collections that can be selected ('*' matches any characters). Default: any.
+    allow: ['pr-*', 'staging'],
+    // The selected collection does not exist or has expired:
+    // 'not-found' (default) gives a 404 response, 'default' serves the default collection.
+    onMissing: 'not-found',
+    // X-Robots-Tag: noindex on the responses of a selected collection. Default: true.
+    noindex: true,
+  },
+};
+```
+
+| Source | Reads | Notes |
+|--------|-------|-------|
+| `host` | The hostname, matched against `pattern` | Needs a wildcard domain and TLS for it. The pattern has one `{collection}` in one label, with fixed text around it if you want (`branch-{collection}.preview.example.com`). A host label has at most 63 characters. Make sure that your production hostname does not match the pattern. With `value`, `pattern` is one hostname without `{collection}`, and selects the collection in `value` (`stag.example.com` → `staging`). |
+| `path` | A path prefix, which is removed before the file lookup | Works on `*.edgecompute.app`. Links that start with `/` lose the prefix, so use it with `sticky: 'cookie'`, or for a site with relative links. The links in HTML do not change. With `value`, `prefix` has no `{collection}`, and selects the collection in `value` (`/_staging` → `staging`). |
+| `query` | A query parameter | Only the request that has it. Usually used with `sticky: 'cookie'`. |
+| `cookie` | A cookie | Also serves the activate path (`/activate?collection=<name>&redirectTo=<path>`) and the reset path. |
+| `header` | A request header | For tests, CI checks, and API clients. |
+
+- `sticky: 'cookie'` on a `path` or `query` source: when the source matches, set the cookie of the `cookie` source, and redirect (`308`) to the URL without the prefix or the parameter. It needs a `cookie` source.
+- A name must follow the [collection name rule](#-collections-publish-preview-promote) and match `allow`. Otherwise the source is skipped.
+- A `value` must also follow the collection name rule, and match `allow` if it is set. Otherwise the config is not valid, and the CLI and the app show an error.
+- Redirects go only to a path on the same site. `redirectTo` with another site redirects to `/`.
+- The responses of a selected collection (not the default collection) get `X-Robots-Tag: noindex` (unless `noindex` is `false`). They get `Cache-Control: private` if the URL does not name the collection. See [Shared caches](#shared-caches).
+- To find out if a selected collection exists, `PublisherServer` reads its index, also when the [response cache](#️-caching-responses-with-the-core-cache) has the response.
+
+The `plain` app does this in `src/index.js`. Apps scaffolded before 8.1.0 do not. To add it to such an app, change `src/index.js`:
+
+```js
+const selection = publisherServer.resolveCollection(request);
+if (selection.response != null) {
+  return selection.response; // a redirect (sticky, activate, reset), or an error
+}
+const response = await publisherServer.serveRequest(request, {
+  collectionName: selection.collectionName, // null: the default collection
+  pathname: selection.pathname,             // the path without the prefix of a path source
+});
+```
+
+To scaffold an app with collection selection, use the [`--collection-selection` flags](#options). To show a link to a collection, for example in CI, use `previewUrl()`. It uses the first source that can make a URL:
+
+```js
+import { previewUrl } from '@fastly/compute-js-static-publish';
+import rc from './static-publish.rc.js';
+
+previewUrl('pr-42', 'https://example.edgecompute.app', rc.collectionSelection);
+// with the sources above: 'https://pr-42.preview.example.com/'
+```
+
+> [!WARNING]
+> A preview is public to anyone who knows its name. Use `allow` to limit the collections that can be selected, and do not publish content that must stay private.
+
+#### Shared caches
+
+A shared cache, for example a CDN in front of your service, can store a response and give it to other visitors. The [response cache](#️-caching-responses-with-the-core-cache) of `PublisherServer` keeps the responses of each collection apart, so this section is only about shared caches. For a shared cache, the response of a collection that is not the default collection depends on how the request selects the collection:
+
+| Source | Does the URL name the collection? | `Cache-Control` |
+|--------|-----------------------------------|-----------------|
+| `host`, `path`, `query` | Yes | As for the default collection. A shared cache can store the response. |
+| `cookie`, `header` | No: the same URL can serve another collection | `private`. A shared cache does not store the response. |
+| `path` or `query` with `sticky: 'cookie'` | No: after the redirect, the cookie selects the collection | `private` |
+
+A response gets `private` also when your code gives `serveRequest()` a `collectionName` that the sources of the request do not select. For a `query` source, the shared cache must keep the query string in its cache key.
+
+**Previews with a cookie or a header:** the default collection and the preview have the same URLs. A shared cache can store a response of the default collection, and give it to a visitor who has the preview cookie. That visitor then sees the default collection in place of the preview. If a shared cache is in front of your service, select previews with a `host` or `path` source.
+
+**More than one site in one service:** you can serve one site from each collection. Select the collection with a `host` source, for example `{collection}.example.com`, so that a shared cache can store the responses of each site. Also set `noindex: false`, because otherwise each site that is not the default collection gets `X-Robots-Tag: noindex`. A collection that expires stops being served, so do not set an expiration time for these collections.
+
+**Without `collectionSelection`:** if your code chooses the collection, for example with `collectionSelector.fromCookie()` and `setActiveCollectionName()`, or with the `collectionName` option, `PublisherServer` does not add `Cache-Control: private` or `X-Robots-Tag: noindex`. Your code must add them when the URL does not name the collection. Otherwise a shared cache can store a preview and give it to other visitors.
+
+`serveRequest()` returns a normal `Response`. To use a different cache policy, change its headers in your code before you return it.
+
+#### A preview for each pull request
+
+A CI job can publish each pull request to its own collection, and remove it when the pull request closes. `--expires-in` stops serving a preview after that time, also if the second job does not run. But its index stays in storage until `clean --delete-expired-collections`, and its files stay until `clean`.
+
+This GitHub Actions workflow publishes the collection `pr-<number>`, and, when the pull request closes, deletes the collection and runs `clean`. It needs the `FASTLY_API_TOKEN` secret (and, for the purge, the `FASTLY_SERVICE_ID` secret).
+
+```yaml
+name: Preview
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+
+# clean must not run while a publish runs, so all jobs that change the same
+# storage use one concurrency group. Use the same group in every workflow that
+# publishes or cleans, for example the workflow that publishes `live`.
+concurrency:
+  group: static-publish-storage
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: compute-js
+    env:
+      FASTLY_API_TOKEN: ${{ secrets.FASTLY_API_TOKEN }}
+      FASTLY_SERVICE_ID: ${{ secrets.FASTLY_SERVICE_ID }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - run: npm ci
+      - run: npx @fastly/compute-js-static-publish publish-content --collection-name=pr-${{ github.event.number }} --expires-in=7d
+
+  remove:
+    if: github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: compute-js
+    env:
+      FASTLY_API_TOKEN: ${{ secrets.FASTLY_API_TOKEN }}
+      FASTLY_SERVICE_ID: ${{ secrets.FASTLY_SERVICE_ID }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - run: npm ci
+      - run: npx @fastly/compute-js-static-publish collections delete --collection-name=pr-${{ github.event.number }}
+      - run: npx @fastly/compute-js-static-publish clean --delete-expired-collections
+```
+
+For a pull request that never published, `collections delete` finds no collection and deletes nothing.
+
 ### 🔀 Selecting a Collection at Runtime
 
-The `collectionSelector` module provides helpers to extract a collection name from different parts of a request:
+For previews, use [collection selection](#-previews-collection-selection). To select a collection in your own code, the `collectionSelector` module provides helpers to extract a collection name from different parts of a request:
 
 ```js
 collectionSelector.fromHostDomain(request, /^preview-([^\.]*)\./);
@@ -683,6 +834,9 @@ This removes:
 - Unused content blobs (no longer referenced)
 - Orphaned server config files
 
+> [!WARNING]
+> Do not run `clean` while `publish-content` can run for the same storage. `publish-content` writes the index of a collection after it uploads the files, so `clean` can delete files that the new index then refers to. In CI, put the jobs that publish and the job that cleans in the same `concurrency` group (see [A preview for each pull request](#a-preview-for-each-pull-request)).
+
 ### 🔍 Dry Run Mode
 
 Preview what will be deleted without making changes:
@@ -742,6 +896,40 @@ async function handleRequest(request) {
 }
 ```
 
+### Options of `serveRequest()`
+
+`serveRequest(request, options)` takes these options. Without options, it works as above.
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `collectionName` | The collection to serve, for this call only. `null` selects the default collection. | The active collection (see [Switching the active collection](#switching-the-active-collection)) |
+| `pathname` | The path to look up, in place of the path of the request URL. It must be decoded, and it must start with `/`. | The decoded path of the request URL |
+| `fallback` | `false`: if no file matches, do not serve the SPA file or the 404 page. Return `null`. | `true` |
+| `healthCheck` | `false`: do not answer `/healthz`. | `true` |
+| `onMissing` | With [collection selection](#-previews-collection-selection): what to do for this call when the selected collection is not published or has expired. `'not-found'`: the `404` below. `'default'`: serve the default collection, as a normal response of the default collection (its headers, without `X-Robots-Tag: noindex`). Without collection selection, it does nothing. | `collectionSelection.onMissing` |
+
+`serveRequest()` returns `null` for a method other than `GET` and `HEAD`, and when there is no response (no file matches, and there is no fallback page or `fallback` is `false`). If the default collection has no settings in storage, the response is `500`. A collection other than the default collection that is not published, or that expired, gets a plain-text `404` that names it.
+
+`serveFallback(request, { collectionName, onMissing })` serves the SPA file (`200`) or the 404 page (`404`) of the collection, as `serveRequest()` does when no file matches. It returns `null` for a method other than `GET` and `HEAD`, for a client that does not accept HTML, or when the collection has no fallback page. Use it with `fallback: false`, to run your own logic between the files and the fallback page. The scaffolded app (`src/index.js`) uses this order:
+
+```js
+async function handleRequest(request) {
+  const response = await publisherServer.serveRequest(request, { fallback: false });
+  if (response) {
+    return response;
+  }
+
+  const url = new URL(request.url);
+  if (url.pathname === '/api/hello') {
+    return new Response(JSON.stringify({ greeting: "hi" }), {
+      headers: { 'content-type': 'application/json' }
+    });
+  }
+
+  return (await publisherServer.serveFallback(request)) ?? new Response("Not Found", { status: 404 });
+}
+```
+
 ### ⏱️ Measuring Performance with `Server-Timing`
 
 `PublisherServer` can report how long it spends reading from storage. To turn this on, give it the name of a request header:
@@ -797,6 +985,7 @@ publisherServer.setResponseCache({ maxAge: 3600, maxBodySize: 4 * 1024 * 1024 })
 
 - A response is cached by the publish ID, the collection, the path, and the client's `Accept-Encoding`. A cache hit does not read the settings, the index, or the file.
 - A path that does not match a file is cached, too, so a missing path does not read the index again.
+- With the options of `serveRequest()`, the path in the key is the `pathname` option, and the collection is the `collectionName` option. A response with `fallback: false` has its own key. `serveFallback()` caches one response for each collection, for all paths.
 - If several requests miss the same response at the same time, one request produces it, and the others wait for it.
 - Only `200` and `404` responses are cached. Conditional requests (`304`) and `HEAD` requests are answered from the cached response.
 - Each cached response has the surrogate key `<publishId>-<collectionName>`. After you publish, `publish-content` purges this key (see [`--fastly-service-id`](#publish-content)), so the next request gets the new content.
@@ -947,6 +1136,19 @@ npx @fastly/compute-js-static-publish@latest \
 - `--not-found-page`: 404 fallback file path, from the current directory (e.g., `./public/404.html`). The file must exist under `--root-dir`. If you do not set it, the scaffolder uses `404.html` in `--root-dir` if that file exists.
 - `--auto-index`: List of filenames to use as index files.
 - `--auto-ext`: Extensions to try when resolving URLs.
+
+**Collection selection** (written as `collectionSelection` in `static-publish.rc.js`; see [Previews: Collection Selection](#-previews-collection-selection)):
+- `--collection-selection`: A source. Can be repeated; the sources are tried in the order of the flags.
+   - `host:<pattern>`, for example `host:{collection}.preview.example.com`
+   - `host:<hostname>,value=<collection>`, for example `host:stag.example.com,value=staging`
+   - `path:<prefix>[,sticky]`, for example `path:/_preview/{collection},sticky`
+   - `path:<prefix>,value=<collection>[,sticky]`, for example `path:/_staging,value=staging`
+   - `query:<param>[,sticky]`, for example `query:collection,sticky`
+   - `cookie[:<cookieName>][,maxAge=<seconds>][,activatePath=<path>][,resetPath=<path>]`
+   - `header:<name>`, for example `header:x-publisher-collection`
+- `--collection-allow`: The collections that can be selected, for example `pr-*,staging`.
+- `--collection-on-missing`: `not-found` (default) or `default`.
+- `--collection-noindex`: `true` (default) or `false`.
 
 ### 🚀 Inside a Compute App Directory
 
@@ -1202,13 +1404,16 @@ if (redirectResponse) {
 
    | Endpoint                           | Purpose          | Query params                                                                                   | Result                                    |
    |------------------------------------|------------------|------------------------------------------------------------------------------------------------|-------------------------------------------|
-   | activatePath (default `/activate`) | Set the cookie   | `collection` (required) - name of the collection<br /> `redirectTo` (optional, `/` by default) | `302` redirect with a `Set-Cookie` header |
-   | resetPath (default `/reset`)       | Clear the cookie | `redirectTo` (optional, `/` by default)                                                        | `302` redirect that expires the cookie    |
+   | activatePath (default `/activate`) | Set the cookie   | `collection` (required) - name of the collection<br /> `redirectTo` (optional, `/` by default) | `308` redirect with a `Set-Cookie` header |
+   | resetPath (default `/reset`)       | Clear the cookie | `redirectTo` (optional, `/` by default)                                                        | `308` redirect that expires the cookie    |
    
    If a visitor accesses `/activate?collection=blue&redirectTo=/preview`, the helper will issue a redirect and drop `publisher-collection=blue` into their cookie jar.
       - If someone forgets `?collection=?`? Then `/activate` replies with HTTP `400`.
    
    When the visitor hits `/reset`, the cookie is deleted.
+
+   > [!NOTE]
+   > The collection that the cookie selects is not in the URL. Add `Cache-Control: private` to the responses of a preview, so that a shared cache does not store them. See [Shared caches](#shared-caches). With [`collectionSelection`](#-previews-collection-selection), `PublisherServer` does this for you.
 
 3. Safety flags are baked in
 

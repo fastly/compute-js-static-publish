@@ -12,6 +12,7 @@ import { decodeIndexMetadata, encodeIndexMetadata } from '../../../../models/ser
 import { calcExpirationTime } from '../../../../models/time/index.js';
 import { LoadConfigError, loadStaticPublisherRcFile } from '../../../util/config.js';
 import { parseCommandLine } from '../../../util/args.js';
+import { checkCollectionNameForWrite } from '../../../util/collection-name.js';
 import { loadStorageProviderFromStaticPublishRc } from '../../../storage/storage-provider.js';
 
 function help() {
@@ -184,6 +185,10 @@ export async function action(actionArgs: string[]) {
 
   const targetCollectionName = toCollectionNameValue;
   console.log(`✔️ Collection to promote to: ${targetCollectionName}`)
+  if (!await checkCollectionNameForWrite(storageProvider, publishId, targetCollectionName)) {
+    process.exitCode = 1;
+    return;
+  }
 
   if (expirationTime === undefined) {
     console.log(`✔️ Not updating expiration timestamp.`);

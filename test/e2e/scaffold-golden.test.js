@@ -83,6 +83,16 @@ const cases = {
     '--root-dir', './public', '--storage-mode', 's3', '--s3-region', 'us-east-1', '--s3-bucket', 'my-bucket',
     '--s3-endpoint', 'https://s3.example.com/',
   ],
+  'kv-collection-selection': [
+    '--root-dir', './public', '--kv-store-name', 'site-content',
+    '--collection-selection', 'host:{collection}.preview.example.com',
+    '--collection-selection', 'query:collection,sticky',
+    '--collection-selection', 'cookie,maxAge=604800',
+    '--collection-selection', 'header:x-publisher-collection',
+    '--collection-allow', 'pr-*,staging',
+    '--collection-on-missing', 'not-found',
+    '--collection-noindex', 'true',
+  ],
 };
 // s3-aws is only in the unit test of generateApp(): without --s3-endpoint,
 // scaffold gets the hostname of the bucket from AWS, which needs AWS
@@ -110,4 +120,14 @@ describe('scaffold writes the golden files', () => {
       }
     });
   }
+
+  test('a --collection-selection that is not valid stops before anything is written', () => {
+    const dir = makeTempDir('scaffold-golden-bad-selection');
+    dirs.push(dir);
+    writeFixture(dir);
+    const result = runCli([ '--root-dir', './public', '--kv-store-name', 'site-content', '--collection-selection', 'query:c,sticky' ], { cwd: dir, allowFailure: true });
+    assert.notEqual(result.status, 0);
+    assert.match(result.output, /needs a 'cookie' source/);
+    assert.equal(fs.existsSync(path.resolve(dir, 'compute-js')), false);
+  });
 });

@@ -18,12 +18,34 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 - `scaffold` writes `generatedFrom` into `static-publish.rc.js`: the template, the version of this package, and the date.
 - `scaffold --default-collection-name`: the collection to serve when no collection is selected. The default is `live`, as before.
 - `scaffold --template`: the template of the app's code. `plain`, the default, is the only template.
+- Previews with collection selection: `collectionSelection` in `static-publish.rc.js` chooses the collection of each request (see below). It is off by default. The CLI checks it when it loads `static-publish.rc.js`.
+   - `PublisherServer.fromStaticPublishRc()` reads it. `setCollectionSelection()` sets it, and `resolveCollection(request)` uses it.
+   - With it, a collection that `serveRequest()` or `serveFallback()` serves through the `collectionName` option, and that is not the default collection: if it is not published or has expired, `onMissing` gives the `404` response that names the collection (`'not-found'`, the default) or serves the default collection (`'default'`). Its responses get `X-Robots-Tag: noindex` (unless `noindex` is `false`), and `Cache-Control: private` unless a `host`, `path`, or `query` source of the request selects the collection (then the URL names the collection, and a shared cache can store the response).
+   - `PublisherServer.isCollectionAvailable(request, collectionName)`: `true` if the collection is published, has not expired, and can be served by this version.
+   - Scaffolding: the `src/index.js` of the `plain` app calls `resolveCollection()`, and passes the result to `serveRequest()`. Without `collectionSelection`, it serves the default collection, as before.
+   - Scaffolding: the flags `--collection-selection`, `--collection-allow`, `--collection-on-missing`, and `--collection-noindex` write `collectionSelection`.
+- Collection selection: `resolveCollection(request, collectionSelection)` chooses the collection for a request from a list of sources (`host`, `path`, `query`, `cookie`, `header`), tried in order. A `host` or `path` source with `value` selects one collection for one hostname or prefix (for example `stag.example.com` → `staging`). `allow` limits the collections that can be selected. A `path` or `query` source with `sticky: 'cookie'` sets the cookie of the `cookie` source and redirects (`308`) to the URL without the selector. The `cookie` source also serves its activate and reset paths; their redirects (also `308`) go only to a path on the same site. `previewUrl(collectionName, baseUrl, collectionSelection)` gives the URL that shows a collection. `validateCollectionSelection()` checks a config.
+- `PublisherServer.serveRequest(request, options)`: the options `collectionName` (the collection for this call only), `pathname` (the path to look up, in place of the URL path), `fallback` (`false`: do not serve the SPA file or the 404 page), `healthCheck` (`false`: do not answer `/healthz`), and `onMissing` (with collection selection: `'not-found'` or `'default'` for this call, in place of `collectionSelection.onMissing`). Without options, the behavior does not change.
+- `PublisherServer.serveFallback(request, { collectionName, onMissing })`: serves the SPA file or the 404 page, as `serveRequest()` does when no file matches. Use it after `serveRequest()` with `fallback: false`.
+- Export the types `ServeRequestOptions` and `ServeFallbackOptions`.
 
 ### Changed
 
+- Scaffolding: the `src/index.js` of the `plain` app calls `serveRequest()` with `fallback: false`, then has the place for your own code, and then calls `serveFallback()` for the SPA file or the 404 page. Thus your code runs for each request that no published file matches, also when the collection has a fallback page. Code that must run before the published files goes before `serveRequest()`.
 - Scaffolding: the app has `@fastly/compute-js-static-publish` in `dependencies`. It was in `devDependencies`. The code of the app imports it, and the `postinstall` script of the app runs it, so `npm ci --omit=dev` needs it.
 - `PublisherServer.setResponseCache()`: the default of `maxBodySize` is now 16 MiB. It was 8 MiB.
 - Scaffolder: in the generated `src/index.js`, the place for your own code is before `serveRequest()`. It was after `serveRequest()`, where it did not run for a path that has no file when a 404 page or an SPA file is set.
+- `collectionSelector.fromCookie()`: the activate and reset paths now redirect with `308`. Before, they used `302`.
+- Collection names have a rule: a DNS label (lowercase `a-z`, `0-9`, and `-`, from 1 to 63 characters, with no `-` at the start or the end). Thus a name is safe in storage keys, in the surrogate key of the purge, in a cookie, and in a hostname.
+   - `publish-content` to a new collection, `collections promote --to` a new collection, and `scaffold --default-collection-name` stop with an error for a name that breaks the rule.
+   - A collection that exists continues to work with a name that breaks the rule. `publish-content` and `collections promote --to` show a warning for it.
+   - `collectionSelector.fromCookie()`: the activate path returns `400` for a name that breaks the rule, and sets no cookie. Before, it returned `400` only for a name with characters that a cookie value cannot have.
+- `PublisherServer` keeps the state of each request (the settings, the index, and the `Server-Timing` measurements) in a scope for that request and collection. A reused sandbox does not keep this state from one request to the next. A second call for the same request (for example `beginRequest()` and then `serveRequest()`) does not read the index again.
+- README: a GitHub Actions example that publishes a preview for each pull request, and deletes it when the pull request closes. The README and `clean --help` say not to run `clean` while `publish-content` can run for the same storage.
+
+### Deprecated
+
+- `PublisherServer`: the fields `serverTiming`, `settingsCached`, and `assetEntryMapCache`. They are now read-only, and they return the state of the current request. Code that assigns to them gets a TypeScript error. Use `getServerConfig()` and `getAssetEntryMap()`. These fields will be removed in v9.
 
 ### Fixed
 

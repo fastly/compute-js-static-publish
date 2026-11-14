@@ -24,7 +24,9 @@ import {
   isAppTemplateName,
   loadAppTemplate,
 } from './app-template.js';
+import { COLLECTION_SELECTION_FLAGS_HELP, collectionSelectionFromFlags } from '../../util/collection-selection-flags.js';
 import { generateApp } from './generate-app.js';
+import { COLLECTION_NAME_RULE, isValidCollectionName } from '../../../models/collections/index.js';
 
 function help() {
   console.log(`\
@@ -73,6 +75,9 @@ Server Config:
                                         (default: 404.html in --root-dir, if the file exists)
   --auto-index <name>,<name...>         Index filename (e.g., index.html,index.htm)
   --auto-ext <ext>,<ext...>             Automatic extensions (e.g., .html,.htm)
+
+Collection Selection (previews):
+${COLLECTION_SELECTION_FLAGS_HELP}
 
 Other:
   --version                             Print the version of this package and exit
@@ -529,6 +534,12 @@ export async function action(actionArgs: string[]) {
     // List of extensions to apply to a path name, for example, if
     // http://example.com/about is requested, we can respond with http://example.com/about.html
     { name: 'auto-ext', type: String, multiple: true, },
+
+    // Collection selection. See util/collection-selection-flags.ts.
+    { name: 'collection-selection', type: String, multiple: true, },
+    { name: 'collection-allow', type: String, multiple: true, },
+    { name: 'collection-on-missing', type: String, },
+    { name: 'collection-noindex', type: String, },
   ];
 
   const parsed = parseCommandLine(actionArgs, optionDefinitions);
@@ -560,6 +571,20 @@ export async function action(actionArgs: string[]) {
   if (!isAppTemplateName(options.template)) {
     console.error(`❌ Unknown template '${options.template}'.`);
     console.error(`  * Valid templates: ${APP_TEMPLATE_NAMES.join(', ')}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  const { collectionSelection, errors: collectionSelectionErrors } = collectionSelectionFromFlags({
+    sources: parsed.commandLineOptions['collection-selection'],
+    allow: parsed.commandLineOptions['collection-allow'],
+    onMissing: parsed.commandLineOptions['collection-on-missing'],
+    noindex: parsed.commandLineOptions['collection-noindex'],
+  });
+  if (collectionSelectionErrors.length > 0) {
+    for (const error of collectionSelectionErrors) {
+      console.error(`❌ ${error}`);
+    }
     process.exitCode = 1;
     return;
   }
@@ -782,8 +807,9 @@ export async function action(actionArgs: string[]) {
   }
 
   const defaultCollectionName = options.defaultCollectionName ?? 'live';
-  if (defaultCollectionName === '') {
-    console.error("❌ parameter --default-collection-name must not be empty.");
+  if (!isValidCollectionName(defaultCollectionName)) {
+    console.error(`❌ parameter --default-collection-name is not a valid collection name: '${defaultCollectionName}'.`);
+    console.error(`  * ${COLLECTION_NAME_RULE}`);
     process.exitCode = 1;
     return;
   }
@@ -829,6 +855,7 @@ export async function action(actionArgs: string[]) {
   console.log('Auto-Index                     :', autoIndex.length > 0 ? autoIndex : '(None)')
   console.log('Auto-Ext                       :', autoExt.length > 0 ? autoExt : '(None)')
   console.log('Static Files Dir               :', staticDirs.length > 0 ? staticDirs.map(rootRelative) : '(None)');
+  console.log('Collection Selection           :', collectionSelection != null ? collectionSelection.sources.map(x => x.type).join(', ') : '(None)');
 
   console.log('');
 
@@ -861,6 +888,7 @@ export async function action(actionArgs: string[]) {
       staticPublishVersion: getOwnVersion(),
       generatedAt: new Date().toISOString().slice(0, 10),
     },
+    collectionSelection,
   });
 
   // Write out the files
