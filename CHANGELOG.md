@@ -11,6 +11,7 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 
 ### Changed
 
+- The npm package includes `CHANGELOG.md` and `MIGRATING.md`.
 - `PublisherServer.setResponseCache()`: the default of `maxBodySize` is now 16 MiB. It was 8 MiB.
 - Scaffolder: in the generated `src/index.js`, the place for your own code is before `serveRequest()`. It was after `serveRequest()`, where it did not run for a path that has no file when a 404 page or an SPA file is set.
 
