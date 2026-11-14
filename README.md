@@ -1210,7 +1210,7 @@ hono-extensions/
   - `beforeFiles`: before the published files.
   - `afterFiles`: after the published files. These handlers get only the requests that no published file matches, for example to make a page for a path that has no file, before the 404 page. The published files are served only for `GET` and `HEAD`, so these handlers also get all other methods.
 
-A module default-exports `defineExtension()`. Give it a function for each phase that the module uses. Each function gets the Hono app and the options of the module, and adds handlers with `app.use()`, `app.get()`, `app.post()`, and the other methods of Hono. With only a function in place of the object, the function is the `middleware` phase:
+A module default-exports `defineExtension()`. Give it a function for each phase that the module uses. Each function gets the Hono app, the options of the module, and the helpers of the app (see below), and adds handlers with `app.use()`, `app.get()`, `app.post()`, and the other methods of Hono. With only a function in place of the object, the function is the `middleware` phase:
 
 ```ts
 // hono-extensions/10-header.ts
@@ -1254,6 +1254,24 @@ templateOptions: {
   },
 },
 ```
+
+**Helpers:** the third argument of each phase function has the `serveStatic()`, `staticResponse()`, `serveFallback()`, and `publisherServer` that the app uses (see [Using Hono](#-using-hono)). They are made once when the app starts, with the same `collectionSelection`, so a module can serve published files in its own order, with its own rules. For example, to serve `/theme/*` before a login check, on a preview, from the selected collection or from the default collection if the preview is missing, and with a plain `404` (never the 404 page of the collection):
+
+```ts
+// hono-extensions/10-theme.ts
+import { defineExtension } from '@fastly/compute-js-static-publish/hono';
+
+export default defineExtension((app, options, { staticResponse }) => {
+  app.use('/theme/*', async (c, next) => {
+    if (c.var.staticPublisher.collectionName == null) {
+      return next(); // not a preview: the published files of the app serve it
+    }
+    return await staticResponse(c, { onMissing: 'default' }) ?? c.text('Not found', 404);
+  });
+});
+```
+
+With `onMissing: 'default'`, a missing preview gets a normal response of the default collection, with its headers. When the preview is published, the next request gets the file of the preview: `PublisherServer` checks the selected collection before it reads the response cache. This example is for a `host`, `query`, `cookie`, or `header` source. With a `path` source, the request path has the prefix (for example `/_preview/pr-1/theme/site.css`), so the route `/theme/*` does not match it: add the handler on `*`, and check `c.var.staticPublisher.pathname`, the path without the prefix. `staticResponse()` looks up that path.
 
 **Bindings** put Fastly resources on `c.env`, as `buildFire()` of `@fastly/hono-fastly-compute` does. A module declares the bindings that it uses in the first argument of `defineExtension()`, and `c.env` in its handlers has their types, for example `ConfigStore | undefined` for `'ConfigStore:site_config'` (`undefined` if the resource does not exist or is not linked to the service). `templateOptions.hono.bindings` adds bindings for the app. The same name with the same resource in two places is allowed. The same name with two different resources stops the build, and the message names both places. `c.var` is not typed in a module, so that a module can set its own variables.
 

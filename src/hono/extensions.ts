@@ -6,9 +6,9 @@
 /// <reference types="@fastly/js-compute" />
 
 // Hono extensions: modules in the hono-extensions/ folder. Each module
-// default-exports defineExtension(…). This module imports only types, from hono
-// and from fastly:*, and nothing that needs Compute, so that the unit tests can
-// import it.
+// default-exports defineExtension(…). This module imports only types (from hono,
+// from fastly:*, and from ./index.js), and nothing that needs Compute, so that
+// the unit tests can import it.
 
 import type { Acl } from 'fastly:acl';
 import type { Backend } from 'fastly:backend';
@@ -17,6 +17,7 @@ import type { KVStore } from 'fastly:kv-store';
 import type { Logger } from 'fastly:logger';
 import type { SecretStore } from 'fastly:secret-store';
 import type { Hono } from 'hono';
+import type { PublisherServerMiddleware } from './index.js';
 
 // Bindings for buildFire() of @fastly/hono-fastly-compute: the name on c.env,
 // and the resource, for example { config: 'ConfigStore:site_config' }.
@@ -55,10 +56,17 @@ export type ExtensionEnv<B extends ExtensionBindings> = {
 export const EXTENSION_PHASES = [ 'middleware', 'beforeFiles', 'afterFiles' ] as const;
 export type ExtensionPhase = typeof EXTENSION_PHASES[number];
 
+// The helpers of the app that each phase function gets: the same
+// serveStatic(), staticResponse(), serveFallback(), and PublisherServer that the
+// app uses, made once when the app starts, with the same defaults and the same
+// collectionSelection. staticResponse() is for a handler that decides itself
+// whether to serve a published file.
+export type ExtensionHelpers = Pick<PublisherServerMiddleware, 'publisherServer' | 'serveStatic' | 'staticResponse' | 'serveFallback'>;
+
 // A function that adds the handlers of a module to the app, in one phase.
 // options is templateOptions.hono.extensions[<name>].
 export type ExtensionPhaseFunction<B extends ExtensionBindings = ExtensionBindings, O = any> =
-  (app: Hono<ExtensionEnv<B>, any, any>, options: O | undefined) => void;
+  (app: Hono<ExtensionEnv<B>, any, any>, options: O | undefined, helpers: ExtensionHelpers) => void;
 
 export type ExtensionPhases<B extends ExtensionBindings = ExtensionBindings, O = any> = {
   [P in ExtensionPhase]?: ExtensionPhaseFunction<B, O>
