@@ -338,6 +338,20 @@ export default defineExtension((app, options, { serveStatic }) => {
   ));
 });
 `;
+  // A page for a missing preview, with a 404, and the 404 page with a 410.
+  const NOTICE_MODULE = `\
+import { defineExtension } from '@fastly/compute-js-static-publish/hono';
+
+export default defineExtension((app, options, { isCollectionAvailable, staticResponse, fallbackResponse }) => {
+  app.use('/notice/*', async (c, next) => {
+    if (await isCollectionAvailable(c)) {
+      return next();
+    }
+    return await staticResponse(c, { path: '/about.html', collectionName: null, status: 404 }) ?? c.text('No page', 500);
+  });
+  app.get('/gone', async (c) => await fallbackResponse(c, { status: 410 }) ?? c.text('No fallback', 500));
+});
+`;
   const PREVIEW = 'x-preview';
   let dir;
   let projectDir;
@@ -351,7 +365,7 @@ export default defineExtension((app, options, { serveStatic }) => {
     fs.mkdirSync(path.resolve(publicDir, 'theme'), { recursive: true });
     fs.mkdirSync(path.resolve(publicDir, 'brand'), { recursive: true });
     runCli([ '--managed', '--template', 'hono', '--root-dir', './public', '--kv-store-name', 'e2e-content', '--collection-selection', `header:${PREVIEW}` ], { cwd: projectDir });
-    writeFiles(path.resolve(projectDir, 'hono-extensions'), { '10-theme.ts': THEME_MODULE, '20-brand.ts': BRAND_MODULE });
+    writeFiles(path.resolve(projectDir, 'hono-extensions'), { '10-theme.ts': THEME_MODULE, '20-brand.ts': BRAND_MODULE, '30-notice.ts': NOTICE_MODULE });
     fs.writeFileSync(path.resolve(publicDir, 'theme/site.css'), '/* live */');
     fs.writeFileSync(path.resolve(publicDir, 'brand/logo.css'), '/* live */');
     runCli([ 'publish-content', '--local' ], { cwd: projectDir });
@@ -411,6 +425,21 @@ export default defineExtension((app, options, { serveStatic }) => {
     const res = await get('/brand/missing.css');
     assert.equal(res.status, 404);
     assert.notEqual(res.body.toString(), 'No brand file');
+  });
+
+  test('isCollectionAvailable() and staticResponse() with a status: a page for a missing preview', async () => {
+    const missing = await get('/notice/x', 'pr-9');
+    assert.equal(missing.status, 404);
+    assert.match(missing.body.toString(), /<h1>About<\/h1>/);
+    const available = await get('/notice/x', 'pr-1');
+    assert.equal(available.status, 404);
+    assert.doesNotMatch(available.body.toString(), /<h1>About<\/h1>/);
+  });
+
+  test('fallbackResponse() with a status: the 404 page with a 410', async () => {
+    const res = await get('/gone');
+    assert.equal(res.status, 410);
+    assert.match(res.body.toString(), /<h1>Not found<\/h1>/);
   });
 
   test('outside the module, a missing preview still gets the 404 of collectionSelection', async () => {
