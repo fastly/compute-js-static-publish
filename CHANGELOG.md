@@ -11,7 +11,7 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 
 ### Added
 
-- Hono support: `@fastly/compute-js-static-publish/hono`. `fromStaticPublishRc(rc)` (or `fromPublisherServer(server)`) returns `serveStatic()` (middleware that serves the published files with `serveRequest()`, and calls the next handler if no file matches; the option `onMissing` replaces `collectionSelection.onMissing` for one route), `staticResponse(c)` (the same response for use in a handler, or `null`; never the SPA file or the 404 page), `serveFallback()` (for `app.notFound()`: the SPA file or the 404 page), `selectCollection()` (collection selection for a Hono app; it sets `c.var.staticPublisher`, and `serveStatic()` and `serveFallback()` use the selected collection), and `publisherServer`. The type `StaticPublisherVariables` is for the variables of the app. `hono` v4 is an optional peer dependency. This replaces `@fastly/hono-compute-js-static-publish`, which supports only v6 and v7; `MIGRATING.md` has the steps.
+- Hono support: `@fastly/compute-js-static-publish/hono`. `fromStaticPublishRc(rc)` (or `fromPublisherServer(server)`) returns `serveStatic()` (middleware that serves the published files with `serveRequest()`, and calls the next handler if no file matches; the option `onMissing` replaces `collectionSelection.onMissing` for one route), `staticResponse(c)` (the same response for use in a handler, or `null`; never the SPA file or the 404 page), `serveFallback()` (for `app.notFound()`: the SPA file or the 404 page), `fallbackResponse(c)` (the same response for use in a handler, or `null`), `isCollectionAvailable(c)` (whether the selected collection, or another one, is published and not expired), `selectCollection()` (collection selection for a Hono app; it sets `c.var.staticPublisher`, and `serveStatic()` and `serveFallback()` use the selected collection), and `publisherServer`. The type `StaticPublisherVariables` is for the variables of the app. The options `status` and `headers` change the response of a file. `hono` v4 is an optional peer dependency. This replaces `@fastly/hono-compute-js-static-publish`, which supports only v6 and v7; `MIGRATING.md` has the steps.
 - `--project-dir`: run a command for the app in another directory, for example from the root of the repo in CI. All relative paths are then relative to that directory.
 - `--version`: print the version of this package. It works in any directory.
 - `--non-interactive`: the CLI never asks a question, and missing input is an error. It is also on when the `CI` environment variable is set (to a value that is not empty, `false`, or `0`).
@@ -46,6 +46,7 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 - `--json`: `publish-content`, `collections list`, `collections delete`, `collections promote`, `status`, `deploy` (in a managed project), and `--version` write their result as one JSON object to stdout, with `schemaVersion: 1`. The log lines then go to stderr. With another command, `--json` is an error. The `publish-content` result shows the purge result for each environment (`purge.ok` is `false` if a purge failed).
 - Error codes: with `--json`, an error gives `{ "schemaVersion": 1, "error": { "code", "message" } }`. The README lists the codes, for example `collection-name-invalid` and `credentials-missing`.
 - README: "Using the CLI in CI", with the exit codes, the JSON output, and the error codes.
+- `PublisherServer`: the options `status` and `headers` of `serveRequest()` and `serveFallback()` change the status and the headers of the response of a file, for one call. For a status other than `2xx`, the server does not evaluate the preconditions of the request.
 
 ### Changed
 
@@ -70,6 +71,7 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 
 ### Fixed
 
+- `PublisherServer`: a request for the 404 page with an `If-None-Match` that matched its `ETag` (or an `If-Modified-Since` after its time) got a `304` with no body. Now the server evaluates the preconditions only for a `2xx` response, as RFC 9110 says, so the response is always the `404` with the page.
 - `scaffold` now escapes the values that it writes into `fastly.toml`. Before, a `"` or a `\` in `--name`, `--description`, or `--author`, or a KV Store name with a character such as `.`, gave a `fastly.toml` that was not valid.
 
 ## [8.0.2] - 2026-11-16

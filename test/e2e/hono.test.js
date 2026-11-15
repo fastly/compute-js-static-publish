@@ -45,10 +45,12 @@ import { fromStaticPublishRc } from '@fastly/compute-js-static-publish/hono';
 import rc from '../static-publish.rc.js';
 
 function createMiddleware(responseCache) {
-  const { publisherServer, serveStatic, serveFallback } = fromStaticPublishRc(rc);
+  const { publisherServer, serveStatic, serveFallback, staticResponse, fallbackResponse } = fromStaticPublishRc(rc);
   publisherServer.setServerTimingRequestHeader('x-server-timing');
   publisherServer.setResponseCache(responseCache);
   return {
+    staticResponse,
+    fallbackResponse,
     serveStatic: serveStatic(),
     serveRooted: serveStatic({ root: './docs', rewriteRequestPath: (p) => p.replace(/^\\/rooted/, '') }),
     serveFallback: serveFallback(),
@@ -60,6 +62,11 @@ const pick = (c) => c.req.header('x-use-cache') === '1' ? cached : plain;
 
 const app = new Hono();
 app.get('/api/hello', (c) => c.json({ hello: 'world' }));
+// A file and the fallback page with another status, and a header.
+app.get('/about-as-404', async (c) =>
+  await pick(c).staticResponse(c, { path: '/about', status: 404, headers: { 'x-extension': 'yes' } }) ?? c.text('no file', 500));
+app.get('/gone', async (c) =>
+  await pick(c).fallbackResponse(c, { status: 410 }) ?? c.text('no fallback', 500));
 app.use('/rooted/*', (c, next) => pick(c).serveRooted(c, next));
 app.use('*', (c, next) => pick(c).serveStatic(c, next));
 // A route after serveStatic: a path that does not match a file comes here.
@@ -79,11 +86,16 @@ import { buildFire } from '@fastly/hono-fastly-compute';
 import { fromStaticPublishRc } from '@fastly/compute-js-static-publish/hono';
 import rc from '../static-publish.rc.js';
 
-const { serveStatic, serveFallback, selectCollection } = fromStaticPublishRc(rc);
+const { serveStatic, serveFallback, selectCollection, isCollectionAvailable } = fromStaticPublishRc(rc);
 
 const app = new Hono();
 app.use('*', selectCollection());
 app.get('/api/collection', (c) => c.json({ collectionName: c.var.staticPublisher.collectionName }));
+app.get('/api/available', async (c) => c.json({
+  selected: await isCollectionAvailable(c),
+  staging: await isCollectionAvailable(c, 'staging'),
+  default: await isCollectionAvailable(c, null),
+}));
 app.use('*', serveStatic());
 app.notFound(serveFallback());
 
@@ -157,6 +169,49 @@ describe('the /hono export (fastly compute serve)', { skip: skipUnlessFastlyCli(
     const timing = res.headers['server-timing'] ?? '';
     assert.equal(timing.match(/\bindex;dur=/g)?.length, 1, timing);
   });
+
+  for (const [ name, cacheHeaders ] of [ [ 'without', {} ], [ 'with', { 'x-use-cache': '1' } ] ]) {
+    test(`staticResponse() with status and headers, ${name} the response cache`, async () => {
+      const get = (headers = {}) => rawRequest(server.baseUrl + '/about-as-404', { headers: { ...HTML, ...cacheHeaders, ...headers } });
+      const res = await get();
+      assert.equal(res.status, 404);
+      assert.match(res.body.toString(), /<h1>About<\/h1>/);
+      assert.equal(res.headers['x-extension'], 'yes');
+      const etag = res.headers['etag'];
+      assert.ok(etag);
+      // A status other than 2xx: the preconditions are not evaluated.
+      const conditional = await get({ 'if-none-match': etag });
+      assert.equal(conditional.status, 404);
+      assert.match(conditional.body.toString(), /<h1>About<\/h1>/);
+    });
+
+    test(`fallbackResponse() with status, ${name} the response cache`, async () => {
+      const get = (headers = {}) => rawRequest(server.baseUrl + '/gone', { headers: { ...HTML, ...cacheHeaders, ...headers } });
+      const res = await get();
+      assert.equal(res.status, 410);
+      assert.match(res.body.toString(), /<h1>Not found<\/h1>/);
+      const conditional = await get({ 'if-none-match': res.headers['etag'] });
+      assert.equal(conditional.status, 410);
+      assert.match(conditional.body.toString(), /<h1>Not found<\/h1>/);
+    });
+
+    test(`the 404 page with a matching If-None-Match is a 404, ${name} the response cache`, async () => {
+      const get = (headers = {}) => rawRequest(server.baseUrl + '/missing-etag', { headers: { ...HTML, ...cacheHeaders, ...headers } });
+      const res = await get();
+      assert.equal(res.status, 404);
+      const conditional = await get({ 'if-none-match': res.headers['etag'] });
+      assert.equal(conditional.status, 404);
+      assert.match(conditional.body.toString(), /<h1>Not found<\/h1>/);
+    });
+
+    test(`a file with a matching If-None-Match is still a 304, ${name} the response cache`, async () => {
+      const get = (headers = {}) => rawRequest(server.baseUrl + '/about', { headers: { ...HTML, ...cacheHeaders, ...headers } });
+      const res = await get();
+      assert.equal(res.status, 200);
+      const conditional = await get({ 'if-none-match': res.headers['etag'] });
+      assert.equal(conditional.status, 304);
+    });
+  }
 
   test('caches the fallback page with one key for all paths', async () => {
     const headers = { ...HTML, 'x-use-cache': '1', 'x-server-timing': '1' };
@@ -241,6 +296,15 @@ describe('selectCollection() of the /hono export (fastly compute serve)', { skip
     assert.equal(res.status, 308);
     assert.equal(res.headers['location'], '/about');
     assert.match([ res.headers['set-cookie'] ].flat()[0], /^publisher-collection=pr-1;/);
+  });
+
+  test('isCollectionAvailable() checks the selected collection by default', async () => {
+    const without = await get('/api/available');
+    assert.deepEqual(JSON.parse(without.body.toString()), { selected: true, staging: false, default: true });
+    const preview = await get('/api/available', { 'x-publisher-collection': 'pr-1' });
+    assert.deepEqual(JSON.parse(preview.body.toString()), { selected: true, staging: false, default: true });
+    const missing = await get('/api/available', { 'x-publisher-collection': 'staging' });
+    assert.deepEqual(JSON.parse(missing.body.toString()), { selected: false, staging: false, default: true });
   });
 
   test('a collection that is not published: the 404 of the server', async () => {
