@@ -11,7 +11,7 @@
 import type { Context, MiddlewareHandler, NotFoundHandler } from 'hono';
 
 // Import from the package entry point, which registers the storage providers.
-import { PublisherServer, type StaticPublishRc } from '../server/index.js';
+import { PublisherServer, type ResponseOverrides, type StaticPublishRc } from '../server/index.js';
 import { type ServeStaticPathOptions, resolveServeStaticPathname } from './path.js';
 
 // The values that selectCollection() sets on c.var. Use this type in the
@@ -39,12 +39,15 @@ export type CollectionNameOption = string | null | ((c: Context) => string | nul
 // is collectionSelection.onMissing. It does nothing without collectionSelection.
 export type OnMissingOption = 'not-found' | 'default';
 
-export type ServeStaticOptions = ServeStaticPathOptions<Context> & {
+// status and headers change the response of a file (see ResponseOverrides of
+// the server). For a status other than 2xx, the preconditions of the request
+// are not evaluated.
+export type ServeStaticOptions = ServeStaticPathOptions<Context> & ResponseOverrides & {
   collectionName?: CollectionNameOption,
   onMissing?: OnMissingOption,
 };
 
-export type ServeFallbackOptions = {
+export type ServeFallbackOptions = ResponseOverrides & {
   collectionName?: CollectionNameOption,
   onMissing?: OnMissingOption,
 };
@@ -71,6 +74,16 @@ export type PublisherServerMiddleware = {
   // If the collection has neither, or the client does not accept HTML, the
   // response is Hono's default 404 response.
   serveFallback: (options?: ServeFallbackOptions) => NotFoundHandler,
+  // The response of the SPA file or the 404 page, or null, for use in a
+  // handler. It takes the options of serveFallback(). It returns null if the
+  // collection has neither file, if the client does not accept HTML, or if the
+  // method is not GET or HEAD.
+  fallbackResponse: (c: Context, options?: ServeFallbackOptions) => Promise<Response | null>,
+  // Returns true if the collection is published, has not expired, and can be
+  // served by this version. The collection is as in the collectionName option:
+  // by default, the collection that selectCollection() chose, or else the
+  // active collection of the PublisherServer.
+  isCollectionAvailable: (c: Context, collectionName?: CollectionNameOption) => Promise<boolean>,
   // Selects the collection of each request with the collectionSelection of the
   // PublisherServer, and sets c.var.staticPublisher. A redirect of a sticky
   // source, or of the activate or reset path of the cookie source, is returned
@@ -116,6 +129,8 @@ export function fromPublisherServer(server: PublisherServer, defaults: Publisher
       fallback: false,
       healthCheck: false,
       onMissing: options.onMissing,
+      status: options.status,
+      headers: options.headers,
     });
   };
 
@@ -130,15 +145,26 @@ export function fromPublisherServer(server: PublisherServer, defaults: Publisher
     };
   };
 
-  const serveFallback = (callOptions: ServeFallbackOptions = {}): NotFoundHandler => {
+  const fallbackResponse = async (c: Context, callOptions: ServeFallbackOptions = {}): Promise<Response | null> => {
     const options = { ...defaults, ...callOptions };
+    return server.serveFallback(c.req.raw, {
+      collectionName: resolveCollectionName(c, options.collectionName, getSelection(c, server)),
+      onMissing: options.onMissing,
+      status: options.status,
+      headers: options.headers,
+    });
+  };
+
+  const serveFallback = (callOptions: ServeFallbackOptions = {}): NotFoundHandler => {
     return async (c) => {
-      const response = await server.serveFallback(c.req.raw, {
-        collectionName: resolveCollectionName(c, options.collectionName, getSelection(c, server)),
-        onMissing: options.onMissing,
-      });
-      return response ?? c.text('404 Not Found', 404);
+      return await fallbackResponse(c, callOptions) ?? c.text('404 Not Found', 404);
     };
+  };
+
+  const isCollectionAvailable = async (c: Context, collectionName?: CollectionNameOption): Promise<boolean> => {
+    const option = collectionName !== undefined ? collectionName : defaults.collectionName;
+    const name = resolveCollectionName(c, option, getSelection(c, server));
+    return server.isCollectionAvailable(c.req.raw, name === undefined ? server.activeCollectionName : name);
   };
 
   const selectCollection = (): MiddlewareHandler => {
@@ -156,7 +182,15 @@ export function fromPublisherServer(server: PublisherServer, defaults: Publisher
     };
   };
 
-  return { publisherServer: server, serveStatic, staticResponse, serveFallback, selectCollection };
+  return {
+    publisherServer: server,
+    serveStatic,
+    staticResponse,
+    serveFallback,
+    fallbackResponse,
+    isCollectionAvailable,
+    selectCollection,
+  };
 }
 
 export function fromStaticPublishRc(rc: StaticPublishRc, defaults: PublisherServerMiddlewareDefaults = {}): PublisherServerMiddleware {

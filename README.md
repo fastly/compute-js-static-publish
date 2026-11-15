@@ -1059,10 +1059,12 @@ async function handleRequest(request) {
 | `fallback` | `false`: if no file matches, do not serve the SPA file or the 404 page. Return `null`. | `true` |
 | `healthCheck` | `false`: do not answer `/healthz`. | `true` |
 | `onMissing` | With [collection selection](#-previews-collection-selection): what to do for this call when the selected collection is not published or has expired. `'not-found'`: the `404` below. `'default'`: serve the default collection, as a normal response of the default collection (its headers, without `X-Robots-Tag: noindex`). Without collection selection, it does nothing. | `collectionSelection.onMissing` |
+| `status` | The status of the response of a file (also of the SPA file and the 404 page). For a status other than `2xx`, the server does not evaluate the preconditions of the request (`If-None-Match` and the others), so the response always has the body. It does not change other responses, such as the `404` of a collection that is not available. | The status of the file: `200`, or `404` for the 404 page |
+| `headers` | Headers to set on the response of a file. Each one replaces the header of the same name. | |
 
 `serveRequest()` returns `null` for a method other than `GET` and `HEAD`, and when there is no response (no file matches, and there is no fallback page or `fallback` is `false`). If the default collection has no settings in storage, the response is `500`. A collection other than the default collection that is not published, or that expired, gets a plain-text `404` that names it.
 
-`serveFallback(request, { collectionName, onMissing })` serves the SPA file (`200`) or the 404 page (`404`) of the collection, as `serveRequest()` does when no file matches. It returns `null` for a method other than `GET` and `HEAD`, for a client that does not accept HTML, or when the collection has no fallback page. Use it with `fallback: false`, to run your own logic between the files and the fallback page. The scaffolded app (`src/index.js`) uses this order:
+`serveFallback(request, { collectionName, onMissing, status, headers })` serves the SPA file (`200`) or the 404 page (`404`) of the collection, as `serveRequest()` does when no file matches. It returns `null` for a method other than `GET` and `HEAD`, for a client that does not accept HTML, or when the collection has no fallback page. Use it with `fallback: false`, to run your own logic between the files and the fallback page. The scaffolded app (`src/index.js`) uses this order:
 
 ```js
 async function handleRequest(request) {
@@ -1208,6 +1210,8 @@ fire(app);
 - `serveStatic(options?)`: middleware that serves the file that matches the request. If no file matches, or the method is not `GET` or `HEAD`, it calls the next handler, so a route after it gets the request. It does not serve the SPA file or the 404 page, and it does not answer `/healthz`.
 - `staticResponse(c, options?)`: the same response as `serveStatic()`, for use inside a handler: the response of the file that matches the request, or `null` if no file matches or the method is not `GET` or `HEAD`. It takes the options of `serveStatic()`. Like `serveStatic()`, it never returns the SPA file or the 404 page.
 - `serveFallback(options?)`: for `app.notFound()`. It serves the SPA file or the 404 page. If there is neither, or the client does not accept HTML, it gives Hono's default 404 response.
+- `fallbackResponse(c, options?)`: the response of the SPA file or the 404 page, for use inside a handler, or `null` if there is neither, the client does not accept HTML, or the method is not `GET` or `HEAD`. It takes the options of `serveFallback()`.
+- `isCollectionAvailable(c, collectionName?)`: `true` if the collection is published, has not expired, and this version of the app can serve it. Without `collectionName`, it checks the collection that `selectCollection()` selected, or else the active collection. `collectionName` is as in the option of `serveStatic()`.
 - `selectCollection()`: middleware that selects the collection of each request with the [`collectionSelection`](#-previews-collection-selection) of `static-publish.rc.js`. It returns the redirects of the selection (a `sticky` source, and the activate and reset paths of the `cookie` source), and sets `c.var.staticPublisher`. Then `serveStatic()` and `serveFallback()` use the selected collection. For a `path` source, `serveStatic()` looks up the path without the prefix.
 - `publisherServer`: the `PublisherServer`, to configure it. For example, `publisherServer.setResponseCache({ maxAge: 3600 })`.
 
@@ -1222,6 +1226,8 @@ If you make the `PublisherServer` yourself, use `fromPublisherServer(publisherSe
 | `rewriteRequestPath` | `(path, c) => string`. Changes the request path before it is resolved against `root`. |
 | `collectionName` | The collection: a string, `null` for the default collection, or `(c) => string \| null \| undefined`. Without it, or if the function returns `undefined`, the collection is the one that `selectCollection()` selected, or else the active collection. |
 | `onMissing` | With collection selection: `'not-found'` or `'default'` when the selected collection is not published or has expired, for this route only. The default is `collectionSelection.onMissing`. With `'default'`, the response is a normal response of the default collection, with its headers (no `X-Robots-Tag: noindex`). |
+| `status` | The status of the response of a file. For a status other than `2xx`, the preconditions of the request are not evaluated, so the response always has the body. See the [options of `serveRequest()`](#options-of-serverequest). |
+| `headers` | Headers to set on the response of a file. Each one replaces the header of the same name. |
 
 For example, to serve `/assets/*` from the `static` directory:
 
@@ -1240,7 +1246,25 @@ app.use('/theme/*', async (c, next) => {
 });
 ```
 
-`serveFallback()` takes the `collectionName` and `onMissing` options, too. To give a default to all the middleware, pass it to `fromStaticPublishRc(rc, { collectionName, onMissing })`. An option in a call replaces the default.
+To serve a page with another status, use `status`. For example, a `404` with the page `/preview-not-found/` of the default collection, when the selected preview is not available:
+
+```ts
+app.use('*', async (c, next) => {
+  if (await isCollectionAvailable(c)) {
+    return next();
+  }
+  return await staticResponse(c, { path: '/preview-not-found/', collectionName: null, status: 404 })
+    ?? c.text('Preview not found', 404);
+});
+```
+
+`fallbackResponse()` is the same for the SPA file or the 404 page. For example, a `410` with the 404 page of the site, for a removed page:
+
+```ts
+app.get('/blog/removed-post', async (c) => await fallbackResponse(c, { status: 410 }) ?? c.text('Gone', 410));
+```
+
+`serveFallback()` and `fallbackResponse()` take the `collectionName`, `onMissing`, `status`, and `headers` options, too. To give a default to all the middleware, pass it to `fromStaticPublishRc(rc, { collectionName, onMissing })`. An option in a call replaces the default.
 
 In TypeScript, use `StaticPublisherVariables` for the variables of the app, so that `c.var.staticPublisher` has a type:
 

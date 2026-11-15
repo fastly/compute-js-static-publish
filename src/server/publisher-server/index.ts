@@ -113,14 +113,69 @@ export type ServeRequestOptions = {
   // It is used in place of collectionSelection.onMissing for this call. It does
   // nothing without collectionSelection.
   onMissing?: 'not-found' | 'default',
-};
+} & ResponseOverrides;
 
 export type ServeFallbackOptions = {
   // The collection for this call, as in ServeRequestOptions.
   collectionName?: string | null,
   // As in ServeRequestOptions.
   onMissing?: 'not-found' | 'default',
+} & ResponseOverrides;
+
+// Changes to the response of a file (also of the SPA file and the 404 page) for
+// one call. They do not change other responses, such as the 404 of a collection
+// that is not available, or a 304.
+export type ResponseOverrides = {
+  // The status of the response. For a status other than 2xx, the server does
+  // not evaluate the preconditions of the request (If-None-Match and the
+  // others), so the response always has the body (RFC 9110, section 13.2.1).
+  status?: number,
+  // Headers to set on the response. Each one replaces the header of the same name.
+  headers?: HeadersInit,
 };
+
+// RFC 9110 evaluates the preconditions only for a response that would be 2xx.
+function isSuccessStatus(status: number): boolean {
+  return status >= 200 && status < 300;
+}
+
+const PRECONDITION_HEADERS = [ 'If-Match', 'If-None-Match', 'If-Modified-Since', 'If-Unmodified-Since', 'If-Range' ];
+
+// The request without its precondition headers, for a response with a status
+// other than 2xx.
+function requestForStatus(request: Request, status: number | undefined): Request {
+  if (status == null || isSuccessStatus(status)) {
+    return request;
+  }
+  const headers = new Headers(request.headers);
+  for (const name of PRECONDITION_HEADERS) {
+    headers.delete(name);
+  }
+  return new Request(request.url, { method: request.method, headers });
+}
+
+// Apply the overrides to the response of a file. The response of a file always
+// has an ETag.
+function applyResponseOverrides(response: Response | null, overrides: ResponseOverrides): Response | null {
+  if (
+    response == null ||
+    (overrides.status == null && overrides.headers == null) ||
+    response.status === 304 ||
+    !response.headers.has('ETag')
+  ) {
+    return response;
+  }
+  const headers = new Headers(response.headers);
+  new Headers(overrides.headers).forEach((value, name) => {
+    headers.set(name, value);
+  });
+  const status = overrides.status ?? response.status;
+  return new Response(response.body, {
+    status,
+    statusText: status === response.status ? response.statusText : '',
+    headers,
+  });
+}
 
 // The state of one request for one collection: the settings and the index that
 // the request read, and the Server-Timing of the request. A sandbox can be reused
@@ -703,9 +758,12 @@ export class PublisherServer {
       headers.append('Server-Timing', scope.serverTiming.toHeaderValue());
     }
 
-    const preconditionResponse = this.handlePreconditions(request, asset, headers);
-    if (preconditionResponse != null) {
-      return preconditionResponse;
+    const status = init?.status ?? 200;
+    if (isSuccessStatus(status)) {
+      const preconditionResponse = this.handlePreconditions(request, asset, headers);
+      if (preconditionResponse != null) {
+        return preconditionResponse;
+      }
     }
 
     // If the body does not have the size in its metadata, the response must not
@@ -719,7 +777,7 @@ export class PublisherServer {
     return new Response(
       body,
       {
-        status: init?.status ?? 200,
+        status,
         headers,
       }
     );
@@ -871,9 +929,11 @@ export class PublisherServer {
     const lastModified = headers.get('Last-Modified');
     const lastModifiedMs = lastModified != null ? Date.parse(lastModified) : NaN;
     const lastModifiedTime = Number.isNaN(lastModifiedMs) ? 0 : Math.floor(lastModifiedMs / 1000);
-    const preconditionResponse = this.handlePreconditionsForLastModified(request, lastModifiedTime, headers);
-    if (preconditionResponse != null) {
-      return preconditionResponse;
+    if (isSuccessStatus(metadata.status)) {
+      const preconditionResponse = this.handlePreconditionsForLastModified(request, lastModifiedTime, headers);
+      if (preconditionResponse != null) {
+        return preconditionResponse;
+      }
     }
 
     return new Response(request.method === 'HEAD' ? null : body, {
@@ -919,7 +979,10 @@ export class PublisherServer {
     // With fallback: false, the response does not depend on HTML, so it has its own cache key.
     const fallback = options.fallback !== false && requestAcceptsTextHtml(request);
     const keyPath = fallback ? pathname : `${pathname}|no-html`;
-    const response = await this.serveCachedFor(scope, request, keyPath, (fillRequest) => this.serveRequestFromStorage(scope, fillRequest, pathname, fallback));
+    const response = applyResponseOverrides(
+      await this.serveCachedFor(scope, requestForStatus(request, options.status), keyPath, (fillRequest) => this.serveRequestFromStorage(scope, fillRequest, pathname, fallback)),
+      options,
+    );
     return selected.preview ? this.markPreviewResponse(request, selected.scope, response) : response;
   }
 
@@ -948,13 +1011,16 @@ export class PublisherServer {
 
     // The fallback response is the same for all paths, so it has one cache key.
     // A path always starts with a slash, so this key is not the key of a path.
-    const response = await this.serveCachedFor(scope, request, '|fallback', async (fillRequest) => {
-      const serverConfig = await this.getServerConfigFor(scope);
-      if (serverConfig == null) {
-        return null;
-      }
-      return this.serveFallbackFromStorage(scope, fillRequest, serverConfig);
-    });
+    const response = applyResponseOverrides(
+      await this.serveCachedFor(scope, requestForStatus(request, options.status), '|fallback', async (fillRequest) => {
+        const serverConfig = await this.getServerConfigFor(scope);
+        if (serverConfig == null) {
+          return null;
+        }
+        return this.serveFallbackFromStorage(scope, fillRequest, serverConfig);
+      }),
+      options,
+    );
     return selected.preview ? this.markPreviewResponse(request, selected.scope, response) : response;
   }
 
