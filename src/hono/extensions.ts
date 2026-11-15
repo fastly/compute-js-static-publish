@@ -57,11 +57,15 @@ export const EXTENSION_PHASES = [ 'middleware', 'beforeFiles', 'afterFiles' ] as
 export type ExtensionPhase = typeof EXTENSION_PHASES[number];
 
 // The helpers of the app that each phase function gets: the same
-// serveStatic(), staticResponse(), serveFallback(), and PublisherServer that the
-// app uses, made once when the app starts, with the same defaults and the same
-// collectionSelection. staticResponse() is for a handler that decides itself
+// serveStatic(), staticResponse(), serveFallback(), fallbackResponse(),
+// isCollectionAvailable(), and PublisherServer that the app uses, made once
+// when the app starts, with the same defaults and the same collectionSelection.
+// staticResponse() and fallbackResponse() are for a handler that decides itself
 // whether to serve a published file.
-export type ExtensionHelpers = Pick<PublisherServerMiddleware, 'publisherServer' | 'serveStatic' | 'staticResponse' | 'serveFallback'>;
+export type ExtensionHelpers = Pick<
+  PublisherServerMiddleware,
+  'publisherServer' | 'serveStatic' | 'staticResponse' | 'serveFallback' | 'fallbackResponse' | 'isCollectionAvailable'
+>;
 
 // A function that adds the handlers of a module to the app, in one phase.
 // options is templateOptions.hono.extensions[<name>].

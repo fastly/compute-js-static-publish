@@ -1262,7 +1262,7 @@ templateOptions: {
 
 **The files step:** between `beforeFiles` and `afterFiles`, the app has a fixed step that serves the published files with `serveStatic()`. It is not a phase, and a module cannot remove it. A module can serve files in another way before it: a request that the module answers does not get to this step, and a request that the module passes on with `next()` does.
 
-**Helpers:** the third argument of each phase function has the `serveStatic()`, `staticResponse()`, `serveFallback()`, and `publisherServer` that the app uses (see [Using Hono](#-using-hono)). They are made once when the app starts, with the same `collectionSelection`, so a module can serve published files in its own place in the order, with its own rules.
+**Helpers:** the third argument of each phase function has the `serveStatic()`, `staticResponse()`, `serveFallback()`, `fallbackResponse()`, `isCollectionAvailable()`, and `publisherServer` that the app uses (see [Using Hono](#-using-hono)). They are made once when the app starts, with the same `collectionSelection`, so a module can serve published files in its own place in the order, with its own rules.
 
 For example, a module that runs before a login check, and serves `/theme/*` on a preview: from the selected collection, or from the default collection if the preview is missing, and with a plain `404` (not the 404 page of the collection, which would show the preview without a login). Without a preview, the module does nothing, and the app serves the request as usual. In Hono, a handler cannot skip the handlers that come after it in the same `app.use()`, so the module decides first whether it takes part. Two ways to write it, which do the same:
 
@@ -1297,6 +1297,30 @@ export default defineExtension((app, options, { serveStatic }) => {
 `except(condition, ...middleware)` skips the middleware when the condition is true, and runs it in order otherwise. `serveStatic()` calls the next middleware when no file matches; `staticResponse()` returns `null`. To give the normal 404 page in place of the plain `404`, use `return c.notFound()`.
 
 With `onMissing: 'default'`, a missing preview gets a normal response of the default collection, with its headers. When the preview is published, the next request gets the file of the preview: `PublisherServer` checks the selected collection before it reads the response cache. These examples are for a `host`, `query`, `cookie`, or `header` source. With a `path` source, the request path has the prefix (for example `/_preview/pr-1/theme/site.css`), so the route `/theme/*` does not match it: add the handler on `*`, and check `c.var.staticPublisher.pathname`, the path without the prefix. `serveStatic()` and `staticResponse()` look up that path.
+
+For example, a module that runs after a login check, and shows the page `/preview-not-found/` of the default collection, with a `404`, when the selected preview is not available. Because it is a module, it can come after the login check, so that a visitor who is not logged in cannot learn which previews exist:
+
+```ts
+// hono-extensions/30-preview-not-found.ts
+import { defineExtension } from '@fastly/compute-js-static-publish/hono';
+
+export default defineExtension((app, options, { isCollectionAvailable, staticResponse }) => {
+  app.use('*', async (c, next) => {
+    if (await isCollectionAvailable(c)) {
+      return next();
+    }
+    return await staticResponse(c, { path: '/preview-not-found/', collectionName: null, status: 404 })
+      ?? c.text('Preview not found', 404);
+  });
+});
+```
+
+**`publisherServer` in a module:** the app has one `PublisherServer` for all requests. Use the other helpers where you can: they use the selected collection, and the path without the prefix of a `path` source. In a handler, a module can call these methods of `publisherServer`:
+
+- `isCollectionAvailable()`, `serveRequest()`, `serveFallback()`, and `resolveCollection()`.
+- The methods that read the collection of the request: `getServerConfig()`, `getStaticItems()`, `getAssetEntryMap()`, `getMatchingAsset()`, and `testExtendedCache()`. They use the collection of the last `serveRequest()` or `serveFallback()` in the request (also through `serveStatic()` and the other helpers), or of `beginRequest()`, which uses the active collection, not the selected one. If neither ran in the request, call `publisherServer.beginRequest(c.req.raw)` first.
+
+Do not call the `set…()` methods (`setActiveCollectionName()`, `setCollectionSelection()`, `setResponseCache()`, and the others) in a handler: they change the server for all requests. In the phase function, which runs one time when the app starts, they change the configuration of the whole app. Do not call the lower-level methods (`serveAsset()`, `serveCached()`, `loadAssetVariant()`, `handlePreconditions()`, and `findAcceptEncodingsGroups()`). Use `staticResponse()` and `fallbackResponse()` in their place.
 
 **Bindings** put Fastly resources on `c.env`, as `buildFire()` of `@fastly/hono-fastly-compute` does. A module declares the bindings that it uses in the first argument of `defineExtension()`, and `c.env` in its handlers has their types, for example `ConfigStore | undefined` for `'ConfigStore:site_config'` (`undefined` if the resource does not exist or is not linked to the service). `templateOptions.hono.bindings` adds bindings for the app. The same name with the same resource in two places is allowed. The same name with two different resources stops the build, and the message names both places. `c.var` is not typed in a module, so that a module can set its own variables.
 

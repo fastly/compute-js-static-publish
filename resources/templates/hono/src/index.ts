@@ -16,10 +16,18 @@ const honoOptions = rc.templateOptions?.hono;
 // with two different resources stops the build.
 const fire = buildFire(mergeBindings(honoOptions?.bindings, extensions) as BindingsDefs);
 
-const { serveStatic, staticResponse, serveFallback, selectCollection, publisherServer } = fromStaticPublishRc(rc);
+const {
+  serveStatic,
+  staticResponse,
+  serveFallback,
+  fallbackResponse,
+  isCollectionAvailable,
+  selectCollection,
+  publisherServer,
+} = fromStaticPublishRc(rc);
 
 // The helpers of the app that each phase of the extensions gets.
-const helpers = { serveStatic, staticResponse, serveFallback, publisherServer };
+const helpers = { serveStatic, staticResponse, serveFallback, fallbackResponse, isCollectionAvailable, publisherServer };
 
 const app = new Hono<{ Bindings: typeof fire.Bindings, Variables: StaticPublisherVariables }>();
 
