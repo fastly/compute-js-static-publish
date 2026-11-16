@@ -74,7 +74,7 @@
     "@types/nunjucks": "^3.2.6",
     "esbuild": "^0.28.2",
     "hono": "^4.13.14",
-    "rimraf": "^4.3.0",
+    "rimraf": "^6.1.4",
     "typescript": "^7.0.2"
   },
   "engines": {
