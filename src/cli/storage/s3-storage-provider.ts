@@ -251,6 +251,7 @@ export class S3StorageProvider implements StorageProvider {
 
     return {
       metadata: response.Metadata,
+      size: response.ContentLength,
     } satisfies StorageEntry;
   }
 
@@ -340,6 +341,10 @@ export class S3StorageProvider implements StorageProvider {
 
   calculateNumChunks(_size: number): number {
     return 1;
+  }
+
+  calculateChunkSizes(size: number): number[] {
+    return [ size ];
   }
 
 }

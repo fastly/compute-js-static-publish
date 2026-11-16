@@ -4,11 +4,19 @@
  */
 
 import fs from 'node:fs';
+import { pipeline } from 'node:stream/promises';
 import { StorageProviderBatchEntry } from '../storage/storage-provider.js';
 import { directoryExists, getFileSize } from './files.js';
 
 // split large files into 20MiB chunks
 export const KV_STORE_CHUNK_SIZE = 1_024 * 1_024 * 20;
+
+// The size of each chunk of a file of `size` bytes. All chunks have chunkSize
+// bytes, except the last, which has the bytes that are left.
+export function chunkSizes(size: number, chunkSize: number): number[] {
+  const numChunks = Math.ceil(size / chunkSize);
+  return Array.from({ length: numChunks }, (_, chunk) => Math.min(chunkSize, size - chunk * chunkSize));
+}
 
 export function shouldRecreateChunks(chunksDir: string, numChunks: number, item: StorageProviderBatchEntry, chunkSize: number) {
   console.log(` 📄 '${item.key}' - ${item.size} bytes → ${numChunks} chunks`)
@@ -23,7 +31,7 @@ export function shouldRecreateChunks(chunksDir: string, numChunks: number, item:
     return true;
   }
 
-  const finalChunkSize = item.size % chunkSize;
+  const expectedFileSizes = chunkSizes(item.size, chunkSize);
   for (let chunk = 0; chunk < numChunks; chunk++) {
     const chunkFileName = `${chunksDir}/${chunk}`;
     // If the chunk does not exist
@@ -33,7 +41,7 @@ export function shouldRecreateChunks(chunksDir: string, numChunks: number, item:
     }
 
     // or if the chunk isn't the expected size
-    const expectedFileSize = chunk === numChunks - 1 ? finalChunkSize : chunkSize;
+    const expectedFileSize = expectedFileSizes[chunk];
 
     const existingFileSize = getFileSize(chunkFileName);
     if (existingFileSize !== expectedFileSize) {
@@ -68,51 +76,16 @@ export async function applyKVStoreEntriesChunks(kvStoreItemDescriptions: Storage
       fs.rmSync(chunksDir, { recursive: true, force: true });
       fs.mkdirSync(chunksDir, { recursive: true });
 
-      const numWrittenChunks = await new Promise<number>((resolve, reject) => {
-        const chunkPaths: string[] = [];
-        let chunkIndex = 0;
-        let bytesWritten = 0;
-        let currentStream: fs.WriteStream | null = null;
-
-        const inputStream = fs.createReadStream(item.filePath);
-        inputStream.on('error', reject);
-
-        inputStream.on('data', (chunk) => {
-          let offset = 0;
-
-          while (offset < chunk.length) {
-            if (!currentStream || bytesWritten >= chunkSize) {
-              if (currentStream != null) {
-                currentStream.end();
-              }
-              const chunkFileName = `${chunksDir}/${chunkIndex}`;
-              currentStream = fs.createWriteStream(chunkFileName);
-              chunkPaths.push(chunkFileName);
-              chunkIndex++;
-              bytesWritten = 0;
-            }
-
-            const bytesLeftInChunk = chunkSize - bytesWritten;
-            const bytesLeftInBuffer = chunk.length - offset;
-            const bytesToWrite = Math.min(bytesLeftInChunk, bytesLeftInBuffer);
-            const slice = chunk.slice(offset, offset + bytesToWrite);
-
-            currentStream.write(slice);
-            bytesWritten += bytesToWrite;
-            offset += bytesToWrite;
-          }
-        });
-
-        inputStream.on('end', () => {
-          if (currentStream != null) {
-            currentStream.end();
-          }
-          resolve(chunkPaths.length);
-        });
-      });
-
-      if (numWrittenChunks !== numChunks) {
-        throw new Error(`numWrittenChunks (${numWrittenChunks}) does not equal numChunks (${numChunks})`);
+      // Each chunk is a copy of a range of the file. pipeline() resolves
+      // after the chunk file is completely written, so the upload reads the
+      // full chunk.
+      let start = 0;
+      for (const [ chunkIndex, size ] of chunkSizes(item.size, chunkSize).entries()) {
+        await pipeline(
+          fs.createReadStream(item.filePath, { start, end: start + size - 1 }),
+          fs.createWriteStream(`${chunksDir}/${chunkIndex}`),
+        );
+        start += size;
       }
     }
 

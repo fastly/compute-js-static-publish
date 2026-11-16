@@ -11,6 +11,8 @@ export interface StorageEntry {
   data?: ReadableStream<Uint8Array>;
   metadata?: Record<string, string>;
   providerMetadata?: Record<string, string>;
+  // The size of the stored value, in bytes, if the provider gives it.
+  size?: number;
 }
 
 export interface StorageProvider {
@@ -32,6 +34,8 @@ export interface StorageProvider {
     throwOnError?: boolean,
   ): Promise<void>;
   calculateNumChunks(size: number): number;
+  // The size of each chunk of a file of `size` bytes.
+  calculateChunkSizes(size: number): number[];
 }
 
 export type StorageProviderBatchEntry = {
@@ -102,4 +106,46 @@ export async function loadStorageProviderFromStaticPublishRc(config: StaticPubli
     }
   }
   throw new Error('Static Publisher Error: Invalid static-publish.rc.js, storage mode not recognized, or could not instantiate store provider.');
+}
+
+// Returns true if storage has the variant with the key `variantKey`, which has
+// `size` bytes in `numChunks` chunks. For a variant in more than one chunk, it
+// also compares the stored size of each chunk with its expected size. It removes
+// a chunk that has a different size, or that is not in storage now, from
+// existingKeys, so that applyBatch() uploads the chunk again.
+export async function isVariantInStorage(
+  storageProvider: StorageProvider,
+  existingKeys: Set<string>,
+  variantKey: string,
+  size: number,
+  numChunks: number,
+): Promise<boolean> {
+  const chunkKeys = Array.from({ length: numChunks }, (_, chunkIndex) =>
+    chunkIndex === 0 ? variantKey : `${variantKey}_${chunkIndex}`
+  );
+  if (!chunkKeys.every(key => existingKeys.has(key))) {
+    return false;
+  }
+  if (numChunks === 1) {
+    return true;
+  }
+
+  const expectedSizes = storageProvider.calculateChunkSizes(size);
+  const entries = await Promise.all(chunkKeys.map(key => storageProvider.getStorageEntryInfo(key)));
+  let found = true;
+  for (const [ chunkIndex, key ] of chunkKeys.entries()) {
+    const entry = entries[chunkIndex];
+    if (entry == null) {
+      existingKeys.delete(key);
+      found = false;
+      continue;
+    }
+    const storedSize = entry.size;
+    if (storedSize != null && storedSize !== expectedSizes[chunkIndex]) {
+      console.log(`  ‼️ Chunk "${key}" in storage has ${storedSize} bytes, but it must have ${expectedSizes[chunkIndex]} bytes. It will be uploaded again.`);
+      existingKeys.delete(key);
+      found = false;
+    }
+  }
+  return found;
 }

@@ -131,10 +131,12 @@ npx @fastly/compute-js-static-publish@latest \
 > npx @fastly/compute-js-static-publish@latest \
 >   --root-dir=./public \
 >   --storage-mode=s3 \
->   --s3-region=us-east \
+>   --s3-region=us-east-1 \
 >   --s3-bucket=my-static-content-bucket \
->   --s3-endpoint=https://us-east.object.fastlystorage.app
+>   --s3-endpoint=https://us-east-1.object.fastlystorage.app
 > ```
+>
+> For the regions of Fastly Object Storage and their endpoints, see [Working with Object Storage](https://www.fastly.com/documentation/guides/platform/object-storage/working-with-object-storage/#managing-object-storage-buckets-and-objects).
 
 You get a Compute app in `./compute-js` with:
 
@@ -343,7 +345,10 @@ You can override this file for a single `publish-content` command by specifying 
      `'../site/public'`, set it to `'/public'`. The value starts with `/` and does not
      end with `/` (default: `''`). The scaffolder sets it from `--root-dir` and `--public-dir`.
    - `spaFile` - Path to a file to be used to serve in a SPA application.
-   - `notFoundPageFile` - Path to a file to be used to serve as a 404 not found page.
+   - `notFoundPageFile` - Path to a file to be used to serve as a 404 not found page.  
+     The server serves `spaFile` or `notFoundPageFile` only to a request that accepts HTML: its `Accept`
+     header is missing or empty, or has `text/html`, `text/*`, or `*/*` with a q-value that is not 0.
+     For other requests, `serveRequest()` returns `null`.
    - `autoIndex` - List of files to automatically use as index.
    - `autoExt` - List of extensions to automatically apply to a path and retry when
      the requested path is not found.
@@ -675,7 +680,9 @@ Assets are stored in multiple formats (uncompressed + compressed) if configured.
 
 ## 🧩 Using PublisherServer in Custom Apps
 
-You can combine PublisherServer with custom logic to support APIs, authentication, redirects, or A/B testing. `PublisherServer` returns `null` when it cannot handle a request, allowing you to chain in your own logic.
+You can combine PublisherServer with custom logic to support APIs, authentication, redirects, or A/B testing. Handle your own routes before you call `serveRequest()`.
+
+`serveRequest()` returns `null` for a method other than `GET` or `HEAD`, and when no file matches and no SPA file or 404 page applies. If `publish-content.config.js` sets a 404 page or an SPA file, `serveRequest()` serves that page for each path that has no file. Thus, code after `serveRequest()` does not run for those requests.
 
 ```js
 import { PublisherServer } from '@fastly/compute-js-static-publish';
@@ -688,17 +695,17 @@ addEventListener("fetch", event => {
 });
 
 async function handleRequest(request) {
-  const response = await publisherServer.serveRequest(request);
-  if (response) {
-    return response;
-  }
-
-  // Add your custom logic here
+  // Add your custom logic here, before serveRequest()
   const url = new URL(request.url);
   if (url.pathname === '/api/hello') {
     return new Response(JSON.stringify({ greeting: "hi" }), {
       headers: { 'content-type': 'application/json' }
     });
+  }
+
+  const response = await publisherServer.serveRequest(request);
+  if (response != null) {
+    return response;
   }
 
   return new Response("Not Found", { status: 404 });
@@ -931,7 +938,7 @@ npx @fastly/compute-js-static-publish publish-content \
 
 Publishes static files from your local root directory into a named collection, in the storage that `static-publish.rc.js` specifies: the Fastly KV Store, S3-compatible storage (BETA), or a local dev directory (`--local`, KV Store mode only).
 
-Before it scans your files, the command lists the files that are already in storage. Files that already exist with the same hash are not compressed or uploaded again. With the KV Store, the command uploads the remaining files in batches.
+Before it scans your files, the command lists the files that are already in storage. Files that already exist with the same hash are not compressed or uploaded again. With the KV Store, a file larger than 20 MiB is stored in chunks, and the command uploads a chunk again if the chunk in storage does not have the correct size. Then the command uploads the remaining files in batches.
 
 After this process is complete, the PublisherServer object in the Compute application will see the updated index of files and updated server settings from the `publish-content.config.js` file.
 

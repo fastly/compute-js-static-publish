@@ -25,6 +25,7 @@ import { ProgressLog } from '../../util/progress.js';
 import { type PurgeTarget, loadPurgeTarget, purgeCollection } from '../../util/purge.js';
 import {
   getStorageKeysByHexPrefix,
+  isVariantInStorage,
   loadStorageProviderFromStaticPublishRc,
   StorageProvider,
   StorageProviderBatch,
@@ -385,6 +386,8 @@ export async function action(actionArgs: string[]) {
   // #### Keys that are already in storage
   // The key of a file is the hash of its content. If the key exists, storage
   // already has the same content. Thus we do not compress, hash, or upload it again.
+  // For a file in more than one chunk, isVariantInStorage() also compares the
+  // stored size of each chunk.
   // In local mode, a key can refer to a working file that was deleted, so we do not list.
   // All the keys that the scan looks for start with `<publishId>_files_sha256_` and a hex
   // hash, so we list them in 16 parts at the same time.
@@ -396,18 +399,6 @@ export async function action(actionArgs: string[]) {
     console.log(`✅  Found ${existingKeys.size} key(s) in ${((Date.now() - listStart) / 1000).toFixed(1)} s.`);
   }
   let existingVariantCount = 0;
-
-  function isVariantInStorage(variantKey: string, numChunks: number) {
-    if (existingKeys == null || !existingKeys.has(variantKey)) {
-      return false;
-    }
-    for (let chunkIndex = 1; chunkIndex < numChunks; chunkIndex++) {
-      if (!existingKeys.has(`${variantKey}_${chunkIndex}`)) {
-        return false;
-      }
-    }
-    return true;
-  }
 
   // #### Iterate files
   const scanProgress = new ProgressLog('Files scanned', verbose);
@@ -473,7 +464,8 @@ export async function action(actionArgs: string[]) {
     async function prepareVariant(variant: Variants, variantKey: string, variantFilePath: string) {
       if (
         (variant === 'original' || baseNumChunks === 1) &&
-        isVariantInStorage(variantKey, variant === 'original' ? baseNumChunks : 1)
+        existingKeys != null &&
+        await isVariantInStorage(storageProvider, existingKeys, variantKey, baseSize, variant === 'original' ? baseNumChunks : 1)
       ) {
 
         if (verbose) {
