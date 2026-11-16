@@ -9,6 +9,8 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 
 ## [unreleased]
 
+## [8.0.2] - 2026-11-16
+
 ### Changed
 
 - The npm package includes `CHANGELOG.md` and `MIGRATING.md`.
@@ -17,7 +19,7 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 
 ### Fixed
 
-- `collections promote` now purges the target collection, as `publish-content` and `collections delete` do. Before, after a promote (for example to `live`), the service could serve the old content of the target from the cache until it expired. The new options `--fastly-service-id` and `--purge-environment` work as in `publish-content`. If a Service ID is found, the command needs an API token, also in S3 mode, and stops before it writes anything if the token is missing.
+- `collections promote` now purges the target collection, as `publish-content` and `collections delete` do. Before, after a promote (for example to `live`), the service could serve the old content of the target from the cache until it expired. The new options `--fastly-service-id` and `--purge-environment` work as in `publish-content`. If a Service ID is found, the command needs an API token, also in S3 mode, and stops before it writes anything if the token is missing. Thus in S3 mode, if your pipeline has a Service ID, set `FASTLY_API_TOKEN` for `collections promote` too.
 - `collections promote --local`: the target collection got the index and settings files of the source collection. Thus a later `publish-content --local` to the source also changed the target, for example `live` after a promote from `staging`. Now the target has its own files. The KV Store and S3 modes were not affected.
 - `scaffold --storage-mode s3` without `--s3-endpoint` (a bucket on AWS): the command stopped with an uncaught `CredentialsProviderError` when the computer had no usable AWS credentials. Now it computes the host name of the bucket (`<bucket>.s3.<region>.amazonaws.com`, the same host name that the server uses), with no credentials and no network. A bucket name with a dot needs `--s3-endpoint`, and the command says so.
 - `PublisherServer` response cache: the request that caches a response now uses memory of about two times the body. Before, it used about four times the body. On a Fastly service, with `maxBodySize` set larger than the default, a response of 32 MiB caused a `500` for that request. With a response of 48 MiB, other requests that waited for the same response also got a `200` with an empty body.
@@ -498,7 +500,8 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 - Updated generated app's webpack and webpack-cli versions
 - Use atob() and removed dependency on Buffer
 
-[unreleased]: https://github.com/fastly/compute-js-static-publish/compare/v8.0.1...HEAD
+[unreleased]: https://github.com/fastly/compute-js-static-publish/compare/v8.0.2...HEAD
+[8.0.2]: https://github.com/fastly/compute-js-static-publish/compare/v8.0.1...v8.0.2
 [8.0.1]: https://github.com/fastly/compute-js-static-publish/compare/v8.0.0...v8.0.1
 [8.0.0]: https://github.com/fastly/compute-js-static-publish/compare/v7.0.8...v8.0.0
 [7.0.8]: https://github.com/fastly/compute-js-static-publish/compare/v7.0.7...v7.0.8
