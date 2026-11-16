@@ -769,7 +769,7 @@ publisherServer.setResponseCache({ maxAge: 3600, maxBodySize: 4 * 1024 * 1024 })
 - A path that does not match a file is cached, too, so a missing path does not read the index again.
 - If several requests miss the same response at the same time, one request produces it, and the others wait for it.
 - Only `200` and `404` responses are cached. Conditional requests (`304`) and `HEAD` requests are answered from the cached response.
-- Each cached response has the surrogate key `<publishId>-<collectionName>`. After you publish, `publish-content` purges this key (see [`--fastly-service-id`](#publish-content)), so the next request gets the new content.
+- Each cached response has the surrogate key `<publishId>-<collectionName>`. After you publish, `publish-content` purges this key (see [`--fastly-service-id`](#publish-content)), so the next request gets the new content. `collections promote` and `collections delete` purge the key of the collection that they change.
 
 `serveRequest()` uses the response cache automatically. If you call `getMatchingAsset()` and `serveAsset()` directly, wrap them in `serveCached()`. When a response is not cached yet, `serveCached()` calls your function to produce it, with a `GET` request that has no conditional headers:
 
@@ -1031,6 +1031,8 @@ npx @fastly/compute-js-static-publish collections promote \
 ```
 Copies an existing collection (content + config) to a new collection name.
 
+If a Service ID is found, the command then purges the surrogate key `<publishId>-<collectionName>` of the target collection, so that the service stops serving cached responses of the old content. This uses the same options as [`publish-content`](#publish-content).
+
 ##### Options:
 
 - `--collection-name`: The name of the source collection to promote (required)
@@ -1049,6 +1051,11 @@ Copies an existing collection (content + config) to a new collection name.
 - `--local`: Instead of working with the Fastly KV Store, operate on local files that will be used to simulate the KV Store with the local development environment. KV Store mode only. In S3 mode, `--local` is an error, because there is no local simulation of S3 storage.
 
 - `--fastly-api-token`: API token to use when publishing. If not set, the tool uses the **`FASTLY_API_TOKEN` environment variable**.
+
+**Purge Options:**
+
+- `--fastly-service-id`: The Fastly Service ID to purge after promoting. If not set, the tool checks the `FASTLY_SERVICE_ID` environment variable, then `service_id` in `fastly.toml`. If none is found, the command skips the purge. The purge also needs an API token (see `--fastly-api-token`), also in S3 mode. With `--local`, there is no purge. If the purge fails, the command shows a warning and completes, because the collection is already promoted.
+- `--purge-environment`: The environments to purge: `production` (the default), `staging`, or both, as a comma-separated list. You can also repeat the option.
 
 **S3 Storage Options (BETA):**
 
