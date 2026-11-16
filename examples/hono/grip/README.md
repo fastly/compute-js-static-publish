@@ -11,7 +11,7 @@ The steps:
 1. Make a new managed project with the `hono` template. Run this command in the directory of your project. In this example, the files of your site are in `./public`:
 
    ```sh
-   npx @fastly/compute-js-static-publish@latest --managed --template hono --root-dir=./public --kv-store-name=site-content
+   npx @fastly/compute-js-static-publish@beta --managed --template hono --root-dir=./public --kv-store-name=site-content
    ```
 
    This writes `static-publish.project.js` and the folder `hono-extensions/`. To add the example to a project that exists, see [Adding to an existing project](#adding-to-an-existing-project).
@@ -20,7 +20,7 @@ The steps:
    ```sh
    rm -rf hono-extensions
    cp -R <this repository>/examples/hono/grip/hono-extensions hono-extensions
-   npx @fastly/compute-js-static-publish template init
+   npx @fastly/compute-js-static-publish@beta template init
    cd hono-extensions
    npm install
    ```
@@ -117,7 +117,7 @@ The values come from environment variables, so that no secret is in the project 
 export GRIP_URL='http://localhost:5561/?verify-iss=viceroy'
 export GRIP_VERIFY_KEY=viceroy_dev_signing_key_dont_use_in_production
 export PUBLISH_KEY=local-publish-key
-npx @fastly/compute-js-static-publish dev
+npx @fastly/compute-js-static-publish@beta dev
 ```
 
 The backend `self` must point at the address of the local server (`localhost:7676` by default). Then, in one terminal:
@@ -169,7 +169,7 @@ Then open `https://<your domain>/events/stream/test`, and publish with `POST htt
 The project must use the `hono` template. For a managed project, this is `managed.template: 'hono'` in `static-publish.project.js`. If the project has no `hono-extensions/` folder, make it:
 
 ```sh
-npx @fastly/compute-js-static-publish template init
+npx @fastly/compute-js-static-publish@beta template init
 ```
 
 Make sure that `hono-extensions/` does not already have files with the same names (`grip.ts` and `lib/grip.ts`). The name of a module is its file name without the number prefix, and two modules with the same name stop the build. If the name `grip` is already used, rename the module of the example, and use the new name in `templateOptions.hono.extensions`.
