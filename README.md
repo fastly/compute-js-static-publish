@@ -1161,9 +1161,31 @@ const response = await publisherServer.serveCached(request, pathname, async (fil
 
 The second argument identifies the response in the collection. If anything other than the path and `Accept-Encoding` changes your response, include it in this value.
 
+Your function can return a `Response`, `null` (not found), or `{ response, length }`. `length` is the number of bytes in the body. With `length: null`, the response is not cached. A `Response` from `serveAsset()` has a known length.
+
+#### Streaming the response into the cache
+
+`serveRequestStreaming()`, `serveFallbackStreaming()`, and `serveCachedStreaming()` take the same arguments as `serveRequest()`, `serveFallback()`, and `serveCached()`. When the response is not cached yet and the length of its body is known, the body goes to the visitor and into the cache at the same time. The visitor does not wait for the whole file, and the request does not keep the whole body in memory. They return `{ response, fillPromise }`. Pass `fillPromise` to `event.waitUntil()`:
+
+```js
+async function handleRequest(event) {
+  const { response, fillPromise } = await publisherServer.serveRequestStreaming(event.request);
+  event.waitUntil(fillPromise);
+  return response ?? new Response('Not Found', { status: 404 });
+}
+```
+
+With `event.waitUntil()`, the fill continues after your handler returns, also if the visitor disconnects. Without it, the fill stops when your handler returns, and nothing is cached. `fillPromise` never rejects.
+
+The scaffolded app of the `plain` template and the [Hono](#-using-hono) helpers use these methods.
+
+The fill streams only on a Fastly service with `@fastly/js-compute` 4.2 or later. With an earlier version, in `fastly compute serve`, or for a body with a length that is not known, the fill reads the whole body first, as `serveCached()` does, and `fillPromise` is already resolved.
+
+If a body does not have the number of bytes of `length`, nothing is cached, the requests for the response get an error, and an error is logged. The next fill for that response reads the whole body first.
+
 Notes:
 
-- A response is read completely before it is cached. The request that caches it uses memory of about two times the body, up to two times `maxBodySize`. A Compute instance has a limit on its memory, so do not set `maxBodySize` larger than 48 MiB (`48 * 1024 * 1024`). Other requests that wait for the same response get it when it is cached.
+- `serveRequest()`, `serveFallback()`, and `serveCached()`, and the streaming methods when the fill does not stream, read a response completely before it is cached. The request that caches it uses memory of about two times the body, up to two times `maxBodySize`. A Compute instance has a limit on its memory, so do not set `maxBodySize` larger than 48 MiB (`48 * 1024 * 1024`). Other requests that wait for the same response get it when it is cached. A streaming fill also caches only a body of `maxBodySize` or less.
 - A response is cached only if its body has the size in the file's metadata. If storage returns a different body, nothing is cached, the request gets an error, and the next request reads the file again.
 - With `--local`, `publish-content` cannot purge the local cache. Restart `fastly compute serve` to see newly published content, or leave the response cache off in local development.
 - On staging, a purge must include the `Fastly-Purge-Environment: staging` header to clear the staging cache. Without it, a purge clears only the production cache. Use `publish-content --purge-environment=production,staging` to purge both.
@@ -1320,7 +1342,7 @@ export default defineExtension((app, options, { isCollectionAvailable, staticRes
 - `isCollectionAvailable()`, `serveRequest()`, `serveFallback()`, and `resolveCollection()`.
 - The methods that read the collection of the request: `getServerConfig()`, `getStaticItems()`, `getAssetEntryMap()`, `getMatchingAsset()`, and `testExtendedCache()`. They use the collection of the last `serveRequest()` or `serveFallback()` in the request (also through `serveStatic()` and the other helpers), or of `beginRequest()`, which uses the active collection, not the selected one. If neither ran in the request, call `publisherServer.beginRequest(c.req.raw)` first.
 
-Do not call the `set…()` methods (`setActiveCollectionName()`, `setCollectionSelection()`, `setResponseCache()`, and the others) in a handler: they change the server for all requests. In the phase function, which runs one time when the app starts, they change the configuration of the whole app. Do not call the lower-level methods (`serveAsset()`, `serveCached()`, `loadAssetVariant()`, `handlePreconditions()`, and `findAcceptEncodingsGroups()`). Use `staticResponse()` and `fallbackResponse()` in their place.
+Do not call the `set…()` methods (`setActiveCollectionName()`, `setCollectionSelection()`, `setResponseCache()`, and the others) in a handler: they change the server for all requests. In the phase function, which runs one time when the app starts, they change the configuration of the whole app. Do not call the lower-level methods (`serveAsset()`, `serveCached()`, `serveCachedStreaming()`, `loadAssetVariant()`, `handlePreconditions()`, and `findAcceptEncodingsGroups()`). Use `staticResponse()` and `fallbackResponse()` in their place.
 
 **Bindings** put Fastly resources on `c.env`, as `buildFire()` of `@fastly/hono-fastly-compute` does. A module declares the bindings that it uses in the first argument of `defineExtension()`, and `c.env` in its handlers has their types, for example `ConfigStore | undefined` for `'ConfigStore:site_config'` (`undefined` if the resource does not exist or is not linked to the service). `templateOptions.hono.bindings` adds bindings for the app. The same name with the same resource in two places is allowed. The same name with two different resources stops the build, and the message names both places. `c.var` is not typed in a module, so that a module can set its own variables.
 

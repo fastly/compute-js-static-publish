@@ -11,7 +11,7 @@
 import type { Context, MiddlewareHandler, NotFoundHandler } from 'hono';
 
 // Import from the package entry point, which registers the storage providers.
-import { PublisherServer, type ResponseOverrides, type StaticPublishRc } from '../server/index.js';
+import { PublisherServer, type ResponseOverrides, type StaticPublishRc, type StreamingServeResult } from '../server/index.js';
 import { type ServeStaticPathOptions, resolveServeStaticPathname } from './path.js';
 
 export {
@@ -127,6 +127,35 @@ function resolveCollectionName(
   return selection != null ? selection.collectionName : undefined;
 }
 
+// The waitUntil() of the FetchEvent of the request, or null if Hono does not
+// have it (for example, when app.request() runs the app in a test).
+function getWaitUntil(c: Context): ((promise: Promise<unknown>) => void) | null {
+  try {
+    const executionCtx = c.executionCtx;
+    return typeof executionCtx?.waitUntil === 'function' ? (promise) => executionCtx.waitUntil(promise) : null;
+  } catch {
+    // c.executionCtx throws if the app has no execution context.
+    return null;
+  }
+}
+
+// Serves with the streaming form of a PublisherServer method if the request
+// has waitUntil(), so that the response cache fill continues after the handler
+// returns. Otherwise, serves with the form that does not stream.
+async function serveWithFill(
+  c: Context,
+  streaming: () => Promise<StreamingServeResult>,
+  buffered: () => Promise<Response | null>,
+): Promise<Response | null> {
+  const waitUntil = getWaitUntil(c);
+  if (waitUntil == null) {
+    return buffered();
+  }
+  const { response, fillPromise } = await streaming();
+  waitUntil(fillPromise);
+  return response;
+}
+
 export function fromPublisherServer(server: PublisherServer, defaults: PublisherServerMiddlewareDefaults = {}): PublisherServerMiddleware {
 
   const staticResponse = async (c: Context, callOptions: ServeStaticOptions = {}): Promise<Response | null> => {
@@ -139,7 +168,7 @@ export function fromPublisherServer(server: PublisherServer, defaults: Publisher
     if (pathname == null) {
       return null;
     }
-    return server.serveRequest(c.req.raw, {
+    const serveOptions = {
       collectionName: resolveCollectionName(c, options.collectionName, selection),
       pathname,
       fallback: false,
@@ -147,7 +176,12 @@ export function fromPublisherServer(server: PublisherServer, defaults: Publisher
       onMissing: options.onMissing,
       status: options.status,
       headers: options.headers,
-    });
+    };
+    return serveWithFill(
+      c,
+      () => server.serveRequestStreaming(c.req.raw, serveOptions),
+      () => server.serveRequest(c.req.raw, serveOptions),
+    );
   };
 
   const serveStatic = (callOptions: ServeStaticOptions = {}): MiddlewareHandler => {
@@ -163,12 +197,17 @@ export function fromPublisherServer(server: PublisherServer, defaults: Publisher
 
   const fallbackResponse = async (c: Context, callOptions: ServeFallbackOptions = {}): Promise<Response | null> => {
     const options = { ...defaults, ...callOptions };
-    return server.serveFallback(c.req.raw, {
+    const serveOptions = {
       collectionName: resolveCollectionName(c, options.collectionName, getSelection(c, server)),
       onMissing: options.onMissing,
       status: options.status,
       headers: options.headers,
-    });
+    };
+    return serveWithFill(
+      c,
+      () => server.serveFallbackStreaming(c.req.raw, serveOptions),
+      () => server.serveFallback(c.req.raw, serveOptions),
+    );
   };
 
   const serveFallback = (callOptions: ServeFallbackOptions = {}): NotFoundHandler => {

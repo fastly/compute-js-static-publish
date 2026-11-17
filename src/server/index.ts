@@ -35,9 +35,11 @@ export {
 } from './storage/s3-storage-provider.js';
 export {
   type GetMatchingAssetOptions,
+  type ProduceResult,
   type ResponseOverrides,
   type ServeFallbackOptions,
   type ServeRequestOptions,
+  type StreamingServeResult,
   PublisherServer,
 } from './publisher-server/index.js';
 

@@ -5,7 +5,9 @@
 
 /// <reference types="@fastly/js-compute" />
 
+import { type FastlyBody } from 'fastly:body';
 import { CoreCache } from 'fastly:cache';
+import { env } from 'fastly:env';
 
 import {
   type StaticPublishRc,
@@ -44,6 +46,7 @@ import { requestAcceptsTextHtml } from './accept-html.js';
 import {
   type CachedResponseMetadata,
   type ResponseCacheOptions,
+  BodyLengthMismatchError,
   CACHEABLE_STATUSES,
   DEFAULT_MAX_BODY_SIZE,
   buildCacheFillRequest,
@@ -51,11 +54,14 @@ import {
   bytesInPieces,
   decodeCachedResponseMetadata,
   encodeCachedResponseMetadata,
+  lengthMismatchMarkerKey,
   parseAcceptEncodingGroups,
+  pipeBodyWithLength,
   readBodyUpTo,
   streamBytesInPieces,
 } from './response-cache.js';
 import { checkBodyLength } from '../util/body-length.js';
+import { isSdkVersionAtLeast } from '../util/sdk-version.js';
 
 export type GetMatchingAssetOptions = {
   // Also try autoExt and autoIndex. The default is false.
@@ -185,9 +191,66 @@ type CollectionScope = {
   serverTiming: ServerTiming | null,
   settings: PublisherServerConfigNormalized | null | undefined,
   assetEntryMap: AssetEntryMap | null | undefined,
-  // When true, serveCached() does not store the response of this request.
-  doNotStoreResponse: boolean,
 };
+
+// What the produce() function of serveCached() and serveCachedStreaming() returns:
+// - A Response. If serveAsset() made it, the length of its body is known.
+//   Otherwise, the length is not known.
+// - { response, length }: length is the number of bytes in the body of the
+//   response. A length of null means that the response is not stored. A length
+//   of undefined is the same as a Response.
+// - null: not found. This is stored.
+// serveCachedStreaming() streams a body into the cache only if its length is
+// known. A body with a length that is not known is read completely first.
+export type ProduceResult =
+  | Response
+  | { response: Response, length?: number | null }
+  | null;
+
+// What serveCachedStreaming(), serveRequestStreaming(), and
+// serveFallbackStreaming() return.
+export type StreamingServeResult = {
+  // The response, or null, as serveCached() returns.
+  response: Response | null,
+  // Resolves when the cache fill ends, also when the fill fails. It never
+  // rejects. Pass it to event.waitUntil(), or the fill stops when the handler returns.
+  fillPromise: Promise<void>,
+};
+
+const FILL_DONE: Promise<void> = Promise.resolve();
+
+// The length of the body of each full response that serveAsset() made.
+const assetResponseLengths = new WeakMap<Response, number>();
+
+function readProduceResult(result: ProduceResult): { response: Response | null, length: number | null | undefined } {
+  if (result == null) {
+    return { response: null, length: undefined };
+  }
+  if (result instanceof Response) {
+    return { response: result, length: assetResponseLengths.get(result) };
+  }
+  const { response, length } = result;
+  if (length != null && !(Number.isSafeInteger(length) && length >= 0)) {
+    throw new TypeError(`length must be an integer of 0 or more, null, or undefined: ${length}`);
+  }
+  return { response, length };
+}
+
+// A streaming fill (insertAndStreamBack() with event.waitUntil()) is safe on a
+// real service from js-compute 4.2. Earlier versions do not show the waiters an
+// error when a fill fails. Viceroy (FASTLY_HOSTNAME is 'localhost') keeps an
+// abandoned fill, and each later request for it gets an error. In these cases,
+// serveCachedStreaming() reads the whole body first, as serveCached() does.
+// This is decided at the first request, not when the module loads.
+let streamingFillSupported: boolean | undefined;
+function isStreamingFillSupported(): boolean {
+  if (streamingFillSupported === undefined) {
+    streamingFillSupported =
+      isSdkVersionAtLeast(globalThis.fastly?.sdkVersion, 4, 2) &&
+      env('FASTLY_HOSTNAME') !== 'localhost';
+  }
+  return streamingFillSupported;
+}
 
 // The response for a collection other than the default collection that is not
 // published, or that expired. It can be published at any time, so no cache
@@ -360,7 +423,6 @@ export class PublisherServer {
       serverTiming,
       settings: undefined,
       assetEntryMap: undefined,
-      doNotStoreResponse: false,
     };
   }
 
@@ -774,13 +836,15 @@ export class PublisherServer {
       assetVariant.size,
       `File ${asset.key} (${assetVariant.contentEncoding ?? 'identity'})`,
     );
-    return new Response(
+    const response = new Response(
       body,
       {
         status,
         headers,
       }
     );
+    assetResponseLengths.set(response, assetVariant.size);
+    return response;
   }
 
   // Serve a response through the response cache (see setResponseCache()).
@@ -790,22 +854,42 @@ export class PublisherServer {
   // range headers, and its result is cached if it is a 200 or 404 response, or
   // null (not found). Conditional requests and HEAD are then answered from the
   // cached response. If the cache is off, produce() gets the original request.
+  // produce() can also return { response, length } (see ProduceResult). The fill
+  // reads the whole body before it stores it.
   async serveCached(
     request: Request,
     keyPath: string,
-    produce: (request: Request) => Promise<Response | null>,
+    produce: (request: Request) => Promise<ProduceResult>,
   ): Promise<Response | null> {
-    return this.serveCachedFor(this.currentScope, request, keyPath, produce);
+    return (await this.serveCachedFor(this.currentScope, request, keyPath, produce, false)).response;
+  }
+
+  // As serveCached(), but a fill for a body with a known length (see
+  // ProduceResult) streams the body into the cache while the response sends it.
+  // Pass fillPromise to event.waitUntil(), or the fill stops when the handler
+  // returns. With js-compute earlier than 4.2, and in Viceroy, the fill reads
+  // the whole body first, and fillPromise is already resolved.
+  async serveCachedStreaming(
+    request: Request,
+    keyPath: string,
+    produce: (request: Request) => Promise<ProduceResult>,
+  ): Promise<StreamingServeResult> {
+    return this.serveCachedFor(this.currentScope, request, keyPath, produce, true);
   }
 
   private async serveCachedFor(
     scope: CollectionScope,
     request: Request,
     keyPath: string,
-    produce: (request: Request) => Promise<Response | null>,
-  ): Promise<Response | null> {
+    produce: (request: Request) => Promise<ProduceResult>,
+    streaming: boolean,
+  ): Promise<StreamingServeResult> {
+    const produceResponse = async (request: Request): Promise<StreamingServeResult> => {
+      return { response: readProduceResult(await produce(request)).response, fillPromise: FILL_DONE };
+    };
+
     if (this.responseCache == null) {
-      return produce(request);
+      return produceResponse(request);
     }
 
     const key = buildResponseCacheKey(this.publishId, scope.collectionName, keyPath, request);
@@ -817,31 +901,32 @@ export class PublisherServer {
       const metadata = state.found() && state.usable() ? decodeCachedResponseMetadata(entry.userMetadata()) : null;
       if (metadata?.tooLarge) {
         scope.serverTiming?.add('cache', performance.now() - lookupStart, 'bypass');
-        return produce(request);
+        return produceResponse(request);
       }
       if (metadata != null) {
         // age() is in milliseconds. A hit younger than the time since a purge proves the entry was refilled.
         scope.serverTiming?.add('cache', performance.now() - lookupStart, `hit age=${Math.round(entry.age() / 1000)}s`);
-        return this.responseFromCache(scope, request, metadata, entry.body());
+        return { response: this.responseFromCache(scope, request, metadata, entry.body()), fillPromise: FILL_DONE };
       }
       // Not usable, and another request is not filling it for us: serve without the cache.
       scope.serverTiming?.add('cache', performance.now() - lookupStart, 'bypass');
-      return produce(request);
+      return produceResponse(request);
     }
 
     // This request must fill the entry (a miss, or a stale entry after a soft purge).
     scope.serverTiming?.add('cache', performance.now() - lookupStart, 'miss');
     let response: Response | null;
+    let length: number | null | undefined;
     try {
-      response = await produce(buildCacheFillRequest(request));
+      ({ response, length } = readProduceResult(await produce(buildCacheFillRequest(request))));
     } catch (err) {
       entry.cancel();
       throw err;
     }
 
-    if (scope.doNotStoreResponse) {
+    if (length === null) {
       entry.cancel();
-      return response;
+      return { response, fillPromise: FILL_DONE };
     }
 
     const insertOptions = {
@@ -858,18 +943,39 @@ export class PublisherServer {
         length: 0,
       });
       writer.close();
-      return null;
+      return { response: null, fillPromise: FILL_DONE };
     }
 
     if (!CACHEABLE_STATUSES.includes(response.status)) {
       entry.cancel();
-      return response;
+      return { response, fillPromise: FILL_DONE };
     }
 
     const headers = new Headers(response.headers);
     // Server-Timing describes one request, so it is not stored.
     headers.delete('Server-Timing');
     const metadata: CachedResponseMetadata = { status: response.status, headers: [...headers] };
+    const maxBodySize = this.responseCache.maxBodySize ?? DEFAULT_MAX_BODY_SIZE;
+
+    if (
+      streaming &&
+      length !== undefined &&
+      length <= maxBodySize &&
+      isStreamingFillSupported() &&
+      CoreCache.lookup(lengthMismatchMarkerKey(key)) == null
+    ) {
+      // The fill streams the body into the entry, and the response streams it
+      // back from the entry. A fill that fails, or that does not have length
+      // bytes, is abandoned and not stored, and the requests that read the
+      // entry get an error.
+      const [ writer, streamBack ] = entry.insertAndStreamBack({
+        ...insertOptions,
+        userMetadata: encodeCachedResponseMetadata(metadata),
+        length,
+      });
+      const fillPromise = this.streamFill(key, insertOptions, writer, response.body, length);
+      return { response: this.responseFromCache(scope, request, metadata, streamBack.body()!), fillPromise };
+    }
 
     // Read the whole body before the insertion starts. After it starts, a body
     // that is not complete is not safe: the requests that read the entry get
@@ -878,7 +984,7 @@ export class PublisherServer {
     // cancel() stores nothing, and the next request fills the entry again.
     let readResult;
     try {
-      readResult = await readBodyUpTo(response.body, this.responseCache.maxBodySize ?? DEFAULT_MAX_BODY_SIZE);
+      readResult = await readBodyUpTo(response.body, maxBodySize);
     } catch (err) {
       entry.cancel();
       throw err;
@@ -894,7 +1000,7 @@ export class PublisherServer {
         length: 0,
       });
       writer.close();
-      return this.responseFromCache(scope, request, metadata, readResult.body);
+      return { response: this.responseFromCache(scope, request, metadata, readResult.body), fillPromise: FILL_DONE };
     }
 
     const writer = entry.insert({
@@ -908,7 +1014,37 @@ export class PublisherServer {
       writer.append(piece);
     }
     writer.close();
-    return this.responseFromCache(scope, request, metadata, streamBytesInPieces(readResult.bytes));
+    return { response: this.responseFromCache(scope, request, metadata, streamBytesInPieces(readResult.bytes)), fillPromise: FILL_DONE };
+  }
+
+  // Writes body into the entry. Never rejects: a failure is logged. If body
+  // does not have length bytes, the fill is abandoned, and a marker tells the
+  // next fill for key to read the whole body first.
+  private async streamFill(
+    key: string,
+    insertOptions: { maxAge: number, surrogateKeys: string[] },
+    writer: FastlyBody,
+    body: ReadableStream<Uint8Array> | null,
+    length: number,
+  ): Promise<void> {
+    try {
+      await pipeBodyWithLength(body, length, (chunk) => writer.append(chunk as Uint8Array<ArrayBuffer>));
+      writer.close();
+    } catch (err) {
+      try {
+        writer.abandon();
+      } catch {
+        // The entry is already closed or abandoned.
+      }
+      console.error(`Response cache: the fill of '${key}' stopped:`, String(err));
+      if (err instanceof BodyLengthMismatchError) {
+        try {
+          CoreCache.insert(lengthMismatchMarkerKey(key), { ...insertOptions, length: 0 }).close();
+        } catch (markerErr) {
+          console.error(`Response cache: cannot store the length mismatch marker of '${key}':`, String(markerErr));
+        }
+      }
+    }
   }
 
   private responseFromCache(
@@ -946,12 +1082,22 @@ export class PublisherServer {
   // file or the 404 page (see options.fallback). Returns null if there is no
   // response for the request, for example for a method other than GET and HEAD.
   async serveRequest(request: Request, options: ServeRequestOptions = {}): Promise<Response | null> {
+    return (await this.serveRequestWith(request, options, false)).response;
+  }
+
+  // As serveRequest(), but the response cache fill streams (see
+  // serveCachedStreaming()). Pass fillPromise to event.waitUntil().
+  async serveRequestStreaming(request: Request, options: ServeRequestOptions = {}): Promise<StreamingServeResult> {
+    return this.serveRequestWith(request, options, true);
+  }
+
+  private async serveRequestWith(request: Request, options: ServeRequestOptions, streaming: boolean): Promise<StreamingServeResult> {
 
     let scope = this.beginRequestFor(request, options.collectionName);
 
     // Only handle GET and HEAD
     if (request.method !== 'GET' && request.method !== 'HEAD') {
-      return null;
+      return { response: null, fillPromise: FILL_DONE };
     }
 
     let pathname;
@@ -966,12 +1112,12 @@ export class PublisherServer {
 
     // Custom health check route
     if (options.healthCheck !== false && pathname === '/healthz') {
-      return new Response("OK", { status: 200 });
+      return { response: new Response("OK", { status: 200 }), fillPromise: FILL_DONE };
     }
 
     const selected = await this.checkSelectedCollection(request, scope, options.onMissing);
     if (selected instanceof Response) {
-      return selected;
+      return { response: selected, fillPromise: FILL_DONE };
     }
     scope = selected.scope;
 
@@ -979,11 +1125,18 @@ export class PublisherServer {
     // With fallback: false, the response does not depend on HTML, so it has its own cache key.
     const fallback = options.fallback !== false && requestAcceptsTextHtml(request);
     const keyPath = fallback ? pathname : `${pathname}|no-html`;
-    const response = applyResponseOverrides(
-      await this.serveCachedFor(scope, requestForStatus(request, options.status), keyPath, (fillRequest) => this.serveRequestFromStorage(scope, fillRequest, pathname, fallback)),
-      options,
+    const served = await this.serveCachedFor(
+      scope,
+      requestForStatus(request, options.status),
+      keyPath,
+      (fillRequest) => this.serveRequestFromStorage(scope, fillRequest, pathname, fallback),
+      streaming,
     );
-    return selected.preview ? this.markPreviewResponse(request, selected.scope, response) : response;
+    const response = applyResponseOverrides(served.response, options);
+    return {
+      response: selected.preview ? this.markPreviewResponse(request, selected.scope, response) : response,
+      fillPromise: served.fillPromise,
+    };
   }
 
   // Serve the SPA file or the 404 page, as serveRequest() does when no file
@@ -991,37 +1144,54 @@ export class PublisherServer {
   // a method other than GET and HEAD, if the client does not accept HTML, or if
   // the collection has no fallback page.
   async serveFallback(request: Request, options: ServeFallbackOptions = {}): Promise<Response | null> {
+    return (await this.serveFallbackWith(request, options, false)).response;
+  }
+
+  // As serveFallback(), but the response cache fill streams (see
+  // serveCachedStreaming()). Pass fillPromise to event.waitUntil().
+  async serveFallbackStreaming(request: Request, options: ServeFallbackOptions = {}): Promise<StreamingServeResult> {
+    return this.serveFallbackWith(request, options, true);
+  }
+
+  private async serveFallbackWith(request: Request, options: ServeFallbackOptions, streaming: boolean): Promise<StreamingServeResult> {
 
     let scope = this.beginRequestFor(request, options.collectionName);
 
     // Only handle GET and HEAD
     if (request.method !== 'GET' && request.method !== 'HEAD') {
-      return null;
+      return { response: null, fillPromise: FILL_DONE };
     }
 
     if (!requestAcceptsTextHtml(request)) {
-      return null;
+      return { response: null, fillPromise: FILL_DONE };
     }
 
     const selected = await this.checkSelectedCollection(request, scope, options.onMissing);
     if (selected instanceof Response) {
-      return selected;
+      return { response: selected, fillPromise: FILL_DONE };
     }
     scope = selected.scope;
 
     // The fallback response is the same for all paths, so it has one cache key.
     // A path always starts with a slash, so this key is not the key of a path.
-    const response = applyResponseOverrides(
-      await this.serveCachedFor(scope, requestForStatus(request, options.status), '|fallback', async (fillRequest) => {
+    const served = await this.serveCachedFor(
+      scope,
+      requestForStatus(request, options.status),
+      '|fallback',
+      async (fillRequest) => {
         const serverConfig = await this.getServerConfigFor(scope);
         if (serverConfig == null) {
           return null;
         }
         return this.serveFallbackFromStorage(scope, fillRequest, serverConfig);
-      }),
-      options,
+      },
+      streaming,
     );
-    return selected.preview ? this.markPreviewResponse(request, selected.scope, response) : response;
+    const response = applyResponseOverrides(served.response, options);
+    return {
+      response: selected.preview ? this.markPreviewResponse(request, selected.scope, response) : response,
+      fillPromise: served.fillPromise,
+    };
   }
 
   // Returns true if the collection is published, has not expired, and can
@@ -1093,7 +1263,7 @@ export class PublisherServer {
     return this.currentScope;
   }
 
-  private async serveRequestFromStorage(scope: CollectionScope, request: Request, pathname: string, fallback: boolean): Promise<Response | null> {
+  private async serveRequestFromStorage(scope: CollectionScope, request: Request, pathname: string, fallback: boolean): Promise<ProduceResult> {
 
     const serverConfig = await this.getServerConfigFor(scope);
     if (serverConfig == null && scope.collectionName === this.defaultCollectionName) {
@@ -1115,8 +1285,7 @@ export class PublisherServer {
       serverConfig == null ||
       (scope.collectionName !== this.defaultCollectionName && await this.getAssetEntryMapFor(scope) == null)
     ) {
-      scope.doNotStoreResponse = true;
-      return collectionNotAvailableResponse(scope.collectionName);
+      return { response: collectionNotAvailableResponse(scope.collectionName), length: null };
     }
 
     const asset = await this.getMatchingAssetFor(scope, serverConfig.publicDirPrefix + pathname, true, false);

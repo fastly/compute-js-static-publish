@@ -23,11 +23,13 @@ async function handleRequest(event) {
 
   // Serve the published file for the request. With fallback: false, a path
   // that has no file does not get the SPA file or the 404 page here.
-  const response = await publisherServer.serveRequest(request, {
+  // waitUntil() lets the response cache fill continue after the response.
+  const { response, fillPromise } = await publisherServer.serveRequestStreaming(request, {
     collectionName: selection.collectionName,
     pathname: selection.pathname,
     fallback: false,
   });
+  event.waitUntil(fillPromise);
   if (response != null) {
     return response;
   }
@@ -37,8 +39,9 @@ async function handleRequest(event) {
   // for the requests that no published file matches.
 
   // When nothing else matches, serve the SPA file or the 404 page.
-  const fallback = await publisherServer.serveFallback(request, {
+  const fallback = await publisherServer.serveFallbackStreaming(request, {
     collectionName: selection.collectionName,
   });
-  return fallback ?? new Response('Not found', { status: 404 });
+  event.waitUntil(fallback.fillPromise);
+  return fallback.response ?? new Response('Not found', { status: 404 });
 }
