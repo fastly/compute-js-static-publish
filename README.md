@@ -1161,7 +1161,7 @@ const response = await publisherServer.serveCached(request, pathname, async (fil
 
 The second argument identifies the response in the collection. If anything other than the path and `Accept-Encoding` changes your response, include it in this value.
 
-Your function can return a `Response`, `null` (not found), or `{ response, length }`. `length` is the number of bytes in the body. With `length: null`, the response is not cached. A `Response` from `serveAsset()` has a known length.
+Your function can return a `Response`, `null` (not found), or `{ response, length }`. `length` is the number of bytes in the body. With `length: null`, the response is not cached. `serveCached()` reads the body, and stores it with its real length. If that is not `length`, it logs a warning. A `Response` from `serveAsset()` has a known length.
 
 #### Streaming the response into the cache
 

@@ -208,8 +208,10 @@ function streamingFillTests({ app, streams, settleMs, checkSdk }) {
       assert.match(cacheResult(third) ?? '', /^hit /);
 
       const output = app().getOutput?.();
-      if (streams && output != null) {
-        assert.match(output, new RegExp(`fill of '[^']*/custom/${name}' stopped: BodyLengthMismatchError`));
+      if (output != null) {
+        assert.match(output, streams ?
+          new RegExp(`fill of '[^']*/custom/${name}' stopped: BodyLengthMismatchError`) :
+          new RegExp(`body of '[^']*/custom/${name}' has 5 bytes, not the declared length ${length}`));
       }
     });
   }

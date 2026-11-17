@@ -241,13 +241,13 @@ function readProduceResult(result: ProduceResult): { response: Response | null, 
 // error when a fill fails. Viceroy (FASTLY_HOSTNAME is 'localhost') keeps an
 // abandoned fill, and each later request for it gets an error. In these cases,
 // serveCachedStreaming() reads the whole body first, as serveCached() does.
-// This is decided at the first request, not when the module loads.
+// The js-compute version is known when the module loads. The environment is
+// read at the first request, and kept.
+const SDK_SUPPORTS_STREAMING_FILL = isSdkVersionAtLeast(globalThis.fastly?.sdkVersion, 4, 2);
 let streamingFillSupported: boolean | undefined;
 function isStreamingFillSupported(): boolean {
   if (streamingFillSupported === undefined) {
-    streamingFillSupported =
-      isSdkVersionAtLeast(globalThis.fastly?.sdkVersion, 4, 2) &&
-      env('FASTLY_HOSTNAME') !== 'localhost';
+    streamingFillSupported = SDK_SUPPORTS_STREAMING_FILL && env('FASTLY_HOSTNAME') !== 'localhost';
   }
   return streamingFillSupported;
 }
@@ -1003,6 +1003,11 @@ export class PublisherServer {
       return { response: this.responseFromCache(scope, request, metadata, readResult.body), fillPromise: FILL_DONE };
     }
 
+    // The fill stores the body that it read. A declared length that is not
+    // the length of that body is a mistake in produce(), so it is logged.
+    if (length !== undefined && length !== readResult.bytes.byteLength) {
+      console.warn(`Response cache: the body of '${key}' has ${readResult.bytes.byteLength} bytes, not the declared length ${length}. The fill stores the body that it read.`);
+    }
     const writer = entry.insert({
       ...insertOptions,
       userMetadata: encodeCachedResponseMetadata(metadata),
