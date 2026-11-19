@@ -41,6 +41,7 @@ checkout through a `file:` dependency. The tests need network access for `npm in
 | `global-options.test.js` | Checks `--version` and `--project-dir`.                                                                          | Nothing                                   |
 | `template-hooks.test.js` | Checks the template hooks (`run-template-hook` and the npm scripts that call it), and `npm run dev:watch` with its watch script. | The Fastly CLI, for `dev:watch`           |
 | `hono-examples.test.js`  | Copies the examples of `examples/hono/` into a managed project, and serves it with `dev`. The GRIP test needs Pushpin on the `PATH`. Then deploys both examples to the service of `deployed.test.js`, and examines a stream through Fanout and a login callback. | The Fastly CLI. For the deployed test, the variables below |
+| `streaming-fill.test.js` | Checks `serveRequestStreaming()` and `serveCachedStreaming()` in Viceroy (with the js-compute of the template and with 4.1.0, where the fill reads the whole body first), and on the service of `deployed.test.js`, where the fill streams: a body that does not have its declared length is not cached, and the next fill reads the whole body. | The Fastly CLI. For the deployed test, the variables below |
 
 If a test does not have what it needs, it is skipped, and the output tells which environment variables to set.
 
@@ -58,16 +59,16 @@ npm run test:e2e
 
 | Variable                  | Used by                         | Value                                                                    |
 |---------------------------|---------------------------------|--------------------------------------------------------------------------|
-| `FASTLY_API_TOKEN`        | `kv-store.test.js`, `deployed.test.js`, purge tests | An API token that can write to the KV Store. For the purge and deployed tests, it must also purge and deploy the service |
-| `CJSP_TEST_KV_STORE_NAME` | `kv-store.test.js`, `deployed.test.js` | The name of a KV Store for tests                                         |
+| `FASTLY_API_TOKEN`        | `kv-store.test.js`, `deployed.test.js`, `streaming-fill.test.js`, purge tests | An API token that can write to the KV Store. For the purge and deployed tests, it must also purge and deploy the service |
+| `CJSP_TEST_KV_STORE_NAME` | `kv-store.test.js`, `deployed.test.js`, `streaming-fill.test.js` | The name of a KV Store for tests                                         |
 | `S3_ACCESS_KEY_ID`        | `s3.test.js`                    | An access key ID that can read and write the bucket                     |
 | `S3_SECRET_ACCESS_KEY`    | `s3.test.js`                    | The secret access key                                                    |
 | `CJSP_TEST_S3_REGION`     | `s3.test.js`                    | The region of the bucket                                                 |
 | `CJSP_TEST_S3_BUCKET`     | `s3.test.js`                    | The name of a bucket for tests                                           |
 | `CJSP_TEST_S3_ENDPOINT`   | `s3.test.js` (optional)         | The endpoint, for storage that is not AWS S3                             |
 | `CJSP_TEST_SERVICE_ID`    | `kv-store.test.js`, `s3.test.js` (optional) | A Service ID to purge after publishing. You can use the service of `deployed.test.js` |
-| `CJSP_TEST_DEPLOY_SERVICE_ID` | `deployed.test.js`, `managed-deploy.test.js` | A Compute service for tests. **The test replaces the active version of this service.** |
-| `CJSP_TEST_DEPLOY_URL`    | `deployed.test.js`              | The URL of that service, for example `https://<name>.edgecompute.app`    |
+| `CJSP_TEST_DEPLOY_SERVICE_ID` | `deployed.test.js`, `streaming-fill.test.js`, `managed-deploy.test.js` | A Compute service for tests. **The test replaces the active version of this service.** |
+| `CJSP_TEST_DEPLOY_URL`    | `deployed.test.js`, `streaming-fill.test.js`              | The URL of that service, for example `https://<name>.edgecompute.app`    |
 | `CJSP_TEST_ONLY_EJECT_PACKAGE_SPEC` | `eject.test.js` (it sets it itself) | Do not set it. The test gives `eject` the spec `file:<checkout>`, because the version of the checkout is not on npm. `eject` shows a warning when it is set |
 | `CJSP_TEST_PUBLISH_API_TOKEN` | `hono-examples.test.js`    | An API token that can publish to Fanout on that service. Only the Secret Store uses it (see below) |
 | `CJSP_TEST_GRIP_PUBLISH_KEY`  | `hono-examples.test.js`    | A random value: `PUBLISH_KEY` of the Secret Store                        |

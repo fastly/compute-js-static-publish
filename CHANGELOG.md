@@ -50,6 +50,8 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 - Error codes: with `--json`, an error gives `{ "schemaVersion": 1, "error": { "code", "message" } }`. The README lists the codes, for example `collection-name-invalid` and `credentials-missing`.
 - README: "Using the CLI in CI", with the exit codes, the JSON output, and the error codes.
 - `PublisherServer`: the options `status` and `headers` of `serveRequest()` and `serveFallback()` change the status and the headers of the response of a file, for one call. For a status other than `2xx`, the server does not evaluate the preconditions of the request.
+- `PublisherServer`: `serveRequestStreaming()`, `serveFallbackStreaming()`, and `serveCachedStreaming()` return `{ response, fillPromise }`. On a Fastly service with `@fastly/js-compute` 4.2 or later (not in `fastly compute serve`), a response cache fill for a body with a known length streams the body to the visitor and into the cache at the same time. Pass `fillPromise` to `event.waitUntil()`. A body that does not have its declared length is not cached, and the next fill reads the whole body first. The `plain` template and the Hono helpers use them.
+- `PublisherServer`: the function of `serveCached()` can return `{ response, length }`. With `length: null`, the response is not cached.
 
 ### Changed
 
