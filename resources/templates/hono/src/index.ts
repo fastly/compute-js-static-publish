@@ -38,8 +38,8 @@ app.use('*', logFastlyServiceVersion());
 app.use('*', selectCollection());
 
 // The extensions, in file-name order: first the middleware phase of all of
-// them, then the beforeFiles phase.
-for (const phase of [ 'middleware', 'beforeFiles' ] as const) {
+// them, then the beforeFilesRoutes phase.
+for (const phase of [ 'middleware', 'beforeFilesRoutes' ] as const) {
   for (const e of extensions) {
     e.module.phases[phase]?.(app, honoOptions?.extensions?.[e.name], helpers);
   }
@@ -51,10 +51,10 @@ for (const phase of [ 'middleware', 'beforeFiles' ] as const) {
 // Serve the published files. If no file matches, the request goes to the next handler.
 app.use('*', serveStatic());
 
-// The afterFiles phase of the extensions: only for the requests that no
+// The afterFilesRoutes phase of the extensions: only for the requests that no
 // published file matches.
 for (const e of extensions) {
-  e.module.phases.afterFiles?.(app, honoOptions?.extensions?.[e.name], helpers);
+  e.module.phases.afterFilesRoutes?.(app, honoOptions?.extensions?.[e.name], helpers);
 }
 
 // When nothing matches, serve the SPA file or the 404 page.

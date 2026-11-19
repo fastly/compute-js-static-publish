@@ -105,8 +105,8 @@ my-site/
 Managed mode generates `src/index.js` again for each build, so your changes to it would be lost. With the `hono`
 template, you can keep your code in Hono extensions: modules in the folder `hono-extensions/`, beside the project file.
 The build bundles them into the app. Code that ran before `serveRequest()`, for example a redirect of an old host name,
-a login check, or a proxy to another service, goes into a `middleware` or `beforeFiles` phase. Code that ran when no
-file matched, for example a special page for a path, goes into an `afterFiles` phase. Each module gets its own options,
+a login check, or a proxy to another service, goes into a `middleware` or `beforeFilesRoutes` phase. Code that ran when no
+file matched, for example a special page for a path, goes into an `afterFilesRoutes` phase. Each module gets its own options,
 and declares the Fastly resources that it uses (bindings).
 
 1. In step 2, add `template: "hono"` to `managed`.

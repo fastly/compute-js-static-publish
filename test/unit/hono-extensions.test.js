@@ -22,19 +22,19 @@ describe('defineExtension()', () => {
   test('an object has a function for each phase', () => {
     const a = () => {};
     const b = () => {};
-    assert.deepEqual(defineExtension({ middleware: a, beforeFiles: b }), { kind: 'extension', bindings: {}, phases: { middleware: a, beforeFiles: b } });
-    assert.deepEqual(defineExtension({ bindings: { kv: 'KVStore' } }, { afterFiles: a }),
-      { kind: 'extension', bindings: { kv: 'KVStore' }, phases: { afterFiles: a } });
+    assert.deepEqual(defineExtension({ middleware: a, beforeFilesRoutes: b }), { kind: 'extension', bindings: {}, phases: { middleware: a, beforeFilesRoutes: b } });
+    assert.deepEqual(defineExtension({ bindings: { kv: 'KVStore' } }, { afterFilesRoutes: a }),
+      { kind: 'extension', bindings: { kv: 'KVStore' }, phases: { afterFilesRoutes: a } });
   });
 
   test('the phases, in the order that the app runs them', () => {
-    assert.deepEqual(EXTENSION_PHASES, [ 'middleware', 'beforeFiles', 'afterFiles' ]);
+    assert.deepEqual(EXTENSION_PHASES, [ 'middleware', 'beforeFilesRoutes', 'afterFilesRoutes' ]);
   });
 });
 
 describe('mergeBindings()', () => {
   const auth = defineExtension({ bindings: { secrets: 'SecretStore:auth', config: 'ConfigStore:site' } }, () => {});
-  const stream = defineExtension({ bindings: { config: 'ConfigStore:site' } }, { beforeFiles: () => {} });
+  const stream = defineExtension({ bindings: { config: 'ConfigStore:site' } }, { beforeFilesRoutes: () => {} });
 
   test('merges the bindings of the app and of the modules', () => {
     assert.deepEqual(
@@ -68,13 +68,22 @@ describe('mergeBindings()', () => {
 
   test('phases that are not correct are an error', () => {
     assert.throws(() => mergeBindings({}, [ entry('a.ts', defineExtension({})) ]),
-      /hono-extensions\/a\.ts: defineExtension\(\) needs a function, or an object with a function for one or more of the phases middleware, beforeFiles, afterFiles\.$/);
+      /hono-extensions\/a\.ts: defineExtension\(\) needs a function, or an object with a function for one or more of the phases middleware, beforeFilesRoutes, afterFilesRoutes\.$/);
     assert.throws(() => mergeBindings({}, [ entry('b.ts', defineExtension({ middleware: () => {}, before: () => {} })) ]),
       /hono-extensions\/b\.ts: .* 'before' is not a phase\./);
     assert.throws(() => mergeBindings({}, [ entry('d.ts', defineExtension({ before: () => {}, after: () => {} })) ]),
       /'before', 'after' are not phases\./);
-    assert.throws(() => mergeBindings({}, [ entry('c.ts', defineExtension({ bindings: {} }, { beforeFiles: 'x' })) ]),
-      /hono-extensions\/c\.ts: the phase beforeFiles must be a function\./);
+    assert.throws(() => mergeBindings({}, [ entry('c.ts', defineExtension({ bindings: {} }, { beforeFilesRoutes: 'x' })) ]),
+      /hono-extensions\/c\.ts: the phase beforeFilesRoutes must be a function\./);
+  });
+
+  test('a phase name of an earlier beta names the new phase', () => {
+    assert.throws(() => mergeBindings({}, [ entry('e.ts', defineExtension({ beforeFiles: () => {} })) ]),
+      /hono-extensions\/e\.ts: .* 'beforeFiles' is not a phase\. Rename 'beforeFiles' to 'beforeFilesRoutes'\.$/);
+    assert.throws(() => mergeBindings({}, [ entry('f.ts', defineExtension({ beforeFiles: () => {}, afterFiles: () => {} })) ]),
+      /are not phases\. Rename 'beforeFiles' to 'beforeFilesRoutes'\. Rename 'afterFiles' to 'afterFilesRoutes'\.$/);
+    assert.throws(() => mergeBindings({}, [ entry('g.ts', defineExtension({ toString: () => {} })) ]),
+      /'toString' is not a phase\.$/);
   });
 });
 
