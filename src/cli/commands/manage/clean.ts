@@ -11,18 +11,30 @@ import { type AssetEntryMap } from '../../../models/assets/index.js';
 import { decodeIndexMetadata } from '../../../models/server/index.js';
 import { isExpired } from '../../../models/time/index.js';
 import { parseCommandLine } from '../../util/args.js';
-import { LoadConfigError, loadStaticPublisherRcFile } from '../../util/config.js';
+import { errorCodeOf, recordFailure } from '../../util/output.js';
+import {
+  LoadConfigError,
+  configFileName,
+  getComputeAppDir,
+  loadStaticPublisherRcFile,
+} from '../../util/config.js';
 import { loadStorageProviderFromStaticPublishRc } from '../../storage/storage-provider.js';
+import { cliCommand } from '../../util/package.js';
 
 function help() {
   console.log(`\
 
 Usage:
-  npx @fastly/compute-js-static-publish clean [options]
+  ${cliCommand()} clean [options]
 
 Description:
   Cleans up expired or unreferenced items in storage.
   This can include expired collection indexes and orphaned content assets.
+
+  Do not run clean while publish-content can run for the same storage.
+  clean can delete files that a publish uses before the publish writes its
+  index. In CI, put the jobs that publish and the job that cleans in the same
+  concurrency group.
 
 Options:
   --delete-expired-collections     If set, expired collection index files will be deleted.
@@ -70,7 +82,7 @@ export async function action(actionArgs: string[]) {
     if (parsed.error != null) {
       console.error(String(parsed.error));
       console.error();
-      process.exitCode = 1;
+      recordFailure('usage', String(parsed.error));
     }
 
     help();
@@ -89,7 +101,7 @@ export async function action(actionArgs: string[]) {
 
   // compute-js-static-publisher cli is always run from the Compute application directory
   // in other words, the directory that contains `fastly.toml`.
-  const computeAppDir = path.resolve();
+  const computeAppDir = getComputeAppDir();
 
   console.log(`🧹 Cleaning storage entries...`);
 
@@ -98,14 +110,14 @@ export async function action(actionArgs: string[]) {
   try {
     staticPublisherRc = await loadStaticPublisherRcFile();
   } catch (err) {
-    console.error("❌ Can't load static-publish.rc.js");
+    console.error(`❌ Can't load ${configFileName()}`);
     console.error("Run this from a compute-js-static-publish compute-js directory.");
     if (err instanceof LoadConfigError) {
       for (const error of err.errors) {
         console.error(error);
       }
     }
-    process.exitCode = 1;
+    recordFailure('config-invalid', `Can't load ${configFileName()}.`);
     return;
   }
 
@@ -131,7 +143,7 @@ export async function action(actionArgs: string[]) {
   } catch (err: unknown) {
     console.error(`❌ Could not instantiate store provider`);
     console.error(String(err));
-    process.exitCode = 1;
+    recordFailure(errorCodeOf(err), String(err));
     return;
   }
 

@@ -1,0 +1,9 @@
+/node_modules
+/bin
+/pkg
+{% if workingDirInApp %}
+/{{ workingDirInApp | line }}
+{% endif %}
+{% for templateLine in templateLines %}
+{{ templateLine | line }}
+{% endfor %}

@@ -123,7 +123,7 @@ export function scaffoldApp(dir, scaffoldArgs, { rootDir = './public' } = {}) {
   runCli([ '--root-dir', rootDir, ...scaffoldArgs ], { cwd: dir });
   const computeJsDir = path.resolve(dir, 'compute-js');
   const packageJson = JSON.parse(fs.readFileSync(path.resolve(computeJsDir, 'package.json'), 'utf-8'));
-  const dependency = packageJson.devDependencies['@fastly/compute-js-static-publish'];
+  const dependency = packageJson.dependencies['@fastly/compute-js-static-publish'];
   if (!dependency.startsWith('file:')) {
     throw new Error(`The scaffolded app does not use this checkout: ${dependency}`);
   }
@@ -181,9 +181,14 @@ async function getFreePort() {
 
 // Starts `fastly compute serve` (this also builds the app). Returns the base
 // URL and a function that stops the server.
-export async function startServe(computeJsDir, { env, timeoutMs = 300_000 } = {}) {
+// command(addr) can give another command that starts the server, as
+// [ command, args ], for example npm run dev:watch, or the CLI's dev command.
+export async function startServe(computeJsDir, { env, timeoutMs = 300_000, command } = {}) {
   const port = await getFreePort();
-  const child = child_process.spawn('fastly', [ 'compute', 'serve', '--addr', `127.0.0.1:${port}` ], {
+  const [ file, args ] = command != null ?
+    command(`127.0.0.1:${port}`) :
+    [ 'fastly', [ 'compute', 'serve', '--addr', `127.0.0.1:${port}` ] ];
+  const child = child_process.spawn(file, args, {
     cwd: computeJsDir,
     env: { ...process.env, ...env },
     stdio: [ 'ignore', 'pipe', 'pipe' ],
@@ -216,7 +221,7 @@ export async function startServe(computeJsDir, { env, timeoutMs = 300_000 } = {}
     }
     try {
       await fetch(baseUrl + '/', { signal: AbortSignal.timeout(2000) });
-      return { baseUrl, stop, getOutput: () => output };
+      return { baseUrl, pid: child.pid, stop, getOutput: () => output };
     } catch {
       await sleep(1000);
     }

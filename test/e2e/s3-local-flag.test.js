@@ -59,7 +59,7 @@ export default {
         env: { S3_ACCESS_KEY_ID: 'dummy', S3_SECRET_ACCESS_KEY: 'dummy' },
         allowFailure: true,
       });
-      assert.equal(result.status, 1, result.output);
+      assert.equal(result.status, 2, result.output);
       assert.match(result.output, /--local is available only in KV Store mode/);
       assert.doesNotMatch(result.output, /ECONNREFUSED|Working on S3/);
     });
