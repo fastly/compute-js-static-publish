@@ -72,6 +72,8 @@ These do not depend on the six parts. Each can be a separate PR to `main`, in a 
 - Remove the deprecated getters `serverTiming`, `settingsCached`, and `assetEntryMapCache` of `PublisherServer` (task 2.2).
 - Remove `--public-dir` and `server.publicDirPrefix` (deprecated in 8.0, #100). Hidden files (part 4) replace their use.
 - Decide whether `scaffold` makes a managed project by default.
+- Require `@fastly/js-compute` 4.3 or later (`peerDependencies` and the templates), and a Viceroy with the fix for abandoned Core Cache fills (Viceroy #771 and #773). Then remove both checks of the streaming fill: the js-compute version and `FASTLY_HOSTNAME === 'localhost'`. This also drops js-compute 3.
+- Decide whether `serveRequest()` and `serveFallback()` stream the fill by default. That changes their return value (`fillPromise`, which needs `event.waitUntil()`), so it can only be done in a major version.
 
 ### Possible future features
 
