@@ -7,7 +7,7 @@
 // 2. The request from Fanout has Grip-Sig: serveGrip() checks it, and sets
 //    c.var.grip for the stream endpoints.
 //
-// The beforeFiles phase:
+// The beforeFilesRoutes phase:
 // - GET /events/stream/:channel: an HTTP stream. Each message is one line.
 // - GET /events/sse/:channel: Server-Sent Events, for EventSource in a browser.
 // - POST /publish/:channel: sends the request body to both endpoints of the
@@ -38,7 +38,7 @@ export default defineExtension({ bindings: GRIP_BINDINGS }, {
     app.use(`${eventsPath(options)}/*`, fanoutSelfHandoffMiddleware('self'), serveGrip<GripEnv>((c) => gripConfig(c)));
   },
 
-  beforeFiles: (app, options?: GripOptions) => {
+  beforeFilesRoutes: (app, options?: GripOptions) => {
     app.get(`${eventsPath(options)}/stream/:channel`, (c) => {
       const error = checkGrip(c);
       if (error != null) {

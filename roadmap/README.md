@@ -84,5 +84,6 @@ These do not depend on the six parts. Each can be a separate PR to `main`, in a 
 - esbuild loader settings in js-compute (so that extensions can import `.html` or `.svg` files).
 - `.tsx`/`.jsx` extension modules (for `hono/jsx`).
 - File-based routes for Hono extensions (`routes/api/hello.js` → `/api/hello`).
+- A config module for the Hono extensions folder (for example `hono-extensions/index.ts`) that sets the order of the steps around the request, or replaces the step that serves the published files (or turns it off). Not in 8.1: the onion of `middleware` already gives each module code before and after each request, and replacing the files step is close to ejecting. Decide it with a real use case.
 - Un-eject (ejected → managed).
 - Upgrade help for ejected apps: compare the ejected files with what the current template would generate (uses `generatedFrom`).

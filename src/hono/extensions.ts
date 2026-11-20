@@ -48,13 +48,25 @@ export type ExtensionEnv<B extends ExtensionBindings> = {
   Variables: Record<string, any>,
 };
 
-// The phases of the app, in the order that the app runs them:
-// - middleware: before all other phases, for example a login check.
-// - beforeFiles: before the published files.
-// - afterFiles: after the published files, only for the requests that no
-//   published file matches.
-export const EXTENSION_PHASES = [ 'middleware', 'beforeFiles', 'afterFiles' ] as const;
+// The phases of the app, in the order that the app adds them. They are on two
+// axes:
+// - Processing: middleware wraps each request, for example a login check, or
+//   the time of a request. The code before await next() runs before the routes,
+//   and the code after it runs after the response is made, in the reverse order.
+// - Routing: the routes that can answer a request, in this order:
+//   - beforeFilesRoutes: before the published files. These routes win over a file.
+//   - (the published files, with serveStatic())
+//   - afterFilesRoutes: only for the requests that no published file matches,
+//     before the fallback (the SPA file or the 404 page).
+export const EXTENSION_PHASES = [ 'middleware', 'beforeFilesRoutes', 'afterFilesRoutes' ] as const;
 export type ExtensionPhase = typeof EXTENSION_PHASES[number];
+
+// The names of the phases in earlier betas of 8.1, and the phase that has
+// each one now. mergeBindings() names the new phase in its error.
+const RENAMED_PHASES: Readonly<Record<string, ExtensionPhase>> = {
+  beforeFiles: 'beforeFilesRoutes',
+  afterFiles: 'afterFilesRoutes',
+};
 
 // The helpers of the app that each phase function gets: the same
 // serveStatic(), staticResponse(), serveFallback(), fallbackResponse(),
@@ -163,7 +175,11 @@ export function mergeBindings(appBindings: ExtensionBindings | undefined, entrie
         `${source}: defineExtension() needs a function, or an object with a function ` +
         `for one or more of the phases ${EXTENSION_PHASES.join(', ')}.` +
         (unknown.length === 1 ? ` '${unknown[0]}' is not a phase.` : '') +
-        (unknown.length > 1 ? ` ${unknown.map(x => `'${x}'`).join(', ')} are not phases.` : ''),
+        (unknown.length > 1 ? ` ${unknown.map(x => `'${x}'`).join(', ')} are not phases.` : '') +
+        unknown
+          .filter(x => Object.prototype.hasOwnProperty.call(RENAMED_PHASES, x))
+          .map(x => ` Rename '${x}' to '${RENAMED_PHASES[x]}'.`)
+          .join(''),
       );
     }
     for (const key of keys) {

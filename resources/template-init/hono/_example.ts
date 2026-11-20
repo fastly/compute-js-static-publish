@@ -4,8 +4,8 @@
 // the project file (or in static-publish.rc.js).
 //
 // defineExtension() gets a function for each phase that the module uses. The
-// app runs the middleware phase of all modules, then their beforeFiles phase,
-// then the published files, then their afterFiles phase. With only a function
+// app runs the middleware phase of all modules, then their beforeFilesRoutes phase,
+// then the published files, then their afterFilesRoutes phase. With only a function
 // in place of the object, the function is the middleware phase.
 import { defineExtension } from '@fastly/compute-js-static-publish/hono';
 
@@ -16,7 +16,7 @@ export default defineExtension({
       c.header(options?.header ?? 'x-example', 'from an extension');
     });
   },
-  beforeFiles: (app) => {
+  beforeFilesRoutes: (app) => {
     app.get('/api/example', (c) => c.json({ hello: 'from an extension' }));
   },
 });

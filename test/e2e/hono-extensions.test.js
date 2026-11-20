@@ -59,7 +59,7 @@ function writeFiles(dir, files) {
 }
 
 // Modules that use options, a binding, a helper in lib/, and each phase.
-// 05-early.ts sorts before 10-header.ts, but its beforeFiles phase runs after
+// 05-early.ts sorts before 10-header.ts, but its beforeFilesRoutes phase runs after
 // the middleware phase of 10-header.ts.
 const MODULES = {
   '10-header.ts': `\
@@ -78,8 +78,8 @@ export default defineExtension({ bindings: { site: 'ConfigStore:site_config' } }
 import { defineExtension } from '@fastly/compute-js-static-publish/hono';
 
 export default defineExtension({
-  beforeFiles: (app) => {
-    app.get('/early', (c) => c.text('from a beforeFiles route'));
+  beforeFilesRoutes: (app) => {
+    app.get('/early', (c) => c.text('from a beforeFilesRoutes route'));
   },
 });
 `,
@@ -87,7 +87,7 @@ export default defineExtension({
 import { defineExtension } from '@fastly/compute-js-static-publish/hono';
 
 export default defineExtension({
-  beforeFiles: (app) => {
+  beforeFilesRoutes: (app) => {
     app.get('/hello', (c) => c.json({ hello: 'from an extension route' }));
   },
 });
@@ -106,7 +106,7 @@ export default defineExtension((app, options?: { path?: string }) => {
 import { defineExtension } from '@fastly/compute-js-static-publish/hono';
 
 export default defineExtension({
-  afterFiles: (app) => {
+  afterFilesRoutes: (app) => {
     app.on([ 'GET', 'POST' ], '/about.html', (c) => c.text('from a route after the files'));
     app.get('/after-files', (c) => c.text('from a route after the files'));
   },
@@ -170,10 +170,10 @@ describe('hono extensions in an ejected app', { skip: skipUnlessFastlyCli() }, (
     assert.deepEqual(JSON.parse(res.body.toString()), { hello: 'from an extension route' });
   });
 
-  test('the middleware phase of all modules comes before their beforeFiles phase', async () => {
+  test('the middleware phase of all modules comes before their beforeFilesRoutes phase', async () => {
     const res = await rawRequest(server.baseUrl + '/early');
     assert.equal(res.status, 200);
-    assert.equal(res.body.toString(), 'from a beforeFiles route');
+    assert.equal(res.body.toString(), 'from a beforeFilesRoutes route');
     assert.equal(res.headers['x-extension'], 'from-options', 'the middleware of 10-header.ts runs for the route of 05-early.ts');
   });
 
@@ -186,7 +186,7 @@ describe('hono extensions in an ejected app', { skip: skipUnlessFastlyCli() }, (
     assert.equal(home.headers['x-docs'], undefined);
   });
 
-  test('the afterFiles phase gets only the requests that no published file matches', async () => {
+  test('the afterFilesRoutes phase gets only the requests that no published file matches', async () => {
     const file = await rawRequest(server.baseUrl + '/about.html');
     assert.equal(file.status, 200);
     assert.match(file.body.toString(), /<h1>About<\/h1>/);

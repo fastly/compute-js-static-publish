@@ -1227,15 +1227,39 @@ hono-extensions/
 
 - **Modules** are the files directly in the folder, with the extension `.ts`, `.mts`, `.js`, or `.mjs`. Files that start with `_` or `.`, and `.d.ts` files, are not modules. The build does not look in subfolders, so use them, for example `lib/`, for your helpers.
 - **The name** of a module is the file name without the number prefix and the extension: `10-auth.ts` is `auth`. Two modules with the same name are an error.
-- **The phases:** a module adds its handlers to the app in one or more phases. The app runs the phases in this order, and in each phase the modules in the order of the file names (add a number prefix to set the order):
+- **The phases:** a module adds its handlers to the app in one or more phases. In each phase, the app takes the modules in the order of the file names (add a number prefix to set the order). The phases are on two axes:
 
   ```
-  selectCollection() → middleware → beforeFiles → serveStatic() → afterFiles → serveFallback()
+  selectCollection()
+  middleware                      processing: wraps all of the routing below
+    beforeFilesRoutes             routing: the first route that answers wins
+    → published files (serveStatic())
+    → afterFilesRoutes
+    → serveFallback()
   ```
 
-  - `middleware`: before all other phases. All modules add their middleware before any module adds its routes, so a middleware such as a login check also applies to the routes of the other modules.
-  - `beforeFiles`: before the published files.
-  - `afterFiles`: after the published files. These handlers get only the requests that no published file matches, for example to make a page for a path that has no file, before the 404 page. The published files are served only for `GET` and `HEAD`, so these handlers also get all other methods.
+  - **Processing:** `middleware` wraps each request, for example a login check, a header on each response, or the time of a request. In a middleware, the code before `await next()` runs before the routes. The code after it runs after the response is made, also when a published file answered, and in the reverse order of the modules. All modules add their middleware before any module adds its routes, so a middleware such as a login check also applies to the routes of the other modules.
+  - **Routing:** the routes that can answer a request, in this order. The first one that answers wins.
+    - `beforeFilesRoutes`: before the published files. A route here wins over a file at the same path, for example an API.
+    - The published files (`serveStatic()`).
+    - `afterFilesRoutes`: only for the requests that no published file matches, before the SPA file or the 404 page. A file at the same path wins, for example for a redirect from an old URL, which stops when a file is published at that URL again. The published files are served only for `GET` and `HEAD`, so these routes also get all other methods.
+
+  A middleware that measures the time of each request, with the code before and after `await next()`:
+
+  ```ts
+  // hono-extensions/05-timing.ts
+  import { defineExtension } from '@fastly/compute-js-static-publish/hono';
+
+  export default defineExtension((app) => {
+    app.use('*', async (c, next) => {
+      const start = performance.now();
+      await next();
+      console.log(`${c.req.method} ${c.req.path} ${c.res.status} ${(performance.now() - start).toFixed(1)} ms`);
+    });
+  });
+  ```
+
+  The time ends when the response is made. The body of a large file can still be on its way to the visitor then.
 
 A module default-exports `defineExtension()`. Give it a function for each phase that the module uses. Each function gets the Hono app, the options of the module, and the helpers of the app (see below), and adds handlers with `app.use()`, `app.get()`, `app.post()`, and the other methods of Hono. With only a function in place of the object, the function is the `middleware` phase:
 
@@ -1262,10 +1286,10 @@ export default defineExtension({ bindings: { config: 'ConfigStore:site_config' }
       c.header('cache-control', 'no-store');
     });
   },
-  beforeFiles: (app) => {
+  beforeFilesRoutes: (app) => {
     app.get('/api/greeting', async (c) => c.json({ greeting: await c.env.config?.get('greeting') }));
   },
-  afterFiles: (app) => {
+  afterFilesRoutes: (app) => {
     app.get('/blog/:slug', (c) => c.redirect(`/archive/${c.req.param('slug')}/`, 301));
   },
 });
@@ -1282,7 +1306,7 @@ templateOptions: {
 },
 ```
 
-**The files step:** between `beforeFiles` and `afterFiles`, the app has a fixed step that serves the published files with `serveStatic()`. It is not a phase, and a module cannot remove it. A module can serve files in another way before it: a request that the module answers does not get to this step, and a request that the module passes on with `next()` does.
+**The files step:** between `beforeFilesRoutes` and `afterFilesRoutes`, the app has a fixed step that serves the published files with `serveStatic()`. It is not a phase, and a module cannot remove it. A module can serve files in another way before it: a request that the module answers does not get to this step, and a request that the module passes on with `next()` does.
 
 **Helpers:** the third argument of each phase function has the `serveStatic()`, `staticResponse()`, `serveFallback()`, `fallbackResponse()`, `isCollectionAvailable()`, and `publisherServer` that the app uses (see [Using Hono](#-using-hono)). They are made once when the app starts, with the same `collectionSelection`, so a module can serve published files in its own place in the order, with its own rules.
 
@@ -1361,7 +1385,7 @@ Do not call the `set…()` methods (`setActiveCollectionName()`, `setCollectionS
 
 **Examples** in [`examples/hono/`](https://github.com/fastly/compute-js-static-publish/tree/main/examples/hono) show complete extensions. They are not part of the npm package, and you cannot scaffold an app with them: for a new project, copy the `hono-extensions/` folder of an example into your project, and set it up as the README of the example shows. The README also shows how to add an example to a project that exists.
 
-- [`grip`](https://github.com/fastly/compute-js-static-publish/tree/main/examples/hono/grip): realtime streams and Server-Sent Events with Fastly Fanout, and a publish endpoint with a shared key. One module with two phases: the `middleware` phase hands off only `/events/*` to Fanout, and the `beforeFiles` phase has the endpoints.
+- [`grip`](https://github.com/fastly/compute-js-static-publish/tree/main/examples/hono/grip): realtime streams and Server-Sent Events with Fastly Fanout, and a publish endpoint with a shared key. One module with two phases: the `middleware` phase hands off only `/events/*` to Fanout, and the `beforeFilesRoutes` phase has the endpoints.
 - [`oauth`](https://github.com/fastly/compute-js-static-publish/tree/main/examples/hono/oauth): a login with GitHub or Google in front of some paths of the site (`protect`), with a signed session cookie.
 
 Each example takes its secrets from a Secret Store. For `dev`, `managed.fastlyToml` adds a local Secret Store that reads environment variables.

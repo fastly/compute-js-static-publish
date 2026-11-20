@@ -138,7 +138,7 @@ describe('bundleHonoExtensions()', () => {
     const extDir = path.resolve(root, 'ext');
     for (const [ file, content ] of Object.entries({
       '10-header.ts': `import { createMiddleware } from 'hono/factory';\nimport { tag } from './lib/tag';\nconst x: string = tag;\nexport default { kind: 'extension', bindings: {}, phases: { middleware: (app) => app.use('*', createMiddleware(async (c, next) => { await next(); c.header('x', x); })) } };\n`,
-      'hello.ts': `import { env } from 'fastly:env';\nexport default { kind: 'extension', bindings: {}, phases: { beforeFiles: (app) => app.get('/hello', (c) => c.text(env('X'))) } };\n`,
+      'hello.ts': `import { env } from 'fastly:env';\nexport default { kind: 'extension', bindings: {}, phases: { beforeFilesRoutes: (app) => app.get('/hello', (c) => c.text(env('X'))) } };\n`,
       'lib/tag.ts': `export const tag = 'from-lib';\n`,
     })) {
       fs.mkdirSync(path.dirname(path.resolve(extDir, file)), { recursive: true });

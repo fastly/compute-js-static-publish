@@ -52,11 +52,11 @@ GET /events/stream/news  (from the visitor)
   ▼
 GET /events/stream/news  (from Fanout, with Grip-Sig, through the backend 'self')
   → grip.ts, middleware phase: the signature is correct → c.var.grip
-  → grip.ts, beforeFiles phase: hold a stream on the channel 'stream:news'
+  → grip.ts, beforeFilesRoutes phase: hold a stream on the channel 'stream:news'
       Fanout keeps the connection to the visitor open, and sends each message.
 ```
 
-- **One module, two phases.** `grip.ts` adds the Fanout handoff and `serveGrip()` in the `middleware` phase, and the three endpoints in the `beforeFiles` phase.
+- **One module, two phases.** `grip.ts` adds the Fanout handoff and `serveGrip()` in the `middleware` phase, and the three endpoints in the `beforeFilesRoutes` phase.
 - **Only `/events/*` goes through Fanout.** The middleware phase adds the handoff with `app.use('/events/*', …)`, so the published files and other routes do not go through Fanout, and keep the cache. This is the pattern of the Fastly starter kit [`fanout`](https://github.com/fastly/compute-starter-kits/tree/main/starter-kits/javascript/fanout): the app hands off one path, and answers the requests that come back from Fanout itself.
 - **The publish endpoint** sends each message two times: to `stream:<channel>` as a line, and to `sse:<channel>` as an SSE event. A request without the correct key gets `401`. If the Secret Store has no `PUBLISH_KEY`, the endpoint gives `503`. You can also publish without this endpoint, with the publish API of Fastly (`POST https://api.fastly.com/service/<service ID>/publish/`, see the [Fanout guide](https://www.fastly.com/documentation/guides/concepts/real-time-messaging/fanout/)).
 

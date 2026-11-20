@@ -853,7 +853,7 @@ my-site/                          ← project dir
 ├── static-publish.project.js
 └── hono-extensions/              ← the customer's code (committed)
     ├── 10-auth.js                → a module (its middleware phase: app.use('*', …))
-    ├── grip.ts                   → a module (middleware and beforeFiles phases)
+    ├── grip.ts                   → a module (middleware and beforeFilesRoutes phases)
     ├── _example.ts               → skipped (inactive example from template init)
     ├── lib/                      → helpers (not scanned)
     ├── package.json              ← dependencies of the extension code
@@ -894,8 +894,9 @@ export const extensions = [ { name: 'auth', file: '10-auth.js', module: m0 }, { 
 - **Name** = the file name without the order prefix and the extension (`20-grip.ts` → `grip`). It is the key in `templateOptions.hono.extensions`. Two files with the same name (`20-grip.js` and `20-grip.ts`, or `10-grip.js` and `20-grip.ts`) are an error.
 - **Order:** the file-name prefix (`10-`, `20-`, …), in each phase.
 - **No file-based paths.** A module adds its handlers with the methods of Hono (they can come later without breaking this).
-- **Decided in this part, after the examples of part 6d:** one kind of module, `defineExtension()`, with **phases**, in place of `defineMiddleware()` (with `path`) and `defineRoutes()` (with `after: 'files'`) in two folders. Hono itself does not separate middleware and routes: `app.use()` is `app.all()`-like registration, and only the order of registration matters. Two kinds, two folders, two option maps (`middleware.<name>`, `routes.<name>`), and settings for only one kind (`path`, `after`) were more to learn than the order needs, and one feature (OAuth: a login check and its routes) had to be split in two files. The phases keep the one guarantee that the two kinds gave: the `middleware` phase of all modules comes before the `beforeFiles` phase of any module, so a login check applies to the routes of every module, whatever the file names.
-  - The second argument is a function (the `middleware` phase), or an object with the keys `middleware`, `beforeFiles`, `afterFiles` (camelCase, the same names as in the object). There is no `phase` option.
+- **Decided in this part, after the examples of part 6d:** one kind of module, `defineExtension()`, with **phases**, in place of `defineMiddleware()` (with `path`) and `defineRoutes()` (with `after: 'files'`) in two folders. Hono itself does not separate middleware and routes: `app.use()` is `app.all()`-like registration, and only the order of registration matters. Two kinds, two folders, two option maps (`middleware.<name>`, `routes.<name>`), and settings for only one kind (`path`, `after`) were more to learn than the order needs, and one feature (OAuth: a login check and its routes) had to be split in two files. The phases keep the one guarantee that the two kinds gave: the `middleware` phase of all modules comes before the `beforeFilesRoutes` phase of any module, so a login check applies to the routes of every module, whatever the file names.
+  - The second argument is a function (the `middleware` phase), or an object with the keys `middleware`, `beforeFilesRoutes`, `afterFilesRoutes` (camelCase, the same names as in the object). There is no `phase` option.
+  - **The names of the phases (decided after beta.7):** in beta.1 to beta.7 they were `beforeFiles` and `afterFiles`. `afterFiles` read as "after the files ran", like the code after `await next()`, but it means "when no file matched". The phases are on two axes: **processing** (`middleware`, the onion of Hono, which wraps each request, with the code after `await next()` in the reverse order), and **routing** (`beforeFilesRoutes` → the files → `afterFilesRoutes` → the fallback, where the first route that answers wins). The routing names end in `Routes`, and `middleware` keeps its name, so that each name shows its axis. The old names are not aliases, because 8.1 is still a beta: a module that uses one stops the build with a message that names the new phase.
   - Each phase function gets `(app, options, helpers)`. A module that uses two phases has the same options in both (one entry in `templateOptions.hono.extensions`).
   - **`helpers` (decided after the feedback on 8.1.0-beta.4):** `ExtensionHelpers` has the `serveStatic()`, `staticResponse()`, `serveFallback()`, and `publisherServer` that the app makes with `fromStaticPublishRc()`, made once at start-up, with the same defaults and `collectionSelection`. A module can then serve published files in its own place in the order, with its own rules (the use case: a theme on preview hosts, served before a login check). Not on `c.var`, so that there is one way. `staticResponse(c, options)` returns the response or `null`, for a handler that decides itself whether to serve a file (a middleware chain cannot skip its later middleware), and never returns the SPA file or the 404 page. A per-call `onMissing` (in `serveStatic()`, `staticResponse()`, `serveFallback()`, and `ServeRequestOptions`) replaces `collectionSelection.onMissing` for one call, and does nothing without `collectionSelection`; with `'default'`, the response is a normal response of the default collection, with its headers, as with the site-wide setting. The response cache needs no change: `serveRequest()` checks the selected collection before it reads the cache, so a preview that is published later is served at once.
   - `mergeBindings()` checks the phases at the top level: an object with no phase, a key that is not a phase, or a value that is not a function stops the build, and names the file.
@@ -931,12 +932,12 @@ const fire = buildFire(mergeBindings(honoOptions?.bindings, extensions) as Bindi
 const app = new Hono<{ Bindings: typeof fire.Bindings, Variables: StaticPublisherVariables }>();
 app.use('*', logFastlyServiceVersion());
 app.use('*', selectCollection());               // sets c.var.staticPublisher
-// 1. the middleware phase of all modules, then 2. their beforeFiles phase, in file-name order
-for (const phase of [ 'middleware', 'beforeFiles' ] as const)
+// 1. the middleware phase of all modules, then 2. their beforeFilesRoutes phase, in file-name order
+for (const phase of [ 'middleware', 'beforeFilesRoutes' ] as const)
   for (const e of extensions) e.module.phases[phase]?.(app, honoOptions?.extensions?.[e.name]);
 app.use('*', serveStatic());                     // 3. published files
-// 4. the afterFiles phase: only the requests that no file matches
-for (const e of extensions) e.module.phases.afterFiles?.(app, honoOptions?.extensions?.[e.name]);
+// 4. the afterFilesRoutes phase: only the requests that no file matches
+for (const e of extensions) e.module.phases.afterFilesRoutes?.(app, honoOptions?.extensions?.[e.name]);
 app.notFound(serveFallback());                   // 5. SPA file / 404 page
 fire(app);
 ```
@@ -956,7 +957,7 @@ export default defineExtension({ bindings: { grip: 'SecretStore:grip' } }, {
   middleware: (app, options) => {
     app.use('/stream/*', serveGrip((c) => ({ /* settings from c.env.grip */ })));
   },
-  beforeFiles: (app, options) => {
+  beforeFilesRoutes: (app, options) => {
     app.get('/stream/:channel', (c) => {
       const gripInstruct = c.var.grip.startInstruct();
       gripInstruct.addChannel(c.req.param('channel'));
@@ -1066,7 +1067,7 @@ Nothing about the extensions changes at eject:
 **Decided in this part:**
 
 - The examples are folders in `examples/hono/<name>/`, in the repository only (not in the npm package; `files` in `package.json` does not list `examples/`). Other examples of this package go to `examples/` too. Each folder has a README and a `hono-extensions/` folder: the modules, and a `package.json` with the `dependencies` of the example. For a new project, the customer copies this `hono-extensions/` folder into the project, and runs `template init` (which adds the peer dependencies and the starter files) and `npm install`. For a project that exists, the README shows how to copy the files and install the packages. The README says that there is no way to scaffold an app with an example. The local e2e tests use the steps for a new project, one example in each project. The deployed test puts both examples in one project with the steps for a project that exists.
-- `grip`: the pattern of the Fastly starter kit `fanout` (the app hands off one path to Fanout through the backend `self`, and answers the requests from Fanout itself), not of `fanout-forward`. One module, `grip.ts`: in the `middleware` phase, the handoff and `serveGrip()` on `${path}/*` (default `/events`); in the `beforeFiles` phase, `GET ${path}/stream/:channel` (HTTP stream), `GET ${path}/sse/:channel` (Server-Sent Events), and `POST ${publishPath}/:channel` (default `/publish`) with `Authorization: Bearer <PUBLISH_KEY>`. No long-poll and no WebSocket. Secret Store `grip`: `PUBLISH_KEY` and `FANOUT_API_TOKEN` on Fastly (the publish URL and the verify key come from `buildFanoutGripConfig()`); `GRIP_URL` and `GRIP_VERIFY_KEY` locally (Pushpin).
+- `grip`: the pattern of the Fastly starter kit `fanout` (the app hands off one path to Fanout through the backend `self`, and answers the requests from Fanout itself), not of `fanout-forward`. One module, `grip.ts`: in the `middleware` phase, the handoff and `serveGrip()` on `${path}/*` (default `/events`); in the `beforeFilesRoutes` phase, `GET ${path}/stream/:channel` (HTTP stream), `GET ${path}/sse/:channel` (Server-Sent Events), and `POST ${publishPath}/:channel` (default `/publish`) with `Authorization: Bearer <PUBLISH_KEY>`. No long-poll and no WebSocket. Secret Store `grip`: `PUBLISH_KEY` and `FANOUT_API_TOKEN` on Fastly (the publish URL and the verify key come from `buildFanoutGripConfig()`); `GRIP_URL` and `GRIP_VERIFY_KEY` locally (Pushpin).
 - `oauth`: `@hono/oauth-providers` for GitHub and Google. One module, `10-oauth.ts`, all in the `middleware` phase: a login check on `protect` (default `/*`; `/auth/*` never needs a session) with `login` and `allowedUsers` (`github:<login>`, `google:<verified email>`), and the routes `/auth/github`, `/auth/google`, `/auth/logout`. The session is a cookie signed with `SESSION_KEY` (HMAC-SHA256), with an expiry time (`sessionMaxAge`). The client secrets are read for each request (a secret cannot be read at the top level). Protected responses get `Cache-Control: private`.
 - Local secrets come from environment variables, through `managed.fastlyToml.local_server.secret_stores` (`env`).
 
