@@ -132,6 +132,8 @@ This part defines the terms **managed app** (the package generates the app when 
 - 6.7 **Hono extensions, modules:** `defineExtension()`, with phases and bindings.
 - 6.8 **`template init [--reset [--force]] [--check]`**.
 
+**Before 8.1.0:** tasks 6.6 and 6.7 move to `@fastly/hono-fastly-compute`, as **Fastly Hono Compose** (plugins in `hono-compose/`, with `definePlugin()`). This package becomes a Compose host. The design and the decisions are in [fastly-hono-compose.md](fastly-hono-compose.md).
+
 After 8.1.0 is released, the old package gets one last release with a pointer to `@fastly/compute-js-static-publish/hono`, and is deprecated (see [../README.md](../README.md#after-810-is-released)).
 
 ## 7. The npx command of a prerelease

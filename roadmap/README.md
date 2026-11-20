@@ -80,9 +80,9 @@ These do not depend on the six parts. Each can be a separate PR to `main`, in a 
 - A non-interactive first deploy with S3 storage: `deploy` would create the service, the `S3_CREDENTIALS` Secret Store with the secrets from env vars, the backend, and the links through the Fastly API.
 - Protection for previews (a token or basic auth, with the secret in a Secret Store).
 - A `config-store` source for collection selection (select the **default** collection from a Config Store, so that `live` can change with no deploy and no promote).
-- Resource declarations: an extension declares backends, stores, or Fanout, and the template adds them to `fastly.toml`. GRIP is the main use case.
-- esbuild loader settings in js-compute (so that extensions can import `.html` or `.svg` files).
-- `.tsx`/`.jsx` extension modules (for `hono/jsx`).
-- File-based routes for Hono extensions (`routes/api/hello.js` → `/api/hello`).
+- Resource declarations: a Compose plugin declares backends, stores, or Fanout, and the template adds them to `fastly.toml`. GRIP is the main use case.
+- esbuild loader settings in js-compute (so that plugins can import `.html` or `.svg` files).
+- `.tsx`/`.jsx` plugins (for `hono/jsx`).
+- File-based routes for Compose plugins (`routes/api/hello.js` → `/api/hello`).
 - Un-eject (ejected → managed).
 - Upgrade help for ejected apps: compare the ejected files with what the current template would generate (uses `generatedFrom`).
