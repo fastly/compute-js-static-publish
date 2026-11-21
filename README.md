@@ -56,7 +56,7 @@ Serve static websites and web apps at the edge &mdash; no backends and no CDN in
 Create a directory for your project, place your static files in `./public`, then type:
 
 ```sh
-npx @fastly/compute-js-static-publish@latest \
+npx @fastly/compute-js-static-publish@rc \
   --root-dir=./public \
   --kv-store-name=site-content
 ```
@@ -117,7 +117,7 @@ FASTLY_API_TOKEN=$(npx fastly auth token) npm run fastly:publish
 Create a directory for your project, place your static files in `./public`, then type:
 
 ```sh
-npx @fastly/compute-js-static-publish@latest \
+npx @fastly/compute-js-static-publish@rc \
   --root-dir=./public \
   --storage-mode=s3 \
   --s3-region=<s3 region> \
@@ -128,7 +128,7 @@ npx @fastly/compute-js-static-publish@latest \
 > If the storage requires a custom endpoint, such as is the case with Fastly Object Storage, specify it using `--s3-endpoint=<endpoint>`. For example:
 >
 > ```sh
-> npx @fastly/compute-js-static-publish@latest \
+> npx @fastly/compute-js-static-publish@rc \
 >   --root-dir=./public \
 >   --storage-mode=s3 \
 >   --s3-region=us-east-1 \
@@ -370,7 +370,7 @@ For an index with 2,000 entries or more, `publish-content` also stores the index
 Collections are published using a `--collection-name`, and can be reused, updated, or deleted independently. For example, you can create a staging version of your site using:
 
 ```sh
-npx @fastly/compute-js-static-publish publish-content \
+npx @fastly/compute-js-static-publish@rc publish-content \
   --collection-name=staging \
   --expires-in=7d \
   --config=./publish-content.config.js
@@ -466,7 +466,7 @@ collectionSelector.fromConfigStore('my-config-store', 'collection-key');
 If you're happy with a preview or staging collection and want to make it live, use the `collections promote` command:
 
 ```sh
-npx @fastly/compute-js-static-publish collections promote \
+npx @fastly/compute-js-static-publish@rc collections promote \
   --collection-name=staging
   --to=live
 ```
@@ -476,7 +476,7 @@ This copies all content and server settings from the `staging` collection to `li
 You can also specify a new expiration:
 
 ```sh
-npx @fastly/compute-js-static-publish collections promote \
+npx @fastly/compute-js-static-publish@rc collections promote \
   --collection-name=preview-42 \
   --to=staging \
   --expires-in=7d
@@ -646,7 +646,7 @@ npm run fastly:clean
 
 These scripts run against the local and Fastly KV Stores respectively, and run the following command:
 ```
-npx @fastly/compute-js-static-publish clean --delete-expired-collections
+npx @fastly/compute-js-static-publish@rc clean --delete-expired-collections
 ```
 
 This removes:
@@ -661,7 +661,7 @@ This removes:
 Preview what will be deleted without making changes:
 
 ```sh
-npx @fastly/compute-js-static-publish clean --dry-run
+npx @fastly/compute-js-static-publish@rc clean --dry-run
 ```
 
 > ⚠️ Cleanup never deletes the default collection and never deletes content that’s still in use.
@@ -837,7 +837,7 @@ You can stream `assetVariant.storageEntry.body` directly to a `Response`, or rea
 ### Available Commands
 
 #### Outside a Compute App Directory
-- `npx @fastly/compute-js-static-publish@latest [options]` - Scaffold a new Compute app
+- `npx @fastly/compute-js-static-publish@rc [options]` - Scaffold a new Compute app
 
 #### Inside a Compute App Directory
 - `publish-content` - Publish static files to storage (KV Store or S3-compatible storage) under a named collection
@@ -855,12 +855,12 @@ Run outside an existing Compute app directory:
 
 ```sh
 # Using KV store storage
-npx @fastly/compute-js-static-publish@latest \
+npx @fastly/compute-js-static-publish@rc \
   --root-dir=./public \
   --kv-store-name=<site-content>
 
 # Using S3 storage (BETA)
-npx @fastly/compute-js-static-publish@latest \
+npx @fastly/compute-js-static-publish@rc \
   --root-dir=./public \
   --storage-mode=s3 \
   --s3-region=<s3 region> \
@@ -871,7 +871,7 @@ npx @fastly/compute-js-static-publish@latest \
 #### Full options list
 
 ```sh
-npx @fastly/compute-js-static-publish@latest \
+npx @fastly/compute-js-static-publish@rc \
   --root-dir=./public \
   { [--storage-mode=kv-store] --kv-store-name=<site-content> | \
     --storage-mode=s3 --s3-region=<s3 region> --s3-bucket=<bucket name> [--s3-endpoint=<endpoint>] } \
@@ -926,7 +926,7 @@ Once you're in the scaffolded Compute app directory (with `static-publish.rc.js`
 #### `publish-content`
 
 ```sh
-npx @fastly/compute-js-static-publish publish-content \
+npx @fastly/compute-js-static-publish@rc publish-content \
   [--root-dir=./public] \
   [--collection-name=preview-42] \
   [--config=./publish-content.config.js] \
@@ -984,7 +984,7 @@ After this process is complete, the PublisherServer object in the Compute applic
 #### `clean`
 
 ```sh
-npx @fastly/compute-js-static-publish clean \
+npx @fastly/compute-js-static-publish@rc clean \
   [--delete-expired-collections] \
   [--dry-run]
 ```
@@ -1010,7 +1010,7 @@ This can include expired collection indexes, orphaned content assets, and index 
 #### `collections list`
 
 ```sh
-npx @fastly/compute-js-static-publish collections list
+npx @fastly/compute-js-static-publish@rc collections list
 ```
 Lists all collections currently published in storage.
 
@@ -1029,7 +1029,7 @@ Lists all collections currently published in storage.
 #### `collections promote`
 
 ```sh
-npx @fastly/compute-js-static-publish collections promote \
+npx @fastly/compute-js-static-publish@rc collections promote \
   --collection-name=preview-42 \
   --to=live \
   [--expires-in=7d | --expires-at=2025-06-01T00:00Z | --expires-never]
@@ -1069,7 +1069,7 @@ If a Service ID is found, the command then purges the surrogate key `<publishId>
 #### `collections update-expiration`
 
 ```sh
-npx @fastly/compute-js-static-publish collections update-expiration \
+npx @fastly/compute-js-static-publish@rc collections update-expiration \
   --collection-name=preview-42 \
   --expires-in=3d | --expires-at=2025-06-01T00:00Z | --expires-never
 ```
@@ -1099,13 +1099,13 @@ Sets or updates the expiration time of an existing collection.
 #### `collections delete`
 
 ```sh
-npx @fastly/compute-js-static-publish collections delete \
+npx @fastly/compute-js-static-publish@rc collections delete \
   --collection-name=preview-42
 ```
 
 Deletes a collection index from storage. The content files will remain as they may still be referenced by other collection indexes.
 
-Use the `npx @fastly/compute-js-static-publish clean` command afterward to remove content files that are no longer referenced by any collection.
+Use the `npx @fastly/compute-js-static-publish@rc clean` command afterward to remove content files that are no longer referenced by any collection.
 
 If a Service ID is found, the command then purges the surrogate key `<publishId>-<collectionName>`, so that the service stops serving cached responses of the deleted collection. This uses the same options as [`publish-content`](#publish-content).
 
@@ -1223,7 +1223,7 @@ async function handleRequest(event) {
 
 ## 📚 Next Steps
 
-- View CLI command help: `npx @fastly/compute-js-static-publish --help`
+- View CLI command help: `npx @fastly/compute-js-static-publish@rc --help`
 - Use in CI to automate branch previews
 - Visit [https://developer.fastly.com](https://developer.fastly.com) for Compute platform docs
 

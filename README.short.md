@@ -18,18 +18,18 @@ This CLI tool helps you:
 Create a directory for your project, place your static files in `./public`, then type:
 
 ```sh
-npx @fastly/compute-js-static-publish@latest --root-dir=./public --kv-store-name=site-content
+npx @fastly/compute-js-static-publish@rc --root-dir=./public --kv-store-name=site-content
 ```
 
 **New in v8:** S3-compatible storage (such as Fastly Object Storage) is also supported (Beta). To use this mode, type:
 
 ```sh
-npx @fastly/compute-js-static-publish@latest --root-dir=./public --storage-mode=s3 --s3-region=<region> --s3-bucket=<bucket-name>
+npx @fastly/compute-js-static-publish@rc --root-dir=./public --storage-mode=s3 --s3-region=<region> --s3-bucket=<bucket-name>
 ```
 
 If the storage needs a custom endpoint, as Fastly Object Storage does, add `--s3-endpoint=<endpoint>` (for example, `--s3-endpoint=https://us-east-1.object.fastlystorage.app`).
 
-For more details, see the [S3-compatible storage](https://github.com/fastly/compute-js-static-publish/blob/main/README.md#-using-s3-compatible-storage-beta) section in the full documentation.
+For more details, see the [S3-compatible storage](https://github.com/fastly/compute-js-static-publish/blob/rc/8.0.3/README.md#-using-s3-compatible-storage-beta) section in the full documentation.
 
 ### 🔧 Local Preview
 
