@@ -35,11 +35,13 @@ import {
 } from '../../models/config/s3-storage-config.js';
 import {
   type StorageEntry,
+  type StorageEntryData,
   type StorageProvider,
   type StorageProviderBuilder,
   type StorageProviderBuilderContext,
   type StorageProviderBatch,
   type ApplyBatchOptions,
+  storageEntryDataToBytes,
 } from './storage-provider.js';
 import { entriesToUpload } from '../util/kv-store-items.js';
 import {
@@ -258,14 +260,14 @@ export class S3StorageProvider implements StorageProvider {
   async submitStorageEntry(
     key: string,
     _filePath: string,
-    data: ReadableStream<Uint8Array> | Uint8Array | string | null | undefined,
+    data: StorageEntryData,
     metadata?: Record<string, string>,
   ): Promise<void> {
 
     const input = {
       Bucket: this.s3Bucket, // required
       Key: key,              // required
-      Body: data ?? undefined,
+      Body: await storageEntryDataToBytes(data),
       Metadata: metadata,
     } satisfies PutObjectCommandInput;
     const command = new PutObjectCommand(input);
