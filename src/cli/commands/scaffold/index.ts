@@ -887,9 +887,9 @@ export async function action(actionArgs: string[]) {
     autoExt,
     staticPublishVersionSpec: findComputeJsStaticPublisherVersion(packageJson),
     template: loadAppTemplate(options.template),
-    // The hono template: the extensions folder is in the directory where
+    // The hono template: the folder of the plugins is in the directory where
     // scaffold runs (next to the app, or next to the project file).
-    ...(options.template === 'hono' ? { build: { hono: { extensionsDir: path.resolve('hono-extensions') } } } : {}),
+    ...(options.template === 'hono' ? { build: { hono: { composeDir: path.resolve('hono-compose') } } } : {}),
     generatedFrom: {
       template: options.template,
       staticPublishVersion: getOwnVersion(),
@@ -927,7 +927,7 @@ export async function action(actionArgs: string[]) {
   child_process.spawnSync('npm', [ '--prefix', COMPUTE_JS_DIR, 'install' ], { stdio: 'inherit' });
   console.log('');
 
-  // The folder of the template (for the hono template: hono-extensions/, next
+  // The folder of the template (for the hono template: hono-compose/, next
   // to the app). It is in the directory where scaffold runs.
   if (templateHasInit(options.template)) {
     await runTemplateInit({

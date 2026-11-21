@@ -1,12 +1,12 @@
-// Helpers of the GRIP example. Files in lib/ are not modules: grip.ts imports
+// Helpers of the GRIP example. Files in lib/ are not plugins: grip.ts imports
 // them.
-import { type ExtensionEnv } from '@fastly/compute-js-static-publish/hono';
+import { type PluginEnv } from '@fastly/compute-js-static-publish/hono';
 import { env } from 'fastly:env';
 import { type GripConfig } from '@fanoutio/grip';
 import { buildFanoutGripConfig } from '@fanoutio/grip/fastly-fanout';
 import { type Env as ServeGripEnv } from '@fanoutio/serve-grip/hono';
 
-// The options of the example, in templateOptions.hono.extensions.grip.
+// The options of the example, in templateOptions.hono.compose.plugins.grip.
 export type GripOptions = {
   // The path of the stream endpoints. The default is '/events'.
   path?: string,
@@ -14,13 +14,13 @@ export type GripOptions = {
   publishPath?: string,
 };
 
-// The binding of the Secret Store with the GRIP settings, for defineExtension().
+// The binding of the Secret Store with the GRIP settings, for definePlugin().
 // With 'as const', c.env.grip has the type SecretStore | undefined.
 export const GRIP_BINDINGS = { grip: 'SecretStore:grip' } as const;
 
 // The Env of the app in this example, with c.env.grip, and c.var.grip of
 // serveGrip().
-export type GripEnv = ExtensionEnv<typeof GRIP_BINDINGS> & ServeGripEnv;
+export type GripEnv = PluginEnv<typeof GRIP_BINDINGS> & ServeGripEnv;
 
 // The part of a Context that the helpers use.
 type WithGripEnv = { env: GripEnv['Bindings'] };

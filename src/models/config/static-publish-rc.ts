@@ -36,9 +36,9 @@ export type StaticPublishRcBase = {
 
 export type StaticPublishBuild = {
   hono?: {
-    // The folder of the Hono extensions, relative to this file.
-    // Default: './hono-extensions'.
-    extensionsDir?: string,
+    // The folder of the plugin modules, relative to this
+    // file. Default: './hono-compose'.
+    composeDir?: string,
   },
 };
 
@@ -47,13 +47,13 @@ export type StaticPublishBuild = {
 export type HonoBindings = Record<string, string>;
 
 export type HonoTemplateOptions = {
-  // Bindings of the app. They are merged with the bindings of the extension
-  // modules.
+  // Bindings of the app. They are merged with the bindings of the plugins.
   bindings?: HonoBindings,
-  // Options for each middleware module, by module name.
-  middleware?: Record<string, unknown>,
-  // Options for each routes module, by module name.
-  routes?: Record<string, unknown>,
+  // The settings of the plugin modules.
+  compose?: {
+    // The options of each plugin, by plugin name.
+    plugins?: Record<string, unknown>,
+  },
 };
 
 export type StaticPublishTemplateOptions = {

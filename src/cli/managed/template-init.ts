@@ -4,7 +4,7 @@
  */
 
 // template init: makes or updates the folder of a template, for example
-// hono-extensions/ of the hono template. The starter files are in
+// hono-compose/ of the hono template. The starter files are in
 // resources/template-init/<template>/. The template owns the peer dependencies
 // on the packages that it provides; the customer owns everything else.
 
@@ -72,7 +72,7 @@ export type TemplateInitPlan = {
   outOfDate: string[],
 };
 
-// What template init does for a folder. It never changes a module of the
+// What template init does for a folder. It never changes a plugin of the
 // customer: only package.json (the peer dependencies on the provided packages,
 // merged), and the starter files that are missing (or all of them, with reset).
 export function planTemplateInit(templateName: string, folderDir: string, provided: Record<string, string>, options: { reset: boolean }): TemplateInitPlan {
@@ -95,7 +95,7 @@ export function planTemplateInit(templateName: string, folderDir: string, provid
   }
   const typescriptRange = loadAppTemplate(templateName).devDependencies.typescript;
   const packageJson = {
-    name: `${templateName}-extensions`,
+    name: `${templateName}-compose`,
     private: true,
     type: 'module',
     ...existing,

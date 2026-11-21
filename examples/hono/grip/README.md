@@ -4,7 +4,7 @@ This example adds realtime endpoints to a static site that uses the `hono` templ
 
 ## This is an example, not a template
 
-You cannot scaffold an app "with this example". There is no flag or command that adds it. To use it, copy its `hono-extensions/` folder into your project, and set it up as this README shows. After you copy it, the code is yours: read it, and change it for your site. It is a starting point, not a supported feature of this package.
+You cannot scaffold an app "with this example". There is no flag or command that adds it. To use it, copy its `hono-compose/` folder into your project, and set it up as this README shows. After you copy it, the code is yours: read it, and change it for your site. It is a starting point, not a supported feature of this package.
 
 The steps:
 
@@ -14,20 +14,20 @@ The steps:
    npx @fastly/compute-js-static-publish@latest --managed --template hono --root-dir=./public --kv-store-name=site-content
    ```
 
-   This writes `static-publish.project.js` and the folder `hono-extensions/`. To add the example to a project that exists, see [Adding to an existing project](#adding-to-an-existing-project).
-2. Replace the `hono-extensions/` folder of your project with the `hono-extensions/` folder of this example (`examples/hono/grip/hono-extensions/` in this repository). Then update the folder for your project, and install its packages:
+   This writes `static-publish.project.js` and the folder `hono-compose/`. To add the example to a project that exists, see [Adding to an existing project](#adding-to-an-existing-project).
+2. Replace the `hono-compose/` folder of your project with the `hono-compose/` folder of this example (`examples/hono/grip/hono-compose/` in this repository). Then update the folder for your project, and install its packages:
 
    ```sh
-   rm -rf hono-extensions
-   cp -R <this repository>/examples/hono/grip/hono-extensions hono-extensions
+   rm -rf hono-compose
+   cp -R <this repository>/examples/hono/grip/hono-compose hono-compose
    npx @fastly/compute-js-static-publish template init
-   cd hono-extensions
+   cd hono-compose
    npm install
    ```
 
    `template init` adds the packages that the template provides to `package.json` (as peer dependencies), and the starter files (`tsconfig.json`, `.gitignore`, and `_example.ts`, which the build does not load). `npm install` installs the packages of the example. It also installs the peer dependencies, for your editor and the type checker. The build uses the copies of the app.
 3. Set up the example in `static-publish.project.js` (a managed project):
-   - the options in `templateOptions.hono.extensions.grip` (see [Options](#options));
+   - the options in `templateOptions.hono.compose.plugins.grip` (see [Options](#options));
    - for local development, the sections of `managed.fastlyToml` in [Local development](#local-development);
    - for Fastly, the steps in [On Fastly](#on-fastly).
 
@@ -52,22 +52,22 @@ GET /events/stream/news  (from the visitor)
   ▼
 GET /events/stream/news  (from Fanout, with Grip-Sig, through the backend 'self')
   → grip.ts, middleware phase: the signature is correct → c.var.grip
-  → grip.ts, beforeFiles phase: hold a stream on the channel 'stream:news'
+  → grip.ts, routes phase: hold a stream on the channel 'stream:news'
       Fanout keeps the connection to the visitor open, and sends each message.
 ```
 
-- **One module, two phases.** `grip.ts` adds the Fanout handoff and `serveGrip()` in the `middleware` phase, and the three endpoints in the `beforeFiles` phase.
+- **One plugin, two phases.** `grip.ts` adds the Fanout handoff and `serveGrip()` in the `middleware` phase, and the three endpoints in the `routes` phase.
 - **Only `/events/*` goes through Fanout.** The middleware phase adds the handoff with `app.use('/events/*', …)`, so the published files and other routes do not go through Fanout, and keep the cache. This is the pattern of the Fastly starter kit [`fanout`](https://github.com/fastly/compute-starter-kits/tree/main/starter-kits/javascript/fanout): the app hands off one path, and answers the requests that come back from Fanout itself.
 - **The publish endpoint** sends each message two times: to `stream:<channel>` as a line, and to `sse:<channel>` as an SSE event. A request without the correct key gets `401`. If the Secret Store has no `PUBLISH_KEY`, the endpoint gives `503`. You can also publish without this endpoint, with the publish API of Fastly (`POST https://api.fastly.com/service/<service ID>/publish/`, see the [Fanout guide](https://www.fastly.com/documentation/guides/concepts/real-time-messaging/fanout/)).
 
 ## Options
 
-In `templateOptions.hono.extensions.grip`:
+In `templateOptions.hono.compose.plugins.grip`:
 
 ```js
 templateOptions: {
   hono: {
-    extensions: { grip: { path: '/events', publishPath: '/publish' } },
+    compose: { plugins: { grip: { path: '/events', publishPath: '/publish' } } },
   },
 },
 ```
@@ -79,7 +79,7 @@ templateOptions: {
 
 ## Secrets
 
-The modules read the Secret Store `grip` (the binding `grip: 'SecretStore:grip'`):
+The plugins read the Secret Store `grip` (the binding `grip: 'SecretStore:grip'`):
 
 | Key | On Fastly | Locally |
 | --- | --- | --- |
@@ -166,18 +166,18 @@ Then open `https://<your domain>/events/stream/test`, and publish with `POST htt
 
 ## Adding to an existing project
 
-The project must use the `hono` template. For a managed project, this is `managed.template: 'hono'` in `static-publish.project.js`. If the project has no `hono-extensions/` folder, make it:
+The project must use the `hono` template. For a managed project, this is `managed.template: 'hono'` in `static-publish.project.js`. If the project has no `hono-compose/` folder, make it:
 
 ```sh
 npx @fastly/compute-js-static-publish template init
 ```
 
-Make sure that `hono-extensions/` does not already have files with the same names (`grip.ts` and `lib/grip.ts`). The name of a module is its file name without the number prefix, and two modules with the same name stop the build. If the name `grip` is already used, rename the module of the example, and use the new name in `templateOptions.hono.extensions`.
+Make sure that `hono-compose/` does not already have files with the same names (`grip.ts` and `lib/grip.ts`). The name of a plugin is its file name without the number prefix, and two plugins with the same name stop the build. If the name `grip` is already used, rename the plugin of the example, and use the new name in `templateOptions.hono.compose.plugins`.
 
-Then copy `grip.ts` and `lib/grip.ts` from the `hono-extensions/` folder of this example into your `hono-extensions/` folder, in the same places, and install the packages of the example:
+Then copy `grip.ts` and `lib/grip.ts` from the `hono-compose/` folder of this example into your `hono-compose/` folder, in the same places, and install the packages of the example:
 
 ```sh
-cd hono-extensions
+cd hono-compose
 npm install @fanoutio/grip@^4.4.0 @fanoutio/serve-grip@^4.3.0
 ```
 

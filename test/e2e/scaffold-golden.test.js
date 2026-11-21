@@ -34,7 +34,7 @@ function writeFixture(dir) {
 }
 
 // The files of a dir, without node_modules, package-lock.json, and the files
-// that the postinstall hook writes (src/hono-extensions.generated.js). The
+// that the postinstall hook writes (src/hono-compose.generated.js). The
 // dependency on this package, its version, and the date in generatedFrom are
 // replaced with the placeholders of the golden files, and .gitignore is named
 // _gitignore, as in test/golden/.
@@ -43,7 +43,7 @@ function readFiles(dir) {
   const walk = (sub) => {
     for (const entry of fs.readdirSync(path.join(dir, sub), { withFileTypes: true })) {
       const rel = path.posix.join(sub, entry.name);
-      if (entry.name === 'node_modules' || entry.name === 'package-lock.json' || rel === 'src/hono-extensions.generated.js') {
+      if (entry.name === 'node_modules' || entry.name === 'package-lock.json' || rel === 'src/hono-compose.generated.js') {
         continue;
       }
       if (entry.isDirectory()) {

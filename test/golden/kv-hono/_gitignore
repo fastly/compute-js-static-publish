@@ -2,4 +2,4 @@
 /bin
 /pkg
 /static-publisher
-/src/hono-extensions.generated.js
+/src/hono-compose.generated.js

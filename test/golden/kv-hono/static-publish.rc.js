@@ -18,7 +18,7 @@ const rc = {
   },
   build: {
     hono: {
-      extensionsDir: "../hono-extensions",
+      composeDir: "../hono-compose",
     },
   },
 };
