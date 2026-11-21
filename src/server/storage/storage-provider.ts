@@ -7,8 +7,20 @@ import {
   type StaticPublishRc,
 } from '../../models/config/static-publish-rc.js';
 
+export type GetEntryOptions = {
+  /**
+   * How long, in seconds, a provider that caches what it reads (such as the
+   * S3 provider) keeps the entry. A provider that does not cache ignores it.
+   */
+  ttl?: number,
+};
+
 export interface StorageProvider {
-  getEntry(key: string, tags?: string[]): Promise<StorageEntry | null>;
+  /**
+   * Reads an entry. `tags` are the surrogate keys of the cached copy, if the
+   * provider caches what it reads.
+   */
+  getEntry(key: string, tags?: string[], options?: GetEntryOptions): Promise<StorageEntry | null>;
 }
 
 export type StorageProviderBuilder = (config: StaticPublishRc) => (StorageProvider | null);

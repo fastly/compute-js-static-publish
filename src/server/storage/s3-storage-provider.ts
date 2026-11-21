@@ -17,6 +17,7 @@ import {
 } from '../../models/config/s3-storage-config.js';
 import {
   concatReadableStreams,
+  type GetEntryOptions,
   type StorageEntry,
   StorageEntryImpl,
   type StorageProvider,
@@ -105,6 +106,10 @@ export type S3StorageProviderParams = {
   s3Endpoint?: string,
   s3FastlyBackendName?: string,
 };
+
+// The time, in seconds, that the readthrough cache keeps an object when
+// getEntry() does not give a TTL.
+const DEFAULT_CACHE_TTL = 3600;
 
 // Attempts for a request that fails with a retryable status or a network error.
 const MAX_ATTEMPTS = 5;
@@ -211,11 +216,11 @@ export class S3StorageProvider implements StorageProvider {
     }
   }
 
-  async getEntry(key: string, tags?: string[]): Promise<StorageEntry | null> {
+  async getEntry(key: string, tags?: string[], options?: GetEntryOptions): Promise<StorageEntry | null> {
     const response = await this.fetchObject(key, {
       backend: this.s3FastlyBackendName ?? "s3_storage",
       cacheOverride: new CacheOverride({
-        ttl: 3600,
+        ttl: options?.ttl ?? DEFAULT_CACHE_TTL,
         surrogateKey: (tags ?? []).join(' ') || undefined,
       }),
     });

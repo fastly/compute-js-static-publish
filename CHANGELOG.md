@@ -9,6 +9,14 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 
 ## [unreleased]
 
+### Added
+
+- `StorageProvider.getEntry()` takes an optional third parameter, `options` (type `GetEntryOptions`). Its `ttl` sets how long, in seconds, a provider that caches what it reads keeps the entry.
+
+### Changed
+
+- S3 mode: the server keeps the files that it reads from storage in the Fastly cache for 1 year. It was 1 hour. With a response cache `maxAge` of 1 hour or more, a response-cache miss then usually also read the file from storage. The key of a file has the hash of its content, so a cached copy does not get out of date. The cached files have the new surrogate key `<publishId>-files`. A publish does not purge it. The settings and the index are still kept for 1 hour.
+
 ## [8.0.2] - 2026-11-16
 
 ### Changed
