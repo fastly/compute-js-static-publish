@@ -85,7 +85,7 @@ describe('findProjectDirsNear', () => {
   test('a parent directory and a subdirectory', () => {
     const root = makeTempDir();
     fs.writeFileSync(path.join(root, 'static-publish.project.js'), '');
-    const here = path.join(root, 'hono-extensions');
+    const here = path.join(root, 'hono-compose');
     fs.mkdirSync(path.join(here, 'compute-js'), { recursive: true });
     fs.mkdirSync(path.join(here, 'node_modules', 'x'), { recursive: true });
     fs.writeFileSync(path.join(here, 'compute-js', 'static-publish.rc.js'), '');
@@ -167,11 +167,11 @@ describe('project file round trip', () => {
     },
     'kv-public-dir': { ...base, rootDir: '/project/site', publicDir: '/project/site/public', notFoundPageFilename: undefined },
     'working dir outside the app': { ...base, staticPublisherWorkingDir: '/project/static-publisher' },
-    'hono': { ...base, template: loadAppTemplate('hono'), build: { hono: { extensionsDir: '/project/hono-extensions' } } },
+    'hono': { ...base, template: loadAppTemplate('hono'), build: { hono: { composeDir: '/project/hono-compose' } } },
     'hono with a custom extensions folder and options': {
       ...base,
       template: loadAppTemplate('hono'),
-      build: { hono: { extensionsDir: '/project/src/extensions' } },
+      build: { hono: { composeDir: '/project/src/extensions' } },
       templateOptions: { hono: { bindings: { config: 'ConfigStore:site' }, middleware: { auth: { realm: 'site' } } } },
     },
     'kv-collection-selection': {

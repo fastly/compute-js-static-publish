@@ -3,7 +3,7 @@
  * Licensed under the MIT license. See LICENSE file for details.
  */
 
-// The examples in examples/hono/: puts each one into the hono-extensions/
+// The examples in examples/hono/: puts each one into the hono-compose/
 // folder of a managed hono project, installs its packages, sets it up as its
 // README shows, and runs `dev`. Needs the Fastly CLI and
 // network access for `npm install`. The GRIP test also needs Pushpin on the
@@ -44,10 +44,10 @@ function skipUnlessPushpin() {
   return result.error != null || result.status !== 0 ? 'Pushpin (pushpin) is not on the PATH' : skipUnlessFastlyCli();
 }
 
-// Makes a managed hono project with the examples in hono-extensions/, as the
+// Makes a managed hono project with the examples in hono-compose/, as the
 // README of an example shows:
-// - one example (a new project): replaces hono-extensions/ with the
-//   hono-extensions/ folder of the example, runs template init, and installs.
+// - one example (a new project): replaces hono-compose/ with the
+//   hono-compose/ folder of the example, runs template init, and installs.
 // - more than one (a project that exists): copies the files of each example
 //   (not package.json), and installs the packages of each example.
 // With local, it publishes the content with --local.
@@ -55,29 +55,29 @@ function makeExampleProject(names, { templateOptions, fastlyToml, scaffoldArgs =
   const dir = makeTempDir(`hono-example-${names.join('-')}`);
   writeFixtureContent(path.resolve(dir, 'public'));
   runCli([ '--managed', '--template', 'hono', '--root-dir', './public', ...scaffoldArgs ], { cwd: dir });
-  const extensionsDir = path.resolve(dir, 'hono-extensions');
-  const exampleDir = (name) => path.resolve(EXAMPLES_DIR, name, 'hono-extensions');
+  const composeDir = path.resolve(dir, 'hono-compose');
+  const exampleDir = (name) => path.resolve(EXAMPLES_DIR, name, 'hono-compose');
   // --legacy-peer-deps: do not install the peer dependencies (the packages that
   // the app provides). The version of this checkout can be one that is not on
   // npm yet, and the build uses the copies of the app.
   const npmInstall = [ 'install', '--no-audit', '--no-fund', '--legacy-peer-deps' ];
   if (names.length === 1) {
-    fs.rmSync(extensionsDir, { recursive: true });
-    fs.cpSync(exampleDir(names[0]), extensionsDir, { recursive: true });
+    fs.rmSync(composeDir, { recursive: true });
+    fs.cpSync(exampleDir(names[0]), composeDir, { recursive: true });
     runCli([ 'template', 'init' ], { cwd: dir });
-    run('npm', npmInstall, { cwd: extensionsDir });
+    run('npm', npmInstall, { cwd: composeDir });
   } else {
     const packages = [];
     for (const name of names) {
       for (const entry of fs.readdirSync(exampleDir(name))) {
         if (entry !== 'package.json') {
-          fs.cpSync(path.resolve(exampleDir(name), entry), path.resolve(extensionsDir, entry), { recursive: true });
+          fs.cpSync(path.resolve(exampleDir(name), entry), path.resolve(composeDir, entry), { recursive: true });
         }
       }
       const { dependencies } = JSON.parse(fs.readFileSync(path.resolve(exampleDir(name), 'package.json'), 'utf-8'));
       packages.push(...Object.entries(dependencies).map(([ pkg, range ]) => `${pkg}@${range}`));
     }
-    run('npm', [ ...npmInstall, ...packages ], { cwd: extensionsDir });
+    run('npm', [ ...npmInstall, ...packages ], { cwd: composeDir });
   }
 
   const projectFile = path.resolve(dir, 'static-publish.project.js');
@@ -227,7 +227,7 @@ describe('the OAuth example', { skip: skipUnlessFastlyCli() }, () => {
       // A path source, to check that a preview URL needs the same login.
       scaffoldArgs: [ '--kv-store-name', 'e2e-content', '--collection-selection', 'path:/_preview/{collection}' ],
       templateOptions: {
-        extensions: {
+        compose: { plugins: {
           oauth: {
             // The login path is also protected, so the login check must let it through.
             protect: [ '/docs/*', '/signin' ],
@@ -236,7 +236,7 @@ describe('the OAuth example', { skip: skipUnlessFastlyCli() }, () => {
             github: { clientId: 'e2e-github-client' },
             google: { clientId: 'e2e-google-client' },
           },
-        },
+        } },
       },
       fastlyToml: {
         local_server: {
@@ -364,7 +364,7 @@ describe('the GRIP and OAuth examples, deployed', {
       scaffoldArgs: [ '--kv-store-name', process.env.CJSP_TEST_KV_STORE_NAME, '--publish-id', publishId ],
       local: false,
       templateOptions: {
-        extensions: { oauth: { protect: '/docs/*', allowedUsers: [ 'github:octocat' ], github: { clientId: 'e2e-github-client' } } },
+        compose: { plugins: { oauth: { protect: '/docs/*', allowedUsers: [ 'github:octocat' ], github: { clientId: 'e2e-github-client' } } } },
       },
       fastlyToml: {},
     }));

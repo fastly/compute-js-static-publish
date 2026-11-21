@@ -9,8 +9,18 @@
 // so that an older version of this package can read a newer file.
 export const TEMPLATE_SETTINGS: Record<string, { build: string[], templateOptions: string[] }> = {
   hono: {
-    build: [ 'extensionsDir' ],
-    templateOptions: [ 'bindings', 'extensions' ],
+    build: [ 'composeDir' ],
+    templateOptions: [ 'bindings', 'compose' ],
+  },
+};
+
+// The names of settings in earlier betas of 8.1, and the name that each one
+// has now. They are errors, not warnings, so that a build never skips the
+// plugins without a message. Removed in v9.
+const RENAMED_SETTINGS: Record<string, Record<'build' | 'templateOptions', Record<string, string>>> = {
+  hono: {
+    build: { extensionsDir: 'build.hono.composeDir' },
+    templateOptions: { extensions: 'templateOptions.hono.compose.plugins' },
   },
 };
 
@@ -47,7 +57,10 @@ export function checkTemplateSettings(build: unknown, templateOptions: unknown):
         continue;
       }
       for (const key of Object.keys(settings)) {
-        if (!declared.includes(key)) {
+        const renamed = RENAMED_SETTINGS[templateName]?.[field]?.[key];
+        if (renamed != null) {
+          errors.push(`${field}.${templateName}.${key} is now ${renamed}.`);
+        } else if (!declared.includes(key)) {
           warnings.push(`${field}.${templateName}.${key} is not a setting of the template '${templateName}'. It is ignored.`);
         }
       }
@@ -55,10 +68,10 @@ export function checkTemplateSettings(build: unknown, templateOptions: unknown):
   }
 
   // The settings of the hono template.
-  if (isPlainObject(build) && isPlainObject(build.hono) && build.hono.extensionsDir !== undefined) {
-    const extensionsDir = build.hono.extensionsDir;
-    if (typeof extensionsDir !== 'string' || !/^\.\.?\//.test(extensionsDir)) {
-      errors.push(`build.hono.extensionsDir must be a relative path that starts with './' or '../'.`);
+  if (isPlainObject(build) && isPlainObject(build.hono) && build.hono.composeDir !== undefined) {
+    const composeDir = build.hono.composeDir;
+    if (typeof composeDir !== 'string' || !/^\.\.?\//.test(composeDir)) {
+      errors.push(`build.hono.composeDir must be a relative path that starts with './' or '../'.`);
     }
   }
   if (isPlainObject(templateOptions) && isPlainObject(templateOptions.hono)) {
@@ -74,8 +87,19 @@ export function checkTemplateSettings(build: unknown, templateOptions: unknown):
         }
       }
     }
-    if (hono.extensions !== undefined && !isPlainObject(hono.extensions)) {
-      errors.push('templateOptions.hono.extensions must be an object, with the options of each module by module name.');
+    if (hono.compose !== undefined) {
+      if (!isPlainObject(hono.compose)) {
+        errors.push('templateOptions.hono.compose must be an object.');
+      } else {
+        for (const key of Object.keys(hono.compose)) {
+          if (key !== 'plugins') {
+            warnings.push(`templateOptions.hono.compose.${key} is not a setting of the template 'hono'. It is ignored.`);
+          }
+        }
+        if (hono.compose.plugins !== undefined && !isPlainObject(hono.compose.plugins)) {
+          errors.push('templateOptions.hono.compose.plugins must be an object, with the options of each plugin by plugin name.');
+        }
+      }
     }
   }
 

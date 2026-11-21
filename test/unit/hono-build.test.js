@@ -12,13 +12,16 @@ import { after, before, describe, mock, test } from 'node:test';
 import * as esbuild from 'esbuild';
 
 import {
-  HONO_EXTENSIONS_MANIFEST,
+  PLUGINS_MANIFEST,
   bundleHonoExtensions,
+  bundlePlugins,
   checkProvidedVersions,
-  honoExtensionsExternals,
-  listHonoExtensionModules,
+  pluginsExternals,
+  listPlugins,
   watchHonoExtensions,
+  watchPlugins,
   writeHonoExtensionsStub,
+  writePluginsStub,
 } from '../../build/cli/cli/hono/build.js';
 
 // The build writes its messages with console.log(). The test runner reads the
@@ -57,7 +60,7 @@ function makeApp(dependencies, rc = 'export default {};\n', extra = {}) {
   });
 }
 
-describe('listHonoExtensionModules()', () => {
+describe('listPlugins()', () => {
   test('the files directly in the folder, in file-name order', () => {
     const dir = makeDir({
       '20-grip.ts': '',
@@ -71,7 +74,7 @@ describe('listHonoExtensionModules()', () => {
       'lib/helper.ts': '',
       'middleware/old.ts': '',
     });
-    assert.deepEqual(listHonoExtensionModules(dir), [
+    assert.deepEqual(listPlugins(dir), [
       { name: 'auth', file: '10-auth.js' },
       { name: 'grip', file: '20-grip.ts' },
       { name: 'stream', file: 'stream.mts' },
@@ -79,20 +82,30 @@ describe('listHonoExtensionModules()', () => {
   });
 
   test('no folder, or no files: no modules', () => {
-    assert.deepEqual(listHonoExtensionModules(makeDir()), []);
-    assert.deepEqual(listHonoExtensionModules(path.resolve(makeDir(), 'missing')), []);
+    assert.deepEqual(listPlugins(makeDir()), []);
+    assert.deepEqual(listPlugins(path.resolve(makeDir(), 'missing')), []);
   });
 
   test('two modules with the same name are an error', () => {
     const dir = makeDir({ '10-grip.js': '', '20-grip.ts': '' });
-    assert.throws(() => listHonoExtensionModules(dir), /10-grip\.js and 20-grip\.ts have the same module name 'grip'/);
+    assert.throws(() => listPlugins(dir), /10-grip\.js and 20-grip\.ts have the same plugin name 'grip'/);
+  });
+
+  test('index is a reserved name', () => {
+    for (const file of [ 'index.ts', 'index.js', 'index.mjs', 'index.mts' ]) {
+      const dir = makeDir({ [file]: '' });
+      assert.throws(() => listPlugins(dir), new RegExp(`^Error: hono-compose/${file.replace('.', '\\.')}: 'index' is a reserved name in this folder\\. Rename the file, for example to 10-${file.replace('.', '\\.')}\\.$`));
+    }
+    // With an order prefix, or as a helper, it is not the reserved name.
+    assert.deepEqual(listPlugins(makeDir({ '10-index.ts': '', '_index.ts': '', 'lib/index.ts': '', 'index.d.ts': '' })),
+      [ { name: 'index', file: '10-index.ts' } ]);
   });
 });
 
-describe('honoExtensionsExternals()', () => {
+describe('pluginsExternals()', () => {
   test('the dependencies of the app and this package, with subpaths, and fastly:*', () => {
     const appDir = makeApp({ hono: '^4', '@fastly/js-compute': '^4' });
-    assert.deepEqual(honoExtensionsExternals(appDir), [
+    assert.deepEqual(pluginsExternals(appDir), [
       '@fastly/compute-js-static-publish', '@fastly/compute-js-static-publish/*',
       '@fastly/js-compute', '@fastly/js-compute/*',
       'hono', 'hono/*',
@@ -105,8 +118,8 @@ describe('checkProvidedVersions()', () => {
   test('a range that does not include the version of the app is a warning', () => {
     const appDir = makeApp({ hono: '^4' }, undefined, { 'node_modules/hono/package.json': JSON.stringify({ version: '4.13.14' }) });
     for (const [ range, warns ] of [ [ '^4.6.0', false ], [ '^4.14.0', true ], [ '~4.13.0', false ], [ '4.13', false ], [ '4.12', true ], [ '>=5', true ], [ '*', false ], [ 'workspace:*', false ] ]) {
-      const extensionsDir = makeDir({ 'package.json': JSON.stringify({ peerDependencies: { hono: range } }) });
-      const warnings = checkProvidedVersions(appDir, extensionsDir);
+      const composeDir = makeDir({ 'package.json': JSON.stringify({ peerDependencies: { hono: range } }) });
+      const warnings = checkProvidedVersions(appDir, composeDir);
       assert.equal(warnings.length, warns ? 1 : 0, range);
       if (warns) {
         assert.match(warnings[0], new RegExp(`expects hono ${range.replace(/[.^*+?]/g, '\\$&')}, but the app provides 4\\.13\\.14`));
@@ -116,17 +129,17 @@ describe('checkProvidedVersions()', () => {
 
   test('packages that the app does not provide are not checked', () => {
     const appDir = makeApp({ hono: '^4' });
-    const extensionsDir = makeDir({ 'package.json': JSON.stringify({ dependencies: { '@fanoutio/serve-grip': '^1' } }) });
-    assert.deepEqual(checkProvidedVersions(appDir, extensionsDir), []);
+    const composeDir = makeDir({ 'package.json': JSON.stringify({ dependencies: { '@fanoutio/serve-grip': '^1' } }) });
+    assert.deepEqual(checkProvidedVersions(appDir, composeDir), []);
   });
 });
 
-describe('bundleHonoExtensions()', () => {
+describe('bundlePlugins()', () => {
   test('without the folder: the manifest with no modules', async () => {
     const appDir = makeApp({ hono: '^4' });
-    await bundleHonoExtensions({ appDir, esbuild });
-    const text = fs.readFileSync(path.resolve(appDir, HONO_EXTENSIONS_MANIFEST), 'utf-8');
-    assert.match(text, /^export const extensions = \[\];$/m);
+    await bundlePlugins({ appDir, esbuild });
+    const text = fs.readFileSync(path.resolve(appDir, PLUGINS_MANIFEST), 'utf-8');
+    assert.match(text, /^export const plugins = \[\];$/m);
   });
 
   test('bundles the modules, and leaves the packages of the app as imports', async () => {
@@ -134,38 +147,38 @@ describe('bundleHonoExtensions()', () => {
     const appDir = path.resolve(root, 'app');
     fs.mkdirSync(appDir);
     fs.writeFileSync(path.resolve(appDir, 'package.json'), JSON.stringify({ dependencies: { hono: '^4' } }));
-    fs.writeFileSync(path.resolve(appDir, 'static-publish.rc.js'), `export default { build: { hono: { extensionsDir: '../ext' } } };\n`);
+    fs.writeFileSync(path.resolve(appDir, 'static-publish.rc.js'), `export default { build: { hono: { composeDir: '../ext' } } };\n`);
     const extDir = path.resolve(root, 'ext');
     for (const [ file, content ] of Object.entries({
-      '10-header.ts': `import { createMiddleware } from 'hono/factory';\nimport { tag } from './lib/tag';\nconst x: string = tag;\nexport default { kind: 'extension', bindings: {}, phases: { middleware: (app) => app.use('*', createMiddleware(async (c, next) => { await next(); c.header('x', x); })) } };\n`,
-      'hello.ts': `import { env } from 'fastly:env';\nexport default { kind: 'extension', bindings: {}, phases: { beforeFiles: (app) => app.get('/hello', (c) => c.text(env('X'))) } };\n`,
+      '10-header.ts': `import { createMiddleware } from 'hono/factory';\nimport { tag } from './lib/tag';\nconst x: string = tag;\nexport default { kind: 'plugin', bindings: {}, phases: { middleware: (app) => app.use('*', createMiddleware(async (c, next) => { await next(); c.header('x', x); })) } };\n`,
+      'hello.ts': `import { env } from 'fastly:env';\nexport default { kind: 'plugin', bindings: {}, phases: { routes: (app) => app.get('/hello', (c) => c.text(env('X'))) } };\n`,
       'lib/tag.ts': `export const tag = 'from-lib';\n`,
     })) {
       fs.mkdirSync(path.dirname(path.resolve(extDir, file)), { recursive: true });
       fs.writeFileSync(path.resolve(extDir, file), content);
     }
 
-    await bundleHonoExtensions({ appDir, esbuild });
-    const text = fs.readFileSync(path.resolve(appDir, HONO_EXTENSIONS_MANIFEST), 'utf-8');
+    await bundlePlugins({ appDir, esbuild });
+    const text = fs.readFileSync(path.resolve(appDir, PLUGINS_MANIFEST), 'utf-8');
     assert.match(text, /^\/\/ Generated by @fastly\/compute-js-static-publish/);
     assert.match(text, /from "hono\/factory"/, 'hono stays an import');
     assert.match(text, /from "fastly:env"/, 'fastly:* stays an import');
     assert.match(text, /from-lib/, 'a helper of the folder is bundled');
     assert.doesNotMatch(text, /: string/, 'the types are removed');
-    assert.match(text, /name: "header", file: "10-header\.ts", module: /);
-    assert.match(text, /name: "hello", file: "hello\.ts", module: /);
+    assert.match(text, /name: "header", file: "10-header\.ts", plugin: /);
+    assert.match(text, /name: "hello", file: "hello\.ts", plugin: /);
   });
 });
 
-describe('bundleHonoExtensions(): only a change is written', () => {
+describe('bundlePlugins(): only a change is written', () => {
   test('a second bundle with the same modules does not write the file', async () => {
     const appDir = makeApp({ hono: '^4' }, undefined, {
-      'hono-extensions/hello.js': `export default { kind: 'extension', bindings: {}, phases: { middleware: () => {} } };\n`,
+      'hono-compose/hello.js': `export default { kind: 'plugin', bindings: {}, phases: { middleware: () => {} } };\n`,
     });
-    assert.equal(await bundleHonoExtensions({ appDir, esbuild }), true);
-    const file = path.resolve(appDir, HONO_EXTENSIONS_MANIFEST);
+    assert.equal(await bundlePlugins({ appDir, esbuild }), true);
+    const file = path.resolve(appDir, PLUGINS_MANIFEST);
     const mtime = fs.statSync(file).mtimeMs;
-    assert.equal(await bundleHonoExtensions({ appDir, esbuild }), false);
+    assert.equal(await bundlePlugins({ appDir, esbuild }), false);
     assert.equal(fs.statSync(file).mtimeMs, mtime);
   });
 });
@@ -181,19 +194,19 @@ async function waitFor(check, message) {
   }
 }
 
-describe('watchHonoExtensions()', () => {
-  const ROUTE = `export default { kind: 'extension', bindings: {}, phases: { middleware: () => 'ROUTE_MARK' } };\n`;
+describe('watchPlugins()', () => {
+  const ROUTE = `export default { kind: 'plugin', bindings: {}, phases: { middleware: () => 'ROUTE_MARK' } };\n`;
 
   test('without the folder: the stub, then the modules when the folder is made, then the stub when it is removed', async () => {
     const appDir = makeApp({ hono: '^4' });
-    const manifest = () => fs.readFileSync(path.resolve(appDir, HONO_EXTENSIONS_MANIFEST), 'utf-8');
-    const watcher = await watchHonoExtensions({ appDir, esbuild });
+    const manifest = () => fs.readFileSync(path.resolve(appDir, PLUGINS_MANIFEST), 'utf-8');
+    const watcher = await watchPlugins({ appDir, esbuild });
     try {
-      assert.match(manifest(), /^export const extensions = \[\];$/m);
-      fs.mkdirSync(path.resolve(appDir, 'hono-extensions'), { recursive: true });
-      fs.writeFileSync(path.resolve(appDir, 'hono-extensions/hello.js'), ROUTE);
+      assert.match(manifest(), /^export const plugins = \[\];$/m);
+      fs.mkdirSync(path.resolve(appDir, 'hono-compose'), { recursive: true });
+      fs.writeFileSync(path.resolve(appDir, 'hono-compose/hello.js'), ROUTE);
       await waitFor(() => manifest().includes('ROUTE_MARK'), 'the new folder is bundled');
-      fs.rmSync(path.resolve(appDir, 'hono-extensions'), { recursive: true });
+      fs.rmSync(path.resolve(appDir, 'hono-compose'), { recursive: true });
       await waitFor(() => !manifest().includes('ROUTE_MARK'), 'the stub after the folder is removed');
     } finally {
       watcher.close();
@@ -202,22 +215,22 @@ describe('watchHonoExtensions()', () => {
 
   test('a new module, a changed helper, and a bundle error', async () => {
     const appDir = makeApp({ hono: '^4' }, undefined, {
-      'hono-extensions/hello.js': `import { mark } from './lib/mark.js';\nexport default { kind: 'extension', bindings: {}, phases: { middleware: () => mark } };\n`,
-      'hono-extensions/lib/mark.js': `export const mark = 'MARK_ONE';\n`,
+      'hono-compose/hello.js': `import { mark } from './lib/mark.js';\nexport default { kind: 'plugin', bindings: {}, phases: { middleware: () => mark } };\n`,
+      'hono-compose/lib/mark.js': `export const mark = 'MARK_ONE';\n`,
     });
-    const manifest = () => fs.readFileSync(path.resolve(appDir, HONO_EXTENSIONS_MANIFEST), 'utf-8');
+    const manifest = () => fs.readFileSync(path.resolve(appDir, PLUGINS_MANIFEST), 'utf-8');
     const errors = [];
     const consoleError = console.error;
     console.error = (...args) => errors.push(args.join(' '));
-    const watcher = await watchHonoExtensions({ appDir, esbuild });
+    const watcher = await watchPlugins({ appDir, esbuild });
     try {
       assert.match(manifest(), /MARK_ONE/);
-      fs.writeFileSync(path.resolve(appDir, 'hono-extensions/lib/mark.js'), `export const mark = 'MARK_TWO';\n`);
+      fs.writeFileSync(path.resolve(appDir, 'hono-compose/lib/mark.js'), `export const mark = 'MARK_TWO';\n`);
       await waitFor(() => manifest().includes('MARK_TWO'), 'a changed helper is bundled');
-      fs.writeFileSync(path.resolve(appDir, 'hono-extensions/other.js'), ROUTE);
-      await waitFor(() => manifest().includes('ROUTE_MARK'), 'a new module is bundled');
-      fs.writeFileSync(path.resolve(appDir, 'hono-extensions/other.js'), 'export default {');
-      await waitFor(() => errors.some(e => /Could not bundle the Hono extensions/.test(e)), 'the error is shown');
+      fs.writeFileSync(path.resolve(appDir, 'hono-compose/other.js'), ROUTE);
+      await waitFor(() => manifest().includes('ROUTE_MARK'), 'a new plugin is bundled');
+      fs.writeFileSync(path.resolve(appDir, 'hono-compose/other.js'), 'export default {');
+      await waitFor(() => errors.some(e => /Could not bundle the plugins: /.test(e)), 'the error is shown');
       assert.match(manifest(), /ROUTE_MARK/, 'the manifest of the app stays');
     } finally {
       watcher.close();
@@ -226,10 +239,36 @@ describe('watchHonoExtensions()', () => {
   });
 });
 
-describe('writeHonoExtensionsStub()', () => {
+describe('the names of earlier betas of 8.1', () => {
+  test('the old settings stop the bundle, with the new names', async () => {
+    const appDir = makeApp({ hono: '^4' }, `export default { build: { hono: { extensionsDir: './x' } }, templateOptions: { hono: { extensions: {} } } };\n`);
+    await assert.rejects(bundlePlugins({ appDir, esbuild }),
+      /^Error: The plugins of the hono template have new names: build\.hono\.extensionsDir is now build\.hono\.composeDir\. templateOptions\.hono\.extensions is now templateOptions\.hono\.compose\.plugins\.$/);
+  });
+
+  test('a hono-extensions/ folder with files, and no hono-compose/, stops the bundle', async () => {
+    const appDir = makeApp({ hono: '^4' }, undefined, { 'hono-extensions/auth.ts': '' });
+    await assert.rejects(bundlePlugins({ appDir, esbuild }), /The folder hono-extensions\/ is now hono-compose\/\. Rename it/);
+    // With hono-compose/, the old folder is not used, and is not an error.
+    fs.mkdirSync(path.resolve(appDir, 'hono-compose'));
+    assert.equal(await bundlePlugins({ appDir, esbuild }), true);
+    // An empty old folder is not an error.
+    const other = makeApp({ hono: '^4' }, undefined, { 'hono-extensions/.keep': '' });
+    fs.rmSync(path.resolve(other, 'hono-extensions/.keep'));
+    assert.equal(await bundlePlugins({ appDir: other, esbuild }), true);
+  });
+
+  test('the old functions of the scripts throw, and give the new names', () => {
+    assert.throws(() => bundleHonoExtensions(), /update scripts\/ and src\/index\.ts of the app as MIGRATING\.md shows\. bundleHonoExtensions\(\) is now bundlePlugins\(\)\./);
+    assert.throws(() => watchHonoExtensions(), /watchHonoExtensions\(\) is now watchPlugins\(\)\./);
+    assert.throws(() => writeHonoExtensionsStub(), /writeHonoExtensionsStub\(\) is now writePluginsStub\(\)\./);
+  });
+});
+
+describe('writePluginsStub()', () => {
   test('writes the manifest with no modules', () => {
     const appDir = makeDir();
-    writeHonoExtensionsStub({ appDir });
-    assert.ok(fs.existsSync(path.resolve(appDir, HONO_EXTENSIONS_MANIFEST)));
+    writePluginsStub({ appDir });
+    assert.ok(fs.existsSync(path.resolve(appDir, PLUGINS_MANIFEST)));
   });
 });

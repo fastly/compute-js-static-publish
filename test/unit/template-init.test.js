@@ -46,7 +46,7 @@ describe('template init', () => {
   });
 
   test('a new folder gets package.json, tsconfig.json, .gitignore, and the inactive example', () => {
-    const dir = path.join(makeDir(), 'hono-extensions');
+    const dir = path.join(makeDir(), 'hono-compose');
     const plan = planTemplateInit('hono', dir, provided, { reset: false });
     assert.deepEqual(Object.keys(plan.write).sort(), [ '.gitignore', '_example.ts', 'package.json', 'tsconfig.json' ]);
     assert.equal(plan.write['.gitignore'], '/node_modules\n');

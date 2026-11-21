@@ -5,8 +5,8 @@
 
 // @fastly/compute-js-static-publish/hono/build: helpers for the scripts of the
 // hono template (scripts/template_prebuild.js, template_postinstall.js, and
-// template_watch.js), which run in Node at build time and during development. The scripts stay in an ejected app, so this
-// is a public API. Never import this module in the code of the app: the Wasm
+// template_watch.js), which run in Node at build time and during development.
+// The scripts stay in an ejected app, so this is a public API. Never import this module in the code of the app: the Wasm
 // bundle must not contain it.
 
 import fs from 'node:fs';
@@ -17,68 +17,82 @@ import { compareVersions } from '../managed/version-check.js';
 import { cliCommand } from '../util/package.js';
 
 // The file that the build writes into the app, and that src/index.ts imports.
-export const HONO_EXTENSIONS_MANIFEST = 'src/hono-extensions.generated.js';
+export const PLUGINS_MANIFEST = 'src/hono-compose.generated.js';
 
-// The extensions folder when build.hono.extensionsDir is not set, relative to
+// The folder of the plugins when build.hono.composeDir is not set, relative to
 // static-publish.rc.js.
-export const DEFAULT_HONO_EXTENSIONS_DIR = './hono-extensions';
+export const DEFAULT_PLUGINS_DIR = './hono-compose';
 
 const THIS_PACKAGE = '@fastly/compute-js-static-publish';
 const MODULE_FILE = /\.(?:js|mjs|ts|mts)$/;
+// A file with this name (with any extension of MODULE_FILE) is not a plugin.
+// The name is kept for a later configuration file of the folder.
+const RESERVED_NAME = 'index';
+// The name of the folder of the plugins in earlier betas of 8.1.
+const OLD_DIR_NAME = 'hono-extensions';
 
-export type HonoExtensionModule = {
+export type PluginFile = {
   // The file name without the order prefix and the extension. It is the key in
-  // templateOptions.hono.extensions.
+  // templateOptions.hono.compose.plugins.
   name: string,
-  // The path relative to the extensions folder, with '/'.
+  // The path relative to the folder of the plugins, with '/'.
   file: string,
 };
 
-// The modules of the extensions folder: the files directly in the folder with
-// the extension .js, .mjs, .ts, or .mts, in file-name order. Files that start
-// with '_' or '.', .d.ts files, and the files in subfolders (for example lib/)
-// are not modules. Throws if two modules have the same name.
-export function listHonoExtensionModules(extensionsDir: string): HonoExtensionModule[] {
-  if (!fs.existsSync(extensionsDir)) {
+// The plugins of the folder: the files directly in the folder with the
+// extension .js, .mjs, .ts, or .mts, in file-name order. Files that start with
+// '_' or '.', .d.ts files, and the files in subfolders (for example lib/) are
+// not plugins. Throws for a file with the reserved name index, and if two
+// plugins have the same name.
+export function listPlugins(composeDir: string): PluginFile[] {
+  if (!fs.existsSync(composeDir)) {
     return [];
   }
-  const modules = fs.readdirSync(extensionsDir, { withFileTypes: true })
+  const files = fs.readdirSync(composeDir, { withFileTypes: true })
     .filter(entry => entry.isFile() && !entry.name.startsWith('_') && !entry.name.startsWith('.'))
     .map(entry => entry.name)
     .filter(file => MODULE_FILE.test(file) && !/\.d\.[cm]?ts$/.test(file))
-    .sort()
-    .map(file => ({
-      name: file.replace(/\.[cm]?[jt]s$/, '').replace(/^\d+-/, ''),
-      file,
-    }));
+    .sort();
+  const plugins: PluginFile[] = [];
   const seen = new Map<string, string>();
-  for (const module of modules) {
-    const other = seen.get(module.name);
-    if (other != null) {
-      throw new Error(`hono-extensions: ${other} and ${module.file} have the same module name '${module.name}'.`);
+  for (const file of files) {
+    const base = file.replace(/\.[cm]?[jt]s$/, '');
+    if (base === RESERVED_NAME) {
+      throw new Error(
+        `hono-compose/${file}: '${RESERVED_NAME}' is a reserved name in this folder. ` +
+        `Rename the file, for example to 10-${file}.`,
+      );
     }
-    seen.set(module.name, module.file);
+    const name = base.replace(/^\d+-/, '');
+    const other = seen.get(name);
+    if (other != null) {
+      throw new Error(`hono-compose: ${other} and ${file} have the same plugin name '${name}'.`);
+    }
+    seen.set(name, file);
+    plugins.push({ name, file });
   }
-  return modules;
+  return plugins;
 }
 
 function readJson(file: string): any {
   return JSON.parse(fs.readFileSync(file, 'utf-8'));
 }
 
-// The packages that the app provides to the extensions: each package in the
+// The packages that the app provides to the plugins: each package in the
 // dependencies of the app's package.json, and this package, each also with its
-// subpaths, and the fastly:* modules of the runtime. The bundle of the
-// extensions leaves their imports, so that the app's copy is the only copy.
-export function honoExtensionsExternals(appDir: string): string[] {
+// subpaths, and the fastly:* modules of the runtime. The bundle of the plugins
+// leaves their imports, so that the app's copy is the only copy.
+export function pluginsExternals(appDir: string): string[] {
   const packageJson = readJson(path.resolve(appDir, 'package.json'));
   const names = new Set([ ...Object.keys(packageJson.dependencies ?? {}), THIS_PACKAGE ]);
   return [ ...[ ...names ].sort().flatMap(name => [ name, `${name}/*` ]), 'fastly:*' ];
 }
 
 type Rc = {
-  build?: { hono?: { extensionsDir?: string } },
-  templateOptions?: { hono?: { extensions?: Record<string, unknown> } },
+  // extensionsDir and extensions are the names of earlier betas of 8.1, for
+  // checkOldNames().
+  build?: { hono?: { composeDir?: string, extensionsDir?: unknown } },
+  templateOptions?: { hono?: { compose?: { plugins?: Record<string, unknown> }, extensions?: unknown } },
 };
 
 async function loadRc(appDir: string): Promise<Rc> {
@@ -86,28 +100,48 @@ async function loadRc(appDir: string): Promise<Rc> {
   return (await import(pathToFileURL(rcPath).href)).default ?? {};
 }
 
-// The extensions folder of the app: build.hono.extensionsDir, relative to
+// The folder of the plugins of the app: build.hono.composeDir, relative to
 // static-publish.rc.js.
-export function honoExtensionsDir(appDir: string, rc: Rc): string {
-  return path.resolve(appDir, rc.build?.hono?.extensionsDir ?? DEFAULT_HONO_EXTENSIONS_DIR);
+export function pluginsDir(appDir: string, rc: Rc): string {
+  return path.resolve(appDir, rc.build?.hono?.composeDir ?? DEFAULT_PLUGINS_DIR);
 }
 
 const GENERATED_HEADER = '// Generated by @fastly/compute-js-static-publish at each build. Do not edit.\n';
 
-function entrySource(modules: HonoExtensionModule[]) {
-  const lines = modules.map((module, i) => `import m${i} from ${JSON.stringify(`./${module.file}`)};`);
-  const entries = modules
-    .map((module, i) => `  { name: ${JSON.stringify(module.name)}, file: ${JSON.stringify(module.file)}, module: m${i} },`)
+function entrySource(plugins: PluginFile[]) {
+  const lines = plugins.map((plugin, i) => `import p${i} from ${JSON.stringify(`./${plugin.file}`)};`);
+  const entries = plugins
+    .map((plugin, i) => `  { name: ${JSON.stringify(plugin.name)}, file: ${JSON.stringify(plugin.file)}, plugin: p${i} },`)
     .join('\n');
-  lines.push(`export const extensions = [\n${entries}\n];`);
+  lines.push(`export const plugins = [\n${entries}\n];`);
   return lines.join('\n') + '\n';
+}
+
+// The names of earlier betas of 8.1 stop the build, with a message that gives
+// the new name, so that a build never skips the plugins without a message.
+// Removed in v9.
+function checkOldNames(rc: Rc, composeDir: string) {
+  const errors: string[] = [];
+  if (rc.build?.hono?.extensionsDir !== undefined) {
+    errors.push('build.hono.extensionsDir is now build.hono.composeDir.');
+  }
+  if (rc.templateOptions?.hono?.extensions !== undefined) {
+    errors.push('templateOptions.hono.extensions is now templateOptions.hono.compose.plugins.');
+  }
+  const oldDir = path.resolve(path.dirname(composeDir), OLD_DIR_NAME);
+  if (!fs.existsSync(composeDir) && fs.existsSync(oldDir) && fs.readdirSync(oldDir).length > 0) {
+    errors.push(`The folder ${OLD_DIR_NAME}/ is now hono-compose/. Rename it (${oldDir}).`);
+  }
+  if (errors.length > 0) {
+    throw new Error(`The plugins of the hono template have new names: ${errors.join(' ')}`);
+  }
 }
 
 // Writes the manifest, but only if its content changes, so that a watcher of
 // the app (fastly compute serve --watch) does not see a change that is not
 // one. Returns true if it wrote the file.
 function writeManifest(appDir: string, content: string): boolean {
-  const file = path.resolve(appDir, HONO_EXTENSIONS_MANIFEST);
+  const file = path.resolve(appDir, PLUGINS_MANIFEST);
   if (fs.existsSync(file) && fs.readFileSync(file, 'utf-8') === content) {
     return false;
   }
@@ -116,10 +150,10 @@ function writeManifest(appDir: string, content: string): boolean {
   return true;
 }
 
-// Writes the manifest with no modules. Then src/index.ts can import it before
+// Writes the manifest with no plugins. Then src/index.ts can import it before
 // the first build, so that an editor does not show an error.
-export function writeHonoExtensionsStub(options: { appDir: string }): boolean {
-  return writeManifest(options.appDir, GENERATED_HEADER + 'export const extensions = [];\n');
+export function writePluginsStub(options: { appDir: string }): boolean {
+  return writeManifest(options.appDir, GENERATED_HEADER + 'export const plugins = [];\n');
 }
 
 // A small part of semver ranges: ^, ~, >=, an exact version, and *. Returns
@@ -160,10 +194,10 @@ function satisfiesRange(version: string, range: string): boolean | null {
 }
 
 // The warnings about the packages that the app provides: a range in the
-// extensions folder's package.json that does not include the version that the
-// app has. The build uses the app's copy, so this is only a warning.
-export function checkProvidedVersions(appDir: string, extensionsDir: string): string[] {
-  const folderPackageJsonPath = path.resolve(extensionsDir, 'package.json');
+// package.json of the folder of the plugins that does not include the version
+// that the app has. The build uses the app's copy, so this is only a warning.
+export function checkProvidedVersions(appDir: string, composeDir: string): string[] {
+  const folderPackageJsonPath = path.resolve(composeDir, 'package.json');
   if (!fs.existsSync(folderPackageJsonPath)) {
     return [];
   }
@@ -173,7 +207,7 @@ export function checkProvidedVersions(appDir: string, extensionsDir: string): st
     ...folderPackageJson.dependencies,
     ...folderPackageJson.peerDependencies,
   };
-  const provided = new Set(honoExtensionsExternals(appDir).filter(x => !x.endsWith('/*') && x !== 'fastly:*'));
+  const provided = new Set(pluginsExternals(appDir).filter(x => !x.endsWith('/*') && x !== 'fastly:*'));
   const warnings: string[] = [];
   for (const [ name, range ] of Object.entries(ranges)) {
     if (!provided.has(name)) {
@@ -186,7 +220,7 @@ export function checkProvidedVersions(appDir: string, extensionsDir: string): st
     const version = readJson(installed).version;
     if (satisfiesRange(version, range) === false) {
       warnings.push(
-        `hono-extensions/package.json expects ${name} ${range}, but the app provides ${version}. ` +
+        `hono-compose/package.json expects ${name} ${range}, but the app provides ${version}. ` +
         `The build uses the app's ${name}. Run: ${cliCommand()} template init`,
       );
     }
@@ -199,76 +233,77 @@ export function checkProvidedVersions(appDir: string, extensionsDir: string): st
 // the app, where esbuild is not installed.
 type Esbuild = { build: (options: any) => Promise<{ outputFiles?: { text: string }[] }> };
 
-export type BundleHonoExtensionsOptions = {
+export type BundlePluginsOptions = {
   // The directory of the app (the directory of static-publish.rc.js).
   appDir: string,
   esbuild: Esbuild,
 };
 
-// Bundles the modules of the extensions folder into one file of the app
-// (HONO_EXTENSIONS_MANIFEST), which src/index.ts imports. The packages that
-// the app provides stay imports (see honoExtensionsExternals()), so that the
-// Wasm bundle has one copy of each. Without the folder, or without modules, it
-// writes the manifest with no modules. It writes the file only if its content
-// changes. Returns true if it wrote the file.
-export async function bundleHonoExtensions(options: BundleHonoExtensionsOptions): Promise<boolean> {
+// Bundles the plugins of the folder into one file of the app
+// (PLUGINS_MANIFEST), which src/index.ts imports. The packages that the app
+// provides stay imports (see pluginsExternals()), so that the Wasm bundle has
+// one copy of each. Without the folder, or without plugins, it writes the
+// manifest with no plugins. It writes the file only if its content changes.
+// Returns true if it wrote the file.
+export async function bundlePlugins(options: BundlePluginsOptions): Promise<boolean> {
   const { appDir, esbuild } = options;
   const rc = await loadRc(appDir);
-  const extensionsDir = honoExtensionsDir(appDir, rc);
-  if (!fs.existsSync(extensionsDir)) {
-    return writeHonoExtensionsStub({ appDir });
+  const composeDir = pluginsDir(appDir, rc);
+  checkOldNames(rc, composeDir);
+  if (!fs.existsSync(composeDir)) {
+    return writePluginsStub({ appDir });
   }
 
-  const modules = listHonoExtensionModules(extensionsDir);
-  const names = new Set(modules.map(module => module.name));
-  for (const name of Object.keys(rc.templateOptions?.hono?.extensions ?? {})) {
+  const plugins = listPlugins(composeDir);
+  const names = new Set(plugins.map(plugin => plugin.name));
+  for (const name of Object.keys(rc.templateOptions?.hono?.compose?.plugins ?? {})) {
     if (!names.has(name)) {
-      console.warn(`⚠️ templateOptions.hono.extensions.${name}: there is no module '${name}' in hono-extensions/.`);
+      console.warn(`⚠️ templateOptions.hono.compose.plugins.${name}: there is no plugin '${name}' in hono-compose/.`);
     }
   }
-  for (const warning of checkProvidedVersions(appDir, extensionsDir)) {
+  for (const warning of checkProvidedVersions(appDir, composeDir)) {
     console.warn(`⚠️ ${warning}`);
   }
-  if (modules.length === 0) {
-    return writeHonoExtensionsStub({ appDir });
+  if (plugins.length === 0) {
+    return writePluginsStub({ appDir });
   }
 
   const result = await esbuild.build({
-    stdin: { contents: entrySource(modules), resolveDir: extensionsDir, sourcefile: 'hono-extensions.js', loader: 'js' },
+    stdin: { contents: entrySource(plugins), resolveDir: composeDir, sourcefile: 'hono-compose.js', loader: 'js' },
     bundle: true,
     format: 'esm',
     // As js-compute's own bundler, so that packages resolve the same way.
     conditions: [ 'fastly' ],
-    external: honoExtensionsExternals(appDir),
-    outfile: path.resolve(appDir, HONO_EXTENSIONS_MANIFEST),
+    external: pluginsExternals(appDir),
+    outfile: path.resolve(appDir, PLUGINS_MANIFEST),
     banner: { js: GENERATED_HEADER.trimEnd() },
     logLevel: 'warning',
     write: false,
   });
   const text = result.outputFiles?.[0]?.text;
   if (text == null) {
-    throw new Error('hono-extensions: esbuild gave no output.');
+    throw new Error('hono-compose: esbuild gave no output.');
   }
   return writeManifest(appDir, text);
 }
 
-export type HonoExtensionsWatcher = {
+export type PluginsWatcher = {
   close: () => void,
 };
 
 const WATCH_DELAY_MS = 100;
 
-// Watches the extensions folder, and bundles the modules again after each
-// change (see bundleHonoExtensions()). fastly compute serve --watch watches only
+// Watches the folder of the plugins, and bundles the plugins again after each
+// change (see bundlePlugins()). fastly compute serve --watch watches only
 // the app directory: a new manifest is the change that makes it build the app
 // again. All files in the folder count, except node_modules/, so that a new
-// module and a changed helper are found. Imports from outside the folder are
+// plugin and a changed helper are found. Imports from outside the folder are
 // not watched. While the folder does not exist, it checks each second if the
 // folder was made. A failed bundle shows the error and keeps the manifest that
 // the app has.
-export async function watchHonoExtensions(options: BundleHonoExtensionsOptions): Promise<HonoExtensionsWatcher> {
+export async function watchPlugins(options: BundlePluginsOptions): Promise<PluginsWatcher> {
   const { appDir } = options;
-  const extensionsDir = honoExtensionsDir(appDir, await loadRc(appDir));
+  const composeDir = pluginsDir(appDir, await loadRc(appDir));
 
   let closed = false;
   let folderWatcher: fs.FSWatcher | undefined;
@@ -278,11 +313,11 @@ export async function watchHonoExtensions(options: BundleHonoExtensionsOptions):
 
   const bundle = async () => {
     try {
-      if (await bundleHonoExtensions(options)) {
-        console.log(`🔄 ${HONO_EXTENSIONS_MANIFEST} changed.`);
+      if (await bundlePlugins(options)) {
+        console.log(`🔄 ${PLUGINS_MANIFEST} changed.`);
       }
     } catch (err) {
-      console.error(`❌ Could not bundle the Hono extensions: ${String(err instanceof Error ? err.message : err)}`);
+      console.error(`❌ Could not bundle the plugins: ${String(err instanceof Error ? err.message : err)}`);
     }
   };
 
@@ -315,9 +350,9 @@ export async function watchHonoExtensions(options: BundleHonoExtensionsOptions):
     if (closed) {
       return;
     }
-    const exists = fs.existsSync(extensionsDir);
+    const exists = fs.existsSync(composeDir);
     if (exists && folderWatcher == null) {
-      folderWatcher = fs.watch(extensionsDir, { recursive: true }, (_event, file) => {
+      folderWatcher = fs.watch(composeDir, { recursive: true }, (_event, file) => {
         if (file == null || !file.toString().split(/[\\/]/).includes('node_modules')) {
           schedule();
         }
@@ -337,7 +372,7 @@ export async function watchHonoExtensions(options: BundleHonoExtensionsOptions):
   // While the folder does not exist, a check each second. The timer also keeps
   // the process of the watch script alive until close().
   const poll = setInterval(() => {
-    if (folderWatcher == null && running == null && fs.existsSync(extensionsDir)) {
+    if (folderWatcher == null && running == null && fs.existsSync(composeDir)) {
       schedule();
     }
   }, 1000);
@@ -353,4 +388,20 @@ export async function watchHonoExtensions(options: BundleHonoExtensionsOptions):
       folderWatcher?.close();
     },
   };
+}
+
+// The names of earlier betas of 8.1. Each one throws, so that the scripts of
+// an ejected app that use an old name stop with a message that gives the new
+// name. Removed in v9.
+const OLD_SCRIPTS_MESSAGE =
+  'The plugins of the hono template have new names: update scripts/ and src/index.ts of the app as MIGRATING.md shows.';
+export const HONO_EXTENSIONS_MANIFEST = 'src/hono-extensions.generated.js';
+export function bundleHonoExtensions(..._args: unknown[]): never {
+  throw new Error(`${OLD_SCRIPTS_MESSAGE} bundleHonoExtensions() is now bundlePlugins().`);
+}
+export function watchHonoExtensions(..._args: unknown[]): never {
+  throw new Error(`${OLD_SCRIPTS_MESSAGE} watchHonoExtensions() is now watchPlugins().`);
+}
+export function writeHonoExtensionsStub(..._args: unknown[]): never {
+  throw new Error(`${OLD_SCRIPTS_MESSAGE} writeHonoExtensionsStub() is now writePluginsStub().`);
 }

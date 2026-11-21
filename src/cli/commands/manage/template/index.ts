@@ -19,7 +19,7 @@ Description:
 
 Available Subcommands:
   init                             Make or update the folder of the template
-                                   (for the hono template: hono-extensions/)
+                                   (for the hono template: hono-compose/)
 
 Global Options:
   -h, --help                       Show this help message and exit.

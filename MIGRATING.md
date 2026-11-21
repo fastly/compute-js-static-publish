@@ -17,7 +17,7 @@ changing the version of this package. See "Managed and ejected apps" in `README.
 
 > [!IMPORTANT]
 > Managed mode generates the app from a template: `plain` (the default) or `hono`. If you changed `src/index.js` (or
-> other files of the app), move your changes into options of the project file, or into Hono extensions (see
+> other files of the app), move your changes into options of the project file, or into plugin modules (see
 > [An app with changes to `src/index.js`](#an-app-with-changes-to-srcindexjs)), or keep your app ejected.
 
 These steps move a project with this layout. Change the paths to match your project:
@@ -103,24 +103,24 @@ my-site/
 ### An app with changes to `src/index.js`
 
 Managed mode generates `src/index.js` again for each build, so your changes to it would be lost. With the `hono`
-template, you can keep your code in Hono extensions: modules in the folder `hono-extensions/`, beside the project file.
-The build bundles them into the app. Code that ran before `serveRequest()`, for example a redirect of an old host name,
-a login check, or a proxy to another service, goes into a `middleware` or `beforeFiles` phase. Code that ran when no
-file matched, for example a special page for a path, goes into an `afterFiles` phase. Each module gets its own options,
-and declares the Fastly resources that it uses (bindings).
+template, you can keep your code in plugin modules: files in the folder `hono-compose/`, beside the
+project file. The build bundles them into the app. Code that ran before `serveRequest()`, for example a redirect of an old
+host name, a login check, or a proxy to another service, goes into a `middleware` or `routes` phase. Code that ran when no
+file matched, for example a special page for a path, goes into an `afterFilesRoutes` phase. Each plugin gets its own
+options, and declares the Fastly resources that it uses (bindings).
 
 1. In step 2, add `template: "hono"` to `managed`.
 2. In `my-site/`, make the folder, and install its packages:
 
    ```sh
    npx compute-js-static-publish template init
-   cd hono-extensions
+   cd hono-compose
    npm install
    ```
 
-3. Move each part of your code into a module. See "Hono extensions" in `README.md` for the phases, the options, and
-   the bindings, and `examples/hono/` in the repository for two complete examples.
-4. Continue with step 3 above. `dev` and `deploy` build the app with your modules.
+3. Move each part of your code into a plugin. See "Composing plugin modules" in `README.md` for the phases, the options,
+   and the bindings, and `examples/hono/` in the repository for two complete examples.
+4. Continue with step 3 above. `dev` and `deploy` build the app with your plugins.
 
 ## Move from `@fastly/hono-compute-js-static-publish` (8.1)
 
@@ -159,6 +159,39 @@ Differences of `serveStatic()`:
 - It applies `publicDirPrefix` (deprecated). If it is set, `root` is relative to it.
 - It serves only `GET` and `HEAD`. For other methods, it calls the next handler.
 - For previews, use `selectCollection()` with `collectionSelection` in `static-publish.rc.js` (see [Using Hono](./README.md#-using-hono)).
+
+## Update the plugins from an earlier beta of 8.1
+
+In the betas of 8.1 before 8.1.0-beta.9, plugin modules had other names ("Hono extensions"). Your plugins
+work the same way; only the names change. Each old name stops the build, and the message gives the new name.
+
+| Before | Now |
+| --- | --- |
+| The folder `hono-extensions/` | `hono-compose/` |
+| `defineExtension()` (from `@fastly/compute-js-static-publish/hono`) | `definePlugin()` (the same import) |
+| The phase `beforeFiles` or `beforeFilesRoutes` | `routes` |
+| The phase `afterFiles` | `afterFilesRoutes` |
+| The types `ExtensionEnv`, `ExtensionBindings`, `ExtensionPhaseFunction`, `ExtensionHelpers`, `ExtensionEntry` | `PluginEnv`, `PluginBindings`, `PluginPhaseFunction`, `PluginHelpers`, `PluginEntry` |
+| `templateOptions.hono.extensions` | `templateOptions.hono.compose.plugins` |
+| `build.hono.extensionsDir` | `build.hono.composeDir` |
+
+1. Rename the folder: `git mv hono-extensions hono-compose` (in the directory of the project file, or next to
+   `compute-js/`).
+2. In each plugin, change `defineExtension` to `definePlugin`, and the phase names and the types as the table shows.
+3. In the project file (or in `static-publish.rc.js`), change the keys as the table shows.
+4. In an ejected app, also update the files of the app, because nothing generates them again:
+   - `scripts/template_prebuild.js`, `scripts/template_postinstall.js`, and `scripts/template_watch.js`: the functions
+     of `@fastly/compute-js-static-publish/hono/build` are now `bundlePlugins()`, `writePluginsStub()`, and
+     `watchPlugins()`, and the constant is `PLUGINS_MANIFEST`;
+   - `src/index.ts`: import `plugins` from `./hono-compose.generated.js`, run the phase `routes` in place of
+     `beforeFilesRoutes`, read the options from `honoOptions?.compose?.plugins`, and use `p.plugin.phases` in place of
+     `e.module.phases`;
+   - `src/hono-extensions.generated.d.ts` becomes `src/hono-compose.generated.d.ts` (with `plugins: PluginEntry[]`),
+     and `.gitignore` ignores `/src/hono-compose.generated.js`.
+
+   To see the new files, scaffold a new app with `--template hono` and compare.
+
+A managed project gets the new files of the app at the next `dev` or `deploy`.
 
 ## Upgrade from v7 to v8
 

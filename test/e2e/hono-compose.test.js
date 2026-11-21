@@ -3,8 +3,9 @@
  * Licensed under the MIT license. See LICENSE file for details.
  */
 
-// Hono extensions: scaffolds hono apps (ejected and managed), adds modules to
-// hono-extensions/, builds them (the prebuild hook bundles the modules), and
+// Plugin modules: scaffolds hono apps (ejected and managed), adds
+// plugins to hono-compose/, builds them (the prebuild hook bundles the
+// plugins), and
 // serves the app with `fastly compute serve` or `dev`. Also template init, the
 // fingerprint, eject, and the hint. Needs the Fastly CLI and network access for
 // `npm install`. No credentials are necessary.
@@ -59,15 +60,15 @@ function writeFiles(dir, files) {
 }
 
 // Modules that use options, a binding, a helper in lib/, and each phase.
-// 05-early.ts sorts before 10-header.ts, but its beforeFiles phase runs after
+// 05-early.ts sorts before 10-header.ts, but its routes phase runs after
 // the middleware phase of 10-header.ts.
 const MODULES = {
   '10-header.ts': `\
-import { defineExtension } from '@fastly/compute-js-static-publish/hono';
+import { definePlugin } from '@fastly/compute-js-static-publish/hono';
 import { createMiddleware } from 'hono/factory';
 import { headerName } from './lib/names';
 
-export default defineExtension({ bindings: { site: 'ConfigStore:site_config' } }, (app, options?: { value?: string }) => {
+export default definePlugin({ bindings: { site: 'ConfigStore:site_config' } }, (app, options?: { value?: string }) => {
   app.use('*', createMiddleware(async (c, next) => {
     await next();
     c.header(headerName, options?.value ?? 'no-options');
@@ -75,27 +76,27 @@ export default defineExtension({ bindings: { site: 'ConfigStore:site_config' } }
 });
 `,
   '05-early.ts': `\
-import { defineExtension } from '@fastly/compute-js-static-publish/hono';
+import { definePlugin } from '@fastly/compute-js-static-publish/hono';
 
-export default defineExtension({
-  beforeFiles: (app) => {
-    app.get('/early', (c) => c.text('from a beforeFiles route'));
+export default definePlugin({
+  routes: (app) => {
+    app.get('/early', (c) => c.text('from a routes route'));
   },
 });
 `,
   'hello.ts': `\
-import { defineExtension } from '@fastly/compute-js-static-publish/hono';
+import { definePlugin } from '@fastly/compute-js-static-publish/hono';
 
-export default defineExtension({
-  beforeFiles: (app) => {
-    app.get('/hello', (c) => c.json({ hello: 'from an extension route' }));
+export default definePlugin({
+  routes: (app) => {
+    app.get('/hello', (c) => c.json({ hello: 'from a plugin route' }));
   },
 });
 `,
   '20-docs.ts': `\
-import { defineExtension } from '@fastly/compute-js-static-publish/hono';
+import { definePlugin } from '@fastly/compute-js-static-publish/hono';
 
-export default defineExtension((app, options?: { path?: string }) => {
+export default definePlugin((app, options?: { path?: string }) => {
   app.use(options?.path ?? '/no-options/*', async (c, next) => {
     await next();
     c.header('x-docs', 'yes');
@@ -103,16 +104,16 @@ export default defineExtension((app, options?: { path?: string }) => {
 });
 `,
   'after.ts': `\
-import { defineExtension } from '@fastly/compute-js-static-publish/hono';
+import { definePlugin } from '@fastly/compute-js-static-publish/hono';
 
-export default defineExtension({
-  afterFiles: (app) => {
+export default definePlugin({
+  afterFilesRoutes: (app) => {
     app.on([ 'GET', 'POST' ], '/about.html', (c) => c.text('from a route after the files'));
     app.get('/after-files', (c) => c.text('from a route after the files'));
   },
 });
 `,
-  'lib/names.ts': `export const headerName = 'x-extension';\n`,
+  'lib/names.ts': `export const headerName = 'x-plugin';\n`,
 };
 
 // Adds templateOptions.hono to the top level of a config file.
@@ -123,19 +124,19 @@ function addTemplateOptions(file, hono) {
   fs.writeFileSync(file, text.replace(marker, `  templateOptions: { hono: ${JSON.stringify(hono)} },\n${marker}`));
 }
 
-describe('hono extensions in an ejected app', { skip: skipUnlessFastlyCli() }, () => {
+describe('plugin modules in an ejected app', { skip: skipUnlessFastlyCli() }, () => {
   let dir;
   let computeJsDir;
-  let extensionsDir;
+  let composeDir;
   let server;
 
   before(async () => {
     dir = makeTempDir('hono-ext');
     writeFixtureContent(path.resolve(dir, 'public'));
     computeJsDir = scaffoldApp(dir, [ '--kv-store-name', 'e2e-content', '--template', 'hono' ]);
-    extensionsDir = path.resolve(dir, 'hono-extensions');
-    writeFiles(extensionsDir, MODULES);
-    addTemplateOptions(path.resolve(computeJsDir, 'static-publish.rc.js'), { extensions: { header: { value: 'from-options' }, docs: { path: '/docs/*' } } });
+    composeDir = path.resolve(dir, 'hono-compose');
+    writeFiles(composeDir, MODULES);
+    addTemplateOptions(path.resolve(computeJsDir, 'static-publish.rc.js'), { compose: { plugins: { header: { value: 'from-options' }, docs: { path: '/docs/*' } } } });
     runCli([ 'publish-content', '--local' ], { cwd: computeJsDir });
     server = await startServe(computeJsDir);
   });
@@ -147,12 +148,12 @@ describe('hono extensions in an ejected app', { skip: skipUnlessFastlyCli() }, (
     }
   });
 
-  test('scaffold makes the extensions folder next to the app', () => {
+  test('scaffold makes the folder of the plugins next to the app', () => {
     for (const file of [ 'package.json', 'tsconfig.json', '.gitignore', '_example.ts' ]) {
-      assert.ok(fs.existsSync(path.resolve(extensionsDir, file)), file);
+      assert.ok(fs.existsSync(path.resolve(composeDir, file)), file);
     }
-    assert.match(fs.readFileSync(path.resolve(computeJsDir, 'static-publish.rc.js'), 'utf-8'), /extensionsDir: "\.\.\/hono-extensions"/);
-    const packageJson = JSON.parse(fs.readFileSync(path.resolve(extensionsDir, 'package.json'), 'utf-8'));
+    assert.match(fs.readFileSync(path.resolve(computeJsDir, 'static-publish.rc.js'), 'utf-8'), /composeDir: "\.\.\/hono-compose"/);
+    const packageJson = JSON.parse(fs.readFileSync(path.resolve(composeDir, 'package.json'), 'utf-8'));
     assert.ok(packageJson.peerDependencies.hono);
     assert.ok(packageJson.peerDependencies['@fastly/compute-js-static-publish']);
   });
@@ -161,20 +162,20 @@ describe('hono extensions in an ejected app', { skip: skipUnlessFastlyCli() }, (
     const res = await rawRequest(server.baseUrl + '/', { headers: HTML });
     assert.equal(res.status, 200);
     assert.match(res.body.toString(), /<h1>Home<\/h1>/);
-    assert.equal(res.headers['x-extension'], 'from-options');
+    assert.equal(res.headers['x-plugin'], 'from-options');
   });
 
   test('the route comes before the published files', async () => {
     const res = await rawRequest(server.baseUrl + '/hello');
     assert.equal(res.status, 200);
-    assert.deepEqual(JSON.parse(res.body.toString()), { hello: 'from an extension route' });
+    assert.deepEqual(JSON.parse(res.body.toString()), { hello: 'from a plugin route' });
   });
 
-  test('the middleware phase of all modules comes before their beforeFiles phase', async () => {
+  test('the middleware phase of all modules comes before their routes phase', async () => {
     const res = await rawRequest(server.baseUrl + '/early');
     assert.equal(res.status, 200);
-    assert.equal(res.body.toString(), 'from a beforeFiles route');
-    assert.equal(res.headers['x-extension'], 'from-options', 'the middleware of 10-header.ts runs for the route of 05-early.ts');
+    assert.equal(res.body.toString(), 'from a routes route');
+    assert.equal(res.headers['x-plugin'], 'from-options', 'the middleware of 10-header.ts runs for the route of 05-early.ts');
   });
 
   test('a middleware runs only on its path, from its options', async () => {
@@ -186,7 +187,7 @@ describe('hono extensions in an ejected app', { skip: skipUnlessFastlyCli() }, (
     assert.equal(home.headers['x-docs'], undefined);
   });
 
-  test('the afterFiles phase gets only the requests that no published file matches', async () => {
+  test('the afterFilesRoutes phase gets only the requests that no published file matches', async () => {
     const file = await rawRequest(server.baseUrl + '/about.html');
     assert.equal(file.status, 200);
     assert.match(file.body.toString(), /<h1>About<\/h1>/);
@@ -199,14 +200,14 @@ describe('hono extensions in an ejected app', { skip: skipUnlessFastlyCli() }, (
   });
 
   test('the bundle leaves hono as an import', () => {
-    const bundle = fs.readFileSync(path.resolve(computeJsDir, 'src/hono-extensions.generated.js'), 'utf-8');
+    const bundle = fs.readFileSync(path.resolve(computeJsDir, 'src/hono-compose.generated.js'), 'utf-8');
     assert.match(bundle, /from "hono\/factory"/);
-    assert.match(bundle, /x-extension/, 'the helper in lib/ is bundled');
+    assert.match(bundle, /x-plugin/, 'the helper in lib/ is bundled');
   });
 
   test('template init --check: up to date, and then out of date', () => {
     assert.equal(runCli([ 'template', 'init', '--check' ], { cwd: computeJsDir }).status, 0);
-    const packageJsonPath = path.resolve(extensionsDir, 'package.json');
+    const packageJsonPath = path.resolve(composeDir, 'package.json');
     const original = fs.readFileSync(packageJsonPath, 'utf-8');
     try {
       const packageJson = JSON.parse(original);
@@ -230,14 +231,14 @@ describe('hono extensions in an ejected app', { skip: skipUnlessFastlyCli() }, (
       fs.writeFileSync(rcPath, original.replace('templateOptions: { hono: {', `templateOptions: { hono: {"bindings":{"site":"ConfigStore:other"},`));
       const result = run('npm', [ 'run', 'build' ], { cwd: computeJsDir, allowFailure: true });
       assert.notEqual(result.status, 0);
-      assert.match(result.output, /The binding 'site' is 'ConfigStore:other' in templateOptions\.hono\.bindings, but 'ConfigStore:site_config' in hono-extensions\/10-header\.ts/);
+      assert.match(result.output, /The binding 'site' is 'ConfigStore:other' in templateOptions\.hono\.bindings, but 'ConfigStore:site_config' in hono-compose\/10-header\.ts/);
     } finally {
       fs.writeFileSync(rcPath, original);
     }
   });
 });
 
-describe('hono extensions in a managed project', { skip: skipUnlessFastlyCli() }, () => {
+describe('plugin modules in a managed project', { skip: skipUnlessFastlyCli() }, () => {
   let dir;
   let projectDir;
   let server;
@@ -248,7 +249,7 @@ describe('hono extensions in a managed project', { skip: skipUnlessFastlyCli() }
     projectDir = path.resolve(dir, 'site');
     writeFixtureContent(path.resolve(projectDir, 'public'));
     runCli([ '--managed', '--template', 'hono', '--root-dir', './public', '--kv-store-name', 'e2e-content' ], { cwd: projectDir });
-    writeFiles(path.resolve(projectDir, 'hono-extensions'), MODULES);
+    writeFiles(path.resolve(projectDir, 'hono-compose'), MODULES);
     runCli([ 'publish-content', '--local' ], { cwd: projectDir });
     server = await startDev(projectDir);
   });
@@ -260,25 +261,25 @@ describe('hono extensions in a managed project', { skip: skipUnlessFastlyCli() }
     }
   });
 
-  test('scaffold --managed makes the extensions folder next to the project file', () => {
-    assert.ok(fs.existsSync(path.resolve(projectDir, 'hono-extensions/package.json')));
+  test('scaffold --managed makes the folder of the plugins next to the project file', () => {
+    assert.ok(fs.existsSync(path.resolve(projectDir, 'hono-compose/package.json')));
     const rc = fs.readFileSync(path.resolve(projectDir, '.static-publish/app/static-publish.rc.js'), 'utf-8');
-    assert.match(rc, /extensionsDir: "\.\.\/\.\.\/hono-extensions"/);
+    assert.match(rc, /composeDir: "\.\.\/\.\.\/hono-compose"/);
   });
 
-  test('dev serves the extensions', async () => {
+  test('dev serves the plugins', async () => {
     const res = await rawRequest(server.baseUrl + '/hello');
-    assert.deepEqual(JSON.parse(res.body.toString()), { hello: 'from an extension route' });
+    assert.deepEqual(JSON.parse(res.body.toString()), { hello: 'from a plugin route' });
     const home = await rawRequest(server.baseUrl + '/', { headers: HTML });
-    assert.equal(home.headers['x-extension'], 'no-options');
+    assert.equal(home.headers['x-plugin'], 'no-options');
   });
 
   test('a change to a module changes the fingerprint', () => {
     const before = fingerprint();
-    const file = path.resolve(projectDir, 'hono-extensions/lib/names.ts');
+    const file = path.resolve(projectDir, 'hono-compose/lib/names.ts');
     const original = fs.readFileSync(file, 'utf-8');
     try {
-      fs.writeFileSync(file, original.replace('x-extension', 'x-extension-2'));
+      fs.writeFileSync(file, original.replace('x-plugin', 'x-plugin-2'));
       assert.notEqual(fingerprint(), before);
     } finally {
       fs.writeFileSync(file, original);
@@ -293,30 +294,30 @@ describe('hono extensions in a managed project', { skip: skipUnlessFastlyCli() }
     assert.ok(json.template.provides['@fastly/compute-js-static-publish']);
   });
 
-  test('eject writes the path of the extensions folder relative to the new rc, and the app builds', () => {
+  test('eject writes the path of the folder of the plugins relative to the new rc, and the app builds', () => {
     const ejectDir = makeTempDir('hono-ext-eject');
     try {
       fs.cpSync(projectDir, ejectDir, { recursive: true, filter: (src) => !src.includes(`${path.sep}.static-publish`) });
       const result = runCli([ 'eject' ], { cwd: ejectDir, env: { CJSP_TEST_ONLY_EJECT_PACKAGE_SPEC: `file:${REPO_DIR}`, FASTLY_SERVICE_ID: '' } });
       assert.equal(result.status, 0, result.output);
       const appDir = path.resolve(ejectDir, 'compute-js');
-      assert.match(fs.readFileSync(path.resolve(appDir, 'static-publish.rc.js'), 'utf-8'), /extensionsDir: "\.\.\/hono-extensions"/);
+      assert.match(fs.readFileSync(path.resolve(appDir, 'static-publish.rc.js'), 'utf-8'), /composeDir: "\.\.\/hono-compose"/);
       run('npm', [ 'run', 'build' ], { cwd: appDir });
-      assert.match(fs.readFileSync(path.resolve(appDir, 'src/hono-extensions.generated.js'), 'utf-8'), /from an extension route/);
+      assert.match(fs.readFileSync(path.resolve(appDir, 'src/hono-compose.generated.js'), 'utf-8'), /from a plugin route/);
     } finally {
       removeDir(ejectDir);
     }
   });
 });
 
-describe('the helpers of the app in an extension', { skip: skipUnlessFastlyCli() }, () => {
+describe('the helpers of the app in a plugin', { skip: skipUnlessFastlyCli() }, () => {
   // The use case: serve /theme/* on a preview, from the selected collection, or
   // from the default collection if the preview is missing, with a plain 404
   // (never the 404 page of the collection).
   const THEME_MODULE = `\
-import { defineExtension } from '@fastly/compute-js-static-publish/hono';
+import { definePlugin } from '@fastly/compute-js-static-publish/hono';
 
-export default defineExtension((app, options, { staticResponse }) => {
+export default definePlugin((app, options, { staticResponse }) => {
   app.use('/theme/*', async (c, next) => {
     if (c.var.staticPublisher.collectionName == null) {
       return next();
@@ -327,10 +328,10 @@ export default defineExtension((app, options, { staticResponse }) => {
 `;
   // The same use case with serveStatic() and except() of hono/combine.
   const BRAND_MODULE = `\
-import { defineExtension } from '@fastly/compute-js-static-publish/hono';
+import { definePlugin } from '@fastly/compute-js-static-publish/hono';
 import { except } from 'hono/combine';
 
-export default defineExtension((app, options, { serveStatic }) => {
+export default definePlugin((app, options, { serveStatic }) => {
   const notPreview = (c) => c.var.staticPublisher.collectionName == null;
   app.use('/brand/*', except(notPreview,
     serveStatic({ onMissing: 'default' }),
@@ -340,9 +341,9 @@ export default defineExtension((app, options, { serveStatic }) => {
 `;
   // A page for a missing preview, with a 404, and the 404 page with a 410.
   const NOTICE_MODULE = `\
-import { defineExtension } from '@fastly/compute-js-static-publish/hono';
+import { definePlugin } from '@fastly/compute-js-static-publish/hono';
 
-export default defineExtension((app, options, { isCollectionAvailable, staticResponse, fallbackResponse }) => {
+export default definePlugin((app, options, { isCollectionAvailable, staticResponse, fallbackResponse }) => {
   app.use('/notice/*', async (c, next) => {
     if (await isCollectionAvailable(c)) {
       return next();
@@ -365,7 +366,7 @@ export default defineExtension((app, options, { isCollectionAvailable, staticRes
     fs.mkdirSync(path.resolve(publicDir, 'theme'), { recursive: true });
     fs.mkdirSync(path.resolve(publicDir, 'brand'), { recursive: true });
     runCli([ '--managed', '--template', 'hono', '--root-dir', './public', '--kv-store-name', 'e2e-content', '--collection-selection', `header:${PREVIEW}` ], { cwd: projectDir });
-    writeFiles(path.resolve(projectDir, 'hono-extensions'), { '10-theme.ts': THEME_MODULE, '20-brand.ts': BRAND_MODULE, '30-notice.ts': NOTICE_MODULE });
+    writeFiles(path.resolve(projectDir, 'hono-compose'), { '10-theme.ts': THEME_MODULE, '20-brand.ts': BRAND_MODULE, '30-notice.ts': NOTICE_MODULE });
     fs.writeFileSync(path.resolve(publicDir, 'theme/site.css'), '/* live */');
     fs.writeFileSync(path.resolve(publicDir, 'brand/logo.css'), '/* live */');
     runCli([ 'publish-content', '--local' ], { cwd: projectDir });
@@ -451,15 +452,15 @@ export default defineExtension((app, options, { isCollectionAvailable, staticRes
 
 describe('npm run dev:watch in an ejected hono app', { skip: skipUnlessFastlyCli() }, () => {
   let dir;
-  let extensionsDir;
+  let composeDir;
   let server;
 
   before(async () => {
     dir = makeTempDir('hono-ext-dev-watch');
     writeFixtureContent(path.resolve(dir, 'public'));
     const computeJsDir = scaffoldApp(dir, [ '--kv-store-name', 'e2e-content', '--template', 'hono' ]);
-    extensionsDir = path.resolve(dir, 'hono-extensions');
-    writeFiles(extensionsDir, MODULES);
+    composeDir = path.resolve(dir, 'hono-compose');
+    writeFiles(composeDir, MODULES);
     runCli([ 'publish-content', '--local' ], { cwd: computeJsDir });
     server = await startServe(computeJsDir, {
       command: (addr) => [ 'npm', [ 'run', 'dev:watch', '--', '--addr', addr ] ],
@@ -474,14 +475,14 @@ describe('npm run dev:watch in an ejected hono app', { skip: skipUnlessFastlyCli
   });
 
   test('a change to a module restarts the app', async () => {
-    await waitForResponse(server.baseUrl + '/hello', res => /from an extension route/.test(res.body.toString()), 'the route');
-    const file = path.resolve(extensionsDir, 'hello.ts');
-    fs.writeFileSync(file, fs.readFileSync(file, 'utf-8').replace('from an extension route', 'changed while dev:watch runs'));
+    await waitForResponse(server.baseUrl + '/hello', res => /from a plugin route/.test(res.body.toString()), 'the route');
+    const file = path.resolve(composeDir, 'hello.ts');
+    fs.writeFileSync(file, fs.readFileSync(file, 'utf-8').replace('from a plugin route', 'changed while dev:watch runs'));
     await waitForResponse(server.baseUrl + '/hello', res => /changed while dev:watch runs/.test(res.body.toString()), 'the changed route');
   });
 });
 
-describe('dev --watch in a managed hono project that starts without the extensions folder', { skip: skipUnlessFastlyCli() }, () => {
+describe('dev --watch in a managed hono project that starts without the folder of the plugins', { skip: skipUnlessFastlyCli() }, () => {
   let dir;
   let server;
 
@@ -489,7 +490,7 @@ describe('dev --watch in a managed hono project that starts without the extensio
     dir = makeTempDir('hono-ext-watch');
     writeFixtureContent(path.resolve(dir, 'public'));
     runCli([ '--managed', '--template', 'hono', '--root-dir', './public', '--kv-store-name', 'e2e-content' ], { cwd: dir });
-    fs.rmSync(path.resolve(dir, 'hono-extensions'), { recursive: true });
+    fs.rmSync(path.resolve(dir, 'hono-compose'), { recursive: true });
     runCli([ 'publish-content', '--local' ], { cwd: dir });
     server = await startDev(dir, [ '--watch' ]);
   });
@@ -504,26 +505,26 @@ describe('dev --watch in a managed hono project that starts without the extensio
   test('the app runs without the folder', async () => {
     const res = await rawRequest(server.baseUrl + '/', { headers: HTML });
     assert.equal(res.status, 200);
-    assert.equal(res.headers['x-extension'], undefined);
+    assert.equal(res.headers['x-plugin'], undefined);
   });
 
   test('a new folder, and then a change to a module, restart the app', async () => {
-    writeFiles(path.resolve(dir, 'hono-extensions'), MODULES);
-    await waitForResponse(server.baseUrl + '/hello', res => res.status === 200 && /from an extension route/.test(res.body.toString()), 'the route of the new folder');
-    const file = path.resolve(dir, 'hono-extensions/hello.ts');
-    fs.writeFileSync(file, fs.readFileSync(file, 'utf-8').replace('from an extension route', 'changed while dev runs'));
+    writeFiles(path.resolve(dir, 'hono-compose'), MODULES);
+    await waitForResponse(server.baseUrl + '/hello', res => res.status === 200 && /from a plugin route/.test(res.body.toString()), 'the route of the new folder');
+    const file = path.resolve(dir, 'hono-compose/hello.ts');
+    fs.writeFileSync(file, fs.readFileSync(file, 'utf-8').replace('from a plugin route', 'changed while dev runs'));
     await waitForResponse(server.baseUrl + '/hello', res => /changed while dev runs/.test(res.body.toString()), 'the changed route');
   });
 });
 
-describe('the hint when a managed hono project has no extensions folder', () => {
+describe('the hint when a managed hono project has no folder of the plugins', () => {
   let dir;
 
   before(() => {
     dir = makeTempDir('hono-ext-hint');
     writeFixtureContent(path.resolve(dir, 'public'));
     runCli([ '--managed', '--template', 'hono', '--root-dir', './public', '--kv-store-name', 'e2e-content' ], { cwd: dir });
-    fs.rmSync(path.resolve(dir, 'hono-extensions'), { recursive: true });
+    fs.rmSync(path.resolve(dir, 'hono-compose'), { recursive: true });
   });
 
   after(() => {
@@ -534,6 +535,50 @@ describe('the hint when a managed hono project has no extensions folder', () => 
 
   test('deploy shows the hint', () => {
     const result = runCli([ 'deploy' ], { cwd: dir, env: NO_TOKEN, allowFailure: true });
-    assert.match(result.output, /No \.\/hono-extensions folder\. To add your own Hono middleware and routes, run: npx @fastly\/compute-js-static-publish(@[a-z-]+)? template init/);
+    assert.match(result.output, /No \.\/hono-compose folder\. To add your own Hono middleware and routes with plugins, run: npx @fastly\/compute-js-static-publish(@[a-z-]+)? template init/);
+  });
+});
+
+describe('the names of earlier betas of 8.1 in a managed hono project', () => {
+  let dir;
+
+  before(() => {
+    dir = makeTempDir('hono-old-names');
+    writeFixtureContent(path.resolve(dir, 'public'));
+    runCli([ '--managed', '--template', 'hono', '--root-dir', './public', '--kv-store-name', 'e2e-content' ], { cwd: dir });
+  });
+
+  after(() => {
+    if (dir != null) {
+      removeDir(dir);
+    }
+  });
+
+  test('template init does not make hono-compose/ when hono-extensions/ has files', () => {
+    fs.renameSync(path.resolve(dir, 'hono-compose'), path.resolve(dir, 'hono-extensions'));
+    fs.writeFileSync(path.resolve(dir, 'hono-extensions/auth.ts'), 'export default {};\n');
+    try {
+      const result = runCli([ 'template', 'init' ], { cwd: dir, allowFailure: true });
+      assert.notEqual(result.status, 0);
+      assert.match(result.output, /The folder hono-extensions\/ is now hono-compose\/\. Rename it/);
+      assert.ok(!fs.existsSync(path.resolve(dir, 'hono-compose')));
+    } finally {
+      fs.renameSync(path.resolve(dir, 'hono-extensions'), path.resolve(dir, 'hono-compose'));
+      fs.rmSync(path.resolve(dir, 'hono-compose/auth.ts'));
+    }
+  });
+
+  test('an old key in the project file is an error that gives the new name', () => {
+    const projectFile = path.resolve(dir, 'static-publish.project.js');
+    const original = fs.readFileSync(projectFile, 'utf-8');
+    assert.ok(original.includes('  publishId: '));
+    fs.writeFileSync(projectFile, original.replace('  publishId: ', '  templateOptions: { hono: { extensions: {} } },\n  publishId: '));
+    try {
+      const result = runCli([ 'template', 'init', '--check' ], { cwd: dir, allowFailure: true });
+      assert.notEqual(result.status, 0);
+      assert.match(result.output, /templateOptions\.hono\.extensions is now templateOptions\.hono\.compose\.plugins\./);
+    } finally {
+      fs.writeFileSync(projectFile, original);
+    }
   });
 });

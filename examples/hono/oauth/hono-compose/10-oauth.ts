@@ -1,8 +1,8 @@
 // The OAuth example: a login with GitHub or Google, with @hono/oauth-providers.
-// The 10- prefix puts this module before other modules in each phase.
+// The 10- prefix puts this plugin before other plugins in each phase.
 //
 // All of it is in the middleware phase, which comes before the routes of all
-// modules:
+// plugins:
 // - The login check, on the paths of the protect option (default: all paths).
 //   It runs on each request, and checks the path of the request, and also the
 //   path without the prefix of a path source of collection selection (for
@@ -20,7 +20,7 @@
 // The client secrets are in the Secret Store, and the app can read a secret
 // only while it handles a request. Thus each request makes the middleware of
 // the provider again, with the secret.
-import { defineExtension } from '@fastly/compute-js-static-publish/hono';
+import { definePlugin } from '@fastly/compute-js-static-publish/hono';
 import { githubAuth } from '@hono/oauth-providers/github';
 import { googleAuth } from '@hono/oauth-providers/google';
 import { type Context, type MiddlewareHandler } from 'hono';
@@ -53,7 +53,7 @@ function withSecret(secretKey: string, make: (clientSecret: string) => Middlewar
   };
 }
 
-export default defineExtension({ bindings: OAUTH_BINDINGS }, (app, options?: OAuthOptions) => {
+export default definePlugin({ bindings: OAUTH_BINDINGS }, (app, options?: OAuthOptions) => {
   const prefixes = protectPrefixes(options?.protect);
   const login = options?.login ?? `${AUTH_PATH}/github`;
   const loginPath = new URL(login, 'https://localhost').pathname;

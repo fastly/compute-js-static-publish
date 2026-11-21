@@ -7,12 +7,12 @@
 // 2. The request from Fanout has Grip-Sig: serveGrip() checks it, and sets
 //    c.var.grip for the stream endpoints.
 //
-// The beforeFiles phase:
+// The routes phase:
 // - GET /events/stream/:channel: an HTTP stream. Each message is one line.
 // - GET /events/sse/:channel: Server-Sent Events, for EventSource in a browser.
 // - POST /publish/:channel: sends the request body to both endpoints of the
 //   channel. It needs the header 'Authorization: Bearer <PUBLISH_KEY>'.
-import { defineExtension } from '@fastly/compute-js-static-publish/hono';
+import { definePlugin } from '@fastly/compute-js-static-publish/hono';
 import { Publisher } from '@fanoutio/grip';
 import { fanoutSelfHandoffMiddleware, serveGrip } from '@fanoutio/serve-grip/hono';
 import { type Context } from 'hono';
@@ -33,12 +33,12 @@ function checkGrip(c: Context): Response | null {
 // Each line of an SSE message needs the 'data: ' prefix.
 const sseEvent = (text: string) => text.split('\n').map(line => `data: ${line}\n`).join('') + '\n';
 
-export default defineExtension({ bindings: GRIP_BINDINGS }, {
+export default definePlugin({ bindings: GRIP_BINDINGS }, {
   middleware: (app, options?: GripOptions) => {
     app.use(`${eventsPath(options)}/*`, fanoutSelfHandoffMiddleware('self'), serveGrip<GripEnv>((c) => gripConfig(c)));
   },
 
-  beforeFiles: (app, options?: GripOptions) => {
+  routes: (app, options?: GripOptions) => {
     app.get(`${eventsPath(options)}/stream/:channel`, (c) => {
       const error = checkGrip(c);
       if (error != null) {
