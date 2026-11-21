@@ -12,7 +12,7 @@
 4. `applyBatch(batch, { existingKeys })`:
    - The KV provider splits files that are larger than 20 MiB into chunks (S3 does not use chunks). It writes each chunk file with `pipeline()`, which resolves after the file is completely written. The upload reads the chunk files. It removes the chunks that are in storage. Then it uploads NDJSON batches of at most 256 items / 8 MiB. Larger entries use one PUT each.
    - The S3 provider uploads one `PutObject` for each entry, 64 at a time by default (`--s3-upload-concurrency`). The S3 client gets an HTTP agent with enough sockets for this; the SDK default is 50.
-5. The CLI writes the index and the settings only after all uploads are successful.
+5. The CLI writes the index and the settings only after all uploads are successful. Before the index, it writes the index parts, if the index has `INDEX_PARTS_MIN_ENTRIES` entries or more (`models/index-parts/`). It lists the keys of the parts of the same index first, and skips the parts that are in storage (not with `--local` or `--overwrite-existing`).
 
 The log lines for each file (scan) and each upload go through `ProgressLog` (`util/progress.ts`). Without `--verbose`, it logs only a progress line after each 1,000 items, because a large site has tens of thousands of files.
 
