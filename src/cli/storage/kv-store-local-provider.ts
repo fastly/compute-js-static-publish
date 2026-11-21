@@ -27,11 +27,13 @@ import {
 import { concurrentParallel } from '../util/retryable.js';
 import {
   type StorageEntry,
+  type StorageEntryData,
   type StorageProvider,
   type StorageProviderBuilder,
   type StorageProviderBuilderContext,
   type StorageProviderBatch,
   type ApplyBatchOptions,
+  storageEntryDataToBytes,
 } from './storage-provider.js';
 import {
   kvStoreEntryToStorageEntry,
@@ -109,21 +111,11 @@ export class KvStoreLocalProvider implements StorageProvider {
   async submitStorageEntry(
     key: string,
     filePath: string,
-    data: ReadableStream<Uint8Array> | Uint8Array | string | null | undefined,
+    data: StorageEntryData,
     metadata?: Record<string, string>,
   ): Promise<void> {
 
-    let fileData;
-    if (data == null) {
-      fileData = new Uint8Array(0);
-    } else if (data instanceof ReadableStream) {
-      fileData = Buffer.from(await new Response(data).arrayBuffer());
-    } else if (typeof data === 'string') {
-      fileData = new TextEncoder().encode(data);
-    } else {
-      fileData = data;
-    }
-    fs.writeFileSync(filePath, fileData);
+    fs.writeFileSync(filePath, await storageEntryDataToBytes(data));
 
     await localKvStoreSubmitEntry(
       this.storeFile,
