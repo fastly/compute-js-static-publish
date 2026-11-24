@@ -73,6 +73,9 @@ export function buildHeadersSubset(responseHeaders: Headers, keys: Readonly<stri
 // * Cache-Control and Expires
 const headersToPreserveForUnmodified = ['Content-Location', 'ETag', 'Vary', 'Cache-Control', 'Expires'] as const;
 
+// The time, in seconds, that a storage provider with a cache keeps a file (one year).
+const FILE_CACHE_TTL = 31536000;
+
 type AssetInit = {
   status?: number,
   headers?: Record<string, string>,
@@ -419,7 +422,12 @@ export class PublisherServer {
     const baseKey = `${this.publishId}_files_sha256_${baseHash}`;
     const variantKey = variant != null ? `${baseKey}_${variant}` : baseKey;
 
-    const storageEntry = await this.timed('asset', () => this.storageProvider.getEntry(variantKey));
+    // The key of a file has the hash of its content, so a cached copy is never
+    // out of date. A publish does not purge the tag; purge it to remove the
+    // cached copies of all files, for example after a bad upload.
+    const storageEntry = await this.timed('asset', () =>
+      this.storageProvider.getEntry(variantKey, [`${this.publishId}-files`], { ttl: FILE_CACHE_TTL }),
+    );
     if (storageEntry == null) {
       return null;
     }
