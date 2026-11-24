@@ -189,7 +189,7 @@ export async function kvStoreSubmitEntry(
   fastlyApiContext: FastlyApiContext,
   kvStoreName: string,
   key: string,
-  data: ReadableStream<Uint8Array> | Uint8Array | string,
+  data: Uint8Array | string,
   metadata: string | undefined,
 ) {
 
