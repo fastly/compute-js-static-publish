@@ -108,7 +108,7 @@ export type S3StorageProviderParams = {
 };
 
 // The time, in seconds, that the readthrough cache keeps an object when
-// getEntry() does not give a TTL.
+// getEntry() does not give a TTL (one hour).
 const DEFAULT_CACHE_TTL = 3600;
 
 // Attempts for a request that fails with a retryable status or a network error.
