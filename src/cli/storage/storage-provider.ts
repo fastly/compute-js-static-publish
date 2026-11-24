@@ -15,6 +15,25 @@ export interface StorageEntry {
   size?: number;
 }
 
+export type StorageEntryData = ReadableStream<Uint8Array> | Uint8Array | string | null | undefined;
+
+// Reads the data of an entry into memory. An upload of a stream has no
+// Content-Length, and the Fastly KV Store API can refuse such an upload
+// with 400 "must include valid content-length header". Thus the providers
+// upload the bytes.
+export async function storageEntryDataToBytes(data: StorageEntryData): Promise<Uint8Array> {
+  if (data == null) {
+    return new Uint8Array(0);
+  }
+  if (typeof data === 'string') {
+    return new TextEncoder().encode(data);
+  }
+  if (data instanceof Uint8Array) {
+    return data;
+  }
+  return new Uint8Array(await new Response(data).arrayBuffer());
+}
+
 export interface StorageProvider {
   getStorageKeys(prefix?: string): Promise<string[] | null>;
   getStorageEntryInfo(key: string): Promise<StorageEntry | null>;
@@ -22,7 +41,7 @@ export interface StorageProvider {
   submitStorageEntry(
     key: string,
     filePath: string,
-    data: ReadableStream<Uint8Array> | Uint8Array | string | null | undefined,
+    data: StorageEntryData,
     metadata?: Record<string, string>,
   ): Promise<void>;
   deleteStorageEntry(key: string): Promise<void>;
