@@ -33,7 +33,7 @@ import {
 } from './helpers.js';
 
 // Routes:
-// - /sdk: fastly.sdkVersion and FASTLY_HOSTNAME.
+// - /sdk: fastly.sdkVersion, FASTLY_HOSTNAME, and the publish ID of the app.
 // - /custom/<name>?body=<text>&length=<n | null | none>: serveCachedStreaming()
 //   with a produce() that returns { response, length } with that body and length.
 //   The response has x-produced, a value that is new for each produce() call.
@@ -54,7 +54,7 @@ async function handleRequest(event) {
   const request = event.request;
   const url = new URL(request.url);
   if (url.pathname === '/sdk') {
-    return new Response(JSON.stringify({ sdkVersion: fastly.sdkVersion, hostname: env('FASTLY_HOSTNAME') }));
+    return new Response(JSON.stringify({ sdkVersion: fastly.sdkVersion, hostname: env('FASTLY_HOSTNAME'), publishId: rc.publishId }));
   }
   let served;
   if (url.pathname.startsWith('/custom/')) {
@@ -287,17 +287,30 @@ describe('streaming fill on a real service', { skip: skipDeployed }, () => {
       '--comment', `compute-js-static-publish e2e test ${publishId}`,
     ], { cwd: computeJsDir });
 
-    // Wait until the new version of the app runs.
+    // Wait until the app of this run answers: an earlier run of this test
+    // deployed the same app with another publish ID. A new version is not active
+    // on all servers at the same time, so wait for 5 answers in a row from it.
     const deadline = Date.now() + 300_000;
+    let answers = 0;
     for (;;) {
       try {
-        // Other versions of the test app do not have /sdk.
         const response = await request(baseUrl + '/sdk');
-        if (response.status === 200 && response.body.startsWith('{"sdkVersion"')) {
-          break;
+        let body = null;
+        try {
+          body = JSON.parse(response.body);
+        } catch {
+          // Another app, which does not have /sdk.
         }
+        answers = response.status === 200 && body?.publishId === publishId ? answers + 1 : 0;
       } catch {
         // The service is not ready yet.
+        answers = 0;
+      }
+      if (answers >= 5) {
+        break;
+      }
+      if (answers > 0) {
+        continue;
       }
       if (Date.now() > deadline) {
         throw new Error('The new version of the app did not start in 300 s.');
