@@ -12,7 +12,7 @@ import { type OptionDefinition } from 'command-line-args';
 import { MANAGED_APP_DIR, PROJECT_FILE_NAME, RC_FILE_NAME } from '../../../../models/config/static-publish-project.js';
 import { type StaticPublishRc } from '../../../../models/config/static-publish-rc.js';
 import { DEFAULT_APP_TEMPLATE_NAME } from '../../scaffold/app-template.js';
-import { DEFAULT_HONO_EXTENSIONS_DIR } from '../../../hono/build.js';
+import { DEFAULT_PLUGINS_DIR } from '../../../hono/build.js';
 import { loadManagedProject } from '../../../managed/command-helpers.js';
 import { applyTemplateInit, planTemplateInit, providedVersions, templateHasInit } from '../../../managed/template-init.js';
 import { parseCommandLine } from '../../../util/args.js';
@@ -29,14 +29,14 @@ Usage:
 
 Description:
   Makes or updates the folder of the app's template: for the hono template,
-  the extensions folder (build.hono.extensionsDir, default ./hono-extensions).
+  the folder of the plugins (build.hono.composeDir, default ./hono-compose).
   The template is managed.template in ${PROJECT_FILE_NAME}, or
   generatedFrom.template in ${RC_FILE_NAME}.
 
   A new folder gets package.json, tsconfig.json, .gitignore, and an inactive
   example. In a folder that exists, it updates only the peer dependencies on
   the packages that the app provides, and adds the starter files that are
-  missing. It never changes your modules. Then run npm install in the folder.
+  missing. It never changes your plugins. Then run npm install in the folder.
 
 Options:
   --reset                          Also write the starter files again (tsconfig.json,
@@ -67,7 +67,7 @@ export type RunTemplateInitParams = {
 // The folder of a template.
 function templateFolderDir(templateName: string, rc: Pick<StaticPublishRc, 'build'>, baseDir: string): string {
   // Only the hono template has a folder.
-  return path.resolve(baseDir, rc.build?.hono?.extensionsDir ?? DEFAULT_HONO_EXTENSIONS_DIR);
+  return path.resolve(baseDir, rc.build?.hono?.composeDir ?? DEFAULT_PLUGINS_DIR);
 }
 
 // template init for a template and a folder. scaffold also runs it.
@@ -80,6 +80,13 @@ export async function runTemplateInit(params: RunTemplateInitParams) {
 
   const folderDir = templateFolderDir(templateName, rc, baseDir);
   const folderName = rootRelative(folderDir);
+  // The name of the folder in earlier betas of 8.1. A new empty folder would
+  // hide the plugins in the old one, so template init stops. Removed in v9.
+  const oldDir = path.resolve(path.dirname(folderDir), 'hono-extensions');
+  if (templateName === 'hono' && !fs.existsSync(folderDir) && fs.existsSync(oldDir) && fs.readdirSync(oldDir).length > 0) {
+    fail('config-invalid', `The folder hono-extensions/ is now hono-compose/. Rename it (${rootRelative(oldDir)}), then run template init again.`);
+    return;
+  }
   const provided = providedVersions(templateName, appNodeModulesDir, getOwnVersion());
   const plan = planTemplateInit(templateName, folderDir, provided, { reset });
 

@@ -6,15 +6,15 @@ import {
   mergeBindings,
 } from '@fastly/compute-js-static-publish/hono';
 import rc from '../static-publish.rc.js';
-// The modules of the Hono extensions folder. The build writes this file (see
-// scripts/template_prebuild.js).
-import { extensions } from './hono-extensions.generated.js';
+// The plugin modules in the folder hono-compose/. The
+// build writes this file (see scripts/template_prebuild.js).
+import { plugins } from './hono-compose.generated.js';
 
 const honoOptions = rc.templateOptions?.hono;
 
-// The bindings of the app and of the extension modules, on c.env. A binding
+// The bindings of the app and of the plugins, on c.env. A binding
 // with two different resources stops the build.
-const fire = buildFire(mergeBindings(honoOptions?.bindings, extensions) as BindingsDefs);
+const fire = buildFire(mergeBindings(honoOptions?.bindings, plugins) as BindingsDefs);
 
 const {
   serveStatic,
@@ -26,7 +26,7 @@ const {
   publisherServer,
 } = fromStaticPublishRc(rc);
 
-// The helpers of the app that each phase of the extensions gets.
+// The helpers of the app that each phase of the plugins gets.
 const helpers = { serveStatic, staticResponse, serveFallback, fallbackResponse, isCollectionAvailable, publisherServer };
 
 const app = new Hono<{ Bindings: typeof fire.Bindings, Variables: StaticPublisherVariables }>();
@@ -37,11 +37,11 @@ app.use('*', logFastlyServiceVersion());
 // example for previews. Without it, this selects the default collection.
 app.use('*', selectCollection());
 
-// The extensions, in file-name order: first the middleware phase of all of
-// them, then the beforeFiles phase.
-for (const phase of [ 'middleware', 'beforeFiles' ] as const) {
-  for (const e of extensions) {
-    e.module.phases[phase]?.(app, honoOptions?.extensions?.[e.name], helpers);
+// The plugins, in file-name order: first the middleware phase of all of
+// them, then the routes phase.
+for (const phase of [ 'middleware', 'routes' ] as const) {
+  for (const p of plugins) {
+    p.plugin.phases[phase]?.(app, honoOptions?.compose?.plugins?.[p.name], helpers);
   }
 }
 
@@ -51,10 +51,10 @@ for (const phase of [ 'middleware', 'beforeFiles' ] as const) {
 // Serve the published files. If no file matches, the request goes to the next handler.
 app.use('*', serveStatic());
 
-// The afterFiles phase of the extensions: only for the requests that no
+// The afterFilesRoutes phase of the plugins: only for the requests that no
 // published file matches.
-for (const e of extensions) {
-  e.module.phases.afterFiles?.(app, honoOptions?.extensions?.[e.name], helpers);
+for (const p of plugins) {
+  p.plugin.phases.afterFilesRoutes?.(app, honoOptions?.compose?.plugins?.[p.name], helpers);
 }
 
 // When nothing matches, serve the SPA file or the 404 page.

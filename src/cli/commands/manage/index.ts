@@ -40,7 +40,7 @@ Available Commands:
   upgrade                          Move a managed project to the version of this CLI
   eject                            Convert a managed project into an ejected app
   template init                    Make or update the folder of the app's template
-                                   (for the hono template: hono-extensions/)
+                                   (for the hono template: hono-compose/)
 
 KV Store Options:
   --local                          Instead of working with the Fastly KV Store, operate on

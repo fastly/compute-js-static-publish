@@ -146,11 +146,11 @@ export async function managedAppState(projectDir: string, project: StaticPublish
     managedAppFiles(generateApp({ ...appConfig, fastlyToml: { ...appConfig.fastlyToml, local_server: undefined } })) :
     files;
   const cliPackageDir = getOwnPackageDir();
-  // The extensions folder of the hono template is part of the app that deploy
+  // The folder of the plugins of the hono template is part of the app that deploy
   // deploys, so a change to it changes the fingerprint.
-  const extensionsDir = appConfig.build?.hono?.extensionsDir;
-  const fingerprintFiles = extensionsDir != null ?
-    { ...deployedFiles, ...folderFilesForFingerprint(extensionsDir, '<hono-extensions>') } :
+  const composeDir = appConfig.build?.hono?.composeDir;
+  const fingerprintFiles = composeDir != null ?
+    { ...deployedFiles, ...folderFilesForFingerprint(composeDir, '<hono-compose>') } :
     deployedFiles;
   const fingerprint = computeFingerprint(fingerprintFiles, {
     staticPublishVersion: getOwnVersion(),

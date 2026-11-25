@@ -246,7 +246,7 @@ my-site/
 
 The project file has the settings that an ejected app has in its two files:
 
-- The top level has the fields of `static-publish.rc.js` (`storageMode`, `kvStore` or `s3`, `publishId`, `defaultCollectionName`, `staticPublisherWorkingDir`, `collectionSelection`), and the settings of the template (`build` and `templateOptions`, see [Hono extensions](#hono-extensions)).
+- The top level has the fields of `static-publish.rc.js` (`storageMode`, `kvStore` or `s3`, `publishId`, `defaultCollectionName`, `staticPublisherWorkingDir`, `collectionSelection`), and the settings of the template (`build` and `templateOptions`, see [Composing plugin modules](#composing-plugin-modules)).
 - `publishContent` has the fields of `publish-content.config.js`. `publish-content --config <file>` replaces it for one run.
 - `managed` has the settings of the generated app (`name`, `description`, `authors`, `serviceId`, `staticPublishVersion`, the version of this package that the project uses, and `fastlyToml`, see below).
 
@@ -1204,9 +1204,9 @@ npx @fastly/compute-js-static-publish@latest --template hono --root-dir=./public
 
 The app is TypeScript: `src/index.ts`, with code like the example below, and `tsconfig.json`. Add your own routes in `src/index.ts`. The build (`js-compute-runtime ./src/index.ts`) removes the types, but does not check them. To check the types, run `npx tsc` in the app. The app has `typescript` as a dev dependency.
 
-### Hono extensions
+### Composing plugin modules
 
-To add your own middleware and routes to the `hono` template, put modules in the extensions folder, `hono-extensions/`. In a managed project, this is the only way to add code, because the CLI generates the app. In an ejected app, you can also edit `src/index.ts`.
+To add your own middleware and routes to the `hono` template, put plugin modules in the folder `hono-compose/`. The app composes them with the published files. In a managed project, this is the only way to add code, because the CLI generates the app. In an ejected app, you can also edit `src/index.ts`.
 
 `scaffold --template hono` makes the folder next to the project file (managed) or next to `compute-js/` (ejected). To make it later, or to update it, run:
 
@@ -1215,35 +1215,59 @@ npx @fastly/compute-js-static-publish template init
 ```
 
 ```
-hono-extensions/
+hono-compose/
 ├── package.json        # Your dependencies, and the peer dependencies on the packages that the app provides
 ├── tsconfig.json       # For your editor
 ├── .gitignore          # Ignores node_modules/
-├── 10-auth.ts          # A module
-├── api.ts              # A module
-├── _example.ts         # An example, not a module (the name starts with _)
-└── lib/                # Your helpers (not modules)
+├── 10-auth.ts          # A plugin
+├── api.ts              # A plugin
+├── _example.ts         # An example, not a plugin (the name starts with _)
+└── lib/                # Your helpers (not plugins)
 ```
 
-- **Modules** are the files directly in the folder, with the extension `.ts`, `.mts`, `.js`, or `.mjs`. Files that start with `_` or `.`, and `.d.ts` files, are not modules. The build does not look in subfolders, so use them, for example `lib/`, for your helpers.
-- **The name** of a module is the file name without the number prefix and the extension: `10-auth.ts` is `auth`. Two modules with the same name are an error.
-- **The phases:** a module adds its handlers to the app in one or more phases. The app runs the phases in this order, and in each phase the modules in the order of the file names (add a number prefix to set the order):
+- **Plugins** are the files directly in the folder, with the extension `.ts`, `.mts`, `.js`, or `.mjs`. Files that start with `_` or `.`, and `.d.ts` files, are not plugins. The build does not look in subfolders, so use them, for example `lib/`, for your helpers.
+- **The name** of a plugin is the file name without the number prefix and the extension: `10-auth.ts` is `auth`. Two plugins with the same name are an error. `index` is a reserved name: a file `index.ts` (or `.js`, `.mjs`, `.mts`) stops the build.
+- **The phases:** a plugin adds its handlers to the app in one or more phases. In each phase, the app takes the plugins in the order of the file names (add a number prefix to set the order). The phases are on two axes:
 
   ```
-  selectCollection() → middleware → beforeFiles → serveStatic() → afterFiles → serveFallback()
+  selectCollection()
+  middleware                      processing: wraps all of the routing below
+    routes             routing: the first route that answers wins
+    → published files (serveStatic())
+    → afterFilesRoutes
+    → serveFallback()
   ```
 
-  - `middleware`: before all other phases. All modules add their middleware before any module adds its routes, so a middleware such as a login check also applies to the routes of the other modules.
-  - `beforeFiles`: before the published files.
-  - `afterFiles`: after the published files. These handlers get only the requests that no published file matches, for example to make a page for a path that has no file, before the 404 page. The published files are served only for `GET` and `HEAD`, so these handlers also get all other methods.
+  - **Processing:** `middleware` wraps each request, for example a login check, a header on each response, or the time of a request. In a middleware, the code before `await next()` runs before the routes. The code after it runs after the response is made, also when a published file answered, and in the reverse order of the plugins. All plugins add their middleware before any plugin adds its routes, so a middleware such as a login check also applies to the routes of the other plugins.
+  - **Routing:** the routes that can answer a request, in this order. The first one that answers wins.
+    - `routes`: before the published files. A route here wins over a file at the same path, for example an API.
+    - The published files (`serveStatic()`).
+    - `afterFilesRoutes`: only for the requests that no published file matches, before the SPA file or the 404 page. A file at the same path wins, for example for a redirect from an old URL, which stops when a file is published at that URL again. The published files are served only for `GET` and `HEAD`, so these routes also get all other methods.
 
-A module default-exports `defineExtension()`. Give it a function for each phase that the module uses. Each function gets the Hono app, the options of the module, and the helpers of the app (see below), and adds handlers with `app.use()`, `app.get()`, `app.post()`, and the other methods of Hono. With only a function in place of the object, the function is the `middleware` phase:
+  A middleware that measures the time of each request, with the code before and after `await next()`:
+
+  ```ts
+  // hono-compose/05-timing.ts
+  import { definePlugin } from '@fastly/compute-js-static-publish/hono';
+
+  export default definePlugin((app) => {
+    app.use('*', async (c, next) => {
+      const start = performance.now();
+      await next();
+      console.log(`${c.req.method} ${c.req.path} ${c.res.status} ${(performance.now() - start).toFixed(1)} ms`);
+    });
+  });
+  ```
+
+  The time ends when the response is made. The body of a large file can still be on its way to the visitor then.
+
+A plugin default-exports `definePlugin()`. Give it a function for each phase that the plugin uses. Each function gets the Hono app, the options of the plugin, and the helpers of the app (see below), and adds handlers with `app.use()`, `app.get()`, `app.post()`, and the other methods of Hono. With only a function in place of the object, the function is the `middleware` phase:
 
 ```ts
-// hono-extensions/10-header.ts
-import { defineExtension } from '@fastly/compute-js-static-publish/hono';
+// hono-compose/10-header.ts
+import { definePlugin } from '@fastly/compute-js-static-publish/hono';
 
-export default defineExtension((app, options?: { value?: string }) => {
+export default definePlugin((app, options?: { value?: string }) => {
   app.use('*', async (c, next) => {
     await next();
     c.header('x-site', options?.value ?? 'default');
@@ -1252,47 +1276,47 @@ export default defineExtension((app, options?: { value?: string }) => {
 ```
 
 ```ts
-// hono-extensions/api.ts
-import { defineExtension } from '@fastly/compute-js-static-publish/hono';
+// hono-compose/api.ts
+import { definePlugin } from '@fastly/compute-js-static-publish/hono';
 
-export default defineExtension({ bindings: { config: 'ConfigStore:site_config' } }, {
+export default definePlugin({ bindings: { config: 'ConfigStore:site_config' } }, {
   middleware: (app) => {
     app.use('/api/*', async (c, next) => {
       await next();
       c.header('cache-control', 'no-store');
     });
   },
-  beforeFiles: (app) => {
+  routes: (app) => {
     app.get('/api/greeting', async (c) => c.json({ greeting: await c.env.config?.get('greeting') }));
   },
-  afterFiles: (app) => {
+  afterFilesRoutes: (app) => {
     app.get('/blog/:slug', (c) => c.redirect(`/archive/${c.req.param('slug')}/`, 301));
   },
 });
 ```
 
-**Options** come from `templateOptions.hono.extensions` in the project file (or in `static-publish.rc.js`), with the name of the module as the key. Each phase of a module gets the same options. The build shows a warning for options of a module that does not exist:
+**Options** come from `templateOptions.hono.compose.plugins` in the project file (or in `static-publish.rc.js`), with the name of the plugin as the key. Each phase of a plugin gets the same options. The build shows a warning for options of a plugin that does not exist:
 
 ```js
 templateOptions: {
   hono: {
     bindings: { config: 'ConfigStore:site_config' },
-    extensions: { header: { value: 'my-site' } },
+    compose: { plugins: { header: { value: 'my-site' } } },
   },
 },
 ```
 
-**The files step:** between `beforeFiles` and `afterFiles`, the app has a fixed step that serves the published files with `serveStatic()`. It is not a phase, and a module cannot remove it. A module can serve files in another way before it: a request that the module answers does not get to this step, and a request that the module passes on with `next()` does.
+**The files step:** between `routes` and `afterFilesRoutes`, the app has a fixed step that serves the published files with `serveStatic()`. It is not a phase, and a plugin cannot remove it. A plugin can serve files in another way before it: a request that the plugin answers does not get to this step, and a request that the plugin passes on with `next()` does.
 
-**Helpers:** the third argument of each phase function has the `serveStatic()`, `staticResponse()`, `serveFallback()`, `fallbackResponse()`, `isCollectionAvailable()`, and `publisherServer` that the app uses (see [Using Hono](#-using-hono)). They are made once when the app starts, with the same `collectionSelection`, so a module can serve published files in its own place in the order, with its own rules.
+**Helpers:** the third argument of each phase function has the `serveStatic()`, `staticResponse()`, `serveFallback()`, `fallbackResponse()`, `isCollectionAvailable()`, and `publisherServer` that the app uses (see [Using Hono](#-using-hono)). They are made once when the app starts, with the same `collectionSelection`, so a plugin can serve published files in its own place in the order, with its own rules.
 
-For example, a module that runs before a login check, and serves `/theme/*` on a preview: from the selected collection, or from the default collection if the preview is missing, and with a plain `404` (not the 404 page of the collection, which would show the preview without a login). Without a preview, the module does nothing, and the app serves the request as usual. In Hono, a handler cannot skip the handlers that come after it in the same `app.use()`, so the module decides first whether it takes part. Two ways to write it, which do the same:
+For example, a plugin that runs before a login check, and serves `/theme/*` on a preview: from the selected collection, or from the default collection if the preview is missing, and with a plain `404` (not the 404 page of the collection, which would show the preview without a login). Without a preview, the plugin does nothing, and the app serves the request as usual. In Hono, a handler cannot skip the handlers that come after it in the same `app.use()`, so the plugin decides first whether it takes part. Two ways to write it, which do the same:
 
 ```ts
-// hono-extensions/10-theme.ts: one handler with staticResponse()
-import { defineExtension } from '@fastly/compute-js-static-publish/hono';
+// hono-compose/10-theme.ts: one handler with staticResponse()
+import { definePlugin } from '@fastly/compute-js-static-publish/hono';
 
-export default defineExtension((app, options, { staticResponse }) => {
+export default definePlugin((app, options, { staticResponse }) => {
   app.use('/theme/*', async (c, next) => {
     if (c.var.staticPublisher.collectionName == null) {
       return next(); // not a preview: the app serves it as usual
@@ -1303,11 +1327,11 @@ export default defineExtension((app, options, { staticResponse }) => {
 ```
 
 ```ts
-// hono-extensions/10-theme.ts: serveStatic() with except() of hono/combine
-import { defineExtension } from '@fastly/compute-js-static-publish/hono';
+// hono-compose/10-theme.ts: serveStatic() with except() of hono/combine
+import { definePlugin } from '@fastly/compute-js-static-publish/hono';
 import { except } from 'hono/combine';
 
-export default defineExtension((app, options, { serveStatic }) => {
+export default definePlugin((app, options, { serveStatic }) => {
   const notPreview = (c) => c.var.staticPublisher.collectionName == null;
   app.use('/theme/*', except(notPreview,
     serveStatic({ onMissing: 'default' }),
@@ -1320,13 +1344,13 @@ export default defineExtension((app, options, { serveStatic }) => {
 
 With `onMissing: 'default'`, a missing preview gets a normal response of the default collection, with its headers. When the preview is published, the next request gets the file of the preview: `PublisherServer` checks the selected collection before it reads the response cache. These examples are for a `host`, `query`, `cookie`, or `header` source. With a `path` source, the request path has the prefix (for example `/_preview/pr-1/theme/site.css`), so the route `/theme/*` does not match it: add the handler on `*`, and check `c.var.staticPublisher.pathname`, the path without the prefix. `serveStatic()` and `staticResponse()` look up that path.
 
-For example, a module that runs after a login check, and shows the page `/preview-not-found/` of the default collection, with a `404`, when the selected preview is not available. Because it is a module, it can come after the login check, so that a visitor who is not logged in cannot learn which previews exist:
+For example, a plugin that runs after a login check, and shows the page `/preview-not-found/` of the default collection, with a `404`, when the selected preview is not available. Because it is a plugin, it can come after the login check, so that a visitor who is not logged in cannot learn which previews exist:
 
 ```ts
-// hono-extensions/30-preview-not-found.ts
-import { defineExtension } from '@fastly/compute-js-static-publish/hono';
+// hono-compose/30-preview-not-found.ts
+import { definePlugin } from '@fastly/compute-js-static-publish/hono';
 
-export default defineExtension((app, options, { isCollectionAvailable, staticResponse }) => {
+export default definePlugin((app, options, { isCollectionAvailable, staticResponse }) => {
   app.use('*', async (c, next) => {
     if (await isCollectionAvailable(c)) {
       return next();
@@ -1337,31 +1361,31 @@ export default defineExtension((app, options, { isCollectionAvailable, staticRes
 });
 ```
 
-**`publisherServer` in a module:** the app has one `PublisherServer` for all requests. Use the other helpers where you can: they use the selected collection, and the path without the prefix of a `path` source. In a handler, a module can call these methods of `publisherServer`:
+**`publisherServer` in a plugin:** the app has one `PublisherServer` for all requests. Use the other helpers where you can: they use the selected collection, and the path without the prefix of a `path` source. In a handler, a plugin can call these methods of `publisherServer`:
 
 - `isCollectionAvailable()`, `serveRequest()`, `serveFallback()`, and `resolveCollection()`.
 - The methods that read the collection of the request: `getServerConfig()`, `getStaticItems()`, `getAssetEntryMap()`, `getMatchingAsset()`, and `testExtendedCache()`. They use the collection of the last `serveRequest()` or `serveFallback()` in the request (also through `serveStatic()` and the other helpers), or of `beginRequest()`, which uses the active collection, not the selected one. If neither ran in the request, call `publisherServer.beginRequest(c.req.raw)` first.
 
 Do not call the `set…()` methods (`setActiveCollectionName()`, `setCollectionSelection()`, `setResponseCache()`, and the others) in a handler: they change the server for all requests. In the phase function, which runs one time when the app starts, they change the configuration of the whole app. Do not call the lower-level methods (`serveAsset()`, `serveCached()`, `serveCachedStreaming()`, `loadAssetVariant()`, `handlePreconditions()`, and `findAcceptEncodingsGroups()`). Use `staticResponse()` and `fallbackResponse()` in their place.
 
-**Bindings** put Fastly resources on `c.env`, as `buildFire()` of `@fastly/hono-fastly-compute` does. A module declares the bindings that it uses in the first argument of `defineExtension()`, and `c.env` in its handlers has their types, for example `ConfigStore | undefined` for `'ConfigStore:site_config'` (`undefined` if the resource does not exist or is not linked to the service). `templateOptions.hono.bindings` adds bindings for the app. The same name with the same resource in two places is allowed. The same name with two different resources stops the build, and the message names both places. `c.var` is not typed in a module, so that a module can set its own variables.
+**Bindings** put Fastly resources on `c.env`, as `buildFire()` of `@fastly/hono-fastly-compute` does. A plugin declares the bindings that it uses in the first argument of `definePlugin()`, and `c.env` in its handlers has their types, for example `ConfigStore | undefined` for `'ConfigStore:site_config'` (`undefined` if the resource does not exist or is not linked to the service). `templateOptions.hono.bindings` adds bindings for the app. The same name with the same resource in two places is allowed. The same name with two different resources stops the build, and the message names both places. `c.var` is not typed in a plugin, so that a plugin can set its own variables.
 
-**Errors** in a module stop the build, and the message names the file: a default export that is not `defineExtension()`, an object with no phase, a key that is not a phase, or a phase that is not a function.
+**Errors** in a plugin stop the build, and the message names the file: a default export that is not `definePlugin()`, an object with no phase, a key that is not a phase, or a phase that is not a function.
 
-**The build** bundles the modules into `src/hono-extensions.generated.js` of the app (the `prebuild` [template hook](#-template-hooks)). The packages that the app provides stay imports, so that the app has one copy of each: the dependencies of the app (for example `hono` and `@fastly/hono-fastly-compute`), this package, and `fastly:*`. Thus, do not add them to the `dependencies` of the folder. `template init` writes them as peer dependencies in `hono-extensions/package.json`, with the versions that the app has. `npm install` in `hono-extensions/` installs them too, because npm 7 and later install peer dependencies. These copies are only for your editor and the type checker. The build always uses the copies of the app. Install other packages in the folder, and the build bundles them.
+**The build** bundles the plugins into `src/hono-compose.generated.js` of the app (the `prebuild` [template hook](#-template-hooks)). The packages that the app provides stay imports, so that the app has one copy of each: the dependencies of the app (for example `hono` and `@fastly/hono-fastly-compute`), this package, and `fastly:*`. Thus, do not add them to the `dependencies` of the folder. `template init` writes them as peer dependencies in `hono-compose/package.json`, with the versions that the app has. `npm install` in `hono-compose/` installs them too, because npm 7 and later install peer dependencies. These copies are only for your editor and the type checker. The build always uses the copies of the app. Install other packages in the folder, and the build bundles them.
 
-- `build.hono.extensionsDir` sets another folder, relative to the project file (or to `static-publish.rc.js`). The default is `./hono-extensions`.
-- Without the folder, or without modules, the app has no extensions. `dev` and `deploy` of a managed project then show how to make the folder.
-- In a managed project, the files of the folder (without `node_modules/`) are part of the fingerprint, so a change to a module makes `deploy` deploy again.
-- Keep the code of the extensions in the folder. A module can import a file from outside the folder, and the build bundles it, but a change to that file does not change the fingerprint, and the watcher does not see it.
+- `build.hono.composeDir` sets another folder, relative to the project file (or to `static-publish.rc.js`). The default is `./hono-compose`.
+- Without the folder, or without plugins, the app has no plugins. `dev` and `deploy` of a managed project then show how to make the folder.
+- In a managed project, the files of the folder (without `node_modules/`) are part of the fingerprint, so a change to a plugin makes `deploy` deploy again.
+- Keep the code of the plugins in the folder. A plugin can import a file from outside the folder, and the build bundles it, but a change to that file does not change the fingerprint, and the watcher does not see it.
 
-**`template init`** makes the folder with `package.json`, `tsconfig.json`, `.gitignore` (for `node_modules/`), and the example. In a folder that exists, it updates only the peer dependencies, and adds the starter files that are missing. It never changes your modules. `--reset` writes the starter files again (it asks first, or needs `--force` with `--non-interactive`). `--check` changes nothing, and fails with `template-init-needed` if the folder is out of date, for example after an upgrade of this package; use it in CI.
+**`template init`** makes the folder with `package.json`, `tsconfig.json`, `.gitignore` (for `node_modules/`), and the example. In a folder that exists, it updates only the peer dependencies, and adds the starter files that are missing. It never changes your plugins. `--reset` writes the starter files again (it asks first, or needs `--force` with `--non-interactive`). `--check` changes nothing, and fails with `template-init-needed` if the folder is out of date, for example after an upgrade of this package; use it in CI.
 
-**Watch:** `dev -- --watch` (managed) and `npm run dev:watch` (ejected) also watch the extensions folder, also if it does not exist yet. A change in the folder bundles the modules again, and then the Fastly CLI builds and restarts the app. If a module has an error, the watcher shows it and the app keeps the last modules that built.
+**Watch:** `dev -- --watch` (managed) and `npm run dev:watch` (ejected) also watch the folder of the plugins, also if it does not exist yet. A change in the folder bundles the plugins again, and then the Fastly CLI builds and restarts the app. If a plugin has an error, the watcher shows it and the app keeps the last plugins that built.
 
-**Examples** in [`examples/hono/`](https://github.com/fastly/compute-js-static-publish/tree/main/examples/hono) show complete extensions. They are not part of the npm package, and you cannot scaffold an app with them: for a new project, copy the `hono-extensions/` folder of an example into your project, and set it up as the README of the example shows. The README also shows how to add an example to a project that exists.
+**Examples** in [`examples/hono/`](https://github.com/fastly/compute-js-static-publish/tree/main/examples/hono) show complete plugins. They are not part of the npm package, and you cannot scaffold an app with them: for a new project, copy the `hono-compose/` folder of an example into your project, and set it up as the README of the example shows. The README also shows how to add an example to a project that exists.
 
-- [`grip`](https://github.com/fastly/compute-js-static-publish/tree/main/examples/hono/grip): realtime streams and Server-Sent Events with Fastly Fanout, and a publish endpoint with a shared key. One module with two phases: the `middleware` phase hands off only `/events/*` to Fanout, and the `beforeFiles` phase has the endpoints.
+- [`grip`](https://github.com/fastly/compute-js-static-publish/tree/main/examples/hono/grip): realtime streams and Server-Sent Events with Fastly Fanout, and a publish endpoint with a shared key. One plugin with two phases: the `middleware` phase hands off only `/events/*` to Fanout, and the `routes` phase has the endpoints.
 - [`oauth`](https://github.com/fastly/compute-js-static-publish/tree/main/examples/hono/oauth): a login with GitHub or Google in front of some paths of the site (`protect`), with a signed session cookie.
 
 Each example takes its secrets from a Secret Store. For `dev`, `managed.fastlyToml` adds a local Secret Store that reads environment variables.
@@ -1635,7 +1659,7 @@ Each object has `schemaVersion` (now `1`). A new field keeps the version. A fiel
 }
 ```
 
-`template.provides` lists the packages that the app of the template provides to the folder of the template (for example `hono-extensions/`), with their versions.
+`template.provides` lists the packages that the app of the template provides to the folder of the template (for example `hono-compose/`), with their versions.
 
 In an ejected app, `status --json` gives `{ "schemaVersion": 1, "mode": "ejected", "serviceId": "SERVICE_ID" }`.
 
@@ -1669,7 +1693,7 @@ In an ejected app, `status --json` gives `{ "schemaVersion": 1, "mode": "ejected
 | `version-mismatch` | `2` | `managed.staticPublishVersion` is not the version of the CLI that runs |
 | `first-deploy-manual` | `2` | The first deploy of a managed project with S3 storage, with `--non-interactive` |
 | `version-not-published` | `2` | `eject` needs a version of this package that is on npm |
-| `template-init-needed` | `2` | `template init --check`: the folder of the template (for example `hono-extensions/`) is out of date. Run `template init` |
+| `template-init-needed` | `2` | `template init --check`: the folder of the template (for example `hono-compose/`) is out of date. Run `template init` |
 | `deploy-failed` | `1` | The build or the deploy of the app failed |
 | `failed` | `1` | The operation failed, for example storage cannot be reached |
 

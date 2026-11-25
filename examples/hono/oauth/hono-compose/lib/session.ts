@@ -1,10 +1,10 @@
-// Helpers of the OAuth example. Files in lib/ are not modules: 10-oauth.ts
+// Helpers of the OAuth example. Files in lib/ are not plugins: 10-oauth.ts
 // imports them.
-import { type ExtensionEnv } from '@fastly/compute-js-static-publish/hono';
+import { type PluginEnv } from '@fastly/compute-js-static-publish/hono';
 import { type Context } from 'hono';
 import { deleteCookie, getCookie, getSignedCookie, setCookie, setSignedCookie } from 'hono/cookie';
 
-// The options of the example, in templateOptions.hono.extensions.oauth. A
+// The options of the example, in templateOptions.hono.compose.plugins.oauth. A
 // provider without a clientId has no login route.
 export type OAuthOptions = {
   // The paths that need a login, as path prefixes: '/docs' is /docs and all
@@ -42,7 +42,7 @@ export type OAuthUser = {
 // without a session.
 export const AUTH_PATH = '/auth';
 
-// The binding of the Secret Store with the secrets, for defineExtension().
+// The binding of the Secret Store with the secrets, for definePlugin().
 // With 'as const', c.env.oauth has the type SecretStore | undefined.
 export const OAUTH_BINDINGS = { oauth: 'SecretStore:oauth' } as const;
 
@@ -62,7 +62,7 @@ const RETURN_TO_COOKIE = 'oauth_return_to';
 
 // A value of the Secret Store 'oauth', or undefined if the store or the key is
 // missing.
-export async function oauthSecret(c: { env: ExtensionEnv<typeof OAUTH_BINDINGS>['Bindings'] }, key: string): Promise<string | undefined> {
+export async function oauthSecret(c: { env: PluginEnv<typeof OAUTH_BINDINGS>['Bindings'] }, key: string): Promise<string | undefined> {
   const entry = await c.env.oauth?.get(key);
   return entry?.plaintext();
 }

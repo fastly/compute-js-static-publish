@@ -16,19 +16,20 @@ import { type ServeStaticPathOptions, resolveServeStaticPathname } from './path.
 
 export {
   type BindingResource,
-  type DefineExtensionOptions,
-  EXTENSION_PHASES,
-  type Extension,
-  type ExtensionBindings,
-  type ExtensionEntry,
-  type ExtensionEnv,
-  type ExtensionHelpers,
-  type ExtensionPhase,
-  type ExtensionPhaseFunction,
-  type ExtensionPhases,
+  type DefinePluginOptions,
+  PLUGIN_PHASES,
+  type Plugin,
+  type PluginBindings,
+  type PluginEntry,
+  type PluginEnv,
+  type PluginHelpers,
+  type PluginPhase,
+  type PluginPhaseFunction,
+  type PluginPhases,
   defineExtension,
+  definePlugin,
   mergeBindings,
-} from './extensions.js';
+} from './compose.js';
 
 // The values that selectCollection() sets on c.var. Use this type in the
 // Variables of the Hono app: new Hono<{ Variables: StaticPublisherVariables }>().

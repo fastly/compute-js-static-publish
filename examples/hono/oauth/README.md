@@ -4,7 +4,7 @@ This example puts a login in front of a static site, or a part of it, that uses 
 
 ## This is an example, not a template
 
-You cannot scaffold an app "with this example". There is no flag or command that adds it. To use it, copy its `hono-extensions/` folder into your project, and set it up as this README shows. After you copy it, the code is yours: read it, and change it for your site. It is a starting point, not a supported feature of this package. Before you use it for content that must stay private, review it, for example the session length and who can log in.
+You cannot scaffold an app "with this example". There is no flag or command that adds it. To use it, copy its `hono-compose/` folder into your project, and set it up as this README shows. After you copy it, the code is yours: read it, and change it for your site. It is a starting point, not a supported feature of this package. Before you use it for content that must stay private, review it, for example the session length and who can log in.
 
 The steps:
 
@@ -14,20 +14,20 @@ The steps:
    npx @fastly/compute-js-static-publish@latest --managed --template hono --root-dir=./public --kv-store-name=site-content
    ```
 
-   This writes `static-publish.project.js` and the folder `hono-extensions/`. To add the example to a project that exists, see [Adding to an existing project](#adding-to-an-existing-project).
-2. Replace the `hono-extensions/` folder of your project with the `hono-extensions/` folder of this example (`examples/hono/oauth/hono-extensions/` in this repository). Then update the folder for your project, and install its packages:
+   This writes `static-publish.project.js` and the folder `hono-compose/`. To add the example to a project that exists, see [Adding to an existing project](#adding-to-an-existing-project).
+2. Replace the `hono-compose/` folder of your project with the `hono-compose/` folder of this example (`examples/hono/oauth/hono-compose/` in this repository). Then update the folder for your project, and install its packages:
 
    ```sh
-   rm -rf hono-extensions
-   cp -R <this repository>/examples/hono/oauth/hono-extensions hono-extensions
+   rm -rf hono-compose
+   cp -R <this repository>/examples/hono/oauth/hono-compose hono-compose
    npx @fastly/compute-js-static-publish template init
-   cd hono-extensions
+   cd hono-compose
    npm install
    ```
 
    `template init` adds the packages that the template provides to `package.json` (as peer dependencies), and the starter files (`tsconfig.json`, `.gitignore`, and `_example.ts`, which the build does not load). `npm install` installs the packages of the example. It also installs the peer dependencies, for your editor and the type checker. The build uses the copies of the app.
 3. Make the OAuth apps (see [The OAuth apps](#the-oauth-apps)). Then set up the example in `static-publish.project.js` (a managed project):
-   - the options in `templateOptions.hono.extensions.oauth` (see [Options](#options));
+   - the options in `templateOptions.hono.compose.plugins.oauth` (see [Options](#options));
    - for local development, the sections of `managed.fastlyToml` in [Local development](#local-development);
    - for Fastly, the steps in [On Fastly](#on-fastly).
 
@@ -35,7 +35,7 @@ The steps:
 
 ## What it does
 
-`10-oauth.ts` is one module. All of it is in the `middleware` phase:
+`10-oauth.ts` is one plugin. All of it is in the `middleware` phase:
 
 ```
 The login check       On the protect paths (default: all paths), also through a preview URL.
@@ -59,7 +59,7 @@ GET /auth/github?code=…       → the app gets the user from GitHub
 GET /private/report.html      valid session → the published file
 ```
 
-- The module has the prefix `10-`, so it comes before other modules in each phase. The `middleware` phase of all modules comes before their other phases, so the login check also protects the routes of other modules on the protected paths.
+- The plugin has the prefix `10-`, so it comes before other plugins in each phase. The `middleware` phase of all plugins comes before their other phases, so the login check also protects the routes of other plugins on the protected paths.
 - The routes under `/auth/`, and the `login` path, never need a session.
 - The login check compares the `protect` paths with the path of the request, and also with the path without the prefix of a `path` source of [collection selection](../../../README.md#-previews-collection-selection). Thus `/_preview/staging/private/report.html` needs the same login as `/private/report.html`.
 - The session cookie has the user and an expiry time, signed with `SESSION_KEY` (HMAC-SHA256). The app does not store sessions. To log out all visitors, change `SESSION_KEY`.
@@ -68,19 +68,21 @@ GET /private/report.html      valid session → the published file
 
 ## Options
 
-In `templateOptions.hono.extensions.oauth`:
+In `templateOptions.hono.compose.plugins.oauth`:
 
 ```js
 templateOptions: {
   hono: {
-    extensions: {
-      oauth: {
-        protect: '/private',
-        login: '/auth/github',
-        allowedUsers: [ 'github-id:583231', 'google:someone@example.com' ],
-        github: { clientId: 'Iv1.0123456789abcdef' },
-        google: { clientId: '0123456789-abc.apps.googleusercontent.com' },
-        sessionMaxAge: 86400,
+    compose: {
+      plugins: {
+        oauth: {
+          protect: '/private',
+          login: '/auth/github',
+          allowedUsers: [ 'github-id:583231', 'google:someone@example.com' ],
+          github: { clientId: 'Iv1.0123456789abcdef' },
+          google: { clientId: '0123456789-abc.apps.googleusercontent.com' },
+          sessionMaxAge: 86400,
+        },
       },
     },
   },
@@ -100,7 +102,7 @@ A client ID is not a secret, so it can be in the project file.
 
 ## Secrets
 
-The modules read the Secret Store `oauth` (the binding `oauth: 'SecretStore:oauth'`):
+The plugins read the Secret Store `oauth` (the binding `oauth: 'SecretStore:oauth'`):
 
 | Key | |
 | --- | --- |
@@ -171,18 +173,18 @@ The login check runs before the published files on each request, so a visitor wi
 
 ## Adding to an existing project
 
-The project must use the `hono` template. For a managed project, this is `managed.template: 'hono'` in `static-publish.project.js`. If the project has no `hono-extensions/` folder, make it:
+The project must use the `hono` template. For a managed project, this is `managed.template: 'hono'` in `static-publish.project.js`. If the project has no `hono-compose/` folder, make it:
 
 ```sh
 npx @fastly/compute-js-static-publish template init
 ```
 
-Make sure that `hono-extensions/` does not already have files with the same names (`10-oauth.ts` and `lib/session.ts`). The name of a module is its file name without the number prefix, and two modules with the same name stop the build. If the name `oauth` is already used, rename the module of the example, and use the new name in `templateOptions.hono.extensions`.
+Make sure that `hono-compose/` does not already have files with the same names (`10-oauth.ts` and `lib/session.ts`). The name of a plugin is its file name without the number prefix, and two plugins with the same name stop the build. If the name `oauth` is already used, rename the plugin of the example, and use the new name in `templateOptions.hono.compose.plugins`.
 
-Then copy `10-oauth.ts` and `lib/session.ts` from the `hono-extensions/` folder of this example into your `hono-extensions/` folder, in the same places, and install the packages of the example:
+Then copy `10-oauth.ts` and `lib/session.ts` from the `hono-compose/` folder of this example into your `hono-compose/` folder, in the same places, and install the packages of the example:
 
 ```sh
-cd hono-extensions
+cd hono-compose
 npm install @hono/oauth-providers@^0.9.1
 ```
 

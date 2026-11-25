@@ -97,7 +97,7 @@ const cases = {
     ...base,
     template: loadAppTemplate('hono'),
     generatedFrom: { ...base.generatedFrom, template: 'hono' },
-    build: { hono: { extensionsDir: '/project/hono-extensions' } },
+    build: { hono: { composeDir: '/project/hono-compose' } },
   },
   's3-endpoint': {
     ...base,

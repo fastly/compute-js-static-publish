@@ -47,7 +47,7 @@ export type AppConfig = {
   fastlyToml?: FastlyTomlSections,
   // Written into static-publish.rc.js, if set: the build settings of the
   // template. The paths are absolute here, and relative to the rc in the file.
-  build?: { hono?: { extensionsDir: string } },
+  build?: { hono?: { composeDir: string } },
   // Written into static-publish.rc.js, if set: templateOptions, only with the
   // key of the app's template.
   templateOptions?: StaticPublishTemplateOptions,
@@ -199,7 +199,7 @@ export function generateApp(config: AppConfig): Record<string, string> {
     generatedFrom,
     collectionSelection,
     build: build?.hono != null ?
-      { hono: { extensionsDir: dotRelative(computeJsDir, build.hono.extensionsDir).split(path.sep).join('/') } } :
+      { hono: { composeDir: dotRelative(computeJsDir, build.hono.composeDir).split(path.sep).join('/') } } :
       undefined,
     templateOptions,
   });

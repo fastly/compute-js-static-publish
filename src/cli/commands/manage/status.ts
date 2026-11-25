@@ -143,7 +143,7 @@ export async function action(actionArgs: string[]) {
   const previewUrls = project.rc.collectionSelection != null ? previewUrlTemplates(baseUrl, project.rc.collectionSelection) : [];
 
   // The packages that the template provides to its folder (for example to the
-  // Hono extensions), with the versions of the generated app.
+  // plugin modules in hono-compose/), with the versions of the generated app.
   const templateName = project.managed.template ?? DEFAULT_APP_TEMPLATE_NAME;
   const providedPackages = providedVersions(templateName, path.resolve(MANAGED_APP_DIR, 'node_modules'), running);
 
