@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `@fastly/compute-js-static-publish` is one npm package. It has two parts, and each part compiles separately:
 
-- **CLI** (`src/cli`, Node.js): It scaffolds a Fastly Compute JS app. It publishes static files to storage: the Fastly KV Store, or S3-compatible storage (v8 beta).
+- **CLI** (`src/cli`, Node.js): It scaffolds a Fastly Compute JS app. It publishes static files to storage: the Fastly KV Store, or S3-compatible storage (since v8).
 - **Server library** (`src/server`, runs in Fastly Compute/Wasm): `PublisherServer`. The scaffolded app imports it to serve the content.
 - **Hono middleware** (`src/hono`, compiled with the server build, export `./hono`): `fromStaticPublishRc()` / `fromPublisherServer()` return `serveStatic()`, `serveFallback()`, and `selectCollection()`, which call `serveRequest()` and `serveFallback()` of `PublisherServer`. It imports only types from `hono` (an optional peer dependency), so it adds nothing to the bundle. `src/hono/path.ts` (resolves `root`, `path`, and `rewriteRequestPath`, and refuses a path outside `root`) has no Compute imports, so the unit tests can import it.
 

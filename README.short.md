@@ -6,7 +6,7 @@ This CLI tool helps you:
 
 - ✅ Deploy static sites to Fastly Compute with zero backend
 - 📦 Store files in Fastly KV Store efficiently
-  - 🎁 Since v8: Support for S3-compatible storage such as Fastly Object Storage (Beta) 
+  - 🎁 Since v8: Support for S3-compatible storage such as Fastly Object Storage
 - 🗂 Publish to named collections (`live`, `preview-42`, etc.)
 - 🔄 Switch between collections at runtime
 - 🧹 Clean up old or expired assets
@@ -21,7 +21,7 @@ Create a directory for your project, place your static files in `./public`, then
 npx @fastly/compute-js-static-publish@latest --root-dir=./public --kv-store-name=site-content
 ```
 
-**Since v8:** S3-compatible storage (such as Fastly Object Storage) is also supported (Beta). To use this mode, type:
+**Since v8:** S3-compatible storage (such as Fastly Object Storage) is also supported. To use this mode, type:
 
 ```sh
 npx @fastly/compute-js-static-publish@latest --root-dir=./public --storage-mode=s3 --s3-region=<region> --s3-bucket=<bucket-name>
@@ -29,7 +29,7 @@ npx @fastly/compute-js-static-publish@latest --root-dir=./public --storage-mode=
 
 If the storage needs a custom endpoint, as Fastly Object Storage does, add `--s3-endpoint=<endpoint>` (for example, `--s3-endpoint=https://us-east-1.object.fastlystorage.app`).
 
-For more details, see the [S3-compatible storage](https://github.com/fastly/compute-js-static-publish/blob/main/README.md#-using-s3-compatible-storage-beta) section in the full documentation.
+For more details, see the [S3-compatible storage](https://github.com/fastly/compute-js-static-publish/blob/main/README.md#-using-s3-compatible-storage) section in the full documentation.
 
 **New in 8.1:** a managed project has only one file in your repo, `static-publish.project.js`, and the CLI generates the app. Add `--template=hono` for a Hono app:
 
