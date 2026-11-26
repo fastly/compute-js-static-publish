@@ -73,6 +73,10 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 - `staticPublisherWorkingDir` in `static-publish.rc.js` can be a path outside the directory of the file, for example `../static-publisher`. It must start with `./` or `../`, and it must not be the directory of `static-publish.rc.js` or a directory above it (for example `./`, `..`, or `../..`). Before, the value had to start with `./`. A value that breaks the rule stops the command before it writes anything.
 - S3 mode: the server keeps the files that it reads from storage in the Fastly cache for 1 year. It was 1 hour. With a response cache `maxAge` of 1 hour or more, a response-cache miss then usually also read the file from storage. The key of a file has the hash of its content, so a cached copy does not get out of date. The cached files have the new surrogate key `<publishId>-files`. A publish does not purge it. The settings and the index are still kept for 1 hour.
 
+### Updated
+
+- Scaffolded apps and the apps of managed projects use `@fastly/js-compute` `^4.4.0` and `@fastly/cli` `^17.0.0`. Before, they used `^4.0.0` and `^16.0.0`.
+
 ### Deprecated
 
 - `PublisherServer`: the fields `serverTiming`, `settingsCached`, and `assetEntryMapCache`. They are now read-only, and they return the state of the current request. Code that assigns to them gets a TypeScript error. Use `getServerConfig()` and `getAssetEntryMap()`. These fields will be removed in v9.
