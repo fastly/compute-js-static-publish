@@ -1,5 +1,7 @@
 # 8.1: the seven parts
 
+> **Note:** In 8.1.0-beta.9, "Hono extensions" got new names ("composing plugin modules"). This file keeps the names of the earlier betas, for example the folder `hono-extensions/`, `defineExtension()`, and `build.hono.extensionsDir`. Now they are `hono-compose/`, `definePlugin()`, and `build.hono.composeDir`. [MIGRATING.md](../../MIGRATING.md#update-the-plugins-from-an-earlier-beta-of-81) has the full list.
+
 8.1 has seven parts: templates, previews, managed mode, hidden files, CI support, Hono, and the npx command of a prerelease. Each part is one PR to the development branch `dev/8.1`, in this order. At the end, one PR merges `dev/8.1` into `main`. The details of each part are in [design.md](design.md), and its tests in [tests.md](tests.md).
 
 In these files, a **customer** is a developer who uses this package. A **visitor** is a person who opens the customer's site.
