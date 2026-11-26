@@ -91,7 +91,7 @@ Before you upgrade, read [CHANGELOG.md](https://github.com/fastly/compute-js-sta
 - The name of a new collection must be a DNS label: lowercase `a-z`, `0-9`, and `-`, from 1 to 63 characters, with no `-` at the start or the end. A collection that exists continues to work with another name, with a warning.
 - A usage or config error exits with `2`. Before, every error exited with `1`.
 - `collectionSelector.fromCookie()`: the activate and reset paths redirect with `308`. Before, they used `302`.
-- `PublisherServer`: the fields `serverTiming`, `settingsCached`, and `assetEntryMapCache` are read-only (deprecated). Code that assigns to them gets a TypeScript error.
+- `PublisherServer`: the fields `serverTiming`, `settingsCached`, and `assetEntryMapCache` are read-only (deprecated). An assignment to them throws a `TypeError` (and is a TypeScript error).
 
 ## Features
 
