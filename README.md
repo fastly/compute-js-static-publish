@@ -1178,7 +1178,7 @@ async function handleRequest(event) {
 
 With `event.waitUntil()`, the fill continues after your handler returns, also if the visitor disconnects. Without it, the fill stops when your handler returns, and nothing is cached. `fillPromise` never rejects.
 
-The scaffolded app of the `plain` template and the [Hono](#-using-hono) helpers use these methods.
+The scaffolded app of the `plain` template and the [Hono](#-using-hono) helpers use these methods. Apps scaffolded before 8.1.0 call `serveRequest()`, so their fill does not stream. To stream, change `src/index.js` of such an app as the example above shows.
 
 The fill streams only on a Fastly service with `@fastly/js-compute` 4.2 or later. With an earlier version, in `fastly compute serve`, or for a body with a length that is not known, the fill reads the whole body first, as `serveCached()` does, and `fillPromise` is already resolved.
 
