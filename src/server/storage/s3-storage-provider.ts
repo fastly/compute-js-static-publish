@@ -4,6 +4,8 @@
  */
 
 import { CacheOverride } from 'fastly:cache-override';
+import { purgeSurrogateKey } from 'fastly:compute';
+import { env } from 'fastly:env';
 import { SecretStore } from 'fastly:secret-store';
 import { Sha256 } from '@aws-crypto/sha256-js';
 import { SignatureV4 } from '@smithy/signature-v4';
@@ -108,7 +110,7 @@ export type S3StorageProviderParams = {
 };
 
 // The time, in seconds, that the readthrough cache keeps an object when
-// getEntry() does not give a TTL.
+// getEntry() does not give a TTL (one hour).
 const DEFAULT_CACHE_TTL = 3600;
 
 // Attempts for a request that fails with a retryable status or a network error.
@@ -217,16 +219,31 @@ export class S3StorageProvider implements StorageProvider {
   }
 
   async getEntry(key: string, tags?: string[], options?: GetEntryOptions): Promise<StorageEntry | null> {
+    const ttl = options?.ttl ?? DEFAULT_CACHE_TTL;
+    // A read with a TTL longer than DEFAULT_CACHE_TTL also gets a surrogate key
+    // for this object in this POP. If the object does not exist, the server
+    // purges this key, so that the cache does not keep the 404 for the long
+    // TTL. The key has the POP name, so the purge removes only the copy in
+    // this POP.
+    const popSurrogateKey = ttl > DEFAULT_CACHE_TTL ? `pop-${env('FASTLY_POP')}-${key}` : null;
+    const surrogateKeys = [ ...(tags ?? []), ...(popSurrogateKey != null ? [ popSurrogateKey ] : []) ];
     const response = await this.fetchObject(key, {
       backend: this.s3FastlyBackendName ?? "s3_storage",
       cacheOverride: new CacheOverride({
-        ttl: options?.ttl ?? DEFAULT_CACHE_TTL,
-        surrogateKey: (tags ?? []).join(' ') || undefined,
+        ttl,
+        surrogateKey: surrogateKeys.join(' ') || undefined,
       }),
     });
 
     if (response.status === 404) {
       console.log("Object does not exist");
+      if (popSurrogateKey != null) {
+        try {
+          purgeSurrogateKey(popSurrogateKey);
+        } catch (err) {
+          console.warn(`Could not purge the 404 of ${key} from the cache.`, err);
+        }
+      }
       return null;
     }
     if (!response.ok) {
