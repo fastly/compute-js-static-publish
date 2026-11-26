@@ -294,7 +294,7 @@ To stop using `publicDirPrefix`:
    publish it again. The keys of the files are the hashes of the content, so the CLI does not upload the same files
    again.
 
-### Move from the KV Store to S3-compatible storage (BETA)
+### Move from the KV Store to S3-compatible storage
 
 You do not have to move to S3-compatible storage. The KV Store continues to be the default storage mode.
 
@@ -307,7 +307,7 @@ Thus, to move, you publish your content again into the bucket:
 2. Copy your changes from your current app into the new app, for example the changes to `src/index.js` and to
    `publish-content.config.js`. Keep the same `publishId` and `defaultCollectionName`.
 
-3. Set up the S3 credentials for publishing and for the server. See "Using S3 Compatible Storage (Beta)" in
+3. Set up the S3 credentials for publishing and for the server. See "Using S3 Compatible Storage" in
    `README.md`.
 
 4. Publish each collection that you need again, from its source files. The collections that are in the KV Store
@@ -317,6 +317,3 @@ Thus, to move, you publish your content again into the bucket:
 
 6. When you do not need the KV Store content, delete it. Before you do this, make sure that no service version
    that is active or staged uses that KV Store.
-
-> [!NOTE]
-> S3-compatible storage is in beta. The configuration and these steps can change before this feature is stable.

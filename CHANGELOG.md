@@ -72,6 +72,7 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 - `collections delete` of a collection that does not exist says "Nothing to delete." It still succeeds, as before.
 - `staticPublisherWorkingDir` in `static-publish.rc.js` can be a path outside the directory of the file, for example `../static-publisher`. It must start with `./` or `../`, and it must not be the directory of `static-publish.rc.js` or a directory above it (for example `./`, `..`, or `../..`). Before, the value had to start with `./`. A value that breaks the rule stops the command before it writes anything.
 - S3 mode: the server keeps the files that it reads from storage in the Fastly cache for 1 year. It was 1 hour. With a response cache `maxAge` of 1 hour or more, a response-cache miss then usually also read the file from storage. The key of a file has the hash of its content, so a cached copy does not get out of date. The cached files have the new surrogate key `<publishId>-files`. A publish does not purge it. The settings and the index are still kept for 1 hour.
+- S3-compatible storage is no longer a beta feature. The docs, the help, and the messages of the CLI do not show "Beta" for it now.
 
 ### Updated
 
