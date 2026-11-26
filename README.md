@@ -15,6 +15,7 @@
 ## 📖 Table of Contents
 
 - [✨ Key Features](#-key-features)
+- [🆕 New in 8.1](#-new-in-81)
 - [🏁 Quick Start](#-quick-start)
   - [📦 Fastly KV Store](#-using-the-fastly-kv-store) 
   - [🎁 S3 Compatible Storage](#-using-s3-compatible-storage)
@@ -45,6 +46,22 @@ Serve static websites and web apps at the edge &mdash; no backends and no CDN in
 - 🧼 Cleanup tools to remove expired or orphaned files
 - ⚙️ Configurable per-collection server configurations (e.g. fallback files)
 - 🔒 Supports Brotli/gzip compression, conditional GET, and long cache TTLs
+
+## 🆕 New in 8.1
+
+- **Managed projects:** keep only `static-publish.project.js` in your repo. The CLI generates the app, and `dev`, `deploy`, `status`, `upgrade`, and `eject` work with it. ([Managed and ejected apps](#managed-and-ejected-apps))
+- **Previews:** serve another collection for a request, selected by host, path, query, cookie, or header. ([Previews](#-previews-collection-selection))
+- **Hidden files:** publish files that the server does not serve for a request, for your own code to read. Deploy your app with 8.1 before you publish hidden files: an app built with 8.0 does not serve a collection that has hidden files. ([Hidden files](#hidden-files))
+- **Hono:** the `hono` template (`--template=hono`), with your own middleware and routes as plugin modules in `hono-compose/`, and examples for GRIP streaming and OAuth login. For your own Hono app, `@fastly/compute-js-static-publish/hono` replaces `@fastly/hono-compute-js-static-publish`. ([Using Hono](#-using-hono))
+- **CI:** `--json` output, exit codes, error codes, `--project-dir`, and `--non-interactive`. ([Using the CLI in CI](#-using-the-cli-in-ci))
+- **Streaming response cache:** on a cache miss, the file goes to the visitor and into the cache at the same time, so the visitor does not wait for the whole file, and the request uses less memory. Apps from the `plain` and `hono` templates do this; in your own code, use `serveRequestStreaming()` and pass `fillPromise` to `event.waitUntil()`. It needs `@fastly/js-compute` 4.2 or later on a Fastly service. ([Streaming the response into the cache](#streaming-the-response-into-the-cache))
+
+Before you upgrade, read [CHANGELOG.md](CHANGELOG.md). These changes can break something:
+
+- The name of a new collection must be a DNS label: lowercase `a-z`, `0-9`, and `-`, from 1 to 63 characters, with no `-` at the start or the end. A collection that exists continues to work with another name, with a warning.
+- A usage or config error exits with `2`. Before, every error exited with `1`.
+- `collectionSelector.fromCookie()`: the activate and reset paths redirect with `308`. Before, they used `302`.
+- `PublisherServer`: the fields `serverTiming`, `settingsCached`, and `assetEntryMapCache` are read-only (deprecated). An assignment to them throws a `TypeError` (and is a TypeScript error).
 
 ---
 
