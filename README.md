@@ -1145,6 +1145,7 @@ publisherServer.setResponseCache({ maxAge: 3600, maxBodySize: 4 * 1024 * 1024 })
 - If several requests miss the same response at the same time, one request produces it, and the others wait for it.
 - Only `200` and `404` responses are cached. Conditional requests (`304`) and `HEAD` requests are answered from the cached response.
 - Each cached response has the surrogate key `<publishId>-<collectionName>`. After you publish, `publish-content` purges this key (see [`--fastly-service-id`](#publish-content)), so the next request gets the new content. `collections promote` and `collections delete` purge the key of the collection that they change.
+- In S3 mode, the server also keeps the settings, the index, and the files that it reads from storage in the Fastly cache. The settings and the index are kept for 1 hour, with the surrogate key of the collection. The files are kept for 1 year, with the surrogate key `<publishId>-files`, because the key of a file has the hash of its content. Thus after a publish, a file that did not change is read from the cache, not from storage. A publish does not purge `<publishId>-files`. To remove the cached copies of all files, purge it yourself.
 
 `serveRequest()` uses the response cache automatically. If you call `getMatchingAsset()` and `serveAsset()` directly, wrap them in `serveCached()`. When a response is not cached yet, `serveCached()` calls your function to produce it, with a `GET` request that has no conditional headers:
 
@@ -1842,7 +1843,7 @@ After this process is complete, the PublisherServer object in the Compute applic
 - `--root-dir`: Source directory to read files from (overrides value in `publish-content.config.js`)
 - `--overwrite-existing`: Always upload all files, even if they are already in storage. `--kv-overwrite` is an alias.
 - `--brotli-quality`: Brotli quality for the `br` variants, an integer from 0 to 11. Overrides `brotliQuality` in `publish-content.config.js`. This is useful in CI, where the config file is generated at each run.
-- `--fastly-service-id`: The Fastly Service ID to purge after publishing. The command purges the surrogate key `<publishId>-<collectionName>`, so that the service stops serving cached copies of the collection's settings, index, files, and responses (see [response cache](#️-caching-responses-with-the-core-cache)). If not set, the tool will check:
+- `--fastly-service-id`: The Fastly Service ID to purge after publishing. The command purges the surrogate key `<publishId>-<collectionName>`, so that the service stops serving cached copies of the collection's settings, index, and responses (see [response cache](#️-caching-responses-with-the-core-cache)). If not set, the tool will check:
    - **`FASTLY_SERVICE_ID` environment variable**
    - `service_id` in `fastly.toml`
 

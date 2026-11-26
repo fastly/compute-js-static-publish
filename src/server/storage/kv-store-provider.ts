@@ -31,6 +31,7 @@ export class KvStoreProvider implements StorageProvider {
 
   readonly kvStoreName: string;
 
+  // The KV Store has its own cache, so the tags and the TTL are not used.
   async getEntry(key: string) {
     const kvStore = new KVStore(this.kvStoreName);
     return await getKVStoreEntry(kvStore, key);

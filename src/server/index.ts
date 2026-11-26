@@ -22,6 +22,7 @@ export {
   type CookieCollectionSelectorOpts,
 } from './collection-selector/from-cookie.js';
 export {
+  type GetEntryOptions,
   type StorageProvider,
   type StorageProviderBuilder,
   type StorageEntry,

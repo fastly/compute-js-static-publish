@@ -42,12 +42,14 @@ import {
 } from '../util/retryable.js';
 import {
   type StorageEntry,
+  type StorageEntryData,
   type StorageProvider,
   type StorageProviderBuilder,
   type StorageProviderBuilderContext,
   type StorageProviderBatch,
   type StorageProviderBatchEntry,
   type ApplyBatchOptions,
+  storageEntryDataToBytes,
 } from './storage-provider.js';
 
 export const buildStoreProvider: StorageProviderBuilder = (
@@ -131,7 +133,7 @@ export class KvStoreProvider implements StorageProvider {
   async submitStorageEntry(
     key: string,
     _filePath: string,
-    data: ReadableStream<Uint8Array> | Uint8Array | string | null | undefined,
+    data: StorageEntryData,
     metadata?: Record<string, string>
   ): Promise<void> {
 
@@ -139,7 +141,7 @@ export class KvStoreProvider implements StorageProvider {
       this.fastlyApiContext,
       this.kvStoreName,
       key,
-      data ?? new Uint8Array(0),
+      await storageEntryDataToBytes(data),
       metadata != null ? JSON.stringify(metadata) : undefined,
     );
 

@@ -52,6 +52,7 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 - `PublisherServer`: the options `status` and `headers` of `serveRequest()` and `serveFallback()` change the status and the headers of the response of a file, for one call. For a status other than `2xx`, the server does not evaluate the preconditions of the request.
 - `PublisherServer`: `serveRequestStreaming()`, `serveFallbackStreaming()`, and `serveCachedStreaming()` return `{ response, fillPromise }`. On a Fastly service with `@fastly/js-compute` 4.2 or later (not in `fastly compute serve`), a response cache fill for a body with a known length streams the body to the visitor and into the cache at the same time. Pass `fillPromise` to `event.waitUntil()`. A body that does not have its declared length is not cached, and the next fill reads the whole body first. The `plain` template and the Hono helpers use them.
 - `PublisherServer`: the function of `serveCached()` can return `{ response, length }`. With `length: null`, the response is not cached.
+- `StorageProvider.getEntry()` takes an optional third parameter, `options` (type `GetEntryOptions`). Its `ttl` sets how long, in seconds, a provider that caches what it reads keeps the entry.
 
 ### Changed
 
@@ -70,6 +71,7 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 - `collections promote` from a collection that does not exist stops with the message "Collection '…' does not exist." (exit `2`). Before, it stopped with an uncaught error.
 - `collections delete` of a collection that does not exist says "Nothing to delete." It still succeeds, as before.
 - `staticPublisherWorkingDir` in `static-publish.rc.js` can be a path outside the directory of the file, for example `../static-publisher`. It must start with `./` or `../`, and it must not be the directory of `static-publish.rc.js` or a directory above it (for example `./`, `..`, or `../..`). Before, the value had to start with `./`. A value that breaks the rule stops the command before it writes anything.
+- S3 mode: the server keeps the files that it reads from storage in the Fastly cache for 1 year. It was 1 hour. With a response cache `maxAge` of 1 hour or more, a response-cache miss then usually also read the file from storage. The key of a file has the hash of its content, so a cached copy does not get out of date. The cached files have the new surrogate key `<publishId>-files`. A publish does not purge it. The settings and the index are still kept for 1 hour.
 
 ### Deprecated
 
@@ -79,6 +81,7 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 
 - `PublisherServer`: a request for the 404 page with an `If-None-Match` that matched its `ETag` (or an `If-Modified-Since` after its time) got a `304` with no body. Now the server evaluates the preconditions only for a `2xx` response, as RFC 9110 says, so the response is always the `404` with the page.
 - `scaffold` now escapes the values that it writes into `fastly.toml`. Before, a `"` or a `\` in `--name`, `--description`, or `--author`, or a KV Store name with a character such as `.`, gave a `fastly.toml` that was not valid.
+- `collections promote` and `collections update-expiration` (KV Store): the command sometimes stopped with `400 Bad request: must include valid content-length header` when it wrote the index of the collection. The command sent the index as a stream, with no `Content-Length`. Now it reads the index into memory and sends it with a `Content-Length`. In S3 mode, the commands now also send the index and the settings with a known length.
 
 ## [8.0.2] - 2026-11-16
 
