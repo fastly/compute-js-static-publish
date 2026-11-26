@@ -96,6 +96,13 @@ describe('loadServiceId', () => {
     assert.deepEqual(loadServiceId({ commandLine: undefined, fastlyTomlPath }), { serviceId: 'from-toml', source: 'fastly.toml' });
   });
 
+  test('an empty service_id in fastly.toml is the same as none', () => {
+    for (const value of [ '', ' ' ]) {
+      const fastlyTomlPath = writeFastlyToml(value);
+      assert.equal(loadServiceId({ commandLine: undefined, fastlyTomlPath }), null);
+    }
+  });
+
   test('gives null if no Service ID is found', () => {
     const fastlyTomlPath = writeFastlyToml(null);
     assert.equal(loadServiceId({ commandLine: undefined, fastlyTomlPath }), null);

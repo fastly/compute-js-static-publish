@@ -20,6 +20,7 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 ### Fixed
 
 - `collections promote` and `collections update-expiration` (KV Store): the command sometimes stopped with `400 Bad request: must include valid content-length header` when it wrote the index of the collection. The command sent the index as a stream, with no `Content-Length`. Now it reads the index into memory and sends it with a `Content-Length`. In S3 mode, the commands now also send the index and the settings with a known length.
+- `publish-content`, `collections promote`, and `collections delete`: an empty `service_id` in `fastly.toml` is now the same as no Service ID. The Fastly CLI writes `service_id = ""` when it removes a new service after the first deploy fails or is cancelled. The commands then tried to purge a service with an empty ID, and showed a warning.
 
 ## [8.0.2] - 2026-11-16
 
