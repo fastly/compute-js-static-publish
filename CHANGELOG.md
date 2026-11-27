@@ -9,6 +9,8 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 
 ## [unreleased]
 
+## [8.0.3] - 2026-11-27
+
 ### Added
 
 - `publish-content` also stores an index with 2,000 entries or more in parts, about 400 entries in each part, with the keys `<publishId>_parts_<hash>_<count>_<n>`. `PublisherServer` then reads only the part that has the path of a request. On a response-cache miss, this removes most of the time to read and parse a large index: for an index of 25,000 entries, about 70 ms became about 10 ms in a test. The full index is still stored, so an older `PublisherServer` serves the same content, and an older CLI can still `promote`, `clean`, and `update-expiration`. `clean` deletes the index parts that no index uses. `Server-Timing` has the new entry `index-part`.
@@ -514,7 +516,8 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 - Updated generated app's webpack and webpack-cli versions
 - Use atob() and removed dependency on Buffer
 
-[unreleased]: https://github.com/fastly/compute-js-static-publish/compare/v8.0.2...HEAD
+[unreleased]: https://github.com/fastly/compute-js-static-publish/compare/v8.0.3...HEAD
+[8.0.3]: https://github.com/fastly/compute-js-static-publish/compare/v8.0.2...v8.0.3
 [8.0.2]: https://github.com/fastly/compute-js-static-publish/compare/v8.0.1...v8.0.2
 [8.0.1]: https://github.com/fastly/compute-js-static-publish/compare/v8.0.0...v8.0.1
 [8.0.0]: https://github.com/fastly/compute-js-static-publish/compare/v7.0.8...v8.0.0
