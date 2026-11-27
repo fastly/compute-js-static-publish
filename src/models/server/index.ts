@@ -5,6 +5,11 @@
 
 import { HIDDEN_INDEX_FEATURE } from '../assets/index.js';
 import { getMetadataFieldValue } from '../metadata/index.js';
+import {
+  decodeIndexPartsInfo,
+  encodeIndexPartsInfo,
+  type IndexPartsInfo,
+} from '../index-parts/index.js';
 
 export type IndexMetadata = {
   publishedTime?: number,
@@ -17,6 +22,9 @@ export type IndexMetadata = {
   // collections list. A collection published by an older version has none.
   fileCount?: number,
   hiddenFileCount?: number,
+  // The parts of the index (see models/index-parts). A server that does not
+  // know this field reads the full index.
+  indexParts?: IndexPartsInfo,
   // Fields that this version does not know. They are kept, so that a command
   // that writes the metadata again (for example promote) does not remove them.
   otherFields?: Record<string, string>,
@@ -31,7 +39,7 @@ export const SUPPORTED_INDEX_FEATURES: readonly string[] = [
   HIDDEN_INDEX_FEATURE,
 ];
 
-const KNOWN_FIELDS = [ 'publishedTime', 'expirationTime', 'requires', 'fileCount', 'hiddenFileCount' ];
+const KNOWN_FIELDS = [ 'publishedTime', 'expirationTime', 'requires', 'fileCount', 'hiddenFileCount', 'indexParts' ];
 
 export function encodeIndexMetadata(indexMetadata: IndexMetadata): Record<string, string> {
   const result: Record<string, string> = { ...indexMetadata.otherFields };
@@ -60,6 +68,10 @@ export function encodeIndexMetadata(indexMetadata: IndexMetadata): Record<string
     }
   }
 
+  if (indexMetadata.indexParts != null) {
+    result['indexParts'] = encodeIndexPartsInfo(indexMetadata.indexParts);
+  }
+
   return result;
 }
 
@@ -73,6 +85,7 @@ export function decodeIndexMetadata(obj: Record<string, string> | undefined): In
   const requires = requiresValue != null
     ? String(requiresValue).split(',').map(x => x.trim()).filter(x => x !== '')
     : [];
+  const indexParts = decodeIndexPartsInfo(getMetadataFieldValue(obj, 'indexParts'));
 
   // S3 makes the metadata keys lowercase, so compare the keys without case.
   const knownKeys = KNOWN_FIELDS.map(x => x.toLowerCase());
@@ -95,6 +108,7 @@ export function decodeIndexMetadata(obj: Record<string, string> | undefined): In
     requires: requires.length > 0 ? requires : undefined,
     fileCount: count('fileCount'),
     hiddenFileCount: count('hiddenFileCount'),
+    indexParts: indexParts ?? undefined,
     otherFields,
   };
 }

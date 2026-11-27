@@ -23,7 +23,7 @@ import {
   type AssetEntryMap,
   type AssetVariantMetadata,
   decodeAssetVariantMetadata,
-  findAssetEntry,
+  hiddenIndexKey,
   isHiddenIndexKey,
 } from '../../models/assets/index.js';
 import { parseItemPatterns, testItemPatterns } from '../../models/config/item-patterns.js';
@@ -32,7 +32,16 @@ import {
   validateCollectionSelection,
 } from '../../models/config/collection-selection.js';
 import { type ResolveCollectionResult, isSelectedByUrl, resolveCollection } from '../collection-selection/index.js';
-import { decodeIndexMetadata, getUnsupportedIndexFeatures } from '../../models/server/index.js';
+import {
+  decodeIndexMetadata,
+  getUnsupportedIndexFeatures,
+  type IndexMetadata,
+} from '../../models/server/index.js';
+import {
+  getIndexPartKey,
+  getIndexPartNumber,
+  type IndexPartsInfo,
+} from '../../models/index-parts/index.js';
 import { isExpired } from '../../models/time/index.js';
 import {
   type StorageEntry,
@@ -97,6 +106,13 @@ const headersToPreserveForUnmodified = ['Content-Location', 'ETag', 'Vary', 'Cac
 
 // The time, in seconds, that a storage provider with a cache keeps a file (one year).
 const FILE_CACHE_TTL = 31536000;
+
+// The index entry of a collection, before its body is read.
+type LoadedIndex = {
+  key: string,
+  entry: StorageEntry,
+  metadata: IndexMetadata | null,
+};
 
 type AssetInit = {
   status?: number,
@@ -193,7 +209,12 @@ type CollectionScope = {
   collectionName: string,
   serverTiming: ServerTiming | null,
   settings: PublisherServerConfigNormalized | null | undefined,
+  // The index entry, read but with its body not read yet.
+  index: LoadedIndex | null | undefined,
+  // The full index, read and parsed.
   assetEntryMap: AssetEntryMap | null | undefined,
+  // The index parts that were read, by part number.
+  indexParts: Map<number, AssetEntryMap | null>,
 };
 
 // What the produce() function of serveCached() and serveCachedStreaming() returns:
@@ -425,7 +446,9 @@ export class PublisherServer {
       collectionName,
       serverTiming,
       settings: undefined,
+      index: undefined,
       assetEntryMap: undefined,
+      indexParts: new Map(),
     };
   }
 
@@ -491,9 +514,12 @@ export class PublisherServer {
     return this.getAssetEntryMapFor(this.currentScope);
   }
 
-  private async getAssetEntryMapFor(scope: CollectionScope) {
-    if (scope.assetEntryMap !== undefined) {
-      return scope.assetEntryMap;
+  // Reads the index entry of a collection, but not its body. Returns null if
+  // there is no usable index: the index is not found, it requires a feature
+  // that this version does not support, or the collection expired.
+  private async getIndexFor(scope: CollectionScope): Promise<LoadedIndex | null> {
+    if (scope.index !== undefined) {
+      return scope.index;
     }
     const indexFileKey = `${this.publishId}_index_${scope.collectionName}`;
     const indexFile = await this.timed(scope, 'index', () =>
@@ -502,18 +528,19 @@ export class PublisherServer {
     if (indexFile == null) {
       console.error(`Index File not found at ${indexFileKey}.`);
       console.error(`You may need to publish your application.`);
-      scope.assetEntryMap = null;
+      scope.index = null;
       return null;
     }
 
-    let metadata;
+    let metadata: IndexMetadata | null = null;
     const metadataText = indexFile.metadataText()
     if (metadataText != null) {
+      let metadataObj;
       try {
-        metadata = JSON.parse(metadataText);
+        metadataObj = JSON.parse(metadataText);
       } catch {
       }
-      metadata = decodeIndexMetadata(metadata);
+      metadata = decodeIndexMetadata(metadataObj);
     }
 
     // Do not serve a collection that needs a feature that this version does not
@@ -522,7 +549,7 @@ export class PublisherServer {
     if (unsupportedFeatures.length > 0) {
       console.error(`Collection at ${indexFileKey} requires features that this version of the server does not support: ${unsupportedFeatures.join(', ')}.`);
       console.error(`Build and deploy the application with a newer version of @fastly/compute-js-static-publish.`);
-      scope.assetEntryMap = null;
+      scope.index = null;
       return null;
     }
 
@@ -533,15 +560,92 @@ export class PublisherServer {
 
     if (collectionIsExpired) {
       console.error(`Requested collection expired at ${indexFileKey}.`);
+      scope.index = null;
+      return null;
+    }
+
+    scope.index = { key: indexFileKey, entry: indexFile, metadata };
+    return scope.index;
+  }
+
+  // Returns the whole index of a collection. This reads and parses the full
+  // index. To find one asset, getMatchingAsset() is faster, because it reads
+  // only one index part if the index has parts.
+  private async getAssetEntryMapFor(scope: CollectionScope) {
+    if (scope.assetEntryMap !== undefined) {
+      return scope.assetEntryMap;
+    }
+    const index = await this.getIndexFor(scope);
+    if (index == null) {
       scope.assetEntryMap = null;
       return null;
     }
 
     // Read and parse in two steps, so that Server-Timing can report each one.
-    const indexText = await this.timed(scope, 'index-body', () => indexFile.text());
+    const indexText = await this.timed(scope, 'index-body', () => index.entry.text());
     scope.assetEntryMap = await this.timed(scope, 'index-parse', async () => JSON.parse(indexText) as AssetEntryMap);
     return scope.assetEntryMap;
   }
+
+  // Reads one index part. Returns null if the part cannot be read, so that the
+  // caller uses the full index.
+  private async getIndexPartFor(scope: CollectionScope, indexParts: IndexPartsInfo, partNumber: number): Promise<AssetEntryMap | null> {
+    const cached = scope.indexParts.get(partNumber);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const partKey = getIndexPartKey(this.publishId, indexParts, partNumber);
+    let part: AssetEntryMap | null = null;
+    try {
+      part = await this.timed(scope, 'index-part', async () => {
+        // The key of a part has the hash of the full index, so a cached copy is
+        // never out of date. It has the same cache TTL and tag as a file.
+        const entry = await this.storageProvider.getEntry(partKey, [`${this.publishId}-files`], { ttl: FILE_CACHE_TTL });
+        return entry != null ? (await entry.json()) as AssetEntryMap : null;
+      });
+      if (part == null) {
+        console.warn(`Index part not found at ${partKey}. Using the full index.`);
+      }
+    } catch (err) {
+      console.warn(`Could not read the index part at ${partKey}. Using the full index.`, err);
+    }
+    scope.indexParts.set(partNumber, part);
+    return part;
+  }
+
+  // Finds the entry of one index key (an asset key, or a hidden: key) in the
+  // index of a collection. If the index has parts, this reads only the part
+  // that has the key.
+  private async lookupIndexKeyFor(scope: CollectionScope, indexKey: string): Promise<AssetEntry | null> {
+    if (scope.assetEntryMap != null) {
+      return scope.assetEntryMap[indexKey] ?? null;
+    }
+    const index = await this.getIndexFor(scope);
+    if (index == null) {
+      return null;
+    }
+    const indexParts = index.metadata?.indexParts;
+    if (indexParts != null) {
+      const part = await this.getIndexPartFor(scope, indexParts, getIndexPartNumber(indexKey, indexParts.count));
+      if (part != null) {
+        return part[indexKey] ?? null;
+      }
+    }
+    const assetEntryMap = await this.getAssetEntryMapFor(scope);
+    return assetEntryMap?.[indexKey] ?? null;
+  }
+
+  // Finds the entry of an asset key, as findAssetEntry() of models/assets does:
+  // a hidden: key finds nothing, and with includeHidden, the key also finds the
+  // hidden file of that key.
+  private async findAssetEntryFor(scope: CollectionScope, assetKey: string, includeHidden: boolean): Promise<AssetEntry | null> {
+    if (isHiddenIndexKey(assetKey)) {
+      return null;
+    }
+    return (await this.lookupIndexKeyFor(scope, assetKey)) ??
+      (includeHidden ? await this.lookupIndexKeyFor(scope, hiddenIndexKey(assetKey)) : null);
+  }
+
 
   // Find the file for an asset key. The second argument can also be a boolean,
   // the value of applyAuto.
@@ -556,8 +660,7 @@ export class PublisherServer {
     if (serverConfig == null) {
       return null;
     }
-    const assetEntryMap = await this.getAssetEntryMapFor(scope);
-    if (assetEntryMap == null) {
+    if (await this.getIndexFor(scope) == null) {
       return null;
     }
 
@@ -567,11 +670,11 @@ export class PublisherServer {
     if (isHiddenIndexKey(assetKey)) {
       return null;
     }
-    const lookup = (key: string) => findAssetEntry(assetEntryMap, key, includeHidden);
+    const lookup = (key: string) => this.findAssetEntryFor(scope, key, includeHidden);
 
     if(!assetKey.endsWith('/')) {
       // A path that does not end in a slash can match an asset directly
-      const asset = lookup(assetKey);
+      const asset = await lookup(assetKey);
       if (asset != null) {
         return asset;
       }
@@ -581,7 +684,7 @@ export class PublisherServer {
         // looks for an asset that has the specified suffix (usually extension, such as .html)
         for (const extEntry of serverConfig.autoExt) {
           let assetKeyWithExt = assetKey + extEntry;
-          const asset = lookup(assetKeyWithExt);
+          const asset = await lookup(assetKeyWithExt);
           if (asset != null) {
             return asset;
           }
@@ -602,7 +705,7 @@ export class PublisherServer {
         assetNameAsDir = assetNameAsDir + '/';
         for (const indexEntry of serverConfig.autoIndex) {
           let assetKeyIndex = assetNameAsDir + indexEntry;
-          const asset = lookup(assetKeyIndex);
+          const asset = await lookup(assetKeyIndex);
           if (asset != null) {
             return asset;
           }
@@ -1214,7 +1317,7 @@ export class PublisherServer {
   }
 
   private async isCollectionAvailableFor(scope: CollectionScope): Promise<boolean> {
-    return (await this.getServerConfigFor(scope)) != null && (await this.getAssetEntryMapFor(scope)) != null;
+    return (await this.getServerConfigFor(scope)) != null && (await this.getIndexFor(scope)) != null;
   }
 
   // With collection selection, check a collection that is not the default
@@ -1296,7 +1399,7 @@ export class PublisherServer {
     // response cache does not store this response.
     if (
       serverConfig == null ||
-      (scope.collectionName !== this.defaultCollectionName && await this.getAssetEntryMapFor(scope) == null)
+      (scope.collectionName !== this.defaultCollectionName && await this.getIndexFor(scope) == null)
     ) {
       return { response: collectionNotAvailableResponse(scope.collectionName), length: null };
     }
@@ -1318,8 +1421,7 @@ export class PublisherServer {
   // fallback HTML responses, like SPA and "not found" pages
   private async serveFallbackFromStorage(scope: CollectionScope, request: Request, serverConfig: PublisherServerConfigNormalized): Promise<Response | null> {
 
-    const assetEntryMap = await this.getAssetEntryMapFor(scope);
-    if (assetEntryMap == null) {
+    if (await this.getIndexFor(scope) == null) {
       return null;
     }
 
@@ -1328,7 +1430,7 @@ export class PublisherServer {
     const { spaFile } = serverConfig;
 
     if (spaFile != null) {
-      const asset = findAssetEntry(assetEntryMap, spaFile, true);
+      const asset = await this.findAssetEntryFor(scope, spaFile, true);
       if (asset != null) {
         return this.serveAssetFor(scope, request, asset, {
           cache: 'never',
@@ -1338,7 +1440,7 @@ export class PublisherServer {
 
     const { notFoundPageFile } = serverConfig;
     if (notFoundPageFile != null) {
-      const asset = findAssetEntry(assetEntryMap, notFoundPageFile, true);
+      const asset = await this.findAssetEntryFor(scope, notFoundPageFile, true);
       if (asset != null) {
         return this.serveAssetFor(scope, request, asset, {
           status: 404,

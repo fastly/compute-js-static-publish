@@ -3,6 +3,7 @@
  * Licensed under the MIT license. See LICENSE file for details.
  */
 
+import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
@@ -18,6 +19,13 @@ import { type ContentCompressionTypes } from '../../../models/compression/index.
 import { type PublisherServerConfigNormalized } from '../../../models/config/publisher-server-config.js';
 import { type ContentTypeDef, type PublishContentConfigNormalized } from '../../../models/config/publish-content-config.js';
 import { parseItemPatterns, testItemPatterns } from '../../../models/config/item-patterns.js';
+import {
+  chooseIndexPartCount,
+  getIndexPartKey,
+  getIndexPartsSetPrefix,
+  type IndexPartsInfo,
+  splitAssetEntryMap,
+} from '../../../models/index-parts/index.js';
 import { encodeIndexMetadata, type IndexMetadata } from '../../../models/server/index.js';
 import { calcExpirationTime } from '../../../models/time/index.js';
 import { parseCommandLine } from '../../util/args.js';
@@ -625,6 +633,46 @@ export async function action(actionArgs: string[]) {
 
   await storageProvider.applyBatch(batch, { existingKeys, verbose });
 
+  const indexText = JSON.stringify(assetsIndex);
+
+  // #### INDEX PARTS
+  // These are saved before the index, so that the index never points to parts
+  // that are not in storage yet.
+  let indexParts: IndexPartsInfo | undefined;
+  const indexPartCount = chooseIndexPartCount(Object.keys(assetsIndex).length);
+  if (indexPartCount > 0) {
+    indexParts = {
+      count: indexPartCount,
+      hash: crypto.createHash('sha256').update(indexText).digest('hex'),
+    };
+    console.log(`🧩 Saving index parts...`);
+    const parts = splitAssetEntryMap(assetsIndex, indexPartCount);
+    const partItems = parts.map((part, partNumber) => ({
+      key: getIndexPartKey(publishId, indexParts!, partNumber),
+      partNumber,
+      part,
+    }));
+    // Parts of the same index are already in storage if this content was
+    // published before.
+    let existingPartKeys: Set<string> | null = null;
+    if (!overwriteExisting && !localMode) {
+      const keys = await storageProvider.getStorageKeys(getIndexPartsSetPrefix(publishId, indexParts));
+      existingPartKeys = keys != null ? new Set(keys) : null;
+    }
+    const partItemsToWrite = partItems.filter(item => !existingPartKeys?.has(item.key));
+    await storageProvider.doConcurrentParallel(
+      partItemsToWrite,
+      async ({ partNumber, part }, key) => {
+        const partFilePath = path.resolve(storageContentDir, `index_parts_${indexParts!.hash}_${indexPartCount}_${partNumber}.json`);
+        await storageProvider.submitStorageEntry(key, partFilePath, JSON.stringify(part));
+      },
+      undefined,
+      // The index must not point to parts that could not be saved.
+      true,
+    );
+    console.log(`✅  ${indexPartCount} index parts: ${partItemsToWrite.length} saved, ${indexPartCount - partItemsToWrite.length} already in storage.`);
+  }
+
   // #### INDEX FILE
   console.log(`🗂️ Saving Index...`);
 
@@ -637,6 +685,7 @@ export async function action(actionArgs: string[]) {
     // For collections list, which then reads only the metadata.
     fileCount: Object.keys(assetsIndex).length,
     hiddenFileCount: hiddenCount,
+    indexParts,
   };
 
   const indexFileName = `index_${collectionName}.json`;
@@ -644,7 +693,7 @@ export async function action(actionArgs: string[]) {
   await storageProvider.submitStorageEntry(
     indexFileKey,
     indexFilePath,
-    JSON.stringify(assetsIndex),
+    indexText,
     encodeIndexMetadata(indexMetadata),
   );
   console.log(`✅  Index has been saved.`);
