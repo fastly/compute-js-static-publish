@@ -8,7 +8,7 @@
     "@fastly/cli": "^17.0.0"
   },
   "dependencies": {
-    "@fastly/js-compute": "^4.4.0",
+    "@fastly/js-compute": "^4.4.1",
     "@fastly/compute-js-static-publish": "<compute-js-static-publish>"
   },
   "engines": {

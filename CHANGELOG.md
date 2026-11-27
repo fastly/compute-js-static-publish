@@ -75,7 +75,7 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 
 ### Updated
 
-- Scaffolded apps and the apps of managed projects use `@fastly/js-compute` `^4.4.0` and `@fastly/cli` `^17.0.0`. Before, they used `^4.0.0` and `^16.0.0`.
+- Scaffolded apps and the apps of managed projects use `@fastly/js-compute` `^4.4.1` and `@fastly/cli` `^17.0.0`. Before, they used `^4.0.0` and `^16.0.0`.
 
 ### Deprecated
 
