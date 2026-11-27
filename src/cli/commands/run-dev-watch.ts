@@ -16,6 +16,51 @@ export function appFastlyCommand(appDir: string): string {
   return fs.existsSync(appFastly) ? appFastly : 'fastly';
 }
 
+// The time that the processes of the Fastly CLI get to stop after a SIGTERM,
+// before they get a SIGKILL.
+const STOP_GRACE_MS = 5000;
+
+function processGroupIsRunning(pgid: number): boolean {
+  try {
+    process.kill(-pgid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function waitForProcessGroup(pgid: number, ms: number) {
+  const end = Date.now() + ms;
+  while (processGroupIsRunning(pgid) && Date.now() < end) {
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+}
+
+// Makes sure that no process of a process group runs. If a process runs, it
+// gets a SIGTERM, and after graceMs a SIGKILL. Returns true if a SIGKILL was
+// necessary.
+export async function stopProcessGroup(pgid: number, graceMs: number = STOP_GRACE_MS): Promise<boolean> {
+  if (!processGroupIsRunning(pgid)) {
+    return false;
+  }
+  try {
+    process.kill(-pgid, 'SIGTERM');
+  } catch {
+    // The process group has already stopped.
+  }
+  await waitForProcessGroup(pgid, graceMs);
+  if (!processGroupIsRunning(pgid)) {
+    return false;
+  }
+  try {
+    process.kill(-pgid, 'SIGKILL');
+  } catch {
+    // The process group has already stopped.
+  }
+  await waitForProcessGroup(pgid, 2000);
+  return true;
+}
+
 export type ServeResult = {
   status: number | null,
   signal: NodeJS.Signals | null,
@@ -47,7 +92,9 @@ export async function serveApp(appDir: string, serveArgs: string[]): Promise<Ser
 
   // A signal to this process (for example SIGTERM from a process manager, or
   // SIGINT from Ctrl+C) goes to the Fastly CLI and to the watch script, so that
-  // nothing stays running. This process waits until the Fastly CLI stops.
+  // nothing stays running. This process waits until all the processes of the
+  // Fastly CLI stop. The wrapper can stop before the fastly binary, for example
+  // when the binary gets the signal during a restart of --watch.
   const forward = (signal: NodeJS.Signals) => {
     if (child.pid != null) {
       try {
@@ -68,6 +115,9 @@ export async function serveApp(appDir: string, serveArgs: string[]): Promise<Ser
       child.on('exit', (status, signal) => resolve({ status, signal }));
     });
   } finally {
+    if (child.pid != null && await stopProcessGroup(child.pid)) {
+      console.warn('⚠️ The Fastly CLI did not stop after SIGTERM, so it got a SIGKILL.');
+    }
     for (const signal of signals) {
       process.off(signal, forward);
     }
