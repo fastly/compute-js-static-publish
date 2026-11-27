@@ -1055,11 +1055,25 @@ function writeManagedProject(appConfig: AppConfig, projectDir: string) {
   }
 
   console.log(`
-The CLI generates the Compute app from ${PROJECT_FILE_NAME}.
-Commit ${PROJECT_FILE_NAME}. Do not commit .static-publish/.
+The Static Publisher CLI manages a Compute app based on ${PROJECT_FILE_NAME}.
+Commit ${PROJECT_FILE_NAME} to source control.
+Do NOT commit the .static-publish/ directory.
 
-To publish your content from this directory:
+It is recommended that you pin the version of the Static Publisher CLI in your project.
+If this directory does not have a package.json file, create one using 'npm init -y' first,
+then type:
+
+  npm install --save-dev @fastly/compute-js-static-publish@${getOwnVersion()}
+
+To preview your site locally, from this directory:
 
   ${cliCommand()} publish-content --local
+  ${cliCommand()} dev
+
+To deploy the app, and then publish your content to the service (both need
+FASTLY_API_TOKEN):
+
+  ${cliCommand()} deploy
+  ${cliCommand()} publish-content
 `);
 }
