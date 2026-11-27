@@ -49,7 +49,7 @@ Description:
 
 Options:
   --storage-mode <mode>                 Storage mode for content storage. 
-                                        Can be "kv-store" or "s3" (BETA).
+                                        Can be "kv-store" or "s3".
                                         (default: kv-store)
   If --storage-mode=kv-store, then:
     --kv-store-name <name>              (required) Name of the KV Store.
@@ -835,7 +835,7 @@ export async function action(actionArgs: string[]) {
     console.log('Storage Mode                   : Fastly KV Store');
     console.log('KV Store Name                  :', kvStoreName);
   } else if (storageMode === 's3') {
-    console.log('Storage Name                   : S3 (or compatible) storage (BETA)');
+    console.log('Storage Name                   : S3 (or compatible) storage');
     console.log('S3 Region                      :', s3Region);
     console.log('S3 Bucket                      :', s3Bucket);
     console.log('S3 Endpoint                    :', String(s3EndpointUrl));
@@ -1055,11 +1055,25 @@ function writeManagedProject(appConfig: AppConfig, projectDir: string) {
   }
 
   console.log(`
-The CLI generates the Compute app from ${PROJECT_FILE_NAME}.
-Commit ${PROJECT_FILE_NAME}. Do not commit .static-publish/.
+The Static Publisher CLI manages a Compute app based on ${PROJECT_FILE_NAME}.
+Commit ${PROJECT_FILE_NAME} to source control.
+Do NOT commit the .static-publish/ directory.
 
-To publish your content from this directory:
+It is recommended that you pin the version of the Static Publisher CLI in your project.
+If this directory does not have a package.json file, create one using 'npm init -y' first,
+then type:
+
+  npm install --save-dev @fastly/compute-js-static-publish@${getOwnVersion()}
+
+To preview your site locally, from this directory:
 
   ${cliCommand()} publish-content --local
+  ${cliCommand()} dev
+
+To deploy the app, and then publish your content to the service (both need
+FASTLY_API_TOKEN):
+
+  ${cliCommand()} deploy
+  ${cliCommand()} publish-content
 `);
 }

@@ -1,5 +1,7 @@
 # Tests
 
+> **Note:** In 8.1.0-beta.9, "Hono extensions" got new names ("composing plugin modules"). This file keeps the names of the earlier betas, for example the folder `hono-extensions/`, `defineExtension()`, and `build.hono.extensionsDir`. Now they are `hono-compose/`, `definePlugin()`, and `build.hono.composeDir`. [MIGRATING.md](../../MIGRATING.md#update-the-plugins-from-an-earlier-beta-of-81) has the full list.
+
 Goal: each PR adds the tests that make its code safe to change later. A refactor must not change a golden file. A change to a golden file must be visible in the PR diff.
 
 ## Rules for all parts
