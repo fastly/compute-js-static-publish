@@ -1,5 +1,10 @@
 # @fastly/compute-js-static-publish
 
+> [!IMPORTANT]
+> This is 8.0, an old version. The current version is 8.1, in the [`main` branch](https://github.com/fastly/compute-js-static-publish/tree/main). 8.1 is a minor release: to upgrade, read the changes that can break something in [CHANGELOG.md](https://github.com/fastly/compute-js-static-publish/blob/main/CHANGELOG.md) in `main`.
+>
+> To continue to use 8.0, install it as `@fastly/compute-js-static-publish@8.0`, not `@latest`.
+
 Fastly Compute + KV Store for static websites and web apps.
 
 This CLI tool helps you:
@@ -18,13 +23,13 @@ This CLI tool helps you:
 Create a directory for your project, place your static files in `./public`, then type:
 
 ```sh
-npx @fastly/compute-js-static-publish@latest --root-dir=./public --kv-store-name=site-content
+npx @fastly/compute-js-static-publish@8.0 --root-dir=./public --kv-store-name=site-content
 ```
 
 **New in v8:** S3-compatible storage (such as Fastly Object Storage) is also supported (Beta). To use this mode, type:
 
 ```sh
-npx @fastly/compute-js-static-publish@latest --root-dir=./public --storage-mode=s3 --s3-region=<region> --s3-bucket=<bucket-name>
+npx @fastly/compute-js-static-publish@8.0 --root-dir=./public --storage-mode=s3 --s3-region=<region> --s3-bucket=<bucket-name>
 ```
 
 If the storage needs a custom endpoint, as Fastly Object Storage does, add `--s3-endpoint=<endpoint>` (for example, `--s3-endpoint=https://us-east-1.object.fastlystorage.app`).
@@ -80,7 +85,7 @@ If the app uses S3-compatible storage, your files are already in the bucket afte
 
 📘 This package includes the full documentation in [DOCUMENTATION.md](DOCUMENTATION.md), with the CLI reference for this version.
 It is also available on GitHub:  
-[https://github.com/fastly/compute-js-static-publish/tree/main](https://github.com/fastly/compute-js-static-publish/tree/main)
+[https://github.com/fastly/compute-js-static-publish/tree/v8.0](https://github.com/fastly/compute-js-static-publish/tree/v8.0)
 
 ### Security issues
 

@@ -1,5 +1,10 @@
 # Static Publisher for JavaScript on Fastly Compute
 
+> [!IMPORTANT]
+> This is 8.0, an old version. The current version is 8.1, in the [`main` branch](https://github.com/fastly/compute-js-static-publish/tree/main). 8.1 is a minor release: to upgrade, read the changes that can break something in [CHANGELOG.md](https://github.com/fastly/compute-js-static-publish/blob/main/CHANGELOG.md) in `main`.
+>
+> To continue to use 8.0, install it as `@fastly/compute-js-static-publish@8.0`, not `@latest`.
+
 > NOTE: `@fastly/compute-js-static-publish` is provided as a Fastly Labs product. Visit the [Fastly Labs](https://www.fastlylabs.com/) site for terms of use.
 
 > [!NOTE]
@@ -56,7 +61,7 @@ Serve static websites and web apps at the edge &mdash; no backends and no CDN in
 Create a directory for your project, place your static files in `./public`, then type:
 
 ```sh
-npx @fastly/compute-js-static-publish@latest \
+npx @fastly/compute-js-static-publish@8.0 \
   --root-dir=./public \
   --kv-store-name=site-content
 ```
@@ -117,7 +122,7 @@ FASTLY_API_TOKEN=$(npx fastly auth token) npm run fastly:publish
 Create a directory for your project, place your static files in `./public`, then type:
 
 ```sh
-npx @fastly/compute-js-static-publish@latest \
+npx @fastly/compute-js-static-publish@8.0 \
   --root-dir=./public \
   --storage-mode=s3 \
   --s3-region=<s3 region> \
@@ -128,7 +133,7 @@ npx @fastly/compute-js-static-publish@latest \
 > If the storage requires a custom endpoint, such as is the case with Fastly Object Storage, specify it using `--s3-endpoint=<endpoint>`. For example:
 >
 > ```sh
-> npx @fastly/compute-js-static-publish@latest \
+> npx @fastly/compute-js-static-publish@8.0 \
 >   --root-dir=./public \
 >   --storage-mode=s3 \
 >   --s3-region=us-east-1 \
@@ -837,7 +842,7 @@ You can stream `assetVariant.storageEntry.body` directly to a `Response`, or rea
 ### Available Commands
 
 #### Outside a Compute App Directory
-- `npx @fastly/compute-js-static-publish@latest [options]` - Scaffold a new Compute app
+- `npx @fastly/compute-js-static-publish@8.0 [options]` - Scaffold a new Compute app
 
 #### Inside a Compute App Directory
 - `publish-content` - Publish static files to storage (KV Store or S3-compatible storage) under a named collection
@@ -855,12 +860,12 @@ Run outside an existing Compute app directory:
 
 ```sh
 # Using KV store storage
-npx @fastly/compute-js-static-publish@latest \
+npx @fastly/compute-js-static-publish@8.0 \
   --root-dir=./public \
   --kv-store-name=<site-content>
 
 # Using S3 storage (BETA)
-npx @fastly/compute-js-static-publish@latest \
+npx @fastly/compute-js-static-publish@8.0 \
   --root-dir=./public \
   --storage-mode=s3 \
   --s3-region=<s3 region> \
@@ -871,7 +876,7 @@ npx @fastly/compute-js-static-publish@latest \
 #### Full options list
 
 ```sh
-npx @fastly/compute-js-static-publish@latest \
+npx @fastly/compute-js-static-publish@8.0 \
   --root-dir=./public \
   { [--storage-mode=kv-store] --kv-store-name=<site-content> | \
     --storage-mode=s3 --s3-region=<s3 region> --s3-bucket=<bucket name> [--s3-endpoint=<endpoint>] } \

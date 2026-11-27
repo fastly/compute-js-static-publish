@@ -9,6 +9,10 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 
 ## [unreleased]
 
+### Changed
+
+- 8.0 is an old version. The README says that the current version is 8.1, in `main`. The docs use `@8.0` in place of `@latest`.
+
 ## [8.0.3] - 2026-11-27
 
 ### Added
