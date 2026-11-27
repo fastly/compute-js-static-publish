@@ -1328,7 +1328,7 @@ hono-compose/
 
 - **Plugins** are the files directly in the folder, with the extension `.ts`, `.mts`, `.js`, or `.mjs`. Files that start with `_` or `.`, and `.d.ts` files, are not plugins. The build does not look in subfolders, so use them, for example `lib/`, for your helpers.
 - **The name** of a plugin is the file name without the number prefix and the extension: `10-auth.ts` is `auth`. Two plugins with the same name are an error. `index` is a reserved name: a file `index.ts` (or `.js`, `.mjs`, `.mts`) stops the build.
-- **The phases:** a plugin adds its handlers to the app in one or more phases. In each phase, the app takes the plugins in the order of the file names (add a number prefix to set the order). The phases are on two axes:
+- **The phases:** a plugin adds its handlers to the app in one or more phases. In each phase, the app takes the plugins in this order: first the files whose name starts with a number and `-`, by the value of the number (`2-` before `10-` before `100-`), then the other files. Files with the same number, and the other files, are in the order of their names. Add a number prefix to set the order. The phases are on two axes:
 
   ```
   selectCollection()
