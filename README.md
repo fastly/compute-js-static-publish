@@ -549,6 +549,8 @@ Collections are a powerful feature that allow you to publish and manage multiple
 - Server configuration (e.g., fallback file, static directories, etc.)
 - An index file that maps paths to those hashes
 
+For an index with 2,000 entries or more, `publish-content` also stores the index in parts, about 400 entries in each part. Then `PublisherServer` reads only the part that has the path of a request, not the whole index. The full index is still stored, so an older version of `PublisherServer` serves the same content.
+
 Collections are published using a `--collection-name`, and can be reused, updated, or deleted independently. For example, you can create a staging version of your site using:
 
 ```sh
@@ -986,6 +988,7 @@ This removes:
 
 - Expired collection index files (only if `--delete-expired-collections` is passed)
 - Unused content blobs (no longer referenced)
+- Index parts that no index uses
 - Orphaned server config files
 
 > [!WARNING]
@@ -1104,6 +1107,7 @@ Server-Timing: settings;dur=12.3, index;dur=40.1, index-body;dur=31.0, index-par
 |------|-------------|
 | `settings` | Reading and parsing the collection's settings |
 | `index` | Reading the collection's index, until the response headers arrive |
+| `index-part` | Reading and parsing one part of the index, if the index has parts. Can appear more than one time, for example when `autoExt` tries more than one path. |
 | `index-body` | Reading the body of the index |
 | `index-parse` | Parsing the index |
 | `asset` | Reading the file, until the response headers arrive. Can appear more than one time, one time for each variant that is tried. |
@@ -1125,7 +1129,7 @@ Any client can send the request header. Choose a name that is not easy to guess 
 
 ### 🗄️ Caching Responses with the Core Cache
 
-To serve a file, `PublisherServer` reads the collection's settings, the collection's index, and the file. Fastly can cache these reads, but `PublisherServer` must still parse the index for each request, and the index of a large site is large. To skip this work, `PublisherServer` can cache whole responses with the Fastly [Core Cache](https://www.fastly.com/documentation/guides/concepts/cache/) API:
+To serve a file, `PublisherServer` reads the collection's settings, the collection's index, and the file. Fastly can cache these reads, but `PublisherServer` must still parse the index (or one part of it) for each request. To skip this work, `PublisherServer` can cache whole responses with the Fastly [Core Cache](https://www.fastly.com/documentation/guides/concepts/cache/) API:
 
 ```js
 publisherServer.setResponseCache({ maxAge: 3600 });
@@ -1145,7 +1149,7 @@ publisherServer.setResponseCache({ maxAge: 3600, maxBodySize: 4 * 1024 * 1024 })
 - If several requests miss the same response at the same time, one request produces it, and the others wait for it.
 - Only `200` and `404` responses are cached. Conditional requests (`304`) and `HEAD` requests are answered from the cached response.
 - Each cached response has the surrogate key `<publishId>-<collectionName>`. After you publish, `publish-content` purges this key (see [`--fastly-service-id`](#publish-content)), so the next request gets the new content. `collections promote` and `collections delete` purge the key of the collection that they change.
-- In S3 mode, the server also keeps the settings, the index, and the files that it reads from storage in the Fastly cache. The settings and the index are kept for 1 hour, with the surrogate key of the collection. The files are kept for 1 year, with the surrogate key `<publishId>-files`, because the key of a file has the hash of its content. Thus after a publish, a file that did not change is read from the cache, not from storage. A publish does not purge `<publishId>-files`. To remove the cached copies of all files, purge it yourself.
+- In S3 mode, the server also keeps the settings, the index, and the files that it reads from storage in the Fastly cache. The settings and the index are kept for 1 hour, with the surrogate key of the collection. The files and the index parts are kept for 1 year, with the surrogate key `<publishId>-files`, because their keys have the hash of their content. Thus after a publish, a file that did not change is read from the cache, not from storage. A publish does not purge `<publishId>-files`. To remove the cached copies of all files, purge it yourself.
 
 `serveRequest()` uses the response cache automatically. If you call `getMatchingAsset()` and `serveAsset()` directly, wrap them in `serveCached()`. When a response is not cached yet, `serveCached()` calls your function to produce it, with a `GET` request that has no conditional headers:
 
@@ -1879,7 +1883,7 @@ npx @fastly/compute-js-static-publish clean \
 ```
 
 Cleans up expired or unreferenced items in storage (KV Store or S3-compatible storage).
-This can include expired collection indexes and orphaned content assets.
+This can include expired collection indexes, orphaned content assets, and index parts that no index uses.
 
 ##### Options:
 

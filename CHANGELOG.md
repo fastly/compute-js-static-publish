@@ -52,7 +52,6 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 - `PublisherServer`: the options `status` and `headers` of `serveRequest()` and `serveFallback()` change the status and the headers of the response of a file, for one call. For a status other than `2xx`, the server does not evaluate the preconditions of the request.
 - `PublisherServer`: `serveRequestStreaming()`, `serveFallbackStreaming()`, and `serveCachedStreaming()` return `{ response, fillPromise }`. On a Fastly service with `@fastly/js-compute` 4.2 or later (not in `fastly compute serve`), a response cache fill for a body with a known length streams the body to the visitor and into the cache at the same time. Pass `fillPromise` to `event.waitUntil()`. A body that does not have its declared length is not cached, and the next fill reads the whole body first. The `plain` template and the Hono helpers use them.
 - `PublisherServer`: the function of `serveCached()` can return `{ response, length }`. With `length: null`, the response is not cached.
-- `StorageProvider.getEntry()` takes an optional third parameter, `options` (type `GetEntryOptions`). Its `ttl` sets how long, in seconds, a provider that caches what it reads keeps the entry.
 
 ### Changed
 
@@ -71,7 +70,6 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 - `collections promote` from a collection that does not exist stops with the message "Collection '…' does not exist." (exit `2`). Before, it stopped with an uncaught error.
 - `collections delete` of a collection that does not exist says "Nothing to delete." It still succeeds, as before.
 - `staticPublisherWorkingDir` in `static-publish.rc.js` can be a path outside the directory of the file, for example `../static-publisher`. It must start with `./` or `../`, and it must not be the directory of `static-publish.rc.js` or a directory above it (for example `./`, `..`, or `../..`). Before, the value had to start with `./`. A value that breaks the rule stops the command before it writes anything.
-- S3 mode: the server keeps the files that it reads from storage in the Fastly cache for 1 year. It was 1 hour. With a response cache `maxAge` of 1 hour or more, a response-cache miss then usually also read the file from storage. The key of a file has the hash of its content, so a cached copy does not get out of date. The cached files have the new surrogate key `<publishId>-files`. A publish does not purge it. The settings and the index are still kept for 1 hour.
 
 ### Updated
 
@@ -85,7 +83,22 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 
 - `PublisherServer`: a request for the 404 page with an `If-None-Match` that matched its `ETag` (or an `If-Modified-Since` after its time) got a `304` with no body. Now the server evaluates the preconditions only for a `2xx` response, as RFC 9110 says, so the response is always the `404` with the page.
 - `scaffold` now escapes the values that it writes into `fastly.toml`. Before, a `"` or a `\` in `--name`, `--description`, or `--author`, or a KV Store name with a character such as `.`, gave a `fastly.toml` that was not valid.
+
+## [8.0.3] - 2026-11-27
+
+### Added
+
+- `publish-content` also stores an index with 2,000 entries or more in parts, about 400 entries in each part, with the keys `<publishId>_parts_<hash>_<count>_<n>`. `PublisherServer` then reads only the part that has the path of a request. On a response-cache miss, this removes most of the time to read and parse a large index: for an index of 25,000 entries, about 70 ms became about 10 ms in a test. The full index is still stored, so an older `PublisherServer` serves the same content, and an older CLI can still `promote`, `clean`, and `update-expiration`. `clean` deletes the index parts that no index uses. `Server-Timing` has the new entry `index-part`.
+- `StorageProvider.getEntry()` takes an optional third parameter, `options` (type `GetEntryOptions`). Its `ttl` sets how long, in seconds, a provider that caches what it reads keeps the entry.
+
+### Changed
+
+- S3 mode: the server keeps the files that it reads from storage in the Fastly cache for 1 year. It was 1 hour. With a response cache `maxAge` of 1 hour or more, a response-cache miss then usually also read the file from storage. The key of a file has the hash of its content, so a cached copy does not get out of date. The cached files have the new surrogate key `<publishId>-files`. A publish does not purge it. If a file or an index part does not exist in storage, the server removes the `404` from the cache of its POP at once, so that it is found when it is added. The settings and the index are still kept for 1 hour.
+
+### Fixed
+
 - `collections promote` and `collections update-expiration` (KV Store): the command sometimes stopped with `400 Bad request: must include valid content-length header` when it wrote the index of the collection. The command sent the index as a stream, with no `Content-Length`. Now it reads the index into memory and sends it with a `Content-Length`. In S3 mode, the commands now also send the index and the settings with a known length.
+- `publish-content`, `collections promote`, and `collections delete`: an empty `service_id` in `fastly.toml` is now the same as no Service ID. The Fastly CLI writes `service_id = ""` when it removes a new service after the first deploy fails or is cancelled. The commands then tried to purge a service with an empty ID, and showed a warning.
 
 ## [8.0.2] - 2026-11-16
 
@@ -578,7 +591,8 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 - Updated generated app's webpack and webpack-cli versions
 - Use atob() and removed dependency on Buffer
 
-[unreleased]: https://github.com/fastly/compute-js-static-publish/compare/v8.0.2...HEAD
+[unreleased]: https://github.com/fastly/compute-js-static-publish/compare/v8.0.3...HEAD
+[8.0.3]: https://github.com/fastly/compute-js-static-publish/compare/v8.0.2...v8.0.3
 [8.0.2]: https://github.com/fastly/compute-js-static-publish/compare/v8.0.1...v8.0.2
 [8.0.1]: https://github.com/fastly/compute-js-static-publish/compare/v8.0.0...v8.0.1
 [8.0.0]: https://github.com/fastly/compute-js-static-publish/compare/v7.0.8...v8.0.0

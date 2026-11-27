@@ -62,14 +62,14 @@ describe('decodeIndexMetadata and encodeIndexMetadata', () => {
   test('decode the fields', () => {
     assert.deepEqual(
       decodeIndexMetadata({ publishedTime: '100', expirationTime: '200', requires: 'a, b,,c' }),
-      { publishedTime: 100, expirationTime: 200, requires: [ 'a', 'b', 'c' ], fileCount: undefined, hiddenFileCount: undefined, otherFields: undefined },
+      { publishedTime: 100, expirationTime: 200, requires: [ 'a', 'b', 'c' ], fileCount: undefined, hiddenFileCount: undefined, indexParts: undefined, otherFields: undefined },
     );
   });
 
   test('read lowercase keys (S3 metadata)', () => {
     assert.deepEqual(
       decodeIndexMetadata({ publishedtime: '100', expirationtime: '200', requires: 'a' }),
-      { publishedTime: 100, expirationTime: 200, requires: [ 'a' ], fileCount: undefined, hiddenFileCount: undefined, otherFields: undefined },
+      { publishedTime: 100, expirationTime: 200, requires: [ 'a' ], fileCount: undefined, hiddenFileCount: undefined, indexParts: undefined, otherFields: undefined },
     );
   });
 
