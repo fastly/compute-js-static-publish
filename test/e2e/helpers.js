@@ -206,10 +206,20 @@ export async function startServe(computeJsDir, { env, timeoutMs = 300_000, comma
       } catch {
         // The process group has already stopped.
       }
-      await new Promise(resolve => {
-        const timer = setTimeout(resolve, 5000);
-        child.once('exit', () => { clearTimeout(timer); resolve(); });
+      // run-dev-watch can need up to about 7 seconds to stop the Fastly CLI. A
+      // process that still runs after 15 seconds gets a SIGKILL, so that it
+      // cannot keep the pipes of the test open.
+      const exited = await new Promise(resolve => {
+        const timer = setTimeout(() => resolve(false), 15_000);
+        child.once('exit', () => { clearTimeout(timer); resolve(true); });
       });
+      if (!exited) {
+        try {
+          process.kill(-child.pid, 'SIGKILL');
+        } catch {
+          // The process group has already stopped.
+        }
+      }
     }
   };
 

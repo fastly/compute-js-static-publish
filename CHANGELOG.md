@@ -9,6 +9,10 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 
 ## [unreleased]
 
+### Fixed
+
+- `npm run dev:watch` and `dev` (in a managed project): when they stop, they also stop the `fastly` binary. Before, if the binary got the signal during a restart of `--watch`, it could stay running and keep the port of the local server.
+
 ## [8.1.0] - 2026-11-27
 
 ### Added
