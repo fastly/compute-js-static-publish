@@ -4,6 +4,11 @@
  */
 
 import { getMetadataFieldValue } from '../metadata/index.js';
+import {
+  decodeIndexPartsInfo,
+  encodeIndexPartsInfo,
+  type IndexPartsInfo,
+} from '../index-parts/index.js';
 
 export type IndexMetadata = {
   publishedTime?: number,
@@ -12,6 +17,9 @@ export type IndexMetadata = {
   // A newer CLI adds a feature only if the published content uses it.
   // The metadata keeps them as one string, separated by commas.
   requires?: string[],
+  // The parts of the index (see models/index-parts). A server that does not
+  // know this field reads the full index.
+  indexParts?: IndexPartsInfo,
   // Fields that this version does not know. They are kept, so that a command
   // that writes the metadata again (for example promote) does not remove them.
   otherFields?: Record<string, string>,
@@ -23,7 +31,7 @@ export type IndexMetadata = {
 // separate the names. Use short kebab-case names, for example 'my-feature'.
 export const SUPPORTED_INDEX_FEATURES: readonly string[] = [];
 
-const KNOWN_FIELDS = [ 'publishedTime', 'expirationTime', 'requires' ];
+const KNOWN_FIELDS = [ 'publishedTime', 'expirationTime', 'requires', 'indexParts' ];
 
 export function encodeIndexMetadata(indexMetadata: IndexMetadata): Record<string, string> {
   const result: Record<string, string> = { ...indexMetadata.otherFields };
@@ -45,6 +53,10 @@ export function encodeIndexMetadata(indexMetadata: IndexMetadata): Record<string
     result['requires'] = indexMetadata.requires.join(',');
   }
 
+  if (indexMetadata.indexParts != null) {
+    result['indexParts'] = encodeIndexPartsInfo(indexMetadata.indexParts);
+  }
+
   return result;
 }
 
@@ -58,6 +70,7 @@ export function decodeIndexMetadata(obj: Record<string, string> | undefined): In
   const requires = requiresValue != null
     ? String(requiresValue).split(',').map(x => x.trim()).filter(x => x !== '')
     : [];
+  const indexParts = decodeIndexPartsInfo(getMetadataFieldValue(obj, 'indexParts'));
 
   // S3 makes the metadata keys lowercase, so compare the keys without case.
   const knownKeys = KNOWN_FIELDS.map(x => x.toLowerCase());
@@ -73,6 +86,7 @@ export function decodeIndexMetadata(obj: Record<string, string> | undefined): In
     publishedTime: !isNaN(publishedTime) ? publishedTime : undefined,
     expirationTime: !isNaN(expirationTime) ? expirationTime : undefined,
     requires: requires.length > 0 ? requires : undefined,
+    indexParts: indexParts ?? undefined,
     otherFields,
   };
 }

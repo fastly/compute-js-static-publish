@@ -9,6 +9,7 @@ import { type OptionDefinition } from 'command-line-args';
 
 import { type AssetEntryMap } from '../../../models/assets/index.js';
 import { decodeIndexMetadata } from '../../../models/server/index.js';
+import { getIndexPartsPrefix, getIndexPartsSetPrefix, parseIndexPartKey } from '../../../models/index-parts/index.js';
 import { isExpired } from '../../../models/time/index.js';
 import { parseCommandLine } from '../../util/args.js';
 import { LoadConfigError, loadStaticPublisherRcFile } from '../../util/config.js';
@@ -154,6 +155,9 @@ export async function action(actionArgs: string[]) {
   // All asset keys (hashes) that we are keeping
   const assetsIdsInUse = new Set<string>();
 
+  // The key prefixes of the index parts that we are keeping
+  const indexPartsInUse = new Set<string>();
+
   console.log('Processing collections:');
   await storageProvider.doConcurrentParallel(
     foundCollections.map(collection => ({
@@ -191,6 +195,9 @@ export async function action(actionArgs: string[]) {
       }
 
       liveCollections.add(collection);
+      if (indexMetadata.indexParts != null) {
+        indexPartsInUse.add(getIndexPartsSetPrefix(publishId, indexMetadata.indexParts));
+      }
       const kvAssetsIndex = (await new Response(indexEntryInfo.data).json()) as AssetEntryMap;
       for (const [_assetKey, assetEntry] of Object.entries(kvAssetsIndex)) {
         if (assetEntry.key.startsWith('sha256:')) {
@@ -247,6 +254,27 @@ export async function action(actionArgs: string[]) {
     } else {
       assetKeysToDelete.add(assetKey);
       console.log(` ${assetId}: not in use - ✅ marking for deletion`);
+    }
+  }
+  console.log('');
+
+  // ### Find the index parts that no live index uses
+  console.log('Enumerating index parts:');
+  const indexPartKeys = await storageProvider.getStorageKeys(getIndexPartsPrefix(publishId));
+  if (indexPartKeys == null) {
+    throw new Error(`Can't query index parts in storage`);
+  }
+  for (const indexPartKey of indexPartKeys) {
+    const parsed = parseIndexPartKey(publishId, indexPartKey);
+    if (parsed == null) {
+      // If we don't know the format, we ignore it
+      continue;
+    }
+    if (indexPartsInUse.has(getIndexPartsSetPrefix(publishId, parsed))) {
+      console.log(` ${indexPartKey}: in use`);
+    } else {
+      assetKeysToDelete.add(indexPartKey);
+      console.log(` ${indexPartKey}: not in use - ✅ marking for deletion`);
     }
   }
   console.log('');

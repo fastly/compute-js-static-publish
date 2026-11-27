@@ -22,7 +22,16 @@ import {
   type AssetVariantMetadata,
   decodeAssetVariantMetadata,
 } from '../../models/assets/index.js';
-import { decodeIndexMetadata, getUnsupportedIndexFeatures } from '../../models/server/index.js';
+import {
+  decodeIndexMetadata,
+  getUnsupportedIndexFeatures,
+  type IndexMetadata,
+} from '../../models/server/index.js';
+import {
+  getIndexPartKey,
+  getIndexPartNumber,
+  type IndexPartsInfo,
+} from '../../models/index-parts/index.js';
 import { isExpired } from '../../models/time/index.js';
 import {
   type StorageEntry,
@@ -76,6 +85,13 @@ const headersToPreserveForUnmodified = ['Content-Location', 'ETag', 'Vary', 'Cac
 // The time, in seconds, that a storage provider with a cache keeps a file (one year).
 const FILE_CACHE_TTL = 31536000;
 
+// The index entry of the active collection, before its body is read.
+type LoadedIndex = {
+  key: string,
+  entry: StorageEntry,
+  metadata: IndexMetadata | null,
+};
+
 type AssetInit = {
   status?: number,
   headers?: Record<string, string>,
@@ -128,6 +144,11 @@ export class PublisherServer {
   // Cached index
   assetEntryMapCache: AssetEntryMap | null | undefined;
 
+  // The index entry, read but with its body not read yet, and the index parts
+  // that were read, by part number.
+  private indexCache: LoadedIndex | null | undefined;
+  private indexPartsCache = new Map<number, AssetEntryMap | null>();
+
   // When true, serveCached() does not store the response of the current request.
   doNotStoreResponse: boolean = false;
 
@@ -138,6 +159,8 @@ export class PublisherServer {
     this.activeCollectionName = collectionName ?? this.defaultCollectionName;
     this.settingsCached = undefined;
     this.assetEntryMapCache = undefined;
+    this.indexCache = undefined;
+    this.indexPartsCache.clear();
   }
 
   setCollectionNameHeader(collectionHeader: string | null) {
@@ -167,6 +190,8 @@ export class PublisherServer {
   beginRequest(request: Request) {
     this.settingsCached = undefined;
     this.assetEntryMapCache = undefined;
+    this.indexCache = undefined;
+    this.indexPartsCache.clear();
     this.doNotStoreResponse = false;
     const header = this.serverTimingRequestHeader;
     this.serverTiming = header != null && request.headers.has(header) ? new ServerTiming() : null;
@@ -215,9 +240,12 @@ export class PublisherServer {
       .filter(x => Boolean(x));
   }
 
-  async getAssetEntryMap() {
-    if (this.assetEntryMapCache !== undefined) {
-      return this.assetEntryMapCache;
+  // Reads the index entry of the active collection, but not its body. Returns
+  // null if there is no usable index: the index is not found, it requires a
+  // feature that this version does not support, or the collection expired.
+  private async getIndex(): Promise<LoadedIndex | null> {
+    if (this.indexCache !== undefined) {
+      return this.indexCache;
     }
     const indexFileKey = `${this.publishId}_index_${this.activeCollectionName}`;
     const indexFile = await this.timed('index', () =>
@@ -226,18 +254,19 @@ export class PublisherServer {
     if (indexFile == null) {
       console.error(`Index File not found at ${indexFileKey}.`);
       console.error(`You may need to publish your application.`);
-      this.assetEntryMapCache = null;
+      this.indexCache = null;
       return null;
     }
 
-    let metadata;
+    let metadata: IndexMetadata | null = null;
     const metadataText = indexFile.metadataText()
     if (metadataText != null) {
+      let metadataObj;
       try {
-        metadata = JSON.parse(metadataText);
+        metadataObj = JSON.parse(metadataText);
       } catch {
       }
-      metadata = decodeIndexMetadata(metadata);
+      metadata = decodeIndexMetadata(metadataObj);
     }
 
     // Do not serve a collection that needs a feature that this version does not
@@ -246,7 +275,7 @@ export class PublisherServer {
     if (unsupportedFeatures.length > 0) {
       console.error(`Collection at ${indexFileKey} requires features that this version of the server does not support: ${unsupportedFeatures.join(', ')}.`);
       console.error(`Build and deploy the application with a newer version of @fastly/compute-js-static-publish.`);
-      this.assetEntryMapCache = null;
+      this.indexCache = null;
       return null;
     }
 
@@ -257,14 +286,78 @@ export class PublisherServer {
 
     if (collectionIsExpired) {
       console.error(`Requested collection expired at ${indexFileKey}.`);
+      this.indexCache = null;
+      return null;
+    }
+
+    this.indexCache = { key: indexFileKey, entry: indexFile, metadata };
+    return this.indexCache;
+  }
+
+  // Returns the whole index of the active collection. This reads and parses
+  // the full index. To find one asset, getMatchingAsset() is faster, because
+  // it reads only one index part if the index has parts.
+  async getAssetEntryMap() {
+    if (this.assetEntryMapCache !== undefined) {
+      return this.assetEntryMapCache;
+    }
+    const index = await this.getIndex();
+    if (index == null) {
       this.assetEntryMapCache = null;
       return null;
     }
 
     // Read and parse in two steps, so that Server-Timing can report each one.
-    const indexText = await this.timed('index-body', () => indexFile.text());
+    const indexText = await this.timed('index-body', () => index.entry.text());
     this.assetEntryMapCache = await this.timed('index-parse', async () => JSON.parse(indexText) as AssetEntryMap);
     return this.assetEntryMapCache;
+  }
+
+  // Reads one index part. Returns null if the part cannot be read, so that the
+  // caller uses the full index.
+  private async getIndexPart(indexParts: IndexPartsInfo, partNumber: number): Promise<AssetEntryMap | null> {
+    const cached = this.indexPartsCache.get(partNumber);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const partKey = getIndexPartKey(this.publishId, indexParts, partNumber);
+    let part: AssetEntryMap | null = null;
+    try {
+      part = await this.timed('index-part', async () => {
+        // The key of a part has the hash of the full index, so a cached copy is
+        // never out of date. It has the same cache TTL and tag as a file.
+        const entry = await this.storageProvider.getEntry(partKey, [`${this.publishId}-files`], { ttl: FILE_CACHE_TTL });
+        return entry != null ? (await entry.json()) as AssetEntryMap : null;
+      });
+      if (part == null) {
+        console.warn(`Index part not found at ${partKey}. Using the full index.`);
+      }
+    } catch (err) {
+      console.warn(`Could not read the index part at ${partKey}. Using the full index.`, err);
+    }
+    this.indexPartsCache.set(partNumber, part);
+    return part;
+  }
+
+  // Finds the entry of one asset key in the index of the active collection.
+  // If the index has parts, this reads only the part that has the key.
+  private async findAssetEntry(assetKey: string): Promise<AssetEntry | null> {
+    if (this.assetEntryMapCache != null) {
+      return this.assetEntryMapCache[assetKey] ?? null;
+    }
+    const index = await this.getIndex();
+    if (index == null) {
+      return null;
+    }
+    const indexParts = index.metadata?.indexParts;
+    if (indexParts != null) {
+      const part = await this.getIndexPart(indexParts, getIndexPartNumber(assetKey, indexParts.count));
+      if (part != null) {
+        return part[assetKey] ?? null;
+      }
+    }
+    const assetEntryMap = await this.getAssetEntryMap();
+    return assetEntryMap?.[assetKey] ?? null;
   }
 
   async getMatchingAsset(assetKey: string, applyAuto: boolean = false): Promise<AssetEntry | null> {
@@ -273,14 +366,13 @@ export class PublisherServer {
     if (serverConfig == null) {
       return null;
     }
-    const assetEntryMap = await this.getAssetEntryMap();
-    if (assetEntryMap == null) {
+    if (await this.getIndex() == null) {
       return null;
     }
 
     if(!assetKey.endsWith('/')) {
       // A path that does not end in a slash can match an asset directly
-      const asset = assetEntryMap[assetKey];
+      const asset = await this.findAssetEntry(assetKey);
       if (asset != null) {
         return asset;
       }
@@ -290,7 +382,7 @@ export class PublisherServer {
         // looks for an asset that has the specified suffix (usually extension, such as .html)
         for (const extEntry of serverConfig.autoExt) {
           let assetKeyWithExt = assetKey + extEntry;
-          const asset = assetEntryMap[assetKeyWithExt];
+          const asset = await this.findAssetEntry(assetKeyWithExt);
           if (asset != null) {
             return asset;
           }
@@ -311,7 +403,7 @@ export class PublisherServer {
         assetNameAsDir = assetNameAsDir + '/';
         for (const indexEntry of serverConfig.autoIndex) {
           let assetKeyIndex = assetNameAsDir + indexEntry;
-          const asset = assetEntryMap[assetKeyIndex];
+          const asset = await this.findAssetEntry(assetKeyIndex);
           if (asset != null) {
             return asset;
           }
@@ -741,7 +833,7 @@ export class PublisherServer {
     // response cache does not store this response.
     if (
       serverConfig == null ||
-      (this.activeCollectionName !== this.defaultCollectionName && await this.getAssetEntryMap() == null)
+      (this.activeCollectionName !== this.defaultCollectionName && await this.getIndex() == null)
     ) {
       this.doNotStoreResponse = true;
       return new Response(
@@ -767,8 +859,7 @@ export class PublisherServer {
     // fallback HTML responses, like SPA and "not found" pages
     if (requestAcceptsTextHtml(request)) {
 
-      const assetEntryMap = await this.getAssetEntryMap();
-      if (assetEntryMap == null) {
+      if (await this.getIndex() == null) {
         return null;
       }
 
@@ -776,7 +867,7 @@ export class PublisherServer {
       const { spaFile } = serverConfig;
 
       if (spaFile != null) {
-        const asset = assetEntryMap[spaFile];
+        const asset = await this.findAssetEntry(spaFile);
         if (asset != null) {
           return this.serveAsset(request, asset, {
             cache: 'never',
@@ -786,7 +877,7 @@ export class PublisherServer {
 
       const { notFoundPageFile } = serverConfig;
       if (notFoundPageFile != null) {
-        const asset = assetEntryMap[notFoundPageFile];
+        const asset = await this.findAssetEntry(notFoundPageFile);
         if (asset != null) {
           return this.serveAsset(request, asset, {
             status: 404,
