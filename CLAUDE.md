@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `@fastly/compute-js-static-publish` is one npm package. It has two parts, and each part compiles separately:
 
-- **CLI** (`src/cli`, Node.js): It scaffolds a Fastly Compute JS app. It publishes static files to storage: the Fastly KV Store, or S3-compatible storage (v8 beta).
+- **CLI** (`src/cli`, Node.js): It scaffolds a Fastly Compute JS app. It publishes static files to storage: the Fastly KV Store, or S3-compatible storage (since v8).
 - **Server library** (`src/server`, runs in Fastly Compute/Wasm): `PublisherServer`. The scaffolded app imports it to serve the content.
 - **Hono middleware** (`src/hono`, compiled with the server build, export `./hono`): `fromStaticPublishRc()` / `fromPublisherServer()` return `serveStatic()`, `serveFallback()`, and `selectCollection()`, which call `serveRequest()` and `serveFallback()` of `PublisherServer`. It imports only types from `hono` (an optional peer dependency), so it adds nothing to the bundle. `src/hono/path.ts` (resolves `root`, `path`, and `rewriteRequestPath`, and refuses a path outside `root`) has no Compute imports, so the unit tests can import it.
 
@@ -102,10 +102,10 @@ All collections share the files, because the key is the hash of the content. `cl
 
 ## Branches and releases
 
-- `main` is the v8 line (the latest stable major), and the default branch. Its ruleset ("Require CODEOWNERS Review") applies to the default branch. Thus each PR to `main` needs an approval. Fixes for v8 go to `main`. Features go to `main` too, but the parts of 8.1 go to `dev/8.1` (see below).
+- `main` is the v8 line (the latest stable major), and the default branch. Its ruleset ("Require CODEOWNERS Review") applies to the default branch. Thus each PR to `main` needs an approval. Fixes for 8.1 and features go to `main`.
 - Older major versions have their own branches (`v6`, `v7`, ...). Fixes for v7 go to the `v7` branch. There is no `v8` branch. Make it from `main` when the next major merges into `main`.
+- `v8.0` is the branch of 8.0.x. It was made from `main` at the 8.0.3 release. A fix for 8.0 goes to `v8.0`, if one is necessary. On `v8.0`, `ci-release.yaml` gives a stable release the dist-tag `latest-v8.0`, not `latest`.
 - The next major (for example `v9`), or a large minor version (for example 8.1, with the branch `dev/8.1`), gets a development branch. The ruleset does not apply to it, so GitHub does not require an approval for a PR to it. Tag its betas on that branch, after a version change commit on that branch. Merge `main` into it often (merge, not rebase), for example after each patch release. The final review is the PR that merges it into `main`. Do not make it the default branch, or each PR to it needs an approval.
-- 8.1 is in development on `dev/8.1`. The parts of 8.1 are PRs to `dev/8.1`, and each one is reviewed before it is merged (see `roadmap/`). Fixes for 8.0 go to `main`.
 - There is no `beta` branch. The npm dist-tag comes from the tag name.
 - The `release-and-port` skill has the release workflow details and the procedure to port changes between `v7` and `main`.
 - Record changes that users can see in `CHANGELOG.md`, under `[unreleased]` (Keep a Changelog format). `MIGRATING.md` has the instructions to upgrade to a new major version.

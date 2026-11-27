@@ -159,7 +159,7 @@ describe('managed commands', () => {
 
         const upgrade = runCli([ 'upgrade' ], { cwd: dir });
         assert.ok(upgrade.output.includes(`now uses ${VERSION} (was 7.0.0)`), upgrade.output);
-        assert.match(readProject(), new RegExp(`staticPublishVersion: "${VERSION.replace(/\./g, '\\.')}",`));
+        assert.ok(readProject().includes(`staticPublishVersion: "${VERSION}",`), readProject());
         assert.match(runCli([ 'upgrade' ], { cwd: dir }).output, /already uses/);
       } finally {
         setVersion(VERSION);
@@ -172,7 +172,7 @@ describe('managed commands', () => {
         const deploy = runText([ 'deploy', '--auto-upgrade' ], dir);
         // It continues to the next check: no API token.
         assert.match(deploy.output, /Fastly API Token not provided/);
-        assert.match(readProject(), new RegExp(`staticPublishVersion: "${VERSION.replace(/\./g, '\\.')}",`));
+        assert.ok(readProject().includes(`staticPublishVersion: "${VERSION}",`), readProject());
       } finally {
         setVersion(VERSION);
       }
@@ -200,7 +200,7 @@ describe('managed commands', () => {
       assert.notEqual(deploy.status, 0);
       assert.match(deploy.output, /missing/);
       runCli([ 'upgrade' ], { cwd: dir });
-      assert.match(readProject(), new RegExp(`staticPublishVersion: "${VERSION.replace(/\./g, '\\.')}",`));
+      assert.ok(readProject().includes(`staticPublishVersion: "${VERSION}",`), readProject());
     });
   });
 

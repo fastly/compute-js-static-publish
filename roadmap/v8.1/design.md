@@ -1,5 +1,7 @@
 # 8.1 design
 
+> **Note:** In 8.1.0-beta.9, "Hono extensions" got new names ("composing plugin modules"). This file keeps the names of the earlier betas, for example the folder `hono-extensions/`, `defineExtension()`, and `build.hono.extensionsDir`. Now they are `hono-compose/`, `definePlugin()`, and `build.hono.composeDir`. [MIGRATING.md](../../MIGRATING.md#update-the-plugins-from-an-earlier-beta-of-81) has the full list.
+
 The design of the six parts of 8.1, with the decisions. The task numbers (1.1, 2.3, …) are the ones in [README.md](README.md). A section can end with details that are still open: "To decide in this part" or "To test in this part". They are decided or tested while that part is built. The answer stays in that task, and no other part depends on it.
 
 ## Background

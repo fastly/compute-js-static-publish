@@ -1,12 +1,12 @@
 ---
 name: release-and-port
-description: Use when you tag or publish a release of this package, change the release workflow, or port changes between the `v7` branch and `main`.
+description: Use when you tag or publish a release of this package, change the release workflow, or port changes between the `v7` or `v8.0` branch and `main`.
 ---
 
 # Release and port
 
 - `.github/workflows/ci-release.yaml` publishes a release when a `v*` tag is pushed. It uses the reusable workflows in `fastly/devex-reusable-workflows` (npm trusted publishing, and GitHub Packages). The first prerelease identifier becomes the npm dist-tag (`v8.0.0-beta.9` gives `beta`). A tag runs the workflow file in the tagged commit. Thus workflow changes must be on the branch that you tag.
-- A tag without a prerelease part (for example `v8.0.0`) gets the dist-tag `latest`. The workflow on `v7` changes `latest` to `latest-v7`. Thus a stable v7 release from the `v7` branch does not move `latest`. A prerelease tag on `v7` still gets its prerelease identifier as the dist-tag.
+- A tag without a prerelease part (for example `v8.0.0`) gets the dist-tag `latest`. The workflow on `v7` changes `latest` to `latest-v7`, and the workflow on `v8.0` changes it to `latest-v8.0`. Thus a stable release from one of these branches does not move `latest`. A prerelease tag on them still gets its prerelease identifier as the dist-tag. npm does not accept a dist-tag that is a SemVer range, such as `v7` or `8.0`, so these tags start with `latest-`.
 - To release v8 from `main` (each PR to `main` needs an approval):
    1. Make a branch `release/v<version>` (for example `release/v8.0.1`) from `main`.
    2. In that branch, set the version in `package.json` and `package-lock.json`. In `CHANGELOG.md`, move the `[unreleased]` entries to a new version section with the date, and update the compare links at the end of the file. A version section compares with the previous release, not with its betas, and its entries do not build on each other. Remove fixes for bugs that only a beta of this version had.
@@ -21,7 +21,7 @@ description: Use when you tag or publish a release of this package, change the r
    2. Merge the top of the PR stack, then the other PRs for the prerelease. `git rerere` (on in this repository) uses the conflict resolutions of the last prerelease again. Check each file that it resolves.
    3. Make the version commit: `npm version 8.1.0-beta.2 --no-git-tag-version`, then `node scripts/prerelease-docs.mjs beta beta/8.1`. The script gives the npx commands of the docs the dist-tag (`npx @fastly/compute-js-static-publish@beta`), and points the links to this repository at the branch. Commit `package.json`, `package-lock.json`, and the changed docs.
    4. Run the unit tests and the e2e tests, push the branch (a force push after the first prerelease), then tag the version commit and push the tag.
-- To release v7, push one commit to the `v7` branch that sets the version in `package.json` and `package-lock.json`, and moves the `[unreleased]` entries of `CHANGELOG.md` to a new version section. Update the compare links at the end of `CHANGELOG.md`. Then tag this commit (for example `v7.0.9`) and push the tag.
+- To release v7, push one commit to the `v7` branch that sets the version in `package.json` and `package-lock.json`, and moves the `[unreleased]` entries of `CHANGELOG.md` to a new version section. Update the compare links at the end of `CHANGELOG.md`. Then tag this commit (for example `v7.0.9`) and push the tag. An 8.0.x release after 8.1.0 is the same, on the `v8.0` branch (for example `v8.0.4`).
 - `prepublishOnly` copies the full `README.md` to `DOCUMENTATION.md`, then replaces `README.md` with `README.short.md`. Thus `README.short.md` is the README on npm, the full README is the README on GitHub, and the package has the full README as `DOCUMENTATION.md`. Git ignores `DOCUMENTATION.md`.
 - To find changes to port between `v7` and `main`, use `git cherry -v origin/v7 origin/main`. This command shows manual ports as missing, so compare the content. Some differences are intentional: `package.json`, the tsconfigs, and much of `src` (v8 has a separate CLI and server build, and storage providers).
 - `CHANGELOG.md` in each branch records only the releases of that branch's major version. Do not copy a release of an older major (for example 7.0.8 from `v7`) into the `CHANGELOG.md` of a newer branch. The `CHANGELOG.md` of `main` says that it does not list v7 releases after 7.0.8 or v6 releases after 6.3.0. When a new major merges into `main`, update that note for the major that becomes old.
