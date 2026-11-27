@@ -162,36 +162,22 @@ Differences of `serveStatic()`:
 
 ## Update the plugins from an earlier beta of 8.1
 
-In the betas of 8.1 before 8.1.0-beta.9, plugin modules had other names ("Hono extensions"). Your plugins
-work the same way; only the names change. Each old name stops the build, and the message gives the new name.
+The betas of 8.1 are not supported versions. Use 8.1.0 or later.
+
+In the betas before 8.1.0-beta.9, the plugin modules of the `hono` template had other names. Each old name stops the
+build, and the message gives the new name:
 
 | Before | Now |
 | --- | --- |
 | The folder `hono-extensions/` | `hono-compose/` |
-| `defineExtension()` (from `@fastly/compute-js-static-publish/hono`) | `definePlugin()` (the same import) |
-| The phase `beforeFiles` or `beforeFilesRoutes` | `routes` |
-| The phase `afterFiles` | `afterFilesRoutes` |
-| The types `ExtensionEnv`, `ExtensionBindings`, `ExtensionPhaseFunction`, `ExtensionHelpers`, `ExtensionEntry` | `PluginEnv`, `PluginBindings`, `PluginPhaseFunction`, `PluginHelpers`, `PluginEntry` |
+| `defineExtension()` | `definePlugin()` |
+| The phases `beforeFiles`, `beforeFilesRoutes`, `afterFiles` | `routes`, `routes`, `afterFilesRoutes` |
+| The types `Extension*` (for example `ExtensionEnv`) | `Plugin*` (for example `PluginEnv`) |
 | `templateOptions.hono.extensions` | `templateOptions.hono.compose.plugins` |
 | `build.hono.extensionsDir` | `build.hono.composeDir` |
 
-1. Rename the folder: `git mv hono-extensions hono-compose` (in the directory of the project file, or next to
-   `compute-js/`).
-2. In each plugin, change `defineExtension` to `definePlugin`, and the phase names and the types as the table shows.
-3. In the project file (or in `static-publish.rc.js`), change the keys as the table shows.
-4. In an ejected app, also update the files of the app, because nothing generates them again:
-   - `scripts/template_prebuild.js`, `scripts/template_postinstall.js`, and `scripts/template_watch.js`: the functions
-     of `@fastly/compute-js-static-publish/hono/build` are now `bundlePlugins()`, `writePluginsStub()`, and
-     `watchPlugins()`, and the constant is `PLUGINS_MANIFEST`;
-   - `src/index.ts`: import `plugins` from `./hono-compose.generated.js`, run the phase `routes` in place of
-     `beforeFilesRoutes`, read the options from `honoOptions?.compose?.plugins`, and use `p.plugin.phases` in place of
-     `e.module.phases`;
-   - `src/hono-extensions.generated.d.ts` becomes `src/hono-compose.generated.d.ts` (with `plugins: PluginEntry[]`),
-     and `.gitignore` ignores `/src/hono-compose.generated.js`.
-
-   To see the new files, scaffold a new app with `--template hono` and compare.
-
-A managed project gets the new files of the app at the next `dev` or `deploy`.
+A managed project gets the new files of the app at the next `dev` or `deploy`. In an ejected app, replace `scripts/`
+and `src/index.ts` with the files of a new app (`--template hono`).
 
 ## Upgrade from v7 to v8
 
