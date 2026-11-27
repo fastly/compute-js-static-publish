@@ -19,7 +19,9 @@ jobs:
     with:
       expected_pkg_name: "@fastly/compute-js-static-publish"
       expected_pkg_version: ${{ needs.process-version.outputs.version }}
-      dist_tag: ${{ needs.process-version.outputs.dist_tag }}
+      # The v8.0 branch is for 8.0.x releases after 8.1. A stable release from it
+      # gets the dist-tag latest-v8.0, not latest.
+      dist_tag: ${{ needs.process-version.outputs.dist_tag == 'latest' && 'latest-v8.0' || needs.process-version.outputs.dist_tag }}
   publish_github:
     needs: process-version
     permissions:
@@ -29,4 +31,6 @@ jobs:
     with:
       expected_pkg_name: "@fastly/compute-js-static-publish"
       expected_pkg_version: ${{ needs.process-version.outputs.version }}
-      dist_tag: ${{ needs.process-version.outputs.dist_tag }}
+      # The v8.0 branch is for 8.0.x releases after 8.1. A stable release from it
+      # gets the dist-tag latest-v8.0, not latest.
+      dist_tag: ${{ needs.process-version.outputs.dist_tag == 'latest' && 'latest-v8.0' || needs.process-version.outputs.dist_tag }}
