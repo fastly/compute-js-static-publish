@@ -72,15 +72,18 @@ These do not depend on the six parts. Each can be a separate PR to `main`, in a 
 - Remove the deprecated getters `serverTiming`, `settingsCached`, and `assetEntryMapCache` of `PublisherServer` (task 2.2).
 - Remove `--public-dir` and `server.publicDirPrefix` (deprecated in 8.0, #100). Hidden files (part 4) replace their use.
 - Decide whether `scaffold` makes a managed project by default.
+- Require `@fastly/js-compute` 4.3 or later (`peerDependencies` and the templates), and a Viceroy with the fix for abandoned Core Cache fills (Viceroy #771 and #773). Then remove both checks of the streaming fill: the js-compute version and `FASTLY_HOSTNAME === 'localhost'`. This also drops js-compute 3.
+- Decide whether `serveRequest()` and `serveFallback()` stream the fill by default. That changes their return value (`fillPromise`, which needs `event.waitUntil()`), so it can only be done in a major version.
 
 ### Possible future features
 
 - A non-interactive first deploy with S3 storage: `deploy` would create the service, the `S3_CREDENTIALS` Secret Store with the secrets from env vars, the backend, and the links through the Fastly API.
 - Protection for previews (a token or basic auth, with the secret in a Secret Store).
 - A `config-store` source for collection selection (select the **default** collection from a Config Store, so that `live` can change with no deploy and no promote).
-- Resource declarations: an extension declares backends, stores, or Fanout, and the template adds them to `fastly.toml`. GRIP is the main use case.
-- esbuild loader settings in js-compute (so that extensions can import `.html` or `.svg` files).
-- `.tsx`/`.jsx` extension modules (for `hono/jsx`).
-- File-based routes for Hono extensions (`routes/api/hello.js` → `/api/hello`).
+- Resource declarations: a plugin of the composition system declares backends, stores, or Fanout, and the template adds them to `fastly.toml`. GRIP is the main use case.
+- esbuild loader settings in js-compute (so that plugins can import `.html` or `.svg` files).
+- `.tsx`/`.jsx` plugins (for `hono/jsx`).
+- File-based routes for the plugins of the composition system (`routes/api/hello.js` → `/api/hello`).
+- A config module for the folder of the plugins (`hono-compose/index.ts`; the name `index` is reserved in the folder for it) that sets the order of the steps around the request, or replaces the step that serves the published files (or turns it off). Not in 8.1: the onion of `middleware` already gives each plugin code before and after each request, and replacing the files step is close to ejecting. Decide it with a real use case.
 - Un-eject (ejected → managed).
 - Upgrade help for ejected apps: compare the ejected files with what the current template would generate (uses `generatedFrom`).

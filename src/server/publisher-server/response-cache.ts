@@ -13,7 +13,8 @@ export type ResponseCacheOptions = {
   // collection's surrogate key, so this mainly limits how long a response can
   // stay cached if that purge does not run.
   maxAge: number,
-  // The largest body, in bytes, that is cached. A response is read completely
+  // The largest body, in bytes, that is cached. A fill that does not stream
+  // (see PublisherServer.serveCachedStreaming()) reads the response completely
   // before it is cached, so this limits the memory that one request uses. A
   // larger response is served from storage. Default: DEFAULT_MAX_BODY_SIZE.
   maxBodySize?: number,
@@ -186,6 +187,50 @@ export async function readBodyUpTo(
     offset += chunk.byteLength;
   }
   return { bytes };
+}
+
+// The body of a response has a number of bytes that is not its declared length.
+export class BodyLengthMismatchError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'BodyLengthMismatchError';
+  }
+}
+
+// Reads body, and gives each chunk to append(). Rejects with
+// BodyLengthMismatchError if body has more or fewer bytes than length. A chunk
+// that goes past length does not go to append(), and the read of body stops.
+// An error from body or from append() rejects the promise.
+export async function pipeBodyWithLength(
+  body: ReadableStream<Uint8Array> | null,
+  length: number,
+  append: (chunk: Uint8Array) => void,
+): Promise<void> {
+  let written = 0;
+  if (body != null) {
+    const reader = body.getReader();
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      if (written + value.byteLength > length) {
+        await reader.cancel().catch(() => {});
+        throw new BodyLengthMismatchError(`The body has more than ${length} bytes.`);
+      }
+      append(value);
+      written += value.byteLength;
+    }
+  }
+  if (written !== length) {
+    throw new BodyLengthMismatchError(`The body has ${written} bytes, not ${length}.`);
+  }
+}
+
+// The key of the marker that tells a cache fill for key to read the whole body
+// first. A streaming fill stores it when the body did not have its declared length.
+export function lengthMismatchMarkerKey(key: string): string {
+  return `${key}|length-mismatch`;
 }
 
 export const BODY_PIECE_SIZE = 1024 * 1024;

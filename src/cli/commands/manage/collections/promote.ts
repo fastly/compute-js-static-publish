@@ -10,16 +10,24 @@ import { type OptionDefinition } from 'command-line-args';
 
 import { decodeIndexMetadata, encodeIndexMetadata } from '../../../../models/server/index.js';
 import { calcExpirationTime } from '../../../../models/time/index.js';
-import { LoadConfigError, loadStaticPublisherRcFile } from '../../../util/config.js';
+import {
+  LoadConfigError,
+  configFileName,
+  getComputeAppDir,
+  loadStaticPublisherRcFile,
+} from '../../../util/config.js';
 import { parseCommandLine } from '../../../util/args.js';
+import { errorCodeOf, fail, recordFailure, setJsonResult } from '../../../util/output.js';
+import { checkCollectionNameForWrite } from '../../../util/collection-name.js';
 import { loadStorageProviderFromStaticPublishRc } from '../../../storage/storage-provider.js';
+import { cliCommand } from '../../../util/package.js';
 import { type PurgeTarget, loadPurgeTarget, purgeCollection } from '../../../util/purge.js';
 
 function help() {
   console.log(`\
 
 Usage:
-  npx @fastly/compute-js-static-publish collections promote
+  ${cliCommand()} collections promote
     --collection-name=<name> \\
     --to=name> \\
     [options]
@@ -69,7 +77,7 @@ Purge Options:
                                    comma-separated list of both. Can be repeated.
                                    Default: production
 
-S3 Storage Options (BETA):
+S3 Storage Options:
   --s3-access-key-id=<id>          Access Key ID and Secret Access Key used to
   --s3-secret-access-key=<key>     interface with S3 or compatible storage.
                                    If not set, the tool will check the S3_ACCESS_KEY_ID
@@ -107,7 +115,7 @@ export async function action(actionArgs: string[]) {
     if (parsed.error != null) {
       console.error(String(parsed.error));
       console.error();
-      process.exitCode = 1;
+      recordFailure('usage', String(parsed.error));
     }
 
     help();
@@ -131,17 +139,15 @@ export async function action(actionArgs: string[]) {
 
   // compute-js-static-publisher cli is always run from the Compute application directory
   // in other words, the directory that contains `fastly.toml`.
-  const computeAppDir = path.resolve();
+  const computeAppDir = getComputeAppDir();
 
   if (collectionNameValue == null) {
-    console.error("❌ Required argument '--collection-name' not specified.");
-    process.exitCode = 1;
+    fail('usage', "Required argument '--collection-name' not specified.");
     return;
   }
 
   if (toCollectionNameValue == null) {
-    console.error("❌ Required argument '--to' not specified.");
-    process.exitCode = 1;
+    fail('usage', "Required argument '--to' not specified.");
     return;
   }
 
@@ -151,7 +157,7 @@ export async function action(actionArgs: string[]) {
   } catch(err: unknown) {
     console.error(`❌ Cannot process expiration time`);
     console.error(String(err));
-    process.exitCode = 1;
+    recordFailure('usage', `Cannot process expiration time: ${String(err)}`);
     return;
   }
 
@@ -162,14 +168,14 @@ export async function action(actionArgs: string[]) {
   try {
     staticPublisherRc = await loadStaticPublisherRcFile();
   } catch (err) {
-    console.error("❌ Can't load static-publish.rc.js");
+    console.error(`❌ Can't load ${configFileName()}`);
     console.error("Run this from a compute-js-static-publish compute-js directory.");
     if (err instanceof LoadConfigError) {
       for (const error of err.errors) {
         console.error(error);
       }
     }
-    process.exitCode = 1;
+    recordFailure('config-invalid', `Can't load ${configFileName()}.`);
     return;
   }
 
@@ -195,7 +201,7 @@ export async function action(actionArgs: string[]) {
   } catch (err: unknown) {
     console.error(`❌ Could not instantiate store provider`);
     console.error(String(err));
-    process.exitCode = 1;
+    recordFailure(errorCodeOf(err), String(err));
     return;
   }
 
@@ -220,6 +226,9 @@ export async function action(actionArgs: string[]) {
 
   const targetCollectionName = toCollectionNameValue;
   console.log(`✔️ Collection to promote to: ${targetCollectionName}`)
+  if (!await checkCollectionNameForWrite(storageProvider, publishId, targetCollectionName)) {
+    return;
+  }
 
   if (expirationTime === undefined) {
     console.log(`✔️ Not updating expiration timestamp.`);
@@ -242,11 +251,9 @@ export async function action(actionArgs: string[]) {
     storageProvider.getStorageEntry(sourceCollectionIndexKey),
     storageProvider.getStorageEntry(sourceCollectionSettingsKey),
   ]);
-  if (!indexEntryInfo) {
-    throw new Error(`Error querying index for '${collectionNameValue}' in storage`);
-  }
-  if (!settingsEntryInfo) {
-    throw new Error(`Error querying settings for '${collectionNameValue}' in storage`);
+  if (!indexEntryInfo || !settingsEntryInfo) {
+    fail('collection-not-found', `Collection '${collectionNameValue}' does not exist.`);
+    return;
   }
 
   let indexMetadata = decodeIndexMetadata(indexEntryInfo.metadata) ?? {};
@@ -291,4 +298,12 @@ export async function action(actionArgs: string[]) {
   }
 
   console.log("✅  Completed.");
+
+  setJsonResult({
+    from: sourceCollectionName,
+    to: targetCollectionName,
+    publishId,
+    // The expiration time of the target, after the promote. null: it does not expire.
+    expiresAt: indexMetadata.expirationTime != null ? new Date(indexMetadata.expirationTime * 1000).toISOString() : null,
+  });
 }

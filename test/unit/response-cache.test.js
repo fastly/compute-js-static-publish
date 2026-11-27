@@ -8,13 +8,16 @@ import { describe, test } from 'node:test';
 
 import {
   BODY_PIECE_SIZE,
+  BodyLengthMismatchError,
   acceptEncodingCacheKeyPart,
   buildCacheFillRequest,
   buildResponseCacheKey,
   bytesInPieces,
   decodeCachedResponseMetadata,
   encodeCachedResponseMetadata,
+  lengthMismatchMarkerKey,
   parseAcceptEncodingGroups,
+  pipeBodyWithLength,
   readBodyUpTo,
   streamBytesInPieces,
 } from '../../build/server/server/publisher-server/response-cache.js';
@@ -180,5 +183,75 @@ describe('streamBytesInPieces', () => {
 
   test('gives an empty stream for no bytes', async () => {
     assert.equal(await new Response(streamBytesInPieces(new Uint8Array(0))).text(), '');
+  });
+});
+
+describe('pipeBodyWithLength', () => {
+  function streamOf(...chunks) {
+    return new ReadableStream({
+      start(controller) {
+        for (const chunk of chunks) {
+          controller.enqueue(new Uint8Array(chunk));
+        }
+        controller.close();
+      },
+    });
+  }
+
+  test('gives all chunks to append() when the body has length bytes', async () => {
+    const appended = [];
+    await pipeBodyWithLength(streamOf([1, 2], [3]), 3, (chunk) => appended.push([...chunk]));
+    assert.deepEqual(appended, [[1, 2], [3]]);
+  });
+
+  test('accepts a null body with length 0', async () => {
+    await pipeBodyWithLength(null, 0, () => assert.fail('append() must not be called'));
+  });
+
+  test('rejects a short body after it gives all of its chunks', async () => {
+    const appended = [];
+    await assert.rejects(
+      pipeBodyWithLength(streamOf([1, 2]), 3, (chunk) => appended.push([...chunk])),
+      (err) => err instanceof BodyLengthMismatchError && /2 bytes, not 3/.test(err.message),
+    );
+    assert.deepEqual(appended, [[1, 2]]);
+  });
+
+  test('rejects a long body, and does not give the chunk that goes past length', async () => {
+    const appended = [];
+    let cancelled = false;
+    const body = new ReadableStream({
+      pull(controller) {
+        controller.enqueue(new Uint8Array([1, 2]));
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
+    await assert.rejects(
+      pipeBodyWithLength(body, 3, (chunk) => appended.push([...chunk])),
+      (err) => err instanceof BodyLengthMismatchError && /more than 3 bytes/.test(err.message),
+    );
+    assert.deepEqual(appended, [[1, 2]]);
+    assert.equal(cancelled, true);
+  });
+
+  test('rejects with the error of the body', async () => {
+    const body = new ReadableStream({
+      pull(controller) {
+        controller.error(new Error('storage failed'));
+      },
+    });
+    await assert.rejects(
+      pipeBodyWithLength(body, 3, () => {}),
+      (err) => !(err instanceof BodyLengthMismatchError) && err.message === 'storage failed',
+    );
+  });
+});
+
+describe('lengthMismatchMarkerKey', () => {
+  test('is not the key of a response', () => {
+    const key = buildResponseCacheKey('default', 'live', '/index.html', new Request('https://example.com/'));
+    assert.equal(lengthMismatchMarkerKey(key), `${key}|length-mismatch`);
   });
 });

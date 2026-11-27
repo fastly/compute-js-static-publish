@@ -1,0 +1,10 @@
+{
+  "name": "compute-js-static-publish-template-plain",
+  "private": true,
+  "dependencies": {
+    "@fastly/js-compute": "^4.4.1"
+  },
+  "devDependencies": {
+    "@fastly/cli": "^17.0.0"
+  }
+}

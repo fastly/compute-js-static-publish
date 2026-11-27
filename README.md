@@ -3,7 +3,7 @@
 > NOTE: `@fastly/compute-js-static-publish` is provided as a Fastly Labs product. Visit the [Fastly Labs](https://www.fastlylabs.com/) site for terms of use.
 
 > [!NOTE]
-> v8 adds Beta support for S3-compatible storage, such as Fastly [Object Storage](https://www.fastly.com/products/storage). For more details, see the [S3-compatible storage](#-using-s3-compatible-storage-beta) section.  
+> v8 adds support for S3-compatible storage, such as Fastly [Object Storage](https://www.fastly.com/products/storage). For more details, see the [S3-compatible storage](#-using-s3-compatible-storage) section.  
 
 > [!NOTE]
 > These docs are for v7 or newer, a major rewrite that adds powerful new features such as named collections.
@@ -15,15 +15,18 @@
 ## 📖 Table of Contents
 
 - [✨ Key Features](#-key-features)
+- [🆕 New in 8.1](#-new-in-81)
 - [🏁 Quick Start](#-quick-start)
-  - [📦 Fastly KV Store](#-using-the-fastly-kv-store) 
-  - [🎁 S3 Compatible Storage](#-using-s3-compatible-storage-beta) (Beta)
+  - [🧭 Managed project (recommended)](#-managed-project-recommended)
+  - [📦 Ejected app: Fastly KV Store](#-using-the-fastly-kv-store)
+  - [🎁 Ejected app: S3 Compatible Storage](#-using-s3-compatible-storage)
 - [⚙️ Configuring `static-publish.rc.js`](#️-configuring-static-publishrcjs)
 - [🧾 Config for Publishing and Server: `publish-content.config.js`](#-config-for-publishing-and-server-publish-contentconfigjs)
 - [📦 Collections (Publish, Preview, Promote)](#-collections-publish-preview-promote)
 - [🧹 Cleaning Up](#-cleaning-up)
 - [🔄 Content Compression](#-content-compression)
 - [🧩 Using PublisherServer in Custom Apps](#-using-publisherserver-in-custom-apps)
+- [🔥 Using Hono](#-using-hono)
 - [📥 Using Published Assets in Your Code](#-using-published-assets-in-your-code)
 - [📚 CLI Reference](#-cli-reference)
 - [📕 Appendix](#-appendix)
@@ -33,21 +36,88 @@ Serve static websites and web apps at the edge &mdash; no backends and no CDN in
 
 `@fastly/compute-js-static-publish` helps you deploy and serve static files using [Fastly Compute](https://developer.fastly.com/learning/compute/) for fast, cacheable, and content-addressed delivery. The library can be configured to store your data in either of the following:
 * Fastly [Key Value Store](https://www.fastly.com/products/kv-store)
-* S3-compatible storage, such as Fastly [Object Storage](https://www.fastly.com/products/storage) (Beta) 
+* S3-compatible storage, such as Fastly [Object Storage](https://www.fastly.com/products/storage)
 
 ## ✨ Key Features
 
 - 📦 Easy to scaffold and deploy
-- 🚀 Content stored using hashed keys, in Fastly KV Store or S3-compatible storage (Beta) including Fastly Object Storage
+- 🚀 Content stored using hashed keys, in Fastly KV Store or S3-compatible storage, including Fastly Object Storage
 - 🔁 Publish new content without needing to deploy new Wasm binaries
 - 🗂 Organize releases into named collections which can be previewed (e.g. `live`, `staging`, `preview-123`)
 - 🧼 Cleanup tools to remove expired or orphaned files
 - ⚙️ Configurable per-collection server configurations (e.g. fallback files)
 - 🔒 Supports Brotli/gzip compression, conditional GET, and long cache TTLs
 
+## 🆕 New in 8.1
+
+- **Managed projects:** keep only `static-publish.project.js` in your repo. The CLI generates the app, and `dev`, `deploy`, `status`, `upgrade`, and `eject` work with it. ([Managed and ejected apps](#managed-and-ejected-apps))
+- **Previews:** serve another collection for a request, selected by host, path, query, cookie, or header. ([Previews](#-previews-collection-selection))
+- **Hidden files:** publish files that the server does not serve for a request, for your own code to read. Deploy your app with 8.1 before you publish hidden files: an app built with 8.0 does not serve a collection that has hidden files. ([Hidden files](#hidden-files))
+- **Hono:** the `hono` template (`--template=hono`), with your own middleware and routes as plugin modules in `hono-compose/`, and examples for GRIP streaming and OAuth login. For your own Hono app, `@fastly/compute-js-static-publish/hono` replaces `@fastly/hono-compute-js-static-publish`. ([Using Hono](#-using-hono))
+- **CI:** `--json` output, exit codes, error codes, `--project-dir`, and `--non-interactive`. ([Using the CLI in CI](#-using-the-cli-in-ci))
+- **Streaming response cache:** on a cache miss, the file goes to the visitor and into the cache at the same time, so the visitor does not wait for the whole file, and the request uses less memory. Apps from the `plain` and `hono` templates do this; in your own code, use `serveRequestStreaming()` and pass `fillPromise` to `event.waitUntil()`. It needs `@fastly/js-compute` 4.2 or later on a Fastly service. ([Streaming the response into the cache](#streaming-the-response-into-the-cache))
+
+Before you upgrade, read [CHANGELOG.md](CHANGELOG.md). These changes can break something:
+
+- The name of a new collection must be a DNS label: lowercase `a-z`, `0-9`, and `-`, from 1 to 63 characters, with no `-` at the start or the end. A collection that exists continues to work with another name, with a warning.
+- A usage or config error exits with `2`. Before, every error exited with `1`.
+- `collectionSelector.fromCookie()`: the activate and reset paths redirect with `308`. Before, they used `302`.
+- `PublisherServer`: the fields `serverTiming`, `settingsCached`, and `assetEntryMapCache` are read-only (deprecated). An assignment to them throws a `TypeError` (and is a TypeScript error).
+
 ---
 
 ## 🏁 Quick Start
+
+### 🧭 Managed project (recommended)
+
+A managed project has one file in your repo, `static-publish.project.js`. The CLI generates the Compute app from it when it needs the app, and `upgrade` moves the project to a new version of this package. See [Managed and ejected apps](#managed-and-ejected-apps).
+
+#### 1. Make the project
+
+Create a directory for your project, place your static files in `./public`, then type:
+
+```sh
+npx @fastly/compute-js-static-publish@latest --managed --root-dir=./public --kv-store-name=site-content
+```
+
+Add `--template=hono` for a [Hono](#-using-hono) app. For S3-compatible storage, type `--storage-mode=s3 --s3-region=<region> --s3-bucket=<bucket-name>` (and `--s3-endpoint=<endpoint>` if necessary) in place of `--kv-store-name=site-content`, as in [Using S3 Compatible Storage](#-using-s3-compatible-storage).
+
+Then add this package to your project, so that the version of the CLI does not change by itself. If the directory has no `package.json`, run `npm init -y` first:
+
+```sh
+npm install --save-dev @fastly/compute-js-static-publish@latest
+```
+
+Commit `static-publish.project.js` and `.gitignore`.
+
+#### 2. Preview Locally
+
+```sh
+npx @fastly/compute-js-static-publish publish-content --local  # 'publish' your files to the simulated local KV Store
+npx @fastly/compute-js-static-publish dev                      # preview locally
+```
+
+Your site is at `http://127.0.0.1:7676`. With S3-compatible storage, use `publish-content` without `--local`, and set `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` before you run `publish-content` and `dev`.
+
+#### 3. Deploy Your App
+
+[Create a free Fastly account](https://www.fastly.com/signup/?tier=free) if you haven't already, set `FASTLY_API_TOKEN` (for example, `export FASTLY_API_TOKEN=$(npx @fastly/cli auth token)`), and type:
+
+```sh
+npx @fastly/compute-js-static-publish deploy
+```
+
+The first deploy makes a new service, and writes its Service ID into `managed.serviceId`. Commit the project file after this.
+
+#### 4. Publish Content
+
+```sh
+npx @fastly/compute-js-static-publish publish-content
+```
+
+This uploads your files and purges the cache of the service. For later changes to your files, run only `publish-content`. Run `deploy` again after a change to the project file, or after `upgrade`: it deploys only if the generated app changed.
+
+The next two parts make an **ejected app** in `./compute-js`, whose code you own.
 
 ### 📦 Using the Fastly KV Store
 
@@ -110,7 +180,7 @@ This command uploads your static files to the KV Store and applies the server co
 FASTLY_API_TOKEN=$(npx fastly auth token) npm run fastly:publish
 ```
 
-### 🎁 Using S3 Compatible Storage (Beta)
+### 🎁 Using S3 Compatible Storage
 
 #### 1. Scaffold a Compute App
 
@@ -183,7 +253,7 @@ Ready to go live? All you need is a [free Fastly account](https://www.fastly.com
 npm run fastly:deploy
 ```
 
-The app reads the S3 credentials from the Secret Store that has the resource link name `S3_CREDENTIALS` on your service.
+The app reads the S3 credentials from the Secret Store that has the resource link name `S3_CREDENTIALS` on your service. To use another resource link name, for example a link that your service already has, set `s3.secretStoreLinkName` in `static-publish.rc.js` (in a managed project, in `static-publish.project.js`), and build the app again. `setSecretStoreForS3Credentials()` in the code of the app also sets the name, and is used in place of `s3.secretStoreLinkName`. In the same way, `s3.fastlyBackendName` sets the name of the backend of the S3 endpoint (default `s3_storage`).
 
 When the Fastly CLI creates a new service, it creates a Secret Store named `S3_CREDENTIALS`, links it to the service with the same name, and prompts you for the values `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY`.
 
@@ -191,7 +261,7 @@ When the Fastly CLI creates a new service, it creates a Secret Store named `S3_C
 
 ## 🗂 Project Layout
 
-Here's what your project might look like after scaffolding:
+A managed project has only `static-publish.project.js` and your files (see [Managed projects](#managed-projects)). Here's what an ejected app might look like after scaffolding:
 
 ```
 my-project/
@@ -210,9 +280,159 @@ my-project/
     ├── static-publisher/                # ⚠️ Do not commit - generated content for local dev and publishing
     │   ├── kvstore.json                 # Simulates KV Store content for local preview
     │   └── kv-store-content/            # Preprocessed and compressed files for KV upload
+    ├── scripts/                         # Optional: template hooks (template_<hook>.js, template_watch.js)
     └── src/
         └── index.js                     # Your Compute app entry point
 ```
+
+### Managed and ejected apps
+
+From 8.1.0, a project can be **managed** or **ejected**:
+
+| | Managed | Ejected |
+|---|---|---|
+| In the repo | One file, `static-publish.project.js`, in the project dir | The app dir (`compute-js/`) with `static-publish.rc.js` and `publish-content.config.js`, as above |
+| Who owns the app code | This package: it generates the app | You |
+| Upgrade this package | Run `upgrade`; the next `deploy` deploys the new app | Change the files by hand (see `MIGRATING.md`) |
+| Deploy | `deploy`, only when the generated app changed | `npm run fastly:deploy` (or `deploy`) |
+| Customize | The options of the project file | Anything |
+
+An **ejected app** is in the repo, and you own its code. Every app that `scaffold` makes without `--managed`, and every app made before 8.1.0, is an ejected app. A **managed project** has only a project file in the repo, and this package generates the app when it needs it.
+
+`scaffold` makes an ejected app, as before. `scaffold --managed` makes a managed project. `eject` converts a managed project into an ejected app. To move an existing app to managed mode, see `MIGRATING.md`.
+
+#### Managed projects
+
+`scaffold --managed` writes only one file, `static-publish.project.js`, in the current directory (the project dir), and adds `node_modules/`, `.static-publish/`, and the working directory to the `.gitignore` there, if they are not in it:
+
+```
+my-site/
+├── static-publish.project.js            # Commit this: the only config file
+├── public/                              # Your static site files
+├── .gitignore                           # Ignores node_modules/, .static-publish/, and static-publisher/
+└── static-publisher/                    # ⚠️ Do not commit - the working directory
+```
+
+The project file has the settings that an ejected app has in its two files:
+
+- The top level has the fields of `static-publish.rc.js` (`storageMode`, `kvStore` or `s3`, `publishId`, `defaultCollectionName`, `staticPublisherWorkingDir`, `collectionSelection`), and the settings of the template (`build` and `templateOptions`, see [Composing plugin modules](#composing-plugin-modules)).
+- `publishContent` has the fields of `publish-content.config.js`. `publish-content --config <file>` replaces it for one run.
+- `managed` has the settings of the generated app (`name`, `description`, `authors`, `serviceId`, `staticPublishVersion`, the version of this package that the project uses, and `fastlyToml`, see below).
+
+Paths in the project file are relative to it. The name of the file marks the mode: a directory with `static-publish.project.js` is a managed project, and a directory with `static-publish.rc.js` is an ejected app. A directory with both is an error.
+
+The project file is a JavaScript module, and the CLI loads it with `import()`. Thus the `type` field of the nearest `package.json` decides its module format. The file that `scaffold --managed` writes uses `export default`, which needs an ES module. In a directory whose `package.json` has `"type": "commonjs"`, change `export default` to `module.exports =`. The other contents of the file stay the same.
+
+`publish-content`, `collections`, and `clean` run in the project dir (or with `--project-dir`), and read the project file. `publish-content` purges the service of `managed.serviceId`, after `--fastly-service-id` and `FASTLY_SERVICE_ID`.
+
+To run the app on your computer:
+
+```sh
+npx @fastly/compute-js-static-publish publish-content --local
+npx @fastly/compute-js-static-publish dev
+```
+
+`dev` generates the app in `.static-publish/app/`, installs its dependencies with `npm ci` if they changed, and runs `fastly compute serve` in it. Options after `--` go to `fastly compute serve`, for example `dev -- --addr=127.0.0.1:8080`. With `dev -- --watch`, a change in the app builds and restarts it, and the watch script of the template (`scripts/template_watch.js`, see [Template hooks](#-template-hooks)), if it has one, runs next to `fastly compute serve`. The app serves the content of the local KV Store, `kvstore.json` in the working directory.
+
+**Local resources and setup in `fastly.toml`.** The CLI generates the `fastly.toml` of the app. To add resources for `fastly compute serve` (`[local_server]`) or for the first deploy, which makes the service (`[setup]`), add them to `managed.fastlyToml`, in the structure of [`fastly.toml`](https://www.fastly.com/documentation/reference/compute/fastly-toml/). For example, a local Secret Store and a local Config Store:
+
+```js
+managed: {
+  // ...
+  fastlyToml: {
+    local_server: {
+      secret_stores: { oauth: [ { key: 'GITHUB_CLIENT_SECRET', env: 'GITHUB_CLIENT_SECRET' } ] },
+      config_stores: { site_config: { format: 'inline-toml', contents: { greeting: 'hello' } } },
+    },
+    setup: {
+      secret_stores: { oauth: { entries: { GITHUB_CLIENT_SECRET: { description: 'The client secret' } } } },
+    },
+  },
+},
+```
+
+- Only `local_server` and `setup` can be added. The CLI writes the other parts of `fastly.toml`.
+- The CLI also writes some resources: the KV Store of the content, and in S3 mode, the `S3_CREDENTIALS` Secret Store and the `s3_storage` backend (other names with `s3.secretStoreLinkName` and `s3.fastlyBackendName`). A resource with one of these names is an error.
+- Do not put a secret in the project file: in `local_server`, read it from an environment variable (`env`) or a file (`file`) that is not committed.
+- `local_server` does not change the fingerprint, because it is only for `fastly compute serve`. `setup` changes it.
+- `eject` writes the sections into the `fastly.toml` of the ejected app.
+
+`managed.template` selects the template of the app: `plain` (the default) or `hono`. To switch, change it. The next `dev` or `deploy` generates the app again with the new template, and `npm ci` installs its dependencies. The fingerprint changes, so `deploy` deploys again. Files of the old template can stay in `.static-publish/app/`. They do not change the build. To remove them, delete `.static-publish/`: the next `dev` or `deploy` generates it again.
+
+The same version of this package always generates the same app, with the same versions of all dependencies: this package has a lockfile for the app of each template. The app uses the copy of this package that runs the CLI, through a `file:` link. Thus, add this package as a dev dependency of your project, and run the CLI from it, so that the version is pinned:
+
+```sh
+npm install --save-dev @fastly/compute-js-static-publish@latest
+```
+
+To deploy the app:
+
+```sh
+npx @fastly/compute-js-static-publish deploy
+```
+
+`deploy` generates the app, installs it if necessary, and runs `fastly compute build` and `fastly compute deploy`, only if the app changed. It needs a Fastly API token (`FASTLY_API_TOKEN` or `--fastly-api-token`). Options after `--` go to `fastly compute deploy`, for example `deploy -- --status-check-timeout=180`. `deploy` refuses `--comment`, `--service-id` (`-s`), `--token` (`-t`), `--package` (`-p`), `--dir` (`-C`), and `--env` there, because it sets them, or they deploy something else.
+
+- **The fingerprint** is a SHA-256 of the generated app and the version of this package. It does not depend on the content, on `publishContent`, on the Service ID, or on the path of this package on your computer. `deploy` writes it into the comment of the new service version (`static-publish <version> fp:<fingerprint>`, then ` | <text>` with `--comment <text>`, for example a commit SHA). The next `deploy` reads the comment of the active version, and does nothing if the fingerprint is the same. A version that you clone by hand, for example to add a backend, has no comment, but it keeps the package of the version that it came from. Thus, if the active version has no fingerprint, `deploy` and `status` use the newest earlier version that has one, if the two versions have the same package. `--force` deploys anyway.
+- **The first deploy** makes a new service (the Fastly CLI asks for its name and domain, unless `--non-interactive`), and writes its ID into `managed.serviceId`. Commit the project file then. To deploy to a service that exists, use `--fastly-service-id` or `FASTLY_SERVICE_ID`. These do not change `managed.serviceId`: to make a service that exists the service of the project, set `managed.serviceId` in the project file. With S3 storage, the first deploy must be done on your computer, because the Fastly CLI asks for the S3 credentials of the Secret Store; with `--non-interactive`, it is an error.
+- `status` shows the fingerprint of the app, the fingerprint of the active version, and if a deploy is necessary, and the preview URLs of [collection selection](#-previews-collection-selection). Without an API token, the deployed fingerprint is unknown.
+
+**The version of this package.** `managed.staticPublishVersion` records the version of this package that the project uses. `dev` and `deploy` compare it with the version that runs:
+
+| The CLI that runs | Result |
+|---|---|
+| The same version | Continue. |
+| A newer version | Stop. Run `upgrade` to move the project to the new version (and commit the project file), or use `--auto-upgrade`. |
+| An older version | Stop. An older version never deploys over an app that a newer version made. |
+
+Thus a new release of this package never changes your app by itself, also with `npx @fastly/compute-js-static-publish@latest`.
+
+**Eject.** `eject` converts a managed project into an ejected app that you own:
+
+- It writes the app that `deploy` would deploy into `./compute-js` (or `--dir`). It refuses a directory that exists, unless `--force`.
+- It splits the project file into `compute-js/static-publish.rc.js` (with `generatedFrom`) and `compute-js/publish-content.config.js`, and writes the paths again, so that they point at the same directories (for example `staticPublisherWorkingDir: '../static-publisher'`). Then it deletes `static-publish.project.js`.
+- `publishContent` must be data: eject cannot copy functions or regular expressions (for example `assetInclusionTest`). If it has them, eject stops before it writes anything. Remove them, eject, and add them to `compute-js/publish-content.config.js` by hand.
+- `package.json` gets `"@fastly/compute-js-static-publish": "^<version>"`, and the lockfile has exactly `<version>`, so that the first ejected build is the same app. This needs a version that is published on npm, and one `npm install` (network access).
+- After eject, run the commands in `compute-js/`. Run `publish-content --local` again before `npm run dev:start`. You can delete `.static-publish/`.
+
+**API token scopes.** Give CI the least access that it needs. As far as we know (check the [Fastly documentation of API tokens](https://www.fastly.com/documentation/reference/api/auth-tokens/)):
+
+| Command | Scope |
+|---|---|
+| `status` (the active version of the service) | `global:read` |
+| `publish-content` and `collections` with the KV Store (writes) | `global` |
+| The purge after `publish-content` (S3 storage) | `purge_select` |
+| `deploy` | `global` |
+
+Limit the token to the service of the project, where possible.
+
+
+### 🪝 Template hooks
+
+The `package.json` of a scaffolded app has these scripts:
+
+```json
+"prebuild":    "compute-js-static-publish run-template-hook prebuild",
+"build":       "js-compute-runtime ./src/index.js ./bin/main.wasm",
+"postbuild":   "compute-js-static-publish run-template-hook postbuild",
+"postinstall": "compute-js-static-publish run-template-hook postinstall"
+```
+
+`run-template-hook <name>` runs `scripts/template_<name>.js` if that file exists, and otherwise does nothing. Thus, to run your own code before or after each build, or after each `npm install`, add one of these files:
+
+- `scripts/template_prebuild.js`
+- `scripts/template_postbuild.js`
+- `scripts/template_postinstall.js`
+
+The file runs with Node.js, in the directory of the app. If it fails, the build or the install fails. `fastly compute build`, `fastly compute serve`, and `fastly compute publish` run `npm run build`, so they also run the build hooks. `npm install --ignore-scripts` does not run the hooks.
+
+The app also has a `dev:watch` script:
+
+```json
+"dev:watch":   "compute-js-static-publish run-dev-watch"
+```
+
+`npm run dev:watch` runs `fastly compute serve --watch`, which builds and restarts the app when a file in the app directory changes. Options after `--` go to `fastly compute serve`, for example `npm run dev:watch -- --addr=127.0.0.1:8080`. If the app has `scripts/template_watch.js`, that file runs with Node.js next to the Fastly CLI, until the Fastly CLI stops. Use it to watch files outside the app directory: when they change, write a file in the app directory, and the Fastly CLI builds the app again. `dev:watch` does not work on Windows.
 
 ## ⚙️ Configuring `static-publish.rc.js`
 
@@ -231,7 +451,8 @@ All fields are required unless specified otherwise.
 - `kvStore.kvStoreName` - The name of the KV Store used for publishing.
 - `defaultCollectionName` - Collection to serve when none is specified.
 - `publishId` - Unique prefix for all keys in the KV Store. Override only for advanced setups (e.g., multiple apps sharing the same KV Store).
-- `staticPublisherWorkingDir` - Directory to hold working files during publish.
+- `staticPublisherWorkingDir` - Directory to hold working files during publish. The path is relative to the directory of `static-publish.rc.js`.
+- `generatedFrom` - (optional) A record of how the app was made: the template, the version of this package, and the date. The scaffolder writes it. The app does not use it.
 
 #### Example: `static-publish.rc.js`
 
@@ -249,7 +470,7 @@ const rc = {
 export default rc;
 ```
 
-### Using S3-compatible storage (BETA)
+### Using S3-compatible storage
 
 #### Fields:
 
@@ -261,7 +482,8 @@ All fields are required unless specified otherwise.
 - `s3.endpoint` - (optional) The custom endpoint for the S3-compatible bucket.
 - `defaultCollectionName` - Collection to serve when none is specified.
 - `publishId` - Unique prefix for all keys in the bucket. Override only for advanced setups (e.g., multiple apps sharing the same bucket).
-- `staticPublisherWorkingDir` - Directory to hold working files during publish.
+- `staticPublisherWorkingDir` - Directory to hold working files during publish. The path is relative to the directory of `static-publish.rc.js`.
+- `generatedFrom` - (optional) A record of how the app was made: the template, the version of this package, and the date. The scaffolder writes it. The app does not use it.
 
 #### Example: `static-publish.rc.js`
 
@@ -299,6 +521,9 @@ const config = {
     return true; // include everything by default
   },
 
+  // Files to publish as hidden files (optional):
+  hiddenItems: ['/404.html', '/templates/'],
+
   // Override which compressed variants to create for each asset during publish (optional):
   contentCompression: ['br', 'gzip'],
 
@@ -332,7 +557,8 @@ You can override this file for a single `publish-content` command by specifying 
 - `excludeDirs` - Array of directory names or regex patterns to exclude (default: `['./node_modules']`).
 - `excludeDotFiles` - Exclude dotfiles and dot-named directories (default: true).
 - `includeWellKnown` - Always include `.well-known` even if dotfiles are excluded (default: true).
-- `assetInclusionTest` - Function to determine inclusion and variant behavior per file.
+- `assetInclusionTest` - Function to determine inclusion and variant behavior per file. Return `false` to leave the file out, `true` to include it, or `{ hidden: true }` to include it as a [hidden file](#hidden-files).
+- `hiddenItems` - The files to publish as [hidden files](#hidden-files). The same format as `server.staticItems`, tested against the asset key (the path relative to `rootDir`): a directory that ends with `/`, an exact path, a glob pattern, or `'re:/<regex>/<flags>'` (default: none).
 - `contentCompression` - Array of compression formats to pre-generate (`['br', 'gzip']` by default).
 - `brotliQuality` - Brotli quality for the `br` variants, an integer from 0 to 11 (default: 11). Quality 11 gives the smallest files but is the slowest. Quality 10 is approximately 3 times faster, and its files are approximately 2% larger. If you change this value, variants that are already in storage are not compressed again.
 - `contentTypes` - Additional or override content type definitions.
@@ -357,6 +583,33 @@ You can override this file for a single `publish-content` command by specifying 
    - `allowedEncodings` - Specifies which compression formats the server is allowed
      to serve based on the client's `Accept-Encoding` header.
 
+### Hidden files
+
+A hidden file is published, but the Publisher Server does not serve it for a request, also not through `autoExt` or `autoIndex`. Use hidden files for:
+
+- The 404 page: a request for `/404.html` must not get the 404 page with status `200`. If the `spaFile` or the `notFoundPageFile` is hidden, the server still serves it as the fallback page.
+- Files that your code reads, for example templates. Get them with `getMatchingAsset(key, { includeHidden: true })` (see [Using Published Assets in Your Code](#-using-published-assets-in-your-code)).
+
+A file is hidden if `hiddenItems` selects it, or if `assetInclusionTest` returns `{ hidden: true }` for it:
+
+```js
+const config = {
+  rootDir: '../public',
+  hiddenItems: ['/404.html', '/templates/'],
+  assetInclusionTest: (key) => key.endsWith('.tpl') ? { hidden: true } : true,
+  server: {
+    notFoundPageFile: '/404.html',
+  },
+};
+```
+
+`publish-content` and `collections list` show the number of hidden files.
+
+> [!WARNING]
+> **Hidden is not access control.** Hidden files are in storage (the KV Store or the bucket), the same as the other files, and code that asks for hidden files can serve them. Do not use hidden files for secrets.
+
+A collection that has hidden files requires the `hidden` feature. An app that is built with a version earlier than 8.1.0 does not serve such a collection (8.0), or does not find its hidden files (earlier versions). Build and deploy your app with 8.1.0 or later before you publish hidden files.
+
 ## 📦 Collections (Publish, Preview, Promote)
 
 Collections are a powerful feature that allow you to publish and manage multiple versions of your site simultaneously. Each collection is a named set of:
@@ -377,6 +630,8 @@ npx @fastly/compute-js-static-publish publish-content \
 ```
 
 You can overwrite or republish any collection at any time. Old file hashes will be reused automatically where contents match.
+
+A collection name must be a DNS label: lowercase `a-z`, `0-9`, and `-`, from 1 to 63 characters, with no `-` at the start or the end (for example `live`, `staging`, `pr-42`). Thus a name is safe in storage keys, in cookies, and in hostnames. If a CI tool makes collection names from branch names, it must convert them to this form (for example `feature/Foo_bar` to `feature-foo-bar`). A collection that was published before this rule continues to work, with a warning, but new collections must follow it.
 
 ### Expiration (Auto-cleanup)
 
@@ -427,9 +682,158 @@ addEventListener("fetch", event => {
 });
 ```
 
+### 👀 Previews: Collection Selection
+
+`collectionSelection` in `static-publish.rc.js` chooses the collection that serves each request, for example to show a preview of a pull request. It is off by default: without it, every request gets the default collection.
+
+```js
+const rc = {
+  // ...
+  collectionSelection: {
+    // Tried in order. The first source that gives a collection wins.
+    // If no source gives a collection, the default collection is used.
+    sources: [
+      { type: 'host',   pattern: 'stag.example.com', value: 'staging' },
+      { type: 'host',   pattern: '{collection}.preview.example.com' },
+      { type: 'path',   prefix: '/_preview/{collection}', sticky: 'cookie' },
+      { type: 'query',  param: 'collection', sticky: 'cookie' },
+      { type: 'cookie', cookieName: 'publisher-collection',
+        activatePath: '/activate', resetPath: '/reset', maxAge: 604800 },
+      { type: 'header', name: 'x-publisher-collection' },
+    ],
+    // The collections that can be selected ('*' matches any characters). Default: any.
+    allow: ['pr-*', 'staging'],
+    // The selected collection does not exist or has expired:
+    // 'not-found' (default) gives a 404 response, 'default' serves the default collection.
+    onMissing: 'not-found',
+    // X-Robots-Tag: noindex on the responses of a selected collection. Default: true.
+    noindex: true,
+  },
+};
+```
+
+| Source | Reads | Notes |
+|--------|-------|-------|
+| `host` | The hostname, matched against `pattern` | Needs a wildcard domain and TLS for it. The pattern has one `{collection}` in one label, with fixed text around it if you want (`branch-{collection}.preview.example.com`). A host label has at most 63 characters. Make sure that your production hostname does not match the pattern. With `value`, `pattern` is one hostname without `{collection}`, and selects the collection in `value` (`stag.example.com` → `staging`). |
+| `path` | A path prefix, which is removed before the file lookup | Works on `*.edgecompute.app`. Links that start with `/` lose the prefix, so use it with `sticky: 'cookie'`, or for a site with relative links. The links in HTML do not change. With `value`, `prefix` has no `{collection}`, and selects the collection in `value` (`/_staging` → `staging`). |
+| `query` | A query parameter | Only the request that has it. Usually used with `sticky: 'cookie'`. |
+| `cookie` | A cookie | Also serves the activate path (`/activate?collection=<name>&redirectTo=<path>`) and the reset path. |
+| `header` | A request header | For tests, CI checks, and API clients. |
+
+- `sticky: 'cookie'` on a `path` or `query` source: when the source matches, set the cookie of the `cookie` source, and redirect (`308`) to the URL without the prefix or the parameter. It needs a `cookie` source.
+- A name must follow the [collection name rule](#-collections-publish-preview-promote) and match `allow`. Otherwise the source is skipped.
+- A `value` must also follow the collection name rule, and match `allow` if it is set. Otherwise the config is not valid, and the CLI and the app show an error.
+- Redirects go only to a path on the same site. `redirectTo` with another site redirects to `/`.
+- The responses of a selected collection (not the default collection) get `X-Robots-Tag: noindex` (unless `noindex` is `false`). They get `Cache-Control: private` if the URL does not name the collection. See [Shared caches](#shared-caches).
+- To find out if a selected collection exists, `PublisherServer` reads its index, also when the [response cache](#️-caching-responses-with-the-core-cache) has the response.
+
+The `plain` app does this in `src/index.js`. Apps scaffolded before 8.1.0 do not. To add it to such an app, change `src/index.js`:
+
+```js
+const selection = publisherServer.resolveCollection(request);
+if (selection.response != null) {
+  return selection.response; // a redirect (sticky, activate, reset), or an error
+}
+const response = await publisherServer.serveRequest(request, {
+  collectionName: selection.collectionName, // null: the default collection
+  pathname: selection.pathname,             // the path without the prefix of a path source
+});
+```
+
+To scaffold an app with collection selection, use the [`--collection-selection` flags](#options). To show a link to a collection, for example in CI, use `previewUrl()`. It uses the first source that can make a URL:
+
+```js
+import { previewUrl } from '@fastly/compute-js-static-publish';
+import rc from './static-publish.rc.js';
+
+previewUrl('pr-42', 'https://example.edgecompute.app', rc.collectionSelection);
+// with the sources above: 'https://pr-42.preview.example.com/'
+```
+
+> [!WARNING]
+> A preview is public to anyone who knows its name. Use `allow` to limit the collections that can be selected, and do not publish content that must stay private.
+
+#### Shared caches
+
+A shared cache, for example a CDN in front of your service, can store a response and give it to other visitors. The [response cache](#️-caching-responses-with-the-core-cache) of `PublisherServer` keeps the responses of each collection apart, so this section is only about shared caches. For a shared cache, the response of a collection that is not the default collection depends on how the request selects the collection:
+
+| Source | Does the URL name the collection? | `Cache-Control` |
+|--------|-----------------------------------|-----------------|
+| `host`, `path`, `query` | Yes | As for the default collection. A shared cache can store the response. |
+| `cookie`, `header` | No: the same URL can serve another collection | `private`. A shared cache does not store the response. |
+| `path` or `query` with `sticky: 'cookie'` | No: after the redirect, the cookie selects the collection | `private` |
+
+A response gets `private` also when your code gives `serveRequest()` a `collectionName` that the sources of the request do not select. For a `query` source, the shared cache must keep the query string in its cache key.
+
+**Previews with a cookie or a header:** the default collection and the preview have the same URLs. A shared cache can store a response of the default collection, and give it to a visitor who has the preview cookie. That visitor then sees the default collection in place of the preview. If a shared cache is in front of your service, select previews with a `host` or `path` source.
+
+**More than one site in one service:** you can serve one site from each collection. Select the collection with a `host` source, for example `{collection}.example.com`, so that a shared cache can store the responses of each site. Also set `noindex: false`, because otherwise each site that is not the default collection gets `X-Robots-Tag: noindex`. A collection that expires stops being served, so do not set an expiration time for these collections.
+
+**Without `collectionSelection`:** if your code chooses the collection, for example with `collectionSelector.fromCookie()` and `setActiveCollectionName()`, or with the `collectionName` option, `PublisherServer` does not add `Cache-Control: private` or `X-Robots-Tag: noindex`. Your code must add them when the URL does not name the collection. Otherwise a shared cache can store a preview and give it to other visitors.
+
+`serveRequest()` returns a normal `Response`. To use a different cache policy, change its headers in your code before you return it.
+
+#### A preview for each pull request
+
+A CI job can publish each pull request to its own collection, and remove it when the pull request closes. `--expires-in` stops serving a preview after that time, also if the second job does not run. But its index stays in storage until `clean --delete-expired-collections`, and its files stay until `clean`.
+
+This GitHub Actions workflow publishes the collection `pr-<number>`, and, when the pull request closes, deletes the collection and runs `clean`. It needs the `FASTLY_API_TOKEN` secret (and, for the purge, the `FASTLY_SERVICE_ID` secret).
+
+```yaml
+name: Preview
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+
+# clean must not run while a publish runs, so all jobs that change the same
+# storage use one concurrency group. Use the same group in every workflow that
+# publishes or cleans, for example the workflow that publishes `live`.
+concurrency:
+  group: static-publish-storage
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: compute-js
+    env:
+      FASTLY_API_TOKEN: ${{ secrets.FASTLY_API_TOKEN }}
+      FASTLY_SERVICE_ID: ${{ secrets.FASTLY_SERVICE_ID }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - run: npm ci
+      - run: npx @fastly/compute-js-static-publish publish-content --collection-name=pr-${{ github.event.number }} --expires-in=7d
+
+  remove:
+    if: github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: compute-js
+    env:
+      FASTLY_API_TOKEN: ${{ secrets.FASTLY_API_TOKEN }}
+      FASTLY_SERVICE_ID: ${{ secrets.FASTLY_SERVICE_ID }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - run: npm ci
+      - run: npx @fastly/compute-js-static-publish collections delete --collection-name=pr-${{ github.event.number }}
+      - run: npx @fastly/compute-js-static-publish clean --delete-expired-collections
+```
+
+For a pull request that never published, `collections delete` finds no collection and deletes nothing.
+
 ### 🔀 Selecting a Collection at Runtime
 
-The `collectionSelector` module provides helpers to extract a collection name from different parts of a request:
+For previews, use [collection selection](#-previews-collection-selection). To select a collection in your own code, the `collectionSelector` module provides helpers to extract a collection name from different parts of a request:
 
 ```js
 collectionSelector.fromHostDomain(request, /^preview-([^\.]*)\./);
@@ -486,6 +890,33 @@ npx @fastly/compute-js-static-publish collections promote \
 > The collection denoted by `defaultCollectionName` is exempt from expiration.
 
 ## 🛠 Development → Production Workflow
+
+### Managed project
+
+Run the commands in the project dir (or with `--project-dir`).
+
+#### Local development
+
+```sh
+npx @fastly/compute-js-static-publish publish-content --local  # 'publish' your files to the simulated local KV Store
+npx @fastly/compute-js-static-publish dev                      # preview locally
+```
+
+`dev` generates the app, and runs `fastly compute serve` in it. With `dev -- --watch`, a change in the app builds and restarts it. To see a new publish, stop `dev` and start it again. To publish to another collection, add `--collection-name=preview-123` to `publish-content`.
+
+#### Production
+
+```sh
+npx @fastly/compute-js-static-publish deploy             # deploy the app, only if it changed
+npx @fastly/compute-js-static-publish publish-content    # upload the files, and purge the cache
+npx @fastly/compute-js-static-publish status             # show if a deploy is necessary
+```
+
+- Do the first `deploy` on your computer: it makes the service, and writes `managed.serviceId` into the project file. Commit the project file.
+- After that, CI can run `deploy` and `publish-content` on each change. `deploy` does nothing if the generated app did not change, so it is safe to run each time. Set `FASTLY_API_TOKEN`, and see [Using the CLI in CI](#-using-the-cli-in-ci) for `--non-interactive`, `--json`, and the exit codes.
+- To move to a new version of this package, update the dev dependency, run `upgrade`, commit the project file, and then `deploy`.
+
+The next two parts are for an ejected app.
 
 ### Using the KV Store
 
@@ -557,7 +988,7 @@ If you do need to rebuild and redeploy the Compute app, simply run:
 npm run fastly:deploy
 ```
 
-### Using S3-compatible storage (BETA)
+### Using S3-compatible storage
 
 #### Local development
 
@@ -656,6 +1087,9 @@ This removes:
 - Index parts that no index uses
 - Orphaned server config files
 
+> [!WARNING]
+> Do not run `clean` while `publish-content` can run for the same storage. `publish-content` writes the index of a collection after it uploads the files, so `clean` can delete files that the new index then refers to. In CI, put the jobs that publish and the job that cleans in the same `concurrency` group (see [A preview for each pull request](#a-preview-for-each-pull-request)).
+
 ### 🔍 Dry Run Mode
 
 Preview what will be deleted without making changes:
@@ -715,6 +1149,42 @@ async function handleRequest(request) {
 }
 ```
 
+### Options of `serveRequest()`
+
+`serveRequest(request, options)` takes these options. Without options, it works as above.
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `collectionName` | The collection to serve, for this call only. `null` selects the default collection. | The active collection (see [Switching the active collection](#switching-the-active-collection)) |
+| `pathname` | The path to look up, in place of the path of the request URL. It must be decoded, and it must start with `/`. | The decoded path of the request URL |
+| `fallback` | `false`: if no file matches, do not serve the SPA file or the 404 page. Return `null`. | `true` |
+| `healthCheck` | `false`: do not answer `/healthz`. | `true` |
+| `onMissing` | With [collection selection](#-previews-collection-selection): what to do for this call when the selected collection is not published or has expired. `'not-found'`: the `404` below. `'default'`: serve the default collection, as a normal response of the default collection (its headers, without `X-Robots-Tag: noindex`). Without collection selection, it does nothing. | `collectionSelection.onMissing` |
+| `status` | The status of the response of a file (also of the SPA file and the 404 page). For a status other than `2xx`, the server does not evaluate the preconditions of the request (`If-None-Match` and the others), so the response always has the body. It does not change other responses, such as the `404` of a collection that is not available. | The status of the file: `200`, or `404` for the 404 page |
+| `headers` | Headers to set on the response of a file. Each one replaces the header of the same name. | |
+
+`serveRequest()` returns `null` for a method other than `GET` and `HEAD`, and when there is no response (no file matches, and there is no fallback page or `fallback` is `false`). If the default collection has no settings in storage, the response is `500`. A collection other than the default collection that is not published, or that expired, gets a plain-text `404` that names it.
+
+`serveFallback(request, { collectionName, onMissing, status, headers })` serves the SPA file (`200`) or the 404 page (`404`) of the collection, as `serveRequest()` does when no file matches. It returns `null` for a method other than `GET` and `HEAD`, for a client that does not accept HTML, or when the collection has no fallback page. Use it with `fallback: false`, to run your own logic between the files and the fallback page. The scaffolded app (`src/index.js`) uses this order:
+
+```js
+async function handleRequest(request) {
+  const response = await publisherServer.serveRequest(request, { fallback: false });
+  if (response) {
+    return response;
+  }
+
+  const url = new URL(request.url);
+  if (url.pathname === '/api/hello') {
+    return new Response(JSON.stringify({ greeting: "hi" }), {
+      headers: { 'content-type': 'application/json' }
+    });
+  }
+
+  return (await publisherServer.serveFallback(request)) ?? new Response("Not Found", { status: 404 });
+}
+```
+
 ### ⏱️ Measuring Performance with `Server-Timing`
 
 `PublisherServer` can report how long it spends reading from storage. To turn this on, give it the name of a request header:
@@ -771,6 +1241,7 @@ publisherServer.setResponseCache({ maxAge: 3600, maxBodySize: 4 * 1024 * 1024 })
 
 - A response is cached by the publish ID, the collection, the path, and the client's `Accept-Encoding`. A cache hit does not read the settings, the index, or the file.
 - A path that does not match a file is cached, too, so a missing path does not read the index again.
+- With the options of `serveRequest()`, the path in the key is the `pathname` option, and the collection is the `collectionName` option. A response with `fallback: false` has its own key. `serveFallback()` caches one response for each collection, for all paths.
 - If several requests miss the same response at the same time, one request produces it, and the others wait for it.
 - Only `200` and `404` responses are cached. Conditional requests (`304`) and `HEAD` requests are answered from the cached response.
 - Each cached response has the surrogate key `<publishId>-<collectionName>`. After you publish, `publish-content` purges this key (see [`--fastly-service-id`](#publish-content)), so the next request gets the new content. `collections promote` and `collections delete` purge the key of the collection that they change.
@@ -791,12 +1262,345 @@ const response = await publisherServer.serveCached(request, pathname, async (fil
 
 The second argument identifies the response in the collection. If anything other than the path and `Accept-Encoding` changes your response, include it in this value.
 
+Your function can return a `Response`, `null` (not found), or `{ response, length }`. `length` is the number of bytes in the body. With `length: null`, the response is not cached. `serveCached()` reads the body, and stores it with its real length. If that is not `length`, it logs a warning. A `Response` from `serveAsset()` has a known length.
+
+#### Streaming the response into the cache
+
+`serveRequestStreaming()`, `serveFallbackStreaming()`, and `serveCachedStreaming()` take the same arguments as `serveRequest()`, `serveFallback()`, and `serveCached()`. When the response is not cached yet and the length of its body is known, the body goes to the visitor and into the cache at the same time. The visitor does not wait for the whole file, and the request does not keep the whole body in memory. They return `{ response, fillPromise }`. Pass `fillPromise` to `event.waitUntil()`:
+
+```js
+async function handleRequest(event) {
+  const { response, fillPromise } = await publisherServer.serveRequestStreaming(event.request);
+  event.waitUntil(fillPromise);
+  return response ?? new Response('Not Found', { status: 404 });
+}
+```
+
+With `event.waitUntil()`, the fill continues after your handler returns, also if the visitor disconnects. Without it, the fill stops when your handler returns, and nothing is cached. `fillPromise` never rejects.
+
+The scaffolded app of the `plain` template and the [Hono](#-using-hono) helpers use these methods. Apps scaffolded before 8.1.0 call `serveRequest()`, so their fill does not stream. To stream, change `src/index.js` of such an app as the example above shows.
+
+The fill streams only on a Fastly service with `@fastly/js-compute` 4.2 or later. With an earlier version, in `fastly compute serve`, or for a body with a length that is not known, the fill reads the whole body first, as `serveCached()` does, and `fillPromise` is already resolved.
+
+If a body does not have the number of bytes of `length`, nothing is cached, the requests for the response get an error, and an error is logged. The next fill for that response reads the whole body first.
+
 Notes:
 
-- A response is read completely before it is cached. The request that caches it uses memory of about two times the body, up to two times `maxBodySize`. A Compute instance has a limit on its memory, so do not set `maxBodySize` larger than 48 MiB (`48 * 1024 * 1024`). Other requests that wait for the same response get it when it is cached.
+- `serveRequest()`, `serveFallback()`, and `serveCached()`, and the streaming methods when the fill does not stream, read a response completely before it is cached. The request that caches it uses memory of about two times the body, up to two times `maxBodySize`. A Compute instance has a limit on its memory, so do not set `maxBodySize` larger than 48 MiB (`48 * 1024 * 1024`). Other requests that wait for the same response get it when it is cached. A streaming fill also caches only a body of `maxBodySize` or less.
 - A response is cached only if its body has the size in the file's metadata. If storage returns a different body, nothing is cached, the request gets an error, and the next request reads the file again.
 - With `--local`, `publish-content` cannot purge the local cache. Restart `fastly compute serve` to see newly published content, or leave the response cache off in local development.
 - On staging, a purge must include the `Fastly-Purge-Environment: staging` header to clear the staging cache. Without it, a purge clears only the production cache. Use `publish-content --purge-environment=production,staging` to purge both.
+
+## 🔥 Using Hono
+
+`@fastly/compute-js-static-publish/hono` has middleware for [Hono](https://hono.dev/) apps. It serves the published files with `PublisherServer`, so a Hono app gets all the features of the server: `autoIndex`, `autoExt`, the compressed variants, `304` responses, the [response cache](#️-caching-responses-with-the-core-cache), `Server-Timing`, and [collection selection](#-previews-collection-selection).
+
+### The `hono` template
+
+To scaffold a Hono app, add `--template hono` (in a managed project: `managed.template: 'hono'`):
+
+```sh
+npx @fastly/compute-js-static-publish@latest --template hono --root-dir=./public --kv-store-name=site-content
+```
+
+The app is TypeScript: `src/index.ts`, with code like the example below, and `tsconfig.json`. Add your own routes in `src/index.ts`. The build (`js-compute-runtime ./src/index.ts`) removes the types, but does not check them. To check the types, run `npx tsc` in the app. The app has `typescript` as a dev dependency.
+
+### Composing plugin modules
+
+To add your own middleware and routes to the `hono` template, put plugin modules in the folder `hono-compose/`. The app composes them with the published files. In a managed project, this is the only way to add code, because the CLI generates the app. In an ejected app, you can also edit `src/index.ts`.
+
+`scaffold --template hono` makes the folder next to the project file (managed) or next to `compute-js/` (ejected). To make it later, or to update it, run:
+
+```sh
+npx @fastly/compute-js-static-publish template init
+```
+
+```
+hono-compose/
+├── package.json        # Your dependencies, and the peer dependencies on the packages that the app provides
+├── tsconfig.json       # For your editor
+├── .gitignore          # Ignores node_modules/
+├── 10-auth.ts          # A plugin
+├── api.ts              # A plugin
+├── _example.ts         # An example, not a plugin (the name starts with _)
+└── lib/                # Your helpers (not plugins)
+```
+
+- **Plugins** are the files directly in the folder, with the extension `.ts`, `.mts`, `.js`, or `.mjs`. Files that start with `_` or `.`, and `.d.ts` files, are not plugins. The build does not look in subfolders, so use them, for example `lib/`, for your helpers.
+- **The name** of a plugin is the file name without the number prefix and the extension: `10-auth.ts` is `auth`. Two plugins with the same name are an error. `index` is a reserved name: a file `index.ts` (or `.js`, `.mjs`, `.mts`) stops the build.
+- **The phases:** a plugin adds its handlers to the app in one or more phases. In each phase, the app takes the plugins in the order of the file names (add a number prefix to set the order). The phases are on two axes:
+
+  ```
+  selectCollection()
+  middleware                      processing: wraps all of the routing below
+    routes             routing: the first route that answers wins
+    → published files (serveStatic())
+    → afterFilesRoutes
+    → serveFallback()
+  ```
+
+  - **Processing:** `middleware` wraps each request, for example a login check, a header on each response, or the time of a request. In a middleware, the code before `await next()` runs before the routes. The code after it runs after the response is made, also when a published file answered, and in the reverse order of the plugins. All plugins add their middleware before any plugin adds its routes, so a middleware such as a login check also applies to the routes of the other plugins.
+  - **Routing:** the routes that can answer a request, in this order. The first one that answers wins.
+    - `routes`: before the published files. A route here wins over a file at the same path, for example an API.
+    - The published files (`serveStatic()`).
+    - `afterFilesRoutes`: only for the requests that no published file matches, before the SPA file or the 404 page. A file at the same path wins, for example for a redirect from an old URL, which stops when a file is published at that URL again. The published files are served only for `GET` and `HEAD`, so these routes also get all other methods.
+
+  A middleware that measures the time of each request, with the code before and after `await next()`:
+
+  ```ts
+  // hono-compose/05-timing.ts
+  import { definePlugin } from '@fastly/compute-js-static-publish/hono';
+
+  export default definePlugin((app) => {
+    app.use('*', async (c, next) => {
+      const start = performance.now();
+      await next();
+      console.log(`${c.req.method} ${c.req.path} ${c.res.status} ${(performance.now() - start).toFixed(1)} ms`);
+    });
+  });
+  ```
+
+  The time ends when the response is made. The body of a large file can still be on its way to the visitor then.
+
+A plugin default-exports `definePlugin()`. Give it a function for each phase that the plugin uses. Each function gets the Hono app, the options of the plugin, and the helpers of the app (see below), and adds handlers with `app.use()`, `app.get()`, `app.post()`, and the other methods of Hono. With only a function in place of the object, the function is the `middleware` phase:
+
+```ts
+// hono-compose/10-header.ts
+import { definePlugin } from '@fastly/compute-js-static-publish/hono';
+
+export default definePlugin((app, options?: { value?: string }) => {
+  app.use('*', async (c, next) => {
+    await next();
+    c.header('x-site', options?.value ?? 'default');
+  });
+});
+```
+
+```ts
+// hono-compose/api.ts
+import { definePlugin } from '@fastly/compute-js-static-publish/hono';
+
+export default definePlugin({ bindings: { config: 'ConfigStore:site_config' } }, {
+  middleware: (app) => {
+    app.use('/api/*', async (c, next) => {
+      await next();
+      c.header('cache-control', 'no-store');
+    });
+  },
+  routes: (app) => {
+    app.get('/api/greeting', async (c) => c.json({ greeting: await c.env.config?.get('greeting') }));
+  },
+  afterFilesRoutes: (app) => {
+    app.get('/blog/:slug', (c) => c.redirect(`/archive/${c.req.param('slug')}/`, 301));
+  },
+});
+```
+
+**Options** come from `templateOptions.hono.compose.plugins` in the project file (or in `static-publish.rc.js`), with the name of the plugin as the key. Each phase of a plugin gets the same options. The build shows a warning for options of a plugin that does not exist:
+
+```js
+templateOptions: {
+  hono: {
+    bindings: { config: 'ConfigStore:site_config' },
+    compose: { plugins: { header: { value: 'my-site' } } },
+  },
+},
+```
+
+**The files step:** between `routes` and `afterFilesRoutes`, the app has a fixed step that serves the published files with `serveStatic()`. It is not a phase, and a plugin cannot remove it. A plugin can serve files in another way before it: a request that the plugin answers does not get to this step, and a request that the plugin passes on with `next()` does.
+
+**Helpers:** the third argument of each phase function has the `serveStatic()`, `staticResponse()`, `serveFallback()`, `fallbackResponse()`, `isCollectionAvailable()`, and `publisherServer` that the app uses (see [Using Hono](#-using-hono)). They are made once when the app starts, with the same `collectionSelection`, so a plugin can serve published files in its own place in the order, with its own rules.
+
+For example, a plugin that runs before a login check, and serves `/theme/*` on a preview: from the selected collection, or from the default collection if the preview is missing, and with a plain `404` (not the 404 page of the collection, which would show the preview without a login). Without a preview, the plugin does nothing, and the app serves the request as usual. In Hono, a handler cannot skip the handlers that come after it in the same `app.use()`, so the plugin decides first whether it takes part. Two ways to write it, which do the same:
+
+```ts
+// hono-compose/10-theme.ts: one handler with staticResponse()
+import { definePlugin } from '@fastly/compute-js-static-publish/hono';
+
+export default definePlugin((app, options, { staticResponse }) => {
+  app.use('/theme/*', async (c, next) => {
+    if (c.var.staticPublisher.collectionName == null) {
+      return next(); // not a preview: the app serves it as usual
+    }
+    return await staticResponse(c, { onMissing: 'default' }) ?? c.text('Not found', 404);
+  });
+});
+```
+
+```ts
+// hono-compose/10-theme.ts: serveStatic() with except() of hono/combine
+import { definePlugin } from '@fastly/compute-js-static-publish/hono';
+import { except } from 'hono/combine';
+
+export default definePlugin((app, options, { serveStatic }) => {
+  const notPreview = (c) => c.var.staticPublisher.collectionName == null;
+  app.use('/theme/*', except(notPreview,
+    serveStatic({ onMissing: 'default' }),
+    (c) => c.text('Not found', 404),
+  ));
+});
+```
+
+`except(condition, ...middleware)` skips the middleware when the condition is true, and runs it in order otherwise. `serveStatic()` calls the next middleware when no file matches; `staticResponse()` returns `null`. To give the normal 404 page in place of the plain `404`, use `return c.notFound()`.
+
+With `onMissing: 'default'`, a missing preview gets a normal response of the default collection, with its headers. When the preview is published, the next request gets the file of the preview: `PublisherServer` checks the selected collection before it reads the response cache. These examples are for a `host`, `query`, `cookie`, or `header` source. With a `path` source, the request path has the prefix (for example `/_preview/pr-1/theme/site.css`), so the route `/theme/*` does not match it: add the handler on `*`, and check `c.var.staticPublisher.pathname`, the path without the prefix. `serveStatic()` and `staticResponse()` look up that path.
+
+For example, a plugin that runs after a login check, and shows the page `/preview-not-found/` of the default collection, with a `404`, when the selected preview is not available. Because it is a plugin, it can come after the login check, so that a visitor who is not logged in cannot learn which previews exist:
+
+```ts
+// hono-compose/30-preview-not-found.ts
+import { definePlugin } from '@fastly/compute-js-static-publish/hono';
+
+export default definePlugin((app, options, { isCollectionAvailable, staticResponse }) => {
+  app.use('*', async (c, next) => {
+    if (await isCollectionAvailable(c)) {
+      return next();
+    }
+    return await staticResponse(c, { path: '/preview-not-found/', collectionName: null, status: 404 })
+      ?? c.text('Preview not found', 404);
+  });
+});
+```
+
+**`publisherServer` in a plugin:** the app has one `PublisherServer` for all requests. Use the other helpers where you can: they use the selected collection, and the path without the prefix of a `path` source. In a handler, a plugin can call these methods of `publisherServer`:
+
+- `isCollectionAvailable()`, `serveRequest()`, `serveFallback()`, and `resolveCollection()`.
+- The methods that read the collection of the request: `getServerConfig()`, `getStaticItems()`, `getAssetEntryMap()`, `getMatchingAsset()`, and `testExtendedCache()`. They use the collection of the last `serveRequest()` or `serveFallback()` in the request (also through `serveStatic()` and the other helpers), or of `beginRequest()`, which uses the active collection, not the selected one. If neither ran in the request, call `publisherServer.beginRequest(c.req.raw)` first.
+
+Do not call the `set…()` methods (`setActiveCollectionName()`, `setCollectionSelection()`, `setResponseCache()`, and the others) in a handler: they change the server for all requests. In the phase function, which runs one time when the app starts, they change the configuration of the whole app. Do not call the lower-level methods (`serveAsset()`, `serveCached()`, `serveCachedStreaming()`, `loadAssetVariant()`, `handlePreconditions()`, and `findAcceptEncodingsGroups()`). Use `staticResponse()` and `fallbackResponse()` in their place.
+
+**Bindings** put Fastly resources on `c.env`, as `buildFire()` of `@fastly/hono-fastly-compute` does. A plugin declares the bindings that it uses in the first argument of `definePlugin()`, and `c.env` in its handlers has their types, for example `ConfigStore | undefined` for `'ConfigStore:site_config'` (`undefined` if the resource does not exist or is not linked to the service). `templateOptions.hono.bindings` adds bindings for the app. The same name with the same resource in two places is allowed. The same name with two different resources stops the build, and the message names both places. `c.var` is not typed in a plugin, so that a plugin can set its own variables.
+
+**Errors** in a plugin stop the build, and the message names the file: a default export that is not `definePlugin()`, an object with no phase, a key that is not a phase, or a phase that is not a function.
+
+**The build** bundles the plugins into `src/hono-compose.generated.js` of the app (the `prebuild` [template hook](#-template-hooks)). The packages that the app provides stay imports, so that the app has one copy of each: the dependencies of the app (for example `hono` and `@fastly/hono-fastly-compute`), this package, and `fastly:*`. Thus, do not add them to the `dependencies` of the folder. `template init` writes them as peer dependencies in `hono-compose/package.json`, with the versions that the app has. `npm install` in `hono-compose/` installs them too, because npm 7 and later install peer dependencies. These copies are only for your editor and the type checker. The build always uses the copies of the app. Install other packages in the folder, and the build bundles them.
+
+- `build.hono.composeDir` sets another folder, relative to the project file (or to `static-publish.rc.js`). The default is `./hono-compose`.
+- Without the folder, or without plugins, the app has no plugins. `dev` and `deploy` of a managed project then show how to make the folder.
+- In a managed project, the files of the folder (without `node_modules/`) are part of the fingerprint, so a change to a plugin makes `deploy` deploy again.
+- Keep the code of the plugins in the folder. A plugin can import a file from outside the folder, and the build bundles it, but a change to that file does not change the fingerprint, and the watcher does not see it.
+
+**`template init`** makes the folder with `package.json`, `tsconfig.json`, `.gitignore` (for `node_modules/`), and the example. In a folder that exists, it updates only the peer dependencies, and adds the starter files that are missing. It never changes your plugins. `--reset` writes the starter files again (it asks first, or needs `--force` with `--non-interactive`). `--check` changes nothing, and fails with `template-init-needed` if the folder is out of date, for example after an upgrade of this package; use it in CI.
+
+**Watch:** `dev -- --watch` (managed) and `npm run dev:watch` (ejected) also watch the folder of the plugins, also if it does not exist yet. A change in the folder bundles the plugins again, and then the Fastly CLI builds and restarts the app. If a plugin has an error, the watcher shows it and the app keeps the last plugins that built.
+
+**Examples** in [`examples/hono/`](https://github.com/fastly/compute-js-static-publish/tree/main/examples/hono) show complete plugins. They are not part of the npm package, and you cannot scaffold an app with them: for a new project, copy the `hono-compose/` folder of an example into your project, and set it up as the README of the example shows. The README also shows how to add an example to a project that exists.
+
+- [`grip`](https://github.com/fastly/compute-js-static-publish/tree/main/examples/hono/grip): realtime streams and Server-Sent Events with Fastly Fanout, and a publish endpoint with a shared key. One plugin with two phases: the `middleware` phase hands off only `/events/*` to Fanout, and the `routes` phase has the endpoints.
+- [`oauth`](https://github.com/fastly/compute-js-static-publish/tree/main/examples/hono/oauth): a login with GitHub or Google in front of some paths of the site (`protect`), with a signed session cookie.
+
+Each example takes its secrets from a Secret Store. For `dev`, `managed.fastlyToml` adds a local Secret Store that reads environment variables.
+
+### Hono in your own app
+
+Add `hono` and `@fastly/hono-fastly-compute` to your app:
+
+```sh
+npm install hono @fastly/hono-fastly-compute
+```
+
+Then serve the files from your Hono app. Add your own routes before `serveStatic()` or after it:
+
+```js
+import { Hono } from 'hono';
+import { fire } from '@fastly/hono-fastly-compute';
+import { fromStaticPublishRc } from '@fastly/compute-js-static-publish/hono';
+import rc from '../static-publish.rc.js';
+
+const { serveStatic, serveFallback, selectCollection } = fromStaticPublishRc(rc);
+
+const app = new Hono();
+
+// Select the collection of each request with collectionSelection in
+// static-publish.rc.js, for example for previews.
+app.use('*', selectCollection());
+
+app.get('/api/hello', (c) => c.json({ hello: 'world' }));
+
+// Serve the published files. If no file matches, the request goes to the next handler.
+app.use('*', serveStatic());
+
+// When nothing matches, serve the SPA file or the 404 page.
+app.notFound(serveFallback());
+
+fire(app);
+```
+
+`fire()` from [`@fastly/hono-fastly-compute`](https://hono.dev/docs/getting-started/fastly) runs the app on Fastly Compute. Use version 0.4.0 or later with `@fastly/js-compute` v4. To use a KV Store, a Config Store, or other resources from `c.env`, use `buildFire()` with bindings. Do not use `hono/service-worker`: by default, it sends each 404 response to `fetch()`, and Compute has no default backend.
+
+`fromStaticPublishRc(rc)` returns:
+
+- `serveStatic(options?)`: middleware that serves the file that matches the request. If no file matches, or the method is not `GET` or `HEAD`, it calls the next handler, so a route after it gets the request. It does not serve the SPA file or the 404 page, and it does not answer `/healthz`.
+- `staticResponse(c, options?)`: the same response as `serveStatic()`, for use inside a handler: the response of the file that matches the request, or `null` if no file matches or the method is not `GET` or `HEAD`. It takes the options of `serveStatic()`. Like `serveStatic()`, it never returns the SPA file or the 404 page.
+- `serveFallback(options?)`: for `app.notFound()`. It serves the SPA file or the 404 page. If there is neither, or the client does not accept HTML, it gives Hono's default 404 response.
+- `fallbackResponse(c, options?)`: the response of the SPA file or the 404 page, for use inside a handler, or `null` if there is neither, the client does not accept HTML, or the method is not `GET` or `HEAD`. It takes the options of `serveFallback()`.
+- `isCollectionAvailable(c, collectionName?)`: `true` if the collection is published, has not expired, and this version of the app can serve it. Without `collectionName`, it checks the collection that `selectCollection()` selected, or else the active collection. `collectionName` is as in the option of `serveStatic()`.
+- `selectCollection()`: middleware that selects the collection of each request with the [`collectionSelection`](#-previews-collection-selection) of `static-publish.rc.js`. It returns the redirects of the selection (a `sticky` source, and the activate and reset paths of the `cookie` source), and sets `c.var.staticPublisher`. Then `serveStatic()` and `serveFallback()` use the selected collection. For a `path` source, `serveStatic()` looks up the path without the prefix.
+- `publisherServer`: the `PublisherServer`, to configure it. For example, `publisherServer.setResponseCache({ maxAge: 3600 })`.
+
+If you make the `PublisherServer` yourself, use `fromPublisherServer(publisherServer)` in place of `fromStaticPublishRc(rc)`.
+
+`serveStatic()` takes options like the `serveStatic()` of Hono:
+
+| Option | Description |
+|---|---|
+| `root` | The directory that request paths are relative to, in the published files (after `publicDirPrefix`, if it is set). The default is `./`. A path that resolves outside `root` is not served. |
+| `path` | The path to serve, in place of the request path. For example, `./favicon.ico`. |
+| `rewriteRequestPath` | `(path, c) => string`. Changes the request path before it is resolved against `root`. |
+| `collectionName` | The collection: a string, `null` for the default collection, or `(c) => string \| null \| undefined`. Without it, or if the function returns `undefined`, the collection is the one that `selectCollection()` selected, or else the active collection. |
+| `onMissing` | With collection selection: `'not-found'` or `'default'` when the selected collection is not published or has expired, for this route only. The default is `collectionSelection.onMissing`. With `'default'`, the response is a normal response of the default collection, with its headers (no `X-Robots-Tag: noindex`). |
+| `status` | The status of the response of a file. For a status other than `2xx`, the preconditions of the request are not evaluated, so the response always has the body. See the [options of `serveRequest()`](#options-of-serverequest). |
+| `headers` | Headers to set on the response of a file. Each one replaces the header of the same name. |
+
+For example, to serve `/assets/*` from the `static` directory:
+
+```js
+app.use('/assets/*', serveStatic({ root: './static', rewriteRequestPath: (path) => path.replace(/^\/assets/, '') }));
+```
+
+`staticResponse()` is for a handler that decides itself whether to serve a file. For example, to serve `/theme/*` for a preview from the selected collection, or from the default collection if the preview is missing, and with a plain `404` and never the 404 page of the collection:
+
+```ts
+app.use('/theme/*', async (c, next) => {
+  if (c.var.staticPublisher.collectionName == null) {
+    return next(); // not a preview
+  }
+  return await staticResponse(c, { onMissing: 'default' }) ?? c.text('Not found', 404);
+});
+```
+
+To serve a page with another status, use `status`. For example, a `404` with the page `/preview-not-found/` of the default collection, when the selected preview is not available:
+
+```ts
+app.use('*', async (c, next) => {
+  if (await isCollectionAvailable(c)) {
+    return next();
+  }
+  return await staticResponse(c, { path: '/preview-not-found/', collectionName: null, status: 404 })
+    ?? c.text('Preview not found', 404);
+});
+```
+
+`fallbackResponse()` is the same for the SPA file or the 404 page. For example, a `410` with the 404 page of the site, for a removed page:
+
+```ts
+app.get('/blog/removed-post', async (c) => await fallbackResponse(c, { status: 410 }) ?? c.text('Gone', 410));
+```
+
+`serveFallback()` and `fallbackResponse()` take the `collectionName`, `onMissing`, `status`, and `headers` options, too. To give a default to all the middleware, pass it to `fromStaticPublishRc(rc, { collectionName, onMissing })`. An option in a call replaces the default.
+
+In TypeScript, use `StaticPublisherVariables` for the variables of the app, so that `c.var.staticPublisher` has a type:
+
+```ts
+import { fromStaticPublishRc, type StaticPublisherVariables } from '@fastly/compute-js-static-publish/hono';
+
+const app = new Hono<{ Variables: StaticPublisherVariables }>();
+app.get('/api/collection', (c) => c.json({ collection: c.var.staticPublisher.collectionName }));
+```
+
+The middleware imports only types from `hono`, so it does not add `hono` to your bundle. `hono` (v4) is an optional peer dependency of this package.
+
+To move from `@fastly/hono-compute-js-static-publish`, see [MIGRATING.md](./MIGRATING.md).
 
 ## 📥 Using Published Assets in Your Code
 
@@ -815,6 +1619,17 @@ if (asset != null) {
   asset.variants;         // Available variants (e.g., ['gzip'])
 }
 ```
+
+`getMatchingAsset(key, options)` takes these options:
+
+- `applyAuto` - Also try `autoExt` and `autoIndex`, as for a request (default: `false`). The second argument can also be a boolean, the value of `applyAuto`.
+- `includeHidden` - Also find [hidden files](#hidden-files) (default: `false`).
+
+```js
+const template = await publisherServer.getMatchingAsset('/templates/email.html', { includeHidden: true });
+```
+
+`getAssetEntryMap()` returns the whole index. The key of a hidden file in it is `hidden:` and then the asset key, for example `hidden:/404.html`.
 
 ### Load the File from KV Store:
 
@@ -847,6 +1662,146 @@ You can stream `assetVariant.storageEntry.body` directly to a `Response`, or rea
 - `collections promote` - Copy a collection to another name
 - `collections update-expiration` - Modify expiration time for an existing collection
 
+### 🤖 Using the CLI in CI
+
+These rules are for tools that run the CLI with no person present, for example a GitHub Actions workflow. They are part of the contract of the CLI: a change that breaks them comes only in a major release.
+
+**Exit codes:**
+
+| Code | Meaning |
+|------|---------|
+| `0` | Success. Also when there is nothing to do, for example when you publish the same content again, promote to a collection again, or delete a collection that does not exist. A failed purge after a successful publish is only a warning (see `purge.ok` in the JSON). |
+| `1` | The operation failed, for example storage cannot be reached, or the deploy failed. A retry can help. |
+| `2` | A usage or config error, for example an unknown option, a missing option, a collection name that breaks the rule, or a config file that cannot be loaded. A retry cannot help. |
+
+**`--json`:** `publish-content`, `collections list`, `collections delete`, `collections promote`, `status`, `deploy` (in a managed project), and `--version` can write their result as one JSON object to stdout, at the end. All log lines then go to stderr, so that they still show in the CI log. With another command, `--json` is an error (`json-not-supported`).
+
+```sh
+npx @fastly/compute-js-static-publish publish-content \
+  --project-dir=./compute-js --collection-name=pr-42 --json > result.json
+```
+
+Each object has `schemaVersion` (now `1`). A new field keeps the version. A field is removed or changed only in a major release, with a new `schemaVersion`.
+
+`publish-content --json`:
+
+```json
+{
+  "schemaVersion": 1,
+  "collection": "pr-42",
+  "publishId": "default",
+  "files": { "total": 352, "hidden": 2 },
+  "storageItems": { "uploaded": 12, "reused": 340 },
+  "expiresAt": "2026-12-01T00:00:00.000Z",
+  "purge": {
+    "ok": true,
+    "serviceId": "SERVICE_ID",
+    "environments": [ { "environment": "production", "result": "purged" } ]
+  }
+}
+```
+
+- `files` counts the files in the index. `storageItems` counts the items in storage: each file, and each compressed variant that is kept. Thus `storageItems.uploaded` can be larger than `files.total`.
+- `expiresAt` is `null` if the collection does not expire.
+- `purge` is `null` if there was no purge (`--local`, or no Service ID). `purge.ok` is `false` if a purge failed. Then the visitors can get the old content from the cache until it expires. Each item of `environments` has a `result`: `purged`, `not-staged` (a `staging` purge, and the service has no staged version), or `failed` (with a `reason`).
+
+`collections list --json`:
+
+```json
+{
+  "schemaVersion": 1,
+  "publishId": "default",
+  "defaultCollection": "live",
+  "collections": [
+    {
+      "name": "live", "isDefault": true,
+      "publishedAt": "2026-11-01T00:00:00.000Z", "expiresAt": null, "expired": false,
+      "requires": [ "hidden" ], "unsupported": [], "files": 352, "hidden": 2
+    }
+  ]
+}
+```
+
+`collections delete --json`. `deleted` is `false` with `"reason": "not-found"` if the collection does not exist (also exit `0`). `purge` is as in `publish-content`:
+
+```json
+{ "schemaVersion": 1, "collection": "pr-42", "publishId": "default", "deleted": true, "purge": null }
+```
+
+`collections promote --json`. `expiresAt` is the expiration time of the target after the promote, or `null`:
+
+```json
+{ "schemaVersion": 1, "from": "staging", "to": "live", "publishId": "default", "expiresAt": null }
+```
+
+`status --json` in a managed project. `needsDeploy` is `null` if it is not known (no API token):
+
+```json
+{
+  "schemaVersion": 1,
+  "mode": "managed",
+  "serviceId": "SERVICE_ID",
+  "staticPublishVersion": { "recorded": "8.1.0", "running": "8.1.0", "check": "same" },
+  "fingerprint": { "current": "3f…", "deployed": "3f…", "deployedStaticPublishVersion": "8.1.0" },
+  "activeVersion": 12,
+  "domain": "example.edgecompute.app",
+  "needsDeploy": false,
+  "reasons": [],
+  "previewUrls": [ { "type": "query", "url": "https://example.edgecompute.app/?collection={collection}" } ],
+  "template": {
+    "name": "hono",
+    "provides": {
+      "@fastly/hono-fastly-compute": "0.4.0",
+      "@fastly/js-compute": "4.0.0",
+      "hono": "4.13.14",
+      "@fastly/compute-js-static-publish": "8.1.0"
+    }
+  }
+}
+```
+
+`template.provides` lists the packages that the app of the template provides to the folder of the template (for example `hono-compose/`), with their versions.
+
+In an ejected app, `status --json` gives `{ "schemaVersion": 1, "mode": "ejected", "serviceId": "SERVICE_ID" }`.
+
+`deploy --json`. `deployed` is `false` with `"reason": "up-to-date"` if the active version already has this app:
+
+```json
+{
+  "schemaVersion": 1,
+  "deployed": true,
+  "serviceId": "SERVICE_ID",
+  "version": 13,
+  "domain": "example.edgecompute.app",
+  "fingerprint": "3f…",
+  "staticPublishVersion": "8.1.0"
+}
+```
+
+`--version --json` gives `{ "schemaVersion": 1, "version": "8.1.0" }`.
+
+**Errors:** with `--json`, stdout has one object, `{ "schemaVersion": 1, "error": { "code": "…", "message": "…" } }`. The error also goes to stderr. `message` is for people and can change. `code` is one of these values. A script can use it:
+
+| Code | Exit code | Meaning |
+|------|-----------|---------|
+| `usage` | `2` | An unknown command or option, or a missing or incorrect option value |
+| `config-invalid` | `2` | `static-publish.rc.js`, `static-publish.project.js`, or `publish-content.config.js` cannot be loaded, or is not valid |
+| `collection-name-invalid` | `2` | A collection name breaks the [rule](#-collections-publish-preview-promote) |
+| `collection-not-found` | `2` | The command needs a collection that does not exist |
+| `project-dir-not-found` | `2` | `--project-dir` is not a directory, or has no config file. Also a command for a project or an app (for example `status`) in a directory with no config file. |
+| `json-not-supported` | `2` | `--json` with a command that does not support it |
+| `credentials-missing` | `2` | An API token or S3 credentials are necessary, but not given |
+| `version-mismatch` | `2` | `managed.staticPublishVersion` is not the version of the CLI that runs |
+| `first-deploy-manual` | `2` | The first deploy of a managed project with S3 storage, with `--non-interactive` |
+| `version-not-published` | `2` | `eject` needs a version of this package that is on npm |
+| `template-init-needed` | `2` | `template init --check`: the folder of the template (for example `hono-compose/`) is out of date. Run `template init` |
+| `deploy-failed` | `1` | The build or the deploy of the app failed |
+| `failed` | `1` | The operation failed, for example storage cannot be reached |
+
+New codes can come in a minor release. Treat a code that you do not know by its exit code.
+
+**Secrets:** give the Fastly API token in `FASTLY_API_TOKEN`, and S3 credentials in `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY`. The CLI replaces the values of the token and the S3 secret access key with `[REDACTED]` in its output, also in errors and in the JSON.
+
 ### 🛠 App Scaffolding
 
 Run outside an existing Compute app directory:
@@ -859,7 +1814,7 @@ npx @fastly/compute-js-static-publish@latest \
   --root-dir=./public \
   --kv-store-name=<site-content>
 
-# Using S3 storage (BETA)
+# Using S3 storage
 npx @fastly/compute-js-static-publish@latest \
   --root-dir=./public \
   --storage-mode=s3 \
@@ -878,6 +1833,8 @@ npx @fastly/compute-js-static-publish@latest \
   [--output=./compute-js] \
   [--static-publisher-working-dir=<output>/static-publisher] \
   [--publish-id=<prefix>] \
+  [--default-collection-name=live] \
+  [--template=plain|hono] \
   [--static-dir=./public/static] \
   [--spa=./public/spa.html] \
   [--not-found-page=./public/404.html] \
@@ -908,10 +1865,13 @@ npx @fastly/compute-js-static-publish@latest \
 - `--description`: Application description to insert into `fastly.toml`
 - `--author`: Author to insert into `fastly.toml`
 - `--service-id`: Optional existing Fastly Compute service ID
+- `--template`: The template of the app's code (default: `plain`). `plain` is a JavaScript app that calls `PublisherServer.serveRequest()` from a fetch event listener. `hono` is a TypeScript [Hono](https://hono.dev/) app (see [Using Hono](#-using-hono)).
+- `--managed`: Write only `static-publish.project.js` (a [managed project](#managed-projects)) in the current directory, in place of the app. `--output` is not used.
 
 **Used in building config files:**
 - `--root-dir`: Required. Directory of static site content.
 - `--publish-id`: Optional key prefix for KV entries (default: `'default'`).
+- `--default-collection-name`: The collection to serve when no collection is selected (default: `'live'`).
 - `--public-dir`: **Deprecated.** A future version will remove it. Public files base directory, under `--root-dir` (default: same as `--root-dir`). Files that are under `--root-dir` but not under `--public-dir` are published, but requests cannot get them.
 - `--static-dir`: One or more directories to serve with long cache TTLs.
 - `--spa`: SPA fallback file path, from the current directory (e.g., `./public/spa.html`). The file must exist under `--root-dir`.
@@ -919,9 +1879,38 @@ npx @fastly/compute-js-static-publish@latest \
 - `--auto-index`: List of filenames to use as index files.
 - `--auto-ext`: Extensions to try when resolving URLs.
 
+**Collection selection** (written as `collectionSelection` in `static-publish.rc.js`; see [Previews: Collection Selection](#-previews-collection-selection)):
+- `--collection-selection`: A source. Can be repeated; the sources are tried in the order of the flags.
+   - `host:<pattern>`, for example `host:{collection}.preview.example.com`
+   - `host:<hostname>,value=<collection>`, for example `host:stag.example.com,value=staging`
+   - `path:<prefix>[,sticky]`, for example `path:/_preview/{collection},sticky`
+   - `path:<prefix>,value=<collection>[,sticky]`, for example `path:/_staging,value=staging`
+   - `query:<param>[,sticky]`, for example `query:collection,sticky`
+   - `cookie[:<cookieName>][,maxAge=<seconds>][,activatePath=<path>][,resetPath=<path>]`
+   - `header:<name>`, for example `header:x-publisher-collection`
+- `--collection-allow`: The collections that can be selected, for example `pr-*,staging`.
+- `--collection-on-missing`: `not-found` (default) or `default`.
+- `--collection-noindex`: `true` (default) or `false`.
+
 ### 🚀 Inside a Compute App Directory
 
-Once you're in the scaffolded Compute app directory (with `static-publish.rc.js` present), you can run these subcommands:
+Once you're in the scaffolded Compute app directory (with `static-publish.rc.js` present), you can run these subcommands.
+
+To run a subcommand from another directory, for example the root of your repo in CI, give the app directory with `--project-dir`:
+
+```sh
+npx @fastly/compute-js-static-publish publish-content \
+  --project-dir=./compute-js \
+  --collection-name=staging
+```
+
+With `--project-dir`, all relative paths are relative to that directory: the paths in `static-publish.rc.js` and `publish-content.config.js`, and also the paths in the other options (for example `--config` and `--root-dir`). The directory must have a `static-publish.rc.js` (an app) or a `static-publish.project.js` (a [managed project](#managed-projects)). To scaffold an app in another directory, use `--output`.
+
+To print the version of this package, run `npx @fastly/compute-js-static-publish --version`. It works in any directory.
+
+With `--non-interactive`, or when the `CI` environment variable is set, the CLI never asks for input: missing input is an error. `deploy` then also runs the Fastly CLI with `--non-interactive`. The output never shows the values of `--fastly-api-token`, `--s3-secret-access-key`, `FASTLY_API_TOKEN`, and `S3_SECRET_ACCESS_KEY`.
+
+For `--json`, the exit codes, and the error codes, see [Using the CLI in CI](#-using-the-cli-in-ci).
 
 #### `publish-content`
 
@@ -941,7 +1930,7 @@ npx @fastly/compute-js-static-publish publish-content \
   [--verbose]
 ```
 
-Publishes static files from your local root directory into a named collection, in the storage that `static-publish.rc.js` specifies: the Fastly KV Store, S3-compatible storage (BETA), or a local dev directory (`--local`, KV Store mode only).
+Publishes static files from your local root directory into a named collection, in the storage that `static-publish.rc.js` specifies: the Fastly KV Store, S3-compatible storage, or a local dev directory (`--local`, KV Store mode only).
 
 Before it scans your files, the command lists the files that are already in storage. Files that already exist with the same hash are not compressed or uploaded again. With the KV Store, a file larger than 20 MiB is stored in chunks, and the command uploads a chunk again if the chunk in storage does not have the correct size. Then the command uploads the remaining files in batches.
 
@@ -976,7 +1965,7 @@ After this process is complete, the PublisherServer object in the Compute applic
 
 - `--fastly-api-token`: API token to use when publishing. If not set, the tool uses the **`FASTLY_API_TOKEN` environment variable**.
 
-**S3 Storage Options (BETA):**
+**S3 Storage Options:**
 
 - `--s3-access-key-id`, `--s3-secret-access-key`: Access key ID and secret access key for S3-compatible storage. If not set, the tool will check the `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` environment variables.
 - `--s3-upload-concurrency`: Number of objects to upload at the same time, from 1 to 256 (default: 64). Each upload keeps its file in memory, so a site with many large files can need a lower value.
@@ -1003,7 +1992,7 @@ This can include expired collection indexes, orphaned content assets, and index 
 
 - `--fastly-api-token`: API token to use when publishing. If not set, the tool uses the **`FASTLY_API_TOKEN` environment variable**.
 
-**S3 Storage Options (BETA):**
+**S3 Storage Options:**
 
 - `--s3-access-key-id`, `--s3-secret-access-key`: Access key ID and secret access key for S3-compatible storage. If not set, the tool will check the `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` environment variables.
 
@@ -1022,7 +2011,7 @@ Lists all collections currently published in storage.
 
 - `--fastly-api-token`: API token to use when publishing. If not set, the tool uses the **`FASTLY_API_TOKEN` environment variable**.
 
-**S3 Storage Options (BETA):**
+**S3 Storage Options:**
 
 - `--s3-access-key-id`, `--s3-secret-access-key`: Access key ID and secret access key for S3-compatible storage. If not set, the tool will check the `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` environment variables.
 
@@ -1062,7 +2051,7 @@ If a Service ID is found, the command then purges the surrogate key `<publishId>
 - `--fastly-service-id`: The Fastly Service ID to purge after promoting. If not set, the tool checks the `FASTLY_SERVICE_ID` environment variable, then `service_id` in `fastly.toml`. If none is found, the command skips the purge. The purge also needs an API token (see `--fastly-api-token`), also in S3 mode. With `--local`, there is no purge. If the purge fails, the command shows a warning and completes, because the collection is already promoted.
 - `--purge-environment`: The environments to purge: `production` (the default), `staging`, or both, as a comma-separated list. You can also repeat the option.
 
-**S3 Storage Options (BETA):**
+**S3 Storage Options:**
 
 - `--s3-access-key-id`, `--s3-secret-access-key`: Access key ID and secret access key for S3-compatible storage. If not set, the tool will check the `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` environment variables.
 
@@ -1092,7 +2081,7 @@ Sets or updates the expiration time of an existing collection.
 
 - `--fastly-api-token`: API token to use when publishing. If not set, the tool uses the **`FASTLY_API_TOKEN` environment variable**.
 
-**S3 Storage Options (BETA):**
+**S3 Storage Options:**
 
 - `--s3-access-key-id`, `--s3-secret-access-key`: Access key ID and secret access key for S3-compatible storage. If not set, the tool will check the `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` environment variables.
 
@@ -1123,7 +2112,7 @@ If a Service ID is found, the command then purges the surrogate key `<publishId>
 
 - `--fastly-api-token`: API token to use when publishing. If not set, the tool uses the **`FASTLY_API_TOKEN` environment variable**.
 
-**S3 Storage Options (BETA):**
+**S3 Storage Options:**
 
 - `--s3-access-key-id`, `--s3-secret-access-key`: Access key ID and secret access key for S3-compatible storage. If not set, the tool will check the `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` environment variables.
 
@@ -1168,13 +2157,16 @@ if (redirectResponse) {
 
    | Endpoint                           | Purpose          | Query params                                                                                   | Result                                    |
    |------------------------------------|------------------|------------------------------------------------------------------------------------------------|-------------------------------------------|
-   | activatePath (default `/activate`) | Set the cookie   | `collection` (required) - name of the collection<br /> `redirectTo` (optional, `/` by default) | `302` redirect with a `Set-Cookie` header |
-   | resetPath (default `/reset`)       | Clear the cookie | `redirectTo` (optional, `/` by default)                                                        | `302` redirect that expires the cookie    |
+   | activatePath (default `/activate`) | Set the cookie   | `collection` (required) - name of the collection<br /> `redirectTo` (optional, `/` by default) | `308` redirect with a `Set-Cookie` header |
+   | resetPath (default `/reset`)       | Clear the cookie | `redirectTo` (optional, `/` by default)                                                        | `308` redirect that expires the cookie    |
    
    If a visitor accesses `/activate?collection=blue&redirectTo=/preview`, the helper will issue a redirect and drop `publisher-collection=blue` into their cookie jar.
       - If someone forgets `?collection=?`? Then `/activate` replies with HTTP `400`.
    
    When the visitor hits `/reset`, the cookie is deleted.
+
+   > [!NOTE]
+   > The collection that the cookie selects is not in the URL. Add `Cache-Control: private` to the responses of a preview, so that a shared cache does not store them. See [Shared caches](#shared-caches). With [`collectionSelection`](#-previews-collection-selection), `PublisherServer` does this for you.
 
 3. Safety flags are baked in
 

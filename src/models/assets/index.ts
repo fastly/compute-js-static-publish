@@ -16,6 +16,35 @@ export type AssetEntry = {
 
 export type AssetEntryMap = Record<string, AssetEntry>;
 
+// A hidden file is published, but PublisherServer does not serve it for a
+// request. Its key in the index is this prefix and then the asset key, for
+// example 'hidden:/404.html'. A real asset key always starts with '/', so no
+// request path can match such a key. A collection that has a hidden file
+// requires the 'hidden' feature.
+export const HIDDEN_INDEX_KEY_PREFIX = 'hidden:';
+export const HIDDEN_INDEX_FEATURE = 'hidden';
+
+export function hiddenIndexKey(assetKey: string): string {
+  return HIDDEN_INDEX_KEY_PREFIX + assetKey;
+}
+
+export function isHiddenIndexKey(indexKey: string): boolean {
+  return indexKey.startsWith(HIDDEN_INDEX_KEY_PREFIX);
+}
+
+// Find the entry for an asset key. With includeHidden, also find a hidden file.
+export function findAssetEntry(assetEntryMap: AssetEntryMap, assetKey: string, includeHidden: boolean): AssetEntry | null {
+  if (isHiddenIndexKey(assetKey)) {
+    return null;
+  }
+  return assetEntryMap[assetKey] ?? (includeHidden ? assetEntryMap[hiddenIndexKey(assetKey)] : undefined) ?? null;
+}
+
+// The number of hidden files in an index.
+export function countHiddenEntries(assetEntryMap: AssetEntryMap): number {
+  return Object.keys(assetEntryMap).filter(isHiddenIndexKey).length;
+}
+
 export type AssetVariantMetadata = {
   contentEncoding?: ContentCompressionTypes,
   size: number,

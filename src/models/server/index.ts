@@ -3,6 +3,7 @@
  * Licensed under the MIT license. See LICENSE file for details.
  */
 
+import { HIDDEN_INDEX_FEATURE } from '../assets/index.js';
 import { getMetadataFieldValue } from '../metadata/index.js';
 import {
   decodeIndexPartsInfo,
@@ -17,6 +18,10 @@ export type IndexMetadata = {
   // A newer CLI adds a feature only if the published content uses it.
   // The metadata keeps them as one string, separated by commas.
   requires?: string[],
+  // The number of files in the index, and how many of them are hidden, for
+  // collections list. A collection published by an older version has none.
+  fileCount?: number,
+  hiddenFileCount?: number,
   // The parts of the index (see models/index-parts). A server that does not
   // know this field reads the full index.
   indexParts?: IndexPartsInfo,
@@ -28,10 +33,13 @@ export type IndexMetadata = {
 // The features that this version of PublisherServer supports. A server does
 // not serve a collection that requires a feature that is not in this list.
 // A feature name must not contain a comma, because the metadata uses commas to
-// separate the names. Use short kebab-case names, for example 'my-feature'.
-export const SUPPORTED_INDEX_FEATURES: readonly string[] = [];
+// separate the names. Use short kebab-case names, for example 'hidden'.
+export const SUPPORTED_INDEX_FEATURES: readonly string[] = [
+  // Hidden files: index keys that start with 'hidden:'.
+  HIDDEN_INDEX_FEATURE,
+];
 
-const KNOWN_FIELDS = [ 'publishedTime', 'expirationTime', 'requires', 'indexParts' ];
+const KNOWN_FIELDS = [ 'publishedTime', 'expirationTime', 'requires', 'fileCount', 'hiddenFileCount', 'indexParts' ];
 
 export function encodeIndexMetadata(indexMetadata: IndexMetadata): Record<string, string> {
   const result: Record<string, string> = { ...indexMetadata.otherFields };
@@ -51,6 +59,13 @@ export function encodeIndexMetadata(indexMetadata: IndexMetadata): Record<string
       }
     }
     result['requires'] = indexMetadata.requires.join(',');
+  }
+
+  for (const field of [ 'fileCount', 'hiddenFileCount' ] as const) {
+    const value = indexMetadata[field];
+    if (value != null && Number.isInteger(value) && value >= 0) {
+      result[field] = String(value);
+    }
   }
 
   if (indexMetadata.indexParts != null) {
@@ -82,10 +97,17 @@ export function decodeIndexMetadata(obj: Record<string, string> | undefined): In
     }
   }
 
+  const count = (field: string) => {
+    const value = getMetadataFieldValue(obj, field);
+    return value != null && /^\d+$/.test(String(value)) ? Number(value) : undefined;
+  };
+
   return {
     publishedTime: !isNaN(publishedTime) ? publishedTime : undefined,
     expirationTime: !isNaN(expirationTime) ? expirationTime : undefined,
     requires: requires.length > 0 ? requires : undefined,
+    fileCount: count('fileCount'),
+    hiddenFileCount: count('hiddenFileCount'),
     indexParts: indexParts ?? undefined,
     otherFields,
   };

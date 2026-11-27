@@ -9,6 +9,53 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 
 ## [unreleased]
 
+## [8.1.0] - 2026-11-27
+
+### Added
+
+- **Managed projects.** `scaffold --managed` writes only `static-publish.project.js`, and the CLI generates the app from it. The new commands `dev`, `deploy`, `status`, `upgrade`, and `eject` work with it. `deploy` deploys only when the generated app changed, and the first deploy makes the service and writes its ID into the project file. `eject` converts the project into an ejected app that you own. See [Managed and ejected apps](https://github.com/fastly/compute-js-static-publish/blob/main/README.md#managed-and-ejected-apps). `MIGRATING.md` has the steps to move an app to managed mode.
+- **Previews.** `collectionSelection` in `static-publish.rc.js` (or in the project file) selects the collection of each request, by `host`, `path`, `query`, `cookie`, or `header`. A preview response gets `X-Robots-Tag: noindex`, and `Cache-Control: private` unless the URL names the collection. `onMissing` gives a `404` or the default collection for a collection that does not exist. The `plain` app uses it, and `scaffold` has the flags `--collection-selection`, `--collection-allow`, `--collection-on-missing`, and `--collection-noindex`. See [Previews](https://github.com/fastly/compute-js-static-publish/blob/main/README.md#-previews-collection-selection).
+- **Hidden files.** `hiddenItems` in `publish-content.config.js`, or `{ hidden: true }` from `assetInclusionTest`, publishes files that the server does not serve for a request. Your code reads them with `getMatchingAsset(key, { includeHidden: true })`. The SPA file and the 404 page can be hidden. Hidden is not access control. **Deploy your app with 8.1 before you publish hidden files:** an app built with 8.0 does not serve a collection that has hidden files. See [Hidden files](https://github.com/fastly/compute-js-static-publish/blob/main/README.md#hidden-files).
+- **Hono.** The `hono` template (`--template=hono`, or `managed.template: 'hono'`) is a TypeScript Hono app. Its plugin modules in `hono-compose/` (`definePlugin()`) add middleware and routes, with options and bindings from `templateOptions.hono`. `template init` makes the folder. For any Hono app, `@fastly/compute-js-static-publish/hono` has `serveStatic()`, `serveFallback()`, `selectCollection()`, and other helpers. It replaces `@fastly/hono-compute-js-static-publish`, and `MIGRATING.md` has the steps. The repository has examples of plugins in `examples/hono/`: GRIP streaming and OAuth login. See [Using Hono](https://github.com/fastly/compute-js-static-publish/blob/main/README.md#-using-hono).
+- **CI.** `--json` (one JSON object on stdout, with `schemaVersion: 1`), error codes, `--project-dir`, `--non-interactive` (also on when `CI` is set), and `--version`. The output never shows the value of an API token or of an S3 secret key. See [Using the CLI in CI](https://github.com/fastly/compute-js-static-publish/blob/main/README.md#-using-the-cli-in-ci).
+- **Streaming response cache.** `serveRequestStreaming()`, `serveFallbackStreaming()`, and `serveCachedStreaming()` return `{ response, fillPromise }`. On a cache miss, the body goes to the visitor and into the cache at the same time. Pass `fillPromise` to `event.waitUntil()`. It needs `@fastly/js-compute` 4.2 or later on a Fastly service. The `plain` and `hono` templates use it. See [Streaming the response into the cache](https://github.com/fastly/compute-js-static-publish/blob/main/README.md#streaming-the-response-into-the-cache).
+- **Scaffolding.** `scaffold --template` (`plain` or `hono`), `--default-collection-name`, [template hooks](https://github.com/fastly/compute-js-static-publish/blob/main/README.md#-template-hooks) (`scripts/template_<name>.js`), and `npm run dev:watch`. `scaffold` writes `generatedFrom` into `static-publish.rc.js`.
+- **`PublisherServer`.** The options of `serveRequest()`: `collectionName`, `pathname`, `fallback`, `healthCheck`, `onMissing`, `status`, and `headers` (see [Options of `serveRequest()`](https://github.com/fastly/compute-js-static-publish/blob/main/README.md#options-of-serverequest)). `serveFallback()` serves the SPA file or the 404 page, after `serveRequest()` with `fallback: false`. Also `isCollectionAvailable()`, `{ applyAuto, includeHidden }` for `getMatchingAsset()`, and `{ response, length }` from the function of `serveCached()`. The types `ServeRequestOptions` and `ServeFallbackOptions` are exported.
+- **S3 mode.** `s3.secretStoreLinkName` and `s3.fastlyBackendName` set the names of the Secret Store and of the backend in the generated `fastly.toml`.
+
+### Changed
+
+These changes can break something:
+
+- The name of a new collection must be a DNS label: lowercase `a-z`, `0-9`, and `-`, from 1 to 63 characters, with no `-` at the start or the end. `publish-content`, `collections promote --to`, and `scaffold --default-collection-name` stop with an error for a new collection with another name. A collection that exists continues to work, with a warning.
+- Exit codes: `1` when the operation failed and a retry can help, and `2` for a usage or config error. Before, every error exited with `1`.
+- `collectionSelector.fromCookie()`: the activate and reset paths redirect with `308`. Before, they used `302`. The activate path returns `400` for a collection name that is not a DNS label.
+- `PublisherServer`: the fields `serverTiming`, `settingsCached`, and `assetEntryMapCache` are read-only (see Deprecated).
+
+Other changes:
+
+- S3-compatible storage is no longer a beta feature.
+- The `src/index.js` of the `plain` app calls `serveRequest()` with `fallback: false`, then runs your code, and then calls `serveFallback()`. Thus your code runs for each request that no published file matches, also when the collection has a fallback page.
+- A scaffolded app has `@fastly/compute-js-static-publish` in `dependencies`. It was in `devDependencies`.
+- `PublisherServer` keeps the settings, the index, and the `Server-Timing` measurements for each request. A reused sandbox does not keep them from one request to the next.
+- `staticPublisherWorkingDir` can be a path outside the directory of `static-publish.rc.js`, for example `../static-publisher`.
+- A command that needs an app or a managed project stops with an error, in a directory that has neither. The error names the directories nearby that have one. Before, the CLI started to scaffold.
+- `collections promote` from a collection that does not exist stops with a clear error (exit `2`). `collections delete` of a collection that does not exist says so, and succeeds.
+- README: a GitHub Actions example that publishes a preview for each pull request.
+
+### Updated
+
+- Scaffolded apps and the apps of managed projects use `@fastly/js-compute` `^4.4.1` and `@fastly/cli` `^17.0.0`. Before, they used `^4.0.0` and `^16.0.0`.
+
+### Deprecated
+
+- `PublisherServer`: the fields `serverTiming`, `settingsCached`, and `assetEntryMapCache`. They are now read-only, and they return the state of the current request. An assignment to them throws a `TypeError` (and is a TypeScript error). Use `getServerConfig()` and `getAssetEntryMap()`. These fields will be removed in v9.
+
+### Fixed
+
+- `PublisherServer`: a request for the 404 page with a matching `If-None-Match` or `If-Modified-Since` got a `304` with no body. Now the response is always the `404` with the page.
+- `scaffold` escapes the values that it writes into `fastly.toml`. Before, a `"` or a `\` in `--name`, `--description`, or `--author`, or a KV Store name such as `my.store`, gave a `fastly.toml` that was not valid.
+
 ## [8.0.3] - 2026-11-27
 
 ### Added
@@ -516,7 +563,8 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 - Updated generated app's webpack and webpack-cli versions
 - Use atob() and removed dependency on Buffer
 
-[unreleased]: https://github.com/fastly/compute-js-static-publish/compare/v8.0.3...HEAD
+[unreleased]: https://github.com/fastly/compute-js-static-publish/compare/v8.1.0...HEAD
+[8.1.0]: https://github.com/fastly/compute-js-static-publish/compare/v8.0.3...v8.1.0
 [8.0.3]: https://github.com/fastly/compute-js-static-publish/compare/v8.0.2...v8.0.3
 [8.0.2]: https://github.com/fastly/compute-js-static-publish/compare/v8.0.1...v8.0.2
 [8.0.1]: https://github.com/fastly/compute-js-static-publish/compare/v8.0.0...v8.0.1

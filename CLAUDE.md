@@ -6,8 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `@fastly/compute-js-static-publish` is one npm package. It has two parts, and each part compiles separately:
 
-- **CLI** (`src/cli`, Node.js): It scaffolds a Fastly Compute JS app. It publishes static files to storage: the Fastly KV Store, or S3-compatible storage (v8 beta).
+- **CLI** (`src/cli`, Node.js): It scaffolds a Fastly Compute JS app. It publishes static files to storage: the Fastly KV Store, or S3-compatible storage (since v8).
 - **Server library** (`src/server`, runs in Fastly Compute/Wasm): `PublisherServer`. The scaffolded app imports it to serve the content.
+- **Hono middleware** (`src/hono`, compiled with the server build, export `./hono`): `fromStaticPublishRc()` / `fromPublisherServer()` return `serveStatic()`, `serveFallback()`, and `selectCollection()`, which call `serveRequest()` and `serveFallback()` of `PublisherServer`. It imports only types from `hono` (an optional peer dependency), so it adds nothing to the bundle. `src/hono/path.ts` (resolves `root`, `path`, and `rewriteRequestPath`, and refuses a path outside `root`) has no Compute imports, so the unit tests can import it.
 
 `src/models` has the types and the encode/decode helpers that both parts use. Both parts use the same storage key layout. Thus a change to one part usually needs a change to the other part.
 
@@ -57,9 +58,10 @@ Both parts use a registry of builder functions. Each entry point calls `register
 
 ### Storage key layout (shared contract)
 
-All keys start with `publishId` (default `'default'`):
+All keys start with `publishId` (default `'default'`). A collection name must be a DNS label (`isValidCollectionName()` in `models/collections/`). The CLI refuses a new collection with another name, and only warns for one that exists. The cookie selector refuses such a name, because the name goes into `Set-Cookie`. The keys:
 
 - `<publishId>_index_<collection>`: It maps each asset path to an `AssetEntry` (key `sha256:<hash>`, content type, variants, and more). The metadata of this entry has the collection metadata (`IndexMetadata`): `publishedTime`, `expirationTime`, and `requires`. `requires` lists the features that the server must support to serve the collection. A server does not serve a collection if `requires` has a feature that is not in `SUPPORTED_INDEX_FEATURES` (`models/server/index.ts`). This applies also to the default collection. When a new feature changes the index, the settings, or the key layout in a way that an older server would get wrong, add the feature to `SUPPORTED_INDEX_FEATURES` (a short kebab-case name, without a comma, because the metadata separates the names with commas), and make the CLI add it to `requires` only if the published content uses it. `decodeIndexMetadata()` keeps the fields that it does not know, so that `promote` and `update-expiration` do not remove them.
+  - Hidden files (`hidden` feature): the index key of a hidden file is `hidden:<asset key>` (`HIDDEN_INDEX_KEY_PREFIX` in `models/assets/`). A real asset key always starts with `/`, so no request path matches it. `findAssetEntry()` never looks up a `hidden:` key directly. `serveRequest()` never matches a hidden file; the SPA and 404 fallbacks and `getMatchingAsset(key, { includeHidden: true })` do. `publish-content` adds `hidden` to `requires` only if a file is hidden.
 - `<publishId>_settings_<collection>`: The normalized `server` section of `publish-content.config.js`. The CLI saves it when it publishes.
 - `<publishId>_files_sha256_<hash>[_<variant>]`: The file content, with `br`/`gzip` variants. The key is the hash of the content. Large files are split into chunks.
 - `<publishId>_parts_<hash>_<count>_<n>`: Index parts (`models/index-parts/`). For an index with `INDEX_PARTS_MIN_ENTRIES` entries or more, `publish-content` also stores `<count>` parts of it, before the index. `<hash>` is the SHA-256 of the index text, and the part of an asset key is `getIndexPartNumber()` (FNV-1a; the CLI and deployed servers must agree, so never change it). The index metadata field `indexParts` (`<count>:<hash>`) points to them. The parts are only a copy: the full index is still stored, so no `requires` feature is needed, and older servers and CLIs work. The key has no collection name, so an older `promote` (which keeps unknown metadata fields) points to the same parts. The prefix is not `_index_`/`_files_`/`_settings_`, so an older `clean` never reads or deletes them. The server reads the index headers, then one part (TTL 1 year, tag `<publishId>-files`), and reads the full index only if the part is missing. `clean` deletes the parts that no live index points to.
@@ -77,10 +79,22 @@ All collections share the files, because the key is the hash of the content. `cl
 - Uploads must be successful before the CLI writes the index.
 - `clean` must read all indexes before it deletes items. Before this rule, a read error that was not reported caused `clean` to delete the files of a live collection.
 
+### Generating the app
+
+`src/cli/CLAUDE.md` has how `generateApp()` makes the files of a scaffolded app, and how the tests check them.
+
+### Managed projects (8.1)
+
+`src/cli/CLAUDE.md` has the details of managed projects.
+
 ### Two config files in a scaffolded app
 
 - `static-publish.rc.js` (`models/config/static-publish-rc.ts`): the storage mode, the store or bucket, `publishId`, and `defaultCollectionName`. The Wasm binary **contains a copy** of this file. Thus, if you change it, you must rebuild the app.
 - `publish-content.config.js` (`models/config/publish-content-config.ts`): the publish-time filters, compression, and content types. It also has a `server` section, which the CLI stores for each collection. If you change it, you must publish again. A rebuild is not necessary.
+
+### Collection selection
+
+`collectionSelection` (types, `validateCollectionSelection()`, patterns, `previewUrl()`) is in `models/config/collection-selection.ts`, so that the CLI can use it. `resolveCollection()` is in `server/collection-selection/` (no `fastly:*` imports, so the unit tests load it). A pattern has exactly one `{collection}`; a name is checked with `isValidCollectionName()` and `allow` before use, and a source with a name that fails is skipped. Every redirect (sticky, activate, reset) goes through `sameSiteLocation()`: a path that starts with exactly one `/`, else `/`. The older `collection-selector/` helpers stay for apps that use them. `PublisherServer` keeps the rc's config (`setCollectionSelection()`). With it, `serveRequest()`/`serveFallback()` check a collection that is not the default (`checkSelectedCollection()`: it reads the index before the response cache, for `onMissing`), and mark its responses (`Cache-Control: private`, `X-Robots-Tag: noindex`). The `plain` template calls `resolveCollection()` in every app. The scaffold flags are parsed in `cli/util/collection-selection-flags.ts`; `generateApp()` throws for `collectionSelection` with a template without `supports.collectionSelection`.
 
 ### PublisherServer request flow
 
@@ -88,10 +102,10 @@ All collections share the files, because the key is the hash of the content. `cl
 
 ## Branches and releases
 
-- `main` is the v8 line (the latest stable major), and the default branch. Its ruleset ("Require CODEOWNERS Review") applies to the default branch. Thus each PR to `main` needs an approval. Fixes for v8 go to `main`. Features go to `main` too, but the parts of 8.1 go to `dev/8.1` (see below).
+- `main` is the v8 line (the latest stable major), and the default branch. Its ruleset ("Require CODEOWNERS Review") applies to the default branch. Thus each PR to `main` needs an approval. Fixes for 8.1 and features go to `main`.
 - Older major versions have their own branches (`v6`, `v7`, ...). Fixes for v7 go to the `v7` branch. There is no `v8` branch. Make it from `main` when the next major merges into `main`.
+- `v8.0` is the branch of 8.0.x. It was made from `main` at the 8.0.3 release. A fix for 8.0 goes to `v8.0`, if one is necessary. On `v8.0`, `ci-release.yaml` gives a stable release the dist-tag `latest-v8.0`, not `latest`.
 - The next major (for example `v9`), or a large minor version (for example 8.1, with the branch `dev/8.1`), gets a development branch. The ruleset does not apply to it, so GitHub does not require an approval for a PR to it. Tag its betas on that branch, after a version change commit on that branch. Merge `main` into it often (merge, not rebase), for example after each patch release. The final review is the PR that merges it into `main`. Do not make it the default branch, or each PR to it needs an approval.
-- 8.1 is in development on `dev/8.1`. The parts of 8.1 are PRs to `dev/8.1`, and each one is reviewed before it is merged (see `roadmap/`). Fixes for 8.0 go to `main`.
 - There is no `beta` branch. The npm dist-tag comes from the tag name.
 - The `release-and-port` skill has the release workflow details and the procedure to port changes between `v7` and `main`.
 - Record changes that users can see in `CHANGELOG.md`, under `[unreleased]` (Keep a Changelog format). `MIGRATING.md` has the instructions to upgrade to a new major version.

@@ -1,5 +1,7 @@
 # Tests
 
+> **Note:** In 8.1.0-beta.9, "Hono extensions" got new names ("composing plugin modules"). This file keeps the names of the earlier betas, for example the folder `hono-extensions/`, `defineExtension()`, and `build.hono.extensionsDir`. Now they are `hono-compose/`, `definePlugin()`, and `build.hono.composeDir`. [MIGRATING.md](../../MIGRATING.md#update-the-plugins-from-an-earlier-beta-of-81) has the full list.
+
 Goal: each PR adds the tests that make its code safe to change later. A refactor must not change a golden file. A change to a golden file must be visible in the PR diff.
 
 ## Rules for all parts
@@ -74,5 +76,12 @@ Goal: each PR adds the tests that make its code safe to change later. A refactor
 | 6.4 | Unit: `build.<template>` is in the generated rc in managed mode, with its path relative to the generated rc, and is kept at eject, with its path relative to the new rc. Warnings for settings that a template does not declare. |
 | 6.5 | Unit: the helpers (read the rc; list modules with the naming rules: prefixes, `_` and `.` skipped, subfolders skipped, `.d.ts` ignored, two files with the same name is an error). |
 | 6.6 | An empty `hono-extensions/` gives the same golden files as no `hono-extensions/`. The manifest lists modules in file-name order; provided packages are not copied; one `hono` in the bundle; the version-mismatch warning. `postinstall` writes the manifest (or the stub). The fingerprint changes with the files in `hono-extensions/` and its lockfile. `status --json` lists the provided packages. |
-| 6.7 | Unit: `defineMiddleware()` and `defineRoutes()` (with and without bindings); the types of `c.env` and `c.var.staticPublisher`. Bindings: the merge, and the error for one key with two values. e2e: a GRIP-like middleware and route; a module added after eject is found; the mount order (middleware → routes → files → fallback). |
+| 6.7 | Unit: `defineExtension()` (a function, an object of phases, with and without bindings; the check of the phases); the types of `c.env` and `c.var.staticPublisher`. Bindings: the merge, and the error for one key with two values. e2e: a GRIP-like middleware and route; a module added after eject is found; the mount order (middleware → beforeFilesRoutes → files → afterFilesRoutes → fallback). |
 | 6.8 | `template init` makes the folder (with the inactive example); updates only the parts that the template owns; `--reset` with and without `--force`; `--check` fails on drift. It fails with no `generatedFrom`, and works only for the current template. Scaffolding with `--template hono` runs it. |
+
+## Part 7: The npx command of a prerelease
+
+| Task | Tests to add |
+|---|---|
+| 7.1 | Unit: `cliCommand()` for a stable version, a prerelease, and the own version. By hand: with a prerelease version, `--help`, `collections --help`, and the next steps of `scaffold --managed` show `@beta`. e2e: the golden files of the scaffolded apps do not change. |
+| 7.2 | Unit: `prereleaseDocs()` (npx commands, `npm install …@latest`, links, text that does not change, a second run) and `prereleaseDocsFiles()`. |

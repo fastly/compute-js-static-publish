@@ -77,14 +77,14 @@ export const buildStoreProvider: StorageProviderBuilder = async (
   if (context.localMode) {
     throw new Error(S3_LOCAL_MODE_ERROR);
   }
-  console.log(`  Working on S3 (or compatible) storage (BETA)...`);
+  console.log(`  Working on S3 (or compatible) storage...`);
 
   const {
     region,
     bucket,
     endpoint,
   } = getS3StorageConfigFromRc(config);
-  console.log(`  | Using S3 storage (BETA)`);
+  console.log(`  | Using S3 storage`);
   console.log(`     Region  : ${region}`);
   console.log(`     Bucket  : ${bucket}`);
   console.log(`     Endpoint: ${endpoint ?? 'default'}`);
