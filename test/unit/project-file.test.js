@@ -168,11 +168,11 @@ describe('project file round trip', () => {
     'kv-public-dir': { ...base, rootDir: '/project/site', publicDir: '/project/site/public', notFoundPageFilename: undefined },
     'working dir outside the app': { ...base, staticPublisherWorkingDir: '/project/static-publisher' },
     'hono': { ...base, template: loadAppTemplate('hono'), build: { hono: { composeDir: '/project/hono-compose' } } },
-    'hono with a custom extensions folder and options': {
+    'hono with a custom plugins folder and options': {
       ...base,
       template: loadAppTemplate('hono'),
-      build: { hono: { composeDir: '/project/src/extensions' } },
-      templateOptions: { hono: { bindings: { config: 'ConfigStore:site' }, middleware: { auth: { realm: 'site' } } } },
+      build: { hono: { composeDir: '/project/src/plugins' } },
+      templateOptions: { hono: { bindings: { config: 'ConfigStore:site' }, compose: { plugins: { auth: { realm: 'site' } } } } },
     },
     'kv-collection-selection': {
       ...base,

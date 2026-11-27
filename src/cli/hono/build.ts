@@ -395,7 +395,6 @@ export async function watchPlugins(options: BundlePluginsOptions): Promise<Plugi
 // name. Removed in v9.
 const OLD_SCRIPTS_MESSAGE =
   'The plugins of the hono template have new names: update scripts/ and src/index.ts of the app as MIGRATING.md shows.';
-export const HONO_EXTENSIONS_MANIFEST = 'src/hono-extensions.generated.js';
 export function bundleHonoExtensions(..._args: unknown[]): never {
   throw new Error(`${OLD_SCRIPTS_MESSAGE} bundleHonoExtensions() is now bundlePlugins().`);
 }

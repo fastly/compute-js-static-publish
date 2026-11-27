@@ -40,7 +40,7 @@ describe('prereleaseDocs()', () => {
       'npx @fastly/compute-js-static-publish@beta dev',
       'npm install @fastly/compute-js-static-publish',
       '"@fastly/compute-js-static-publish": "^8.1.0"',
-      'import { defineExtension } from \'@fastly/compute-js-static-publish/hono\';',
+      'import { definePlugin } from \'@fastly/compute-js-static-publish/hono\';',
       'https://github.com/fastly/compute-js-static-publish/pull/158',
       'Thus a new release of this package never changes your app by itself, also with `npx @fastly/compute-js-static-publish@latest`.',
     ]) {
@@ -58,8 +58,8 @@ describe('prereleaseDocsFiles()', () => {
   test('the READMEs, MIGRATING.md, and the READMEs in examples/', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cjsp-prerelease-docs-'));
     for (const file of [ 'README.md', 'README.short.md', 'MIGRATING.md', 'CHANGELOG.md',
-      'examples/hono/grip/README.md', 'examples/hono/grip/hono-extensions/grip.ts',
-      'examples/hono/grip/hono-extensions/node_modules/x/README.md' ]) {
+      'examples/hono/grip/README.md', 'examples/hono/grip/hono-compose/grip.ts',
+      'examples/hono/grip/hono-compose/node_modules/x/README.md' ]) {
       fs.mkdirSync(path.dirname(path.resolve(dir, file)), { recursive: true });
       fs.writeFileSync(path.resolve(dir, file), '');
     }
