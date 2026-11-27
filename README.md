@@ -17,8 +17,9 @@
 - [✨ Key Features](#-key-features)
 - [🆕 New in 8.1](#-new-in-81)
 - [🏁 Quick Start](#-quick-start)
-  - [📦 Fastly KV Store](#-using-the-fastly-kv-store) 
-  - [🎁 S3 Compatible Storage](#-using-s3-compatible-storage)
+  - [🧭 Managed project (recommended)](#-managed-project-recommended)
+  - [📦 Ejected app: Fastly KV Store](#-using-the-fastly-kv-store)
+  - [🎁 Ejected app: S3 Compatible Storage](#-using-s3-compatible-storage)
 - [⚙️ Configuring `static-publish.rc.js`](#️-configuring-static-publishrcjs)
 - [🧾 Config for Publishing and Server: `publish-content.config.js`](#-config-for-publishing-and-server-publish-contentconfigjs)
 - [📦 Collections (Publish, Preview, Promote)](#-collections-publish-preview-promote)
@@ -66,6 +67,57 @@ Before you upgrade, read [CHANGELOG.md](CHANGELOG.md). These changes can break s
 ---
 
 ## 🏁 Quick Start
+
+### 🧭 Managed project (recommended)
+
+A managed project has one file in your repo, `static-publish.project.js`. The CLI generates the Compute app from it when it needs the app, and `upgrade` moves the project to a new version of this package. See [Managed and ejected apps](#managed-and-ejected-apps).
+
+#### 1. Make the project
+
+Create a directory for your project, place your static files in `./public`, then type:
+
+```sh
+npx @fastly/compute-js-static-publish@latest --managed --root-dir=./public --kv-store-name=site-content
+```
+
+Add `--template=hono` for a [Hono](#-using-hono) app. For S3-compatible storage, type `--storage-mode=s3 --s3-region=<region> --s3-bucket=<bucket-name>` (and `--s3-endpoint=<endpoint>` if necessary) in place of `--kv-store-name=site-content`, as in [Using S3 Compatible Storage](#-using-s3-compatible-storage).
+
+Then add this package to your project, so that the version of the CLI does not change by itself. If the directory has no `package.json`, run `npm init -y` first:
+
+```sh
+npm install --save-dev @fastly/compute-js-static-publish@latest
+```
+
+Commit `static-publish.project.js` and `.gitignore`.
+
+#### 2. Preview Locally
+
+```sh
+npx @fastly/compute-js-static-publish publish-content --local  # 'publish' your files to the simulated local KV Store
+npx @fastly/compute-js-static-publish dev                      # preview locally
+```
+
+Your site is at `http://127.0.0.1:7676`. With S3-compatible storage, use `publish-content` without `--local`, and set `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` before you run `publish-content` and `dev`.
+
+#### 3. Deploy Your App
+
+[Create a free Fastly account](https://www.fastly.com/signup/?tier=free) if you haven't already, set `FASTLY_API_TOKEN` (for example, `export FASTLY_API_TOKEN=$(npx @fastly/cli auth token)`), and type:
+
+```sh
+npx @fastly/compute-js-static-publish deploy
+```
+
+The first deploy makes a new service, and writes its Service ID into `managed.serviceId`. Commit the project file after this.
+
+#### 4. Publish Content
+
+```sh
+npx @fastly/compute-js-static-publish publish-content
+```
+
+This uploads your files and purges the cache of the service. For later changes to your files, run only `publish-content`. Run `deploy` again after a change to the project file, or after `upgrade`: it deploys only if the generated app changed.
+
+The next two parts make an **ejected app** in `./compute-js`, whose code you own.
 
 ### 📦 Using the Fastly KV Store
 
@@ -209,7 +261,7 @@ When the Fastly CLI creates a new service, it creates a Secret Store named `S3_C
 
 ## 🗂 Project Layout
 
-Here's what your project might look like after scaffolding:
+A managed project has only `static-publish.project.js` and your files (see [Managed projects](#managed-projects)). Here's what an ejected app might look like after scaffolding:
 
 ```
 my-project/
@@ -310,7 +362,7 @@ managed: {
 The same version of this package always generates the same app, with the same versions of all dependencies: this package has a lockfile for the app of each template. The app uses the copy of this package that runs the CLI, through a `file:` link. Thus, add this package as a dev dependency of your project, and run the CLI from it, so that the version is pinned:
 
 ```sh
-npm install --save-dev @fastly/compute-js-static-publish
+npm install --save-dev @fastly/compute-js-static-publish@latest
 ```
 
 To deploy the app:
@@ -838,6 +890,33 @@ npx @fastly/compute-js-static-publish collections promote \
 > The collection denoted by `defaultCollectionName` is exempt from expiration.
 
 ## 🛠 Development → Production Workflow
+
+### Managed project
+
+Run the commands in the project dir (or with `--project-dir`).
+
+#### Local development
+
+```sh
+npx @fastly/compute-js-static-publish publish-content --local  # 'publish' your files to the simulated local KV Store
+npx @fastly/compute-js-static-publish dev                      # preview locally
+```
+
+`dev` generates the app, and runs `fastly compute serve` in it. With `dev -- --watch`, a change in the app builds and restarts it. To see a new publish, stop `dev` and start it again. To publish to another collection, add `--collection-name=preview-123` to `publish-content`.
+
+#### Production
+
+```sh
+npx @fastly/compute-js-static-publish deploy             # deploy the app, only if it changed
+npx @fastly/compute-js-static-publish publish-content    # upload the files, and purge the cache
+npx @fastly/compute-js-static-publish status             # show if a deploy is necessary
+```
+
+- Do the first `deploy` on your computer: it makes the service, and writes `managed.serviceId` into the project file. Commit the project file.
+- After that, CI can run `deploy` and `publish-content` on each change. `deploy` does nothing if the generated app did not change, so it is safe to run each time. Set `FASTLY_API_TOKEN`, and see [Using the CLI in CI](#-using-the-cli-in-ci) for `--non-interactive`, `--json`, and the exit codes.
+- To move to a new version of this package, update the dev dependency, run `upgrade`, commit the project file, and then `deploy`.
+
+The next two parts are for an ejected app.
 
 ### Using the KV Store
 

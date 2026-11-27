@@ -18,71 +18,71 @@ This CLI tool helps you:
 Create a directory for your project, place your static files in `./public`, then type:
 
 ```sh
-npx @fastly/compute-js-static-publish@latest --root-dir=./public --kv-store-name=site-content
-```
-
-**Since v8:** S3-compatible storage (such as Fastly Object Storage) is also supported. To use this mode, type:
-
-```sh
-npx @fastly/compute-js-static-publish@latest --root-dir=./public --storage-mode=s3 --s3-region=<region> --s3-bucket=<bucket-name>
-```
-
-If the storage needs a custom endpoint, as Fastly Object Storage does, add `--s3-endpoint=<endpoint>` (for example, `--s3-endpoint=https://us-east-1.object.fastlystorage.app`).
-
-For more details, see the [S3-compatible storage](https://github.com/fastly/compute-js-static-publish/blob/main/README.md#-using-s3-compatible-storage) section in the full documentation.
-
-**New in 8.1:** a managed project has only one file in your repo, `static-publish.project.js`, and the CLI generates the app. Add `--template=hono` for a Hono app:
-
-```sh
 npx @fastly/compute-js-static-publish@latest --managed --root-dir=./public --kv-store-name=site-content
-npx @fastly/compute-js-static-publish@latest publish-content --local
-npx @fastly/compute-js-static-publish@latest dev
+```
+
+This makes a **managed project**: one file, `static-publish.project.js`, that you commit. The Static Publisher CLI generates the Compute app from it when it needs the app. Add `--template=hono` for a Hono app.
+
+**Since v8:** S3-compatible storage (such as Fastly Object Storage) is also supported. To use it, type `--storage-mode=s3 --s3-region=<region> --s3-bucket=<bucket-name>` in place of `--kv-store-name=site-content`. If the storage needs a custom endpoint, as Fastly Object Storage does, add `--s3-endpoint=<endpoint>` (for example, `--s3-endpoint=https://us-east-1.object.fastlystorage.app`). For more details, see the [S3-compatible storage](https://github.com/fastly/compute-js-static-publish/blob/main/README.md#-using-s3-compatible-storage) section in the full documentation.
+
+Then add this package to your project, so that the version of the CLI does not change by itself. If the directory has no `package.json`, run `npm init -y` first:
+
+```sh
+npm install --save-dev @fastly/compute-js-static-publish@latest
 ```
 
 ### 🔧 Local Preview
 
 ```sh
-cd compute-js
-npm install
-npm run dev:publish  # 'publish' your files to the simulated local KV Store
-npm run dev:start    # preview locally
+npx @fastly/compute-js-static-publish publish-content --local  # 'publish' your files to the simulated local KV Store
+npx @fastly/compute-js-static-publish dev                      # preview locally
 ```
 
-Serves your app at `http://127.0.0.1:7676`. If the app is using the KV Store, your content is served from a simulated KV Store managed by the development server.
+Serves your app at `http://127.0.0.1:7676`. `dev` generates the app in `.static-publish/app/`, which you do not commit. With `dev -- --watch`, a change in the app builds and restarts it.
 
-If the app uses S3-compatible storage, use `npm run s3:publish` in place of `npm run dev:publish`. This uploads your files to the bucket. Set the `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` environment variables before you run `s3:publish` and `dev:start`.
+If the project uses S3-compatible storage, use `publish-content` without `--local`. This uploads your files to the bucket. Set the `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` environment variables before you run `publish-content` and `dev`.
 
 ### 🚀 Deploy to Production
 
 When you're ready to go live, [create a free Fastly account](https://www.fastly.com/signup/?tier=free) if you haven't already, and then:
 
 ```sh
+npx @fastly/compute-js-static-publish deploy             # deploy the app
+npx @fastly/compute-js-static-publish publish-content    # upload your static files
+```
+
+Both commands need a Fastly API token. Set the `FASTLY_API_TOKEN` environment variable, or add `--fastly-api-token=<token>`. The commands do not read the token of your Fastly CLI profile. If you are logged in with the Fastly CLI, you can give them that token:
+
+```sh
+export FASTLY_API_TOKEN=$(npx @fastly/cli auth token)
+```
+
+The first `deploy` makes a new service: the Fastly CLI asks for its name and its domain. Then `deploy` writes the Service ID into the project file. Commit the project file after this. With S3-compatible storage, the first deploy also asks for the S3 credentials, so do it on your computer, not in CI.
+
+To upload changes to your static files, run only `publish-content`. It also purges the cache of the service. `deploy` deploys again only when the generated app changes, for example after you run `upgrade` to move the project to a new version of this package.
+
+### Ejected app
+
+To own the code of the Compute app, scaffold without `--managed`. This makes the app in `./compute-js`, and you commit all of its files:
+
+```sh
+npx @fastly/compute-js-static-publish@latest --root-dir=./public --kv-store-name=site-content
 cd compute-js
+npm install
+npm run dev:publish          # 'publish' your files to the simulated local KV Store
+npm run dev:start            # preview locally
 npm run fastly:deploy        # deploy the app
 npm run fastly:publish       # upload your static files
 ```
 
-`fastly:publish` needs a Fastly API token that can write to the KV Store. Set the `FASTLY_API_TOKEN` environment variable, or add `-- --fastly-api-token=<token>`. The command does not read the token of your Fastly CLI profile. If you are logged in with the Fastly CLI, you can give it that token:
-
-```sh
-FASTLY_API_TOKEN=$(npx fastly auth token) npm run fastly:publish
-```
-
-In the future, unless you have further changes to make to your app itself, you can
-upload further updates to your static files:
-```sh
-cd compute-js
-npm run fastly:publish       # upload your static files
-```
-
-If the app uses S3-compatible storage, your files are already in the bucket after `npm run s3:publish`. Run `npm run fastly:deploy` to deploy the app, and use `npm run s3:publish` to upload updates. After the deploy, `fastly.toml` has the service ID, so `s3:publish` also purges the service's cache. For this purge, set `FASTLY_API_TOKEN` too. Without it, `s3:publish` stops with an error before it uploads files.
+`fastly:publish` needs a Fastly API token too. If the app uses S3-compatible storage, use `npm run s3:publish` in place of `dev:publish` and `fastly:publish`. The full documentation has the details of [managed and ejected apps](https://github.com/fastly/compute-js-static-publish/blob/main/README.md#managed-and-ejected-apps).
 
 ## New in 8.1
 
 - **Managed projects:** keep only `static-publish.project.js` in your repo. The CLI generates the app, and `dev`, `deploy`, `status`, `upgrade`, and `eject` work with it. ([Managed and ejected apps](https://github.com/fastly/compute-js-static-publish/blob/main/README.md#managed-and-ejected-apps))
-- **Previews:** serve another collection for a request, selected by host, path, query, cookie, or header. ([Previews](https://github.com/fastly/compute-js-static-publish/blob/main/README.md#-previews-collection-selection))
+- **Previews:** declaratively serve another collection for a request, selected by host, path, query, cookie, or header. ([Previews](https://github.com/fastly/compute-js-static-publish/blob/main/README.md#-previews-collection-selection))
 - **Hidden files:** publish files that the server does not serve for a request, for your own code to read. Deploy your app with 8.1 before you publish hidden files: an app built with 8.0 does not serve a collection that has hidden files. ([Hidden files](https://github.com/fastly/compute-js-static-publish/blob/main/README.md#hidden-files))
-- **Hono:** the `hono` template (`--template=hono`), with your own middleware and routes as plugin modules in `hono-compose/`, and examples for GRIP streaming and OAuth login. For your own Hono app, `@fastly/compute-js-static-publish/hono` replaces `@fastly/hono-compute-js-static-publish`. ([Using Hono](https://github.com/fastly/compute-js-static-publish/blob/main/README.md#-using-hono))
+- **Hono:** the `hono` template (`--template=hono`), and middleware for your own Hono app in `@fastly/compute-js-static-publish/hono`, which replaces `@fastly/hono-compute-js-static-publish`. To add your own middleware and routes, read [Using Hono](https://github.com/fastly/compute-js-static-publish/blob/main/README.md#-using-hono) in the full documentation.
 - **CI:** `--json` output, exit codes, error codes, `--project-dir`, and `--non-interactive`. ([Using the CLI in CI](https://github.com/fastly/compute-js-static-publish/blob/main/README.md#-using-the-cli-in-ci))
 - **Streaming response cache:** on a cache miss, the file goes to the visitor and into the cache at the same time, so the visitor does not wait for the whole file, and the request uses less memory. Apps from the `plain` and `hono` templates do this; in your own code, use `serveRequestStreaming()` and pass `fillPromise` to `event.waitUntil()`. It needs `@fastly/js-compute` 4.2 or later on a Fastly service. ([Streaming the response into the cache](https://github.com/fastly/compute-js-static-publish/blob/main/README.md#streaming-the-response-into-the-cache))
 
