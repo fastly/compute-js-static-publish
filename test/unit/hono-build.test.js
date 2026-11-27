@@ -17,6 +17,7 @@ import {
   bundlePlugins,
   checkProvidedVersions,
   pluginsExternals,
+  comparePluginFiles,
   listPlugins,
   watchHonoExtensions,
   watchPlugins,
@@ -61,7 +62,7 @@ function makeApp(dependencies, rc = 'export default {};\n', extra = {}) {
 }
 
 describe('listPlugins()', () => {
-  test('the files directly in the folder, in file-name order', () => {
+  test('the files directly in the folder, in plugin order', () => {
     const dir = makeDir({
       '20-grip.ts': '',
       '10-auth.js': '',
@@ -79,6 +80,32 @@ describe('listPlugins()', () => {
       { name: 'grip', file: '20-grip.ts' },
       { name: 'stream', file: 'stream.mts' },
     ]);
+  });
+
+  test('a number prefix orders by its value, then the files without a prefix follow', () => {
+    const dir = makeDir({
+      '100-c.ts': '',
+      '99-b.ts': '',
+      '10-a.ts': '',
+      '2-d.ts': '',
+      '010-e.ts': '',
+      'api.ts': '',
+      'Zeta.ts': '',
+    });
+    assert.deepEqual(listPlugins(dir).map(plugin => plugin.file), [
+      '2-d.ts',
+      '010-e.ts',
+      '10-a.ts',
+      '99-b.ts',
+      '100-c.ts',
+      'Zeta.ts',
+      'api.ts',
+    ]);
+  });
+
+  test('comparePluginFiles() keeps the exact value of a long number', () => {
+    assert.equal(comparePluginFiles('9007199254740993-a.ts', '9007199254740992-b.ts'), 1);
+    assert.equal(comparePluginFiles('99999999999999999999-a.ts', '100000000000000000000-b.ts') < 0, true);
   });
 
   test('no folder, or no files: no modules', () => {

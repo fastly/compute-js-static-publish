@@ -9,6 +9,10 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 
 ## [unreleased]
 
+### Fixed
+
+- `hono` template: the plugins in `hono-compose/` are now in the order of the value of their number prefix, so `99-` comes before `100-`, and `2-` before `10-`. In 8.1.0, the order was the text order of the file names, so `100-` came before `99-`, and `10-` before `2-`. Files without a number prefix still come after the files with one. **This can change the order of your plugins:** if they have number prefixes of different lengths, check the order after you upgrade.
+
 ## [8.1.0] - 2026-11-27
 
 ### Added

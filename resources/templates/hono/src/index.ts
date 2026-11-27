@@ -37,8 +37,9 @@ app.use('*', logFastlyServiceVersion());
 // example for previews. Without it, this selects the default collection.
 app.use('*', selectCollection());
 
-// The plugins, in file-name order: first the middleware phase of all of
-// them, then the routes phase.
+// The plugins, in plugin order (a number prefix by its value, then the files
+// without one): first the middleware phase of all of them, then the routes
+// phase.
 for (const phase of [ 'middleware', 'routes' ] as const) {
   for (const p of plugins) {
     p.plugin.phases[phase]?.(app, honoOptions?.compose?.plugins?.[p.name], helpers);

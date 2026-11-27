@@ -39,11 +39,42 @@ export type PluginFile = {
   file: string,
 };
 
+const ORDER_PREFIX = /^(\d+)-/;
+
+// The order of the plugins: first the files whose name starts with a number
+// and '-', by the value of the number (2- before 10- before 100-), then the
+// other files. Files with the same number, and the other files, are in the
+// order of their names.
+export function comparePluginFiles(a: string, b: string): number {
+  const prefixA = ORDER_PREFIX.exec(a)?.[1];
+  const prefixB = ORDER_PREFIX.exec(b)?.[1];
+  if (prefixA != null && prefixB == null) {
+    return -1;
+  }
+  if (prefixA == null && prefixB != null) {
+    return 1;
+  }
+  if (prefixA != null && prefixB != null) {
+    // Compare the values without converting them to numbers, so that a long
+    // number keeps its exact value: without leading zeros, a shorter number is
+    // smaller, and numbers of the same length compare as text.
+    const valueA = prefixA.replace(/^0+(?=\d)/, '');
+    const valueB = prefixB.replace(/^0+(?=\d)/, '');
+    if (valueA.length !== valueB.length) {
+      return valueA.length - valueB.length;
+    }
+    if (valueA !== valueB) {
+      return valueA < valueB ? -1 : 1;
+    }
+  }
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
 // The plugins of the folder: the files directly in the folder with the
-// extension .js, .mjs, .ts, or .mts, in file-name order. Files that start with
-// '_' or '.', .d.ts files, and the files in subfolders (for example lib/) are
-// not plugins. Throws for a file with the reserved name index, and if two
-// plugins have the same name.
+// extension .js, .mjs, .ts, or .mts, in the order of comparePluginFiles().
+// Files that start with '_' or '.', .d.ts files, and the files in subfolders
+// (for example lib/) are not plugins. Throws for a file with the reserved name
+// index, and if two plugins have the same name.
 export function listPlugins(composeDir: string): PluginFile[] {
   if (!fs.existsSync(composeDir)) {
     return [];
@@ -52,7 +83,7 @@ export function listPlugins(composeDir: string): PluginFile[] {
     .filter(entry => entry.isFile() && !entry.name.startsWith('_') && !entry.name.startsWith('.'))
     .map(entry => entry.name)
     .filter(file => MODULE_FILE.test(file) && !/\.d\.[cm]?ts$/.test(file))
-    .sort();
+    .sort(comparePluginFiles);
   const plugins: PluginFile[] = [];
   const seen = new Map<string, string>();
   for (const file of files) {
@@ -63,7 +94,7 @@ export function listPlugins(composeDir: string): PluginFile[] {
         `Rename the file, for example to 10-${file}.`,
       );
     }
-    const name = base.replace(/^\d+-/, '');
+    const name = base.replace(ORDER_PREFIX, '');
     const other = seen.get(name);
     if (other != null) {
       throw new Error(`hono-compose: ${other} and ${file} have the same plugin name '${name}'.`);
