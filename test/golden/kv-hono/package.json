@@ -12,7 +12,7 @@
   "dependencies": {
     "@fastly/hono-fastly-compute": "^0.4.0",
     "@fastly/js-compute": "^4.4.1",
-    "hono": "^4.13.14",
+    "hono": "^4.13.23",
     "@fastly/compute-js-static-publish": "<compute-js-static-publish>"
   },
   "engines": {

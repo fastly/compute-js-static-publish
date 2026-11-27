@@ -9,6 +9,12 @@ This file does not list v7 releases after 7.0.8, or v6 releases after 6.3.0. For
 
 ## [unreleased]
 
+## [8.1.1] - 2026-11-28
+
+### Security
+
+- `hono` template: the generated app uses `hono` 4.13.23 or later. It has the fixes for the advisories GHSA-656w-x92q-369m and GHSA-586x-c76g-h528.
+
 ### Fixed
 
 - `hono` template: the plugins in `hono-compose/` are now in the order of the value of their number prefix, so `99-` comes before `100-`, and `2-` before `10-`. In 8.1.0, the order was the text order of the file names, so `100-` came before `99-`, and `10-` before `2-`. Files without a number prefix still come after the files with one. **This can change the order of your plugins:** if they have number prefixes of different lengths, check the order after you upgrade.
@@ -567,7 +573,8 @@ Other changes:
 - Updated generated app's webpack and webpack-cli versions
 - Use atob() and removed dependency on Buffer
 
-[unreleased]: https://github.com/fastly/compute-js-static-publish/compare/v8.1.0...HEAD
+[unreleased]: https://github.com/fastly/compute-js-static-publish/compare/v8.1.1...HEAD
+[8.1.1]: https://github.com/fastly/compute-js-static-publish/compare/v8.1.0...v8.1.1
 [8.1.0]: https://github.com/fastly/compute-js-static-publish/compare/v8.0.3...v8.1.0
 [8.0.3]: https://github.com/fastly/compute-js-static-publish/compare/v8.0.2...v8.0.3
 [8.0.2]: https://github.com/fastly/compute-js-static-publish/compare/v8.0.1...v8.0.2
